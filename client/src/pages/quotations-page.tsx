@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Quotation, Customer, QuotationStatus } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Quotation, Customer, QuotationStatus, InsertQuotation } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,19 +11,30 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Plus, FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useLocation } from "wouter";
+import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
+import { QuotationForm } from "@/components/quotation-form";
+import { useAuth } from "@/lib/auth";
 
 export default function QuotationsPage() {
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { user } = useAuth();
 
-  const { data: quotations, isLoading } = useQuery<(Quotation & { customer: Customer })[]>({
-    queryKey: ["/api/quotations"],
+  const { data: quotations, isLoading } = useEntityQuery<(Quotation & { customer: Customer })[]>(
+    "/api/quotations"
+  );
+
+  const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
+
+  const createQuotationMutation = useEntityMutation<Quotation, InsertQuotation>({
+    endpoint: "/api/quotations",
+    method: "POST",
+    successMessage: "Cotización creada exitosamente",
+    invalidateQueries: ["/api/quotations"],
+    onSuccessCallback: () => setDialogOpen(false),
   });
 
   const getStatusBadge = (status: string) => {
@@ -49,7 +58,7 @@ export default function QuotationsPage() {
             Gestiona cotizaciones y conviértelas en pedidos
           </p>
         </div>
-        <Button onClick={() => setLocation("/quotations/new")} data-testid="button-add-quotation">
+        <Button onClick={() => setDialogOpen(true)} data-testid="button-add-quotation">
           <Plus className="h-4 w-4 mr-2" />
           Nueva Cotización
         </Button>
@@ -110,7 +119,6 @@ export default function QuotationsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setLocation(`/quotations/${quotation.id}`)}
                           data-testid={`button-view-quotation-${quotation.id}`}
                         >
                           <FileText className="h-4 w-4 mr-1" />
@@ -128,7 +136,7 @@ export default function QuotationsPage() {
               <p className="text-muted-foreground">No hay cotizaciones registradas</p>
               <Button
                 className="mt-4"
-                onClick={() => setLocation("/quotations/new")}
+                onClick={() => setDialogOpen(true)}
                 data-testid="button-add-first-quotation"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -138,6 +146,15 @@ export default function QuotationsPage() {
           )}
         </CardContent>
       </Card>
+
+      <QuotationForm
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSubmit={createQuotationMutation.mutate}
+        isPending={createQuotationMutation.isPending}
+        customers={customers?.map(c => ({ id: c.id, name: c.name })) || []}
+        userId={user?.id}
+      />
     </div>
   );
 }

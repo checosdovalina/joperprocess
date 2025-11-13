@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { Order, Quotation, Customer, OrderStatus } from "@shared/schema";
+import { useState } from "react";
+import { Order, Quotation, Customer, OrderStatus, InsertOrder } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -11,17 +11,31 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Loader2 } from "lucide-react";
+import { Package, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
+import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
+import { OrderForm } from "@/components/order-form";
+import { useAuth } from "@/lib/auth";
 
 export default function OrdersPage() {
-  const { data: orders, isLoading } = useQuery<
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { user } = useAuth();
+
+  const { data: orders, isLoading } = useEntityQuery<
     (Order & { quotation: Quotation & { customer: Customer } })[]
-  >({
-    queryKey: ["/api/orders"],
+  >("/api/orders");
+
+  const { data: quotations } = useEntityQuery<Quotation[]>("/api/quotations");
+
+  const createOrderMutation = useEntityMutation<Order, InsertOrder>({
+    endpoint: "/api/orders",
+    method: "POST",
+    successMessage: "Orden creada exitosamente",
+    invalidateQueries: ["/api/orders"],
+    onSuccessCallback: () => setDialogOpen(false),
   });
 
   const getStatusBadge = (status: string) => {
@@ -38,11 +52,17 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Pedidos y Producción</h1>
-        <p className="text-muted-foreground mt-1">
-          Seguimiento de pedidos y avances de producción
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Pedidos y Producción</h1>
+          <p className="text-muted-foreground mt-1">
+            Seguimiento de pedidos y avances de producción
+          </p>
+        </div>
+        <Button onClick={() => setDialogOpen(true)} data-testid="button-add-order">
+          <Plus className="h-4 w-4 mr-2" />
+          Nueva Orden
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -171,10 +191,27 @@ export default function OrdersPage() {
             <div className="text-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No hay pedidos registrados</p>
+              <Button
+                className="mt-4"
+                onClick={() => setDialogOpen(true)}
+                data-testid="button-add-first-order"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Crear Primera Orden
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <OrderForm
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSubmit={createOrderMutation.mutate}
+        isPending={createOrderMutation.isPending}
+        quotations={quotations?.map(q => ({ id: q.id, folio: q.folio })) || []}
+        userId={user?.id}
+      />
     </div>
   );
 }
