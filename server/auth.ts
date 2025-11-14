@@ -33,6 +33,8 @@ export function setupAuth(app: Express) {
     throw new Error("SESSION_SECRET environment variable is required");
   }
 
+  const isProduction = process.env.NODE_ENV === "production";
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -40,6 +42,9 @@ export function setupAuth(app: Express) {
     store: storage.sessionStore,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      secure: isProduction, // Require HTTPS in production
+      httpOnly: true, // Prevent XSS attacks
+      sameSite: isProduction ? 'none' : 'lax', // Allow cross-origin in production
     },
   };
 
