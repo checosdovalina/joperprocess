@@ -14,6 +14,7 @@ import CreditAuthPage from "@/pages/credit-auth-page";
 import OrdersPage from "@/pages/orders-page";
 import ShipmentsPage from "@/pages/shipments-page";
 import InvoicesPage from "@/pages/invoices-page";
+import AccountsReceivablePage from "@/pages/accounts-receivable-page";
 import PaymentsPage from "@/pages/payments-page";
 import UsersPage from "@/pages/users-page";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -34,6 +35,7 @@ function Router() {
       <ProtectedRoute path="/orders" component={OrdersPage} />
       <ProtectedRoute path="/shipments" component={ShipmentsPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
+      <ProtectedRoute path="/accounts-receivable" component={AccountsReceivablePage} />
       <ProtectedRoute path="/payments" component={PaymentsPage} />
       <ProtectedRoute path="/users" component={UsersPage} />
       <Route component={NotFound} />

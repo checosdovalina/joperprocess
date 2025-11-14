@@ -81,7 +81,7 @@ export function AppSidebar() {
     },
     {
       title: "Facturación",
-      url: "/invoices",
+      url: "/accounts-receivable",
       icon: FileSpreadsheet,
       roles: [UserRole.ADMIN, UserRole.FACTURACION],
     },
