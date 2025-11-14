@@ -127,6 +127,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer summary for check-in (facturas vencidas, pedidos pendientes, historial)
+  app.get("/api/customers/:id/summary", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Verify customer exists
+      const customer = await storage.getCustomer(id);
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+
+      // Get overdue invoices
+      const overdueInvoices = await db.query.invoices.findMany({
+        where: and(
+          eq(invoices.customerId, id),
+          sql`${invoices.dueDate} < NOW()`
+        ),
+        orderBy: (invoices, { desc }) => [desc(invoices.dueDate)],
+        limit: 10,
+      });
+
+      // Get customer's quotation IDs first
+      const customerQuotations = await db.query.quotations.findMany({
+        where: eq(quotations.customerId, id),
+        columns: { id: true },
+      });
+      const quotationIds = customerQuotations.map(q => q.id);
+      
+      // Get pending orders for this customer's quotations
+      let pendingOrders: any[] = [];
+      if (quotationIds.length > 0) {
+        pendingOrders = await db.query.orders.findMany({
+          where: and(
+            sql`${orders.quotationId} IN (${sql.join(quotationIds.map(id => sql`${id}`), sql`, `)})`,
+            sql`${orders.status} IN ('pending', 'in_production')`
+          ),
+          with: {
+            quotation: {
+              columns: {
+                id: true,
+                customerId: true,
+                folio: true,
+                total: true,
+              },
+            },
+          },
+          orderBy: (orders, { desc }) => [desc(orders.createdAt)],
+          limit: 10,
+        });
+      }
+
+      // Get recent quotations (last 6 months)
+      const recentQuotations = await db.query.quotations.findMany({
+        where: and(
+          eq(quotations.customerId, id),
+          sql`${quotations.createdAt} > NOW() - INTERVAL '6 months'`
+        ),
+        orderBy: (quotations, { desc }) => [desc(quotations.createdAt)],
+        limit: 10,
+      });
+
+      // Get recent check-ins
+      const recentCheckins = await db.query.checkins.findMany({
+        where: eq(checkins.customerId, id),
+        with: {
+          user: true,
+        },
+        orderBy: (checkins, { desc }) => [desc(checkins.checkinAt)],
+        limit: 5,
+      });
+
+      // Get customer locations
+      const locations = await storage.getCustomerLocationsByCustomerId(id);
+
+      // Calculate credit usage (ALL authorized/converted quotations, not just recent)
+      const creditUsageResult = await db.execute(sql`
+        SELECT COALESCE(SUM(total::numeric), 0) as total_used
+        FROM ${quotations}
+        WHERE customer_id = ${id}
+        AND status IN ('authorized', 'converted')
+      `);
+      
+      const creditUsed = parseFloat(creditUsageResult.rows[0].total_used as string) || 0;
+      const creditLimitNum = parseFloat(customer.creditLimit || '0');
+      const creditAvailable = creditLimitNum - creditUsed;
+
+      res.json({
+        customer,
+        overdueInvoices,
+        pendingOrders,
+        recentQuotations,
+        recentCheckins,
+        locations,
+        creditSummary: {
+          creditLimit: creditLimitNum,
+          creditUsed: parseFloat(creditUsed.toFixed(2)),
+          creditAvailable: parseFloat(Math.max(0, creditAvailable).toFixed(2)),
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching customer summary:", error);
+      res.status(500).json({ error: "Error fetching customer summary" });
+    }
+  });
+
   // Check-ins endpoints
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
