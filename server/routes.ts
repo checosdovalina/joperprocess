@@ -13,6 +13,8 @@ import {
   insertCustomerSchema,
   updateCustomerSchema,
   insertCheckinSchema,
+  insertScheduledVisitSchema,
+  updateScheduledVisitSchema,
   insertQuotationSchema,
   insertQuotationItemSchema,
   insertCreditAuthorizationSchema,
@@ -26,9 +28,10 @@ import {
   QuotationStatus,
   CreditAuthStatus,
   OrderStatus,
+  ScheduledVisitStatus,
 } from "@shared/schema";
-import { customers, quotations, checkins, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { customers, quotations, checkins, scheduledVisits, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads } from "@shared/schema";
+import { eq, and, sql, gte, lt } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
@@ -344,6 +347,223 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating checkin:", error);
       res.status(400).json({ error: "Error creating checkin" });
+    }
+  });
+
+  // Scheduled visits endpoints
+  app.get("/api/scheduled-visits", isAuthenticated, async (req, res) => {
+    try {
+      const allVisits = await db.query.scheduledVisits.findMany({
+        with: {
+          customer: true,
+          user: true,
+        },
+        orderBy: (scheduledVisits, { asc }) => [asc(scheduledVisits.scheduledDate)],
+      });
+      res.json(allVisits);
+    } catch (error) {
+      console.error("Error fetching scheduled visits:", error);
+      res.status(500).json({ error: "Error fetching scheduled visits" });
+    }
+  });
+
+  app.get("/api/scheduled-visits/today", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+      const todayVisits = await db.query.scheduledVisits.findMany({
+        where: and(
+          eq(scheduledVisits.userId, userId),
+          eq(scheduledVisits.status, ScheduledVisitStatus.SCHEDULED),
+          gte(scheduledVisits.scheduledDate, startOfDay),
+          lt(scheduledVisits.scheduledDate, endOfDay)
+        ),
+        with: {
+          customer: true,
+          customerLocation: true,
+        },
+        orderBy: (scheduledVisits, { asc }) => [asc(scheduledVisits.scheduledDate)],
+      });
+      res.json(todayVisits);
+    } catch (error) {
+      console.error("Error fetching today's visits:", error);
+      res.status(500).json({ error: "Error fetching today's visits" });
+    }
+  });
+
+  app.get("/api/scheduled-visits/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const visit = await db.query.scheduledVisits.findFirst({
+        where: eq(scheduledVisits.id, id),
+        with: {
+          customer: true,
+          user: true,
+          customerLocation: true,
+        },
+      });
+
+      if (!visit) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
+      res.json(visit);
+    } catch (error) {
+      console.error("Error fetching scheduled visit:", error);
+      res.status(500).json({ error: "Error fetching scheduled visit" });
+    }
+  });
+
+  app.post("/api/scheduled-visits", isAuthenticated, async (req, res) => {
+    try {
+      const validated = insertScheduledVisitSchema.parse({
+        ...req.body,
+        userId: req.user!.id, // Set userId from authenticated user
+      });
+
+      // customerLocationId is optional - only validate if provided
+      if (validated.customerLocationId) {
+        const location = await storage.getCustomerLocation(validated.customerLocationId);
+        if (!location) {
+          return res.status(400).json({ error: "Customer location not found" });
+        }
+        if (location.customerId !== validated.customerId) {
+          return res.status(400).json({ error: "Customer location does not belong to the specified customer" });
+        }
+      }
+
+      const [visit] = await db.insert(scheduledVisits).values(validated).returning();
+      res.status(201).json(visit);
+    } catch (error) {
+      console.error("Error creating scheduled visit:", error);
+      res.status(400).json({ error: "Error creating scheduled visit" });
+    }
+  });
+
+  app.patch("/api/scheduled-visits/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+
+      // Check if visit exists and user owns it
+      const visit = await db.query.scheduledVisits.findFirst({
+        where: eq(scheduledVisits.id, id),
+      });
+
+      if (!visit) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
+      // Only owner or admin can update
+      if (visit.userId !== userId && req.user!.role !== UserRole.ADMIN) {
+        return res.status(403).json({ error: "Not authorized to update this visit" });
+      }
+
+      const validated = updateScheduledVisitSchema.parse(req.body);
+      const [updatedVisit] = await db
+        .update(scheduledVisits)
+        .set({ ...validated, updatedAt: new Date() })
+        .where(eq(scheduledVisits.id, id))
+        .returning();
+
+      res.json(updatedVisit);
+    } catch (error) {
+      console.error("Error updating scheduled visit:", error);
+      res.status(400).json({ error: "Error updating scheduled visit" });
+    }
+  });
+
+  app.delete("/api/scheduled-visits/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+
+      // Check if visit exists and user owns it
+      const visit = await db.query.scheduledVisits.findFirst({
+        where: eq(scheduledVisits.id, id),
+      });
+
+      if (!visit) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
+      // Only owner or admin can delete
+      if (visit.userId !== userId && req.user!.role !== UserRole.ADMIN) {
+        return res.status(403).json({ error: "Not authorized to delete this visit" });
+      }
+
+      // Mark as cancelled instead of deleting
+      await db
+        .update(scheduledVisits)
+        .set({ status: ScheduledVisitStatus.CANCELLED, updatedAt: new Date() })
+        .where(eq(scheduledVisits.id, id));
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error cancelling scheduled visit:", error);
+      res.status(500).json({ error: "Error cancelling scheduled visit" });
+    }
+  });
+
+  app.post("/api/scheduled-visits/:id/convert", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+
+      // Validate GPS coordinates are provided (allow 0 values)
+      if (req.body.latitude == null || req.body.longitude == null) {
+        return res.status(400).json({ error: "GPS coordinates are required to start check-in" });
+      }
+
+      // Get scheduled visit
+      const visit = await db.query.scheduledVisits.findFirst({
+        where: eq(scheduledVisits.id, id),
+      });
+
+      if (!visit) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
+      // Only owner can convert
+      if (visit.userId !== userId) {
+        return res.status(403).json({ error: "Not authorized to convert this visit" });
+      }
+
+      if (visit.status !== ScheduledVisitStatus.SCHEDULED) {
+        return res.status(400).json({ error: "Visit already completed or cancelled" });
+      }
+
+      // Create checkin from scheduled visit with GPS coordinates
+      const checkinData: InsertCheckin = {
+        userId: visit.userId,
+        customerId: visit.customerId,
+        customerLocationId: visit.customerLocationId,
+        latitude: req.body.latitude,
+        longitude: req.body.longitude,
+        topics: visit.topics || [],
+        notes: visit.notes || "",
+        photos: [],
+      };
+
+      const checkin = await storage.createCheckin(checkinData);
+
+      // Update scheduled visit to completed
+      await db
+        .update(scheduledVisits)
+        .set({ 
+          status: ScheduledVisitStatus.COMPLETED, 
+          checkinId: checkin.id,
+          updatedAt: new Date() 
+        })
+        .where(eq(scheduledVisits.id, id));
+
+      res.status(201).json(checkin);
+    } catch (error) {
+      console.error("Error converting scheduled visit to checkin:", error);
+      res.status(400).json({ error: "Error converting scheduled visit" });
     }
   });
 

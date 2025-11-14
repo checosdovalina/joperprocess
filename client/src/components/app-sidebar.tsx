@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Users,
   MapPin,
+  Calendar,
   FileText,
   ClipboardCheck,
   Package,
@@ -53,6 +54,12 @@ export function AppSidebar() {
       title: "Check-ins",
       url: "/checkins",
       icon: MapPin,
+      roles: [UserRole.ADMIN, UserRole.VENDEDOR],
+    },
+    {
+      title: "Visitas Programadas",
+      url: "/scheduled-visits",
+      icon: Calendar,
       roles: [UserRole.ADMIN, UserRole.VENDEDOR],
     },
     {

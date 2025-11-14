@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Checkin, Customer, InsertCheckin } from "@shared/schema";
+import { Checkin, Customer, InsertCheckin, ScheduledVisit } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Loader2, FileText } from "lucide-react";
+import { Plus, MapPin, Loader2, FileText, Calendar, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,6 +53,64 @@ export default function CheckinsPage() {
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
   });
+
+  const { data: todayVisits } = useQuery<(ScheduledVisit & { customer: Customer })[]>({
+    queryKey: ["/api/scheduled-visits/today"],
+  });
+
+  const convertVisitMutation = useMutation({
+    mutationFn: async ({ id, lat, lng }: { id: string; lat: number; lng: number }) => {
+      const res = await apiRequest("POST", `/api/scheduled-visits/${id}/convert`, {
+        latitude: lat.toString(),
+        longitude: lng.toString(),
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits"] });
+      toast({
+        title: "Visita iniciada",
+        description: "El check-in ha sido creado desde la visita programada",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo convertir la visita",
+      });
+    },
+  });
+
+  const handleConvertVisit = (visitId: string) => {
+    setGettingLocation(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          convertVisitMutation.mutate({ id: visitId, lat: latitude, lng: longitude });
+          setGettingLocation(false);
+        },
+        (error) => {
+          setGettingLocation(false);
+          toast({
+            title: "Error de ubicación",
+            description: "No se pudo obtener la ubicación GPS. Verifica los permisos.",
+            variant: "destructive",
+          });
+        }
+      );
+    } else {
+      setGettingLocation(false);
+      toast({
+        title: "GPS no disponible",
+        description: "Tu navegador no soporta geolocalización",
+        variant: "destructive",
+      });
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertCheckin) => {
@@ -240,6 +298,70 @@ export default function CheckinsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Today's Scheduled Visits */}
+      {todayVisits && todayVisits.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Visitas Programadas Hoy
+              </CardTitle>
+              <CardDescription>
+                {todayVisits.length} {todayVisits.length === 1 ? "visita programada" : "visitas programadas"}
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {todayVisits.map((visit) => (
+                <Card key={visit.id} className="hover-elevate" data-testid={`card-scheduled-visit-${visit.id}`}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">{visit.customer.name}</CardTitle>
+                    <CardDescription className="text-xs">
+                      {format(new Date(visit.scheduledDate), "PPP", { locale: es })}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {visit.topics && visit.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {visit.topics.map((topic, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {topic}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {visit.notes && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">{visit.notes}</p>
+                    )}
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      onClick={() => handleConvertVisit(visit.id)}
+                      disabled={gettingLocation || convertVisitMutation.isPending}
+                      data-testid={`button-convert-visit-${visit.id}`}
+                    >
+                      {convertVisitMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Iniciando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Iniciar Check-in
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

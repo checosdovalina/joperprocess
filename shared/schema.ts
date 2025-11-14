@@ -56,6 +56,15 @@ export const CreditAuthStatus = {
 
 export type CreditAuthStatusType = typeof CreditAuthStatus[keyof typeof CreditAuthStatus];
 
+// Enum for scheduled visit status
+export const ScheduledVisitStatus = {
+  SCHEDULED: "scheduled",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+} as const;
+
+export type ScheduledVisitStatusType = typeof ScheduledVisitStatus[keyof typeof ScheduledVisitStatus];
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -115,6 +124,26 @@ export const checkins = pgTable("checkins", {
   photos: text("photos").array(),
   minutePdfPath: text("minute_pdf_path"),
 });
+
+// Scheduled visits table (for pre-checkin planning)
+export const scheduledVisits = pgTable("scheduled_visits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  customerId: varchar("customer_id").notNull().references(() => customers.id),
+  customerLocationId: varchar("customer_location_id").references(() => customerLocations.id),
+  scheduledDate: timestamp("scheduled_date", { withTimezone: true }).notNull(),
+  topics: text("topics").array().notNull().default(sql`ARRAY[]::text[]`),
+  notes: text("notes"),
+  status: text("status").notNull().default(ScheduledVisitStatus.SCHEDULED),
+  checkinId: varchar("checkin_id").unique().references(() => checkins.id), // Unique: one visit maps to at most one checkin
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  // Composite index for daily agenda queries (userId + date range)
+  userScheduledIdx: sql`CREATE INDEX scheduled_visits_user_date_idx ON ${table} (user_id, scheduled_date)`,
+  // Index for customer lookup with status filtering
+  customerStatusIdx: sql`CREATE INDEX scheduled_visits_customer_status_idx ON ${table} (customer_id, status)`,
+}));
 
 // Pending uploads table (for secure photo upload tracking)
 export const pendingUploads = pgTable("pending_uploads", {
@@ -253,6 +282,7 @@ export const payments = pgTable("payments", {
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkins: many(checkins),
+  scheduledVisits: many(scheduledVisits),
   quotations: many(quotations),
   creditAuthorizations: many(creditAuthorizations),
   paymentsRegistered: many(payments),
@@ -260,6 +290,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 export const customersRelations = relations(customers, ({ many }) => ({
   checkins: many(checkins),
+  scheduledVisits: many(scheduledVisits),
   quotations: many(quotations),
   invoices: many(invoices),
   payments: many(payments),
@@ -272,6 +303,7 @@ export const customerLocationsRelations = relations(customerLocations, ({ one, m
     references: [customers.id],
   }),
   checkins: many(checkins),
+  scheduledVisits: many(scheduledVisits),
 }));
 
 export const checkinsRelations = relations(checkins, ({ one }) => ({
@@ -286,6 +318,25 @@ export const checkinsRelations = relations(checkins, ({ one }) => ({
   customerLocation: one(customerLocations, {
     fields: [checkins.customerLocationId],
     references: [customerLocations.id],
+  }),
+}));
+
+export const scheduledVisitsRelations = relations(scheduledVisits, ({ one }) => ({
+  user: one(users, {
+    fields: [scheduledVisits.userId],
+    references: [users.id],
+  }),
+  customer: one(customers, {
+    fields: [scheduledVisits.customerId],
+    references: [customers.id],
+  }),
+  customerLocation: one(customerLocations, {
+    fields: [scheduledVisits.customerLocationId],
+    references: [customerLocations.id],
+  }),
+  checkin: one(checkins, {
+    fields: [scheduledVisits.checkinId],
+    references: [checkins.id],
   }),
 }));
 
@@ -388,12 +439,45 @@ export const insertCustomerLocationSchema = createInsertSchema(customerLocations
 export const insertCheckinSchema = createInsertSchema(checkins).omit({
   id: true,
   checkinAt: true,
+}).extend({
+  userId: z.string().optional(), // Allow backend to set it
 });
 
 // Schema for updating check-ins (includes checkout fields)
 export const updateCheckinSchema = createInsertSchema(checkins).omit({
   id: true,
 }).partial();
+
+export const insertScheduledVisitSchema = createInsertSchema(scheduledVisits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  userId: z.string().optional(), // Allow backend to set it
+  scheduledDate: z.coerce.date().refine((date) => {
+    // Allow scheduling for today or future dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date >= today;
+  }, {
+    message: "La fecha programada no puede ser en el pasado",
+  }),
+});
+
+export const updateScheduledVisitSchema = createInsertSchema(scheduledVisits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial().extend({
+  userId: z.string().optional(), // Allow backend to preserve it
+  scheduledDate: z.coerce.date().refine((date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date >= today;
+  }, {
+    message: "La fecha programada no puede ser en el pasado",
+  }).optional(),
+});
 
 export const insertPendingUploadSchema = createInsertSchema(pendingUploads).omit({
   createdAt: true,
@@ -453,6 +537,10 @@ export type CustomerLocation = typeof customerLocations.$inferSelect;
 export type InsertCheckin = z.infer<typeof insertCheckinSchema>;
 export type UpdateCheckin = z.infer<typeof updateCheckinSchema>;
 export type Checkin = typeof checkins.$inferSelect;
+
+export type InsertScheduledVisit = z.infer<typeof insertScheduledVisitSchema>;
+export type UpdateScheduledVisit = z.infer<typeof updateScheduledVisitSchema>;
+export type ScheduledVisit = typeof scheduledVisits.$inferSelect;
 
 export type InsertQuotation = z.infer<typeof insertQuotationSchema>;
 export type Quotation = typeof quotations.$inferSelect;

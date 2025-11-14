@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import CustomersPage from "@/pages/customers-page";
 import CheckinsPage from "@/pages/checkins-page";
 import CheckinDetailPage from "@/pages/checkin-detail-page";
+import ScheduledVisitsPage from "@/pages/scheduled-visits-page";
 import QuotationsPage from "@/pages/quotations-page";
 import CreditAuthPage from "@/pages/credit-auth-page";
 import OrdersPage from "@/pages/orders-page";
@@ -30,6 +31,7 @@ function Router() {
       <ProtectedRoute path="/customers" component={CustomersPage} />
       <ProtectedRoute path="/checkins/:id" component={CheckinDetailPage} />
       <ProtectedRoute path="/checkins" component={CheckinsPage} />
+      <ProtectedRoute path="/scheduled-visits" component={ScheduledVisitsPage} />
       <ProtectedRoute path="/quotations" component={QuotationsPage} />
       <ProtectedRoute path="/credit-auth" component={CreditAuthPage} />
       <ProtectedRoute path="/orders" component={OrdersPage} />
