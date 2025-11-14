@@ -39,6 +39,8 @@ export class ObjectNotFoundError extends Error {
 }
 
 export class ObjectStorageService {
+  private normalizedPrivateDir: string | null = null;
+
   constructor() {}
 
   getPublicObjectSearchPaths(): Array<string> {
@@ -116,6 +118,89 @@ export class ObjectStorageService {
       if (!res.headersSent) {
         res.status(500).json({ error: "Error downloading file" });
       }
+    }
+  }
+
+  private getNormalizedPrivateDir(): string {
+    if (!this.normalizedPrivateDir) {
+      const privateObjectDir = this.getPrivateObjectDir();
+      // Ensure leading slash
+      let normalized = privateObjectDir.startsWith('/') ? privateObjectDir : `/${privateObjectDir}`;
+      // Remove trailing slash
+      normalized = normalized.replace(/\/+$/, '');
+      // Collapse multiple slashes
+      normalized = normalized.replace(/\/+/g, '/');
+      this.normalizedPrivateDir = normalized;
+    }
+    return this.normalizedPrivateDir;
+  }
+
+  async downloadObjectByPath(
+    objectPath: string,
+    res: Response,
+    options?: {
+      isPublic?: boolean;
+      contentType?: string;
+      disposition?: "inline" | "attachment";
+      filename?: string;
+      cacheTtlSec?: number;
+    }
+  ) {
+    try {
+      let fullPath: string;
+      
+      // Paths starting with "/" are absolute, use as-is
+      // Otherwise treat as relative and prepend normalized PRIVATE_OBJECT_DIR
+      if (objectPath.startsWith('/')) {
+        fullPath = objectPath;
+      } else {
+        const normalizedPrivateDir = this.getNormalizedPrivateDir();
+        fullPath = `${normalizedPrivateDir}/${objectPath}`;
+      }
+
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectName);
+
+      const [exists] = await file.exists();
+      if (!exists) {
+        console.error(`Object not found: ${fullPath}`);
+        throw new ObjectNotFoundError();
+      }
+
+      const [metadata] = await file.getMetadata();
+      const contentType = options?.contentType || metadata.contentType || "application/octet-stream";
+      const cacheTtlSec = options?.cacheTtlSec || 3600;
+
+      const headers: Record<string, string> = {
+        "Content-Type": contentType,
+        "Cache-Control": `${options?.isPublic ? "public" : "private"}, max-age=${cacheTtlSec}`,
+      };
+
+      if (metadata.size) {
+        headers["Content-Length"] = String(metadata.size);
+      }
+
+      if (options?.disposition) {
+        const filename = options?.filename || objectName.split('/').pop();
+        headers["Content-Disposition"] = `${options.disposition}; filename="${filename}"`;
+      }
+
+      res.set(headers);
+
+      const stream = file.createReadStream();
+
+      stream.on("error", (err: Error) => {
+        console.error("Stream error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Error streaming file" });
+        }
+      });
+
+      stream.pipe(res);
+    } catch (error) {
+      console.error(`Error downloading object by path: ${objectPath}`, error);
+      throw error;
     }
   }
 

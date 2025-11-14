@@ -21,6 +21,7 @@ import {
   insertInvoiceSchema,
   insertPaymentSchema,
   insertPendingUploadSchema,
+  type InsertCustomer,
   UserRole,
   QuotationStatus,
   CreditAuthStatus,
@@ -124,7 +125,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const validated = updateCustomerSchema.parse(req.body);
-      const customer = await storage.updateCustomer(id, validated);
+      
+      // Filter out undefined values to prevent NULL assignments
+      const updateData: Partial<InsertCustomer> = {};
+      Object.keys(validated).forEach(key => {
+        const value = validated[key as keyof typeof validated];
+        if (value !== undefined) {
+          (updateData as any)[key] = value;
+        }
+      });
+      
+      const customer = await storage.updateCustomer(id, updateData);
       if (!customer) {
         return res.status(404).json({ error: "Customer not found" });
       }
@@ -975,7 +986,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Check-in not found" });
       }
 
-      if (checkin.userId !== userId) {
+      // Verify authorization: user must own the check-in or be an admin
+      if (checkin.userId !== userId && req.user!.role !== UserRole.ADMIN) {
         return res.status(403).json({ error: "Not authorized to checkout this check-in" });
       }
 
@@ -1087,9 +1099,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "PDF not yet generated for this check-in" });
       }
 
+      // Validate path to prevent path traversal attacks
+      if (checkin.minutePdfPath.includes('..')) {
+        console.error(`Invalid PDF path detected: ${checkin.minutePdfPath}`);
+        return res.status(400).json({ error: "Invalid PDF path" });
+      }
+
       // Stream PDF from object storage
       const objectStorageService = new ObjectStorageService();
-      await objectStorageService.downloadObject(checkin.minutePdfPath, res, {
+      await objectStorageService.downloadObjectByPath(checkin.minutePdfPath, res, {
         isPublic: false,
         contentType: "application/pdf",
         disposition: "attachment",

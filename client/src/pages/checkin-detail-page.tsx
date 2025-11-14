@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -151,15 +151,29 @@ export default function CheckinDetailPage() {
             {checkin.customer.name} - {format(new Date(checkin.checkinAt), "PPP", { locale: es })}
           </p>
         </div>
-        {!checkin.checkoutAt && (
-          <Button 
-            data-testid="button-checkout"
-            onClick={() => setCheckoutDialogOpen(true)}
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Finalizar Visita
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {checkin.minutePdfPath && (
+            <Button 
+              variant="outline"
+              data-testid="button-download-pdf"
+              asChild
+            >
+              <a href={`/api/checkins/${id}/pdf`} download>
+                <Download className="h-4 w-4 mr-2" />
+                Descargar PDF
+              </a>
+            </Button>
+          )}
+          {!checkin.checkoutAt && (
+            <Button 
+              data-testid="button-checkout"
+              onClick={() => setCheckoutDialogOpen(true)}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Finalizar Visita
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

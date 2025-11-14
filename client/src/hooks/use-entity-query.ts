@@ -20,7 +20,7 @@ export function useEntityMutation<TData, TVariables = TData>({
   onSuccessCallback,
 }: {
   endpoint: string;
-  method?: "POST" | "PATCH" | "DELETE";
+  method?: "POST" | "PUT" | "PATCH" | "DELETE";
   successMessage?: string;
   invalidateQueries?: string[];
   onSuccessCallback?: (data: TData) => void;

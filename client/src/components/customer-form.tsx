@@ -1,7 +1,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertCustomerSchema, InsertCustomer } from "@shared/schema";
+import { insertCustomerSchema, InsertCustomer, Customer } from "@shared/schema";
 import { z } from "zod";
+import { useEffect } from "react";
 import {
   Form,
   FormControl,
@@ -20,8 +21,24 @@ interface CustomerFormProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: InsertCustomer) => void;
   isPending: boolean;
+  customer?: Customer;
   onCancel?: () => void;
 }
+
+const defaultFormValues = {
+  name: "",
+  rfc: "",
+  email: "",
+  phone: "",
+  address: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  creditLimit: "0",
+  creditDays: 30,
+  blocked: false,
+  contactName: "",
+};
 
 // Extend schema with client-side decimal validation
 const customerFormSchema = insertCustomerSchema.extend({
@@ -35,24 +52,39 @@ const customerFormSchema = insertCustomerSchema.extend({
 
 type CustomerFormData = z.infer<typeof customerFormSchema>;
 
-export function CustomerForm({ open, onOpenChange, onSubmit, isPending, onCancel }: CustomerFormProps) {
+export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer, onCancel }: CustomerFormProps) {
+  const isEditing = !!customer;
+  
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerFormSchema),
-    defaultValues: {
-      name: "",
-      rfc: "",
-      email: "",
-      phone: "",
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      creditLimit: "0",
-      creditDays: 30,
-      blocked: false,
-      contactName: "",
-    },
+    defaultValues: defaultFormValues,
   });
+
+  // Reset form when dialog opens or customer changes
+  useEffect(() => {
+    if (open) {
+      if (customer) {
+        // Edit mode: populate with customer data
+        form.reset({
+          name: customer.name,
+          rfc: customer.rfc || "",
+          email: customer.email || "",
+          phone: customer.phone || "",
+          address: customer.address || "",
+          city: customer.city || "",
+          state: customer.state || "",
+          zipCode: customer.zipCode || "",
+          creditLimit: customer.creditLimit || "0",
+          creditDays: customer.creditDays,
+          blocked: customer.blocked,
+          contactName: customer.contactName || "",
+        });
+      } else {
+        // Create mode: reset to empty values
+        form.reset(defaultFormValues);
+      }
+    }
+  }, [open, customer, form]);
 
   const handleSubmit = (data: CustomerFormData) => {
     // Transform data to ensure correct types - schema already validated creditLimit
@@ -70,8 +102,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, onCancel
     <EntityFormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Nuevo Cliente"
-      description="Agrega un nuevo cliente al sistema"
+      title={isEditing ? "Editar Cliente" : "Nuevo Cliente"}
+      description={isEditing ? "Actualiza la información del cliente" : "Agrega un nuevo cliente al sistema"}
     >
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -308,7 +340,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, onCancel
               </Button>
               <Button type="submit" disabled={isPending} data-testid="button-save-customer">
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar Cliente
+                {isEditing ? "Actualizar Cliente" : "Guardar Cliente"}
               </Button>
             </div>
           </form>

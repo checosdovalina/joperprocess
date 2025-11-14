@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Customer, InsertCustomer } from "@shared/schema";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -12,14 +15,17 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Plus } from "lucide-react";
+import { Users, UserCheck, UserX, Plus, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CustomerForm } from "@/components/customer-form";
 
 export default function CustomersPage() {
   const [formOpen, setFormOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
 
   const { data: customers, isLoading } = useEntityQuery<Customer[]>("/api/customers");
+
+  const { toast } = useToast();
 
   const createCustomerMutation = useEntityMutation<Customer, InsertCustomer>({
     endpoint: "/api/customers",
@@ -28,8 +34,50 @@ export default function CustomersPage() {
     invalidateQueries: ["/api/customers"],
     onSuccessCallback: () => {
       setFormOpen(false);
+      setEditingCustomer(undefined);
     },
   });
+
+  const updateCustomerMutation = useMutation<Customer, Error, { id: string; data: InsertCustomer }>({
+    mutationFn: async ({ id, data }) => {
+      const res = await apiRequest("PUT", `/api/customers/${id}`, data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Éxito",
+        description: "Cliente actualizado exitosamente",
+      });
+      setFormOpen(false);
+      setEditingCustomer(undefined);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditCustomer = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setFormOpen(true);
+  };
+
+  const handleFormSubmit = (data: InsertCustomer) => {
+    if (editingCustomer) {
+      updateCustomerMutation.mutate({ id: editingCustomer.id, data });
+    } else {
+      createCustomerMutation.mutate(data);
+    }
+  };
+
+  const handleCloseForm = () => {
+    setFormOpen(false);
+    setEditingCustomer(undefined);
+  };
 
   return (
     <div className="space-y-6">
@@ -107,6 +155,7 @@ export default function CustomersPage() {
                     <TableHead>Ubicación</TableHead>
                     <TableHead className="text-right">Crédito</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -159,6 +208,16 @@ export default function CustomersPage() {
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditCustomer(customer)}
+                          data-testid={`button-edit-customer-${customer.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -183,14 +242,10 @@ export default function CustomersPage() {
 
       <CustomerForm
         open={formOpen}
-        onOpenChange={(open) => {
-          setFormOpen(open);
-          if (!open && !createCustomerMutation.isPending) {
-            // Form closed - can be reset safely
-          }
-        }}
-        onSubmit={createCustomerMutation.mutate}
-        isPending={createCustomerMutation.isPending}
+        onOpenChange={handleCloseForm}
+        onSubmit={handleFormSubmit}
+        isPending={createCustomerMutation.isPending || updateCustomerMutation.isPending}
+        customer={editingCustomer}
       />
     </div>
   );
