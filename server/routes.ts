@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { 
   insertCustomerSchema,
+  updateCustomerSchema,
   insertCheckinSchema,
   insertQuotationSchema,
   insertQuotationItemSchema,
@@ -116,6 +117,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating customer:", error);
       res.status(400).json({ error: "Error creating customer" });
+    }
+  });
+
+  app.put("/api/customers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validated = updateCustomerSchema.parse(req.body);
+      const customer = await storage.updateCustomer(id, validated);
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+      res.json(customer);
+    } catch (error) {
+      console.error("Error updating customer:", error);
+      res.status(400).json({ error: "Error updating customer" });
     }
   });
 
@@ -1048,6 +1064,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error(`Error during checkout for check-in ${checkinId}:`, error);
       res.status(500).json({ error: "Error processing checkout" });
+    }
+  });
+
+  // Download check-in PDF
+  app.get("/api/checkins/:id/pdf", isAuthenticated, async (req, res) => {
+    const { id: checkinId } = req.params;
+    const userId = req.user!.id;
+
+    try {
+      const checkin = await storage.getCheckin(checkinId);
+      if (!checkin) {
+        return res.status(404).json({ error: "Check-in not found" });
+      }
+
+      // Verify authorization: user must own the check-in or be an admin
+      if (checkin.userId !== userId && req.user!.role !== UserRole.ADMIN) {
+        return res.status(403).json({ error: "Not authorized to access this PDF" });
+      }
+
+      if (!checkin.minutePdfPath) {
+        return res.status(404).json({ error: "PDF not yet generated for this check-in" });
+      }
+
+      // Stream PDF from object storage
+      const objectStorageService = new ObjectStorageService();
+      await objectStorageService.downloadObject(checkin.minutePdfPath, res, {
+        isPublic: false,
+        contentType: "application/pdf",
+        disposition: "attachment",
+        filename: `minuta-${checkinId}.pdf`,
+      });
+    } catch (error) {
+      console.error(`Error downloading PDF for check-in ${checkinId}:`, error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Error downloading PDF" });
+      }
     }
   });
 

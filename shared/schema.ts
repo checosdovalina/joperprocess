@@ -375,6 +375,11 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   createdAt: true,
 });
 
+export const updateCustomerSchema = createInsertSchema(customers).omit({
+  id: true,
+  createdAt: true,
+}).partial();
+
 export const insertCustomerLocationSchema = createInsertSchema(customerLocations).omit({
   id: true,
   createdAt: true,
@@ -439,6 +444,7 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type UpdateCustomer = z.infer<typeof updateCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
 
 export type InsertCustomerLocation = z.infer<typeof insertCustomerLocationSchema>;
