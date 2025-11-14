@@ -667,6 +667,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/checkins/:id/checkout", isAuthenticated, async (req, res) => {
+    const { id: checkinId } = req.params;
+    const userId = req.user!.id;
+
+    try {
+      const checkin = await storage.getCheckin(checkinId);
+      if (!checkin) {
+        return res.status(404).json({ error: "Check-in not found" });
+      }
+
+      if (checkin.userId !== userId) {
+        return res.status(403).json({ error: "Not authorized to checkout this check-in" });
+      }
+
+      if (checkin.checkoutAt) {
+        return res.status(400).json({ error: "Check-in already checked out" });
+      }
+
+      const customer = await storage.getCustomer(checkin.customerId);
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+
+      const user = await storage.getUser(checkin.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log(`Generating and uploading PDF for check-in ${checkinId}...`);
+      const { generateMinutePDFStream } = await import("./pdf-generator");
+      const pdfStream = await generateMinutePDFStream({ checkin, customer, user });
+
+      const objectStorageService = new ObjectStorageService();
+      const pdfPath = await objectStorageService.uploadPdfStreamToStorage(
+        pdfStream,
+        checkinId,
+        userId
+      );
+
+      console.log(`Updating check-in with checkout time and PDF path...`);
+      const updatedCheckin = await storage.updateCheckin(checkinId, {
+        checkoutAt: new Date(),
+        minutePdfPath: pdfPath,
+      });
+
+      res.status(200).json({
+        checkin: updatedCheckin,
+        pdfPath: pdfPath,
+      });
+    } catch (error) {
+      console.error(`Error during checkout for check-in ${checkinId}:`, error);
+      res.status(500).json({ error: "Error processing checkout" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

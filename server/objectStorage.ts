@@ -10,6 +10,7 @@ import {
 } from "./objectAcl";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+const ACL_POLICY_METADATA_KEY = "custom:aclPolicy";
 
 export const objectStorageClient = new Storage({
   credentials: {
@@ -214,6 +215,38 @@ export class ObjectStorageService {
       userId,
       objectFile,
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
+    });
+  }
+
+  async uploadPdfStreamToStorage(
+    pdfStream: NodeJS.ReadableStream,
+    filename: string,
+    ownerId: string
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const privateObjectDir = this.getPrivateObjectDir();
+      const fullPath = `${privateObjectDir}/minutes/${filename}.pdf`;
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectName);
+
+      const writeStream = file.createWriteStream({
+        metadata: {
+          contentType: "application/pdf",
+          metadata: {
+            [ACL_POLICY_METADATA_KEY]: JSON.stringify({
+              owner: ownerId,
+              visibility: "private",
+            } as ObjectAclPolicy),
+          },
+        },
+      });
+
+      pdfStream
+        .pipe(writeStream)
+        .on("error", (error) => reject(error))
+        .on("finish", () => resolve(`minutes/${filename}.pdf`));
     });
   }
 }
