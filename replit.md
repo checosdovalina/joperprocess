@@ -18,6 +18,18 @@ The frontend is built with React 18 and TypeScript, using Vite for development a
 
 The backend runs on Node.js with Express.js in ESM module mode, exposing a RESTful API. Authentication is session-based using Passport.js with a LocalStrategy and scrypt-hashed passwords, with sessions stored server-side using `connect-pg-simple`. Authorization is role-based (RBAC) with seven distinct roles. Custom middleware handles request logging, and centralized error handling provides consistent HTTP status codes.
 
+**Security Features:**
+- **Secure User Registration**: Public registration is only allowed for the first user (initial admin setup). After that, only authenticated admins can create new users via the Users page.
+- **Zod Schema Validation**: All registration requests are validated server-side to prevent injection of unauthorized fields and ensure data integrity.
+- **Race Condition Mitigation**: Post-creation verification with rollback protection minimizes (but does not fully eliminate) the theoretical risk of concurrent first-user registrations.
+- **Production Cookie Configuration**: Session cookies use secure=true, httpOnly=true, and sameSite='none' for HTTPS deployments.
+- **Known Limitation**: A theoretical race condition exists during the first ~milliseconds of initial deployment where two simultaneous unauthenticated registration requests could both succeed. This is acceptable for an internal enterprise system with controlled deployment procedures.
+
+**Deployment Procedure:**
+1. Deploy the application to production
+2. Immediately create the first admin user via the registration form
+3. All subsequent users must be created by admins via the Users page
+
 ### Data Layer
 
 Drizzle ORM provides type-safe SQL querying with PostgreSQL (via Neon serverless) as the database. The schema is centrally defined in `shared/schema.ts` and managed with Drizzle Kit for migrations. Drizzle-Zod integration ensures data validation matches database constraints. Key tables include `users`, `customers`, `checkins`, `quotations`, `creditAuthorizations`, `orders`, `shipments`, `invoices`, and `payments`.
