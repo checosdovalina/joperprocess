@@ -30,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { Link } from "wouter";
 
 export default function CheckinsPage() {
   const { toast } = useToast();
@@ -305,14 +306,16 @@ export default function CheckinsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          data-testid={`button-view-checkin-${checkin.id}`}
-                        >
-                          <FileText className="h-4 w-4 mr-1" />
-                          Ver Minuta
-                        </Button>
+                        <Link href={`/checkins/${checkin.id}`}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            data-testid={`button-view-checkin-${checkin.id}`}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Ver Detalle
+                          </Button>
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}

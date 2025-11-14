@@ -8,6 +8,7 @@ import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import CustomersPage from "@/pages/customers-page";
 import CheckinsPage from "@/pages/checkins-page";
+import CheckinDetailPage from "@/pages/checkin-detail-page";
 import QuotationsPage from "@/pages/quotations-page";
 import CreditAuthPage from "@/pages/credit-auth-page";
 import OrdersPage from "@/pages/orders-page";
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/" component={Dashboard} />
       <ProtectedRoute path="/customers" component={CustomersPage} />
+      <ProtectedRoute path="/checkins/:id" component={CheckinDetailPage} />
       <ProtectedRoute path="/checkins" component={CheckinsPage} />
       <ProtectedRoute path="/quotations" component={QuotationsPage} />
       <ProtectedRoute path="/credit-auth" component={CreditAuthPage} />

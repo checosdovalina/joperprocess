@@ -211,9 +211,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         AND status IN ('authorized', 'converted')
       `);
       
-      const creditUsed = parseFloat(creditUsageResult.rows[0].total_used as string) || 0;
-      const creditLimitNum = parseFloat(customer.creditLimit || '0');
-      const creditAvailable = creditLimitNum - creditUsed;
+      // Sanitize credit values to prevent NaN
+      let creditUsed = parseFloat(creditUsageResult.rows[0].total_used as string);
+      creditUsed = Number.isFinite(creditUsed) ? creditUsed : 0;
+      
+      let creditLimitNum = parseFloat(customer.creditLimit || '0');
+      creditLimitNum = Number.isFinite(creditLimitNum) ? creditLimitNum : 0;
+      
+      let creditAvailable = creditLimitNum - creditUsed;
+      creditAvailable = Number.isFinite(creditAvailable) ? creditAvailable : 0;
 
       res.json({
         customer,
@@ -223,7 +229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recentCheckins,
         locations,
         creditSummary: {
-          creditLimit: creditLimitNum,
+          creditLimit: parseFloat(creditLimitNum.toFixed(2)),
           creditUsed: parseFloat(creditUsed.toFixed(2)),
           creditAvailable: parseFloat(Math.max(0, creditAvailable).toFixed(2)),
         },
@@ -248,6 +254,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching checkins:", error);
       res.status(500).json({ error: "Error fetching checkins" });
+    }
+  });
+
+  app.get("/api/checkins/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const checkin = await db.query.checkins.findFirst({
+        where: eq(checkins.id, id),
+        with: {
+          customer: true,
+          user: true,
+        },
+      });
+
+      if (!checkin) {
+        return res.status(404).json({ error: "Check-in not found" });
+      }
+
+      res.json(checkin);
+    } catch (error) {
+      console.error("Error fetching check-in:", error);
+      res.status(500).json({ error: "Error fetching check-in" });
     }
   });
 
