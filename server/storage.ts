@@ -101,9 +101,11 @@ export interface IStorage {
   createShipment(shipment: InsertShipment): Promise<Shipment>;
   updateShipment(id: string, data: Partial<InsertShipment>): Promise<Shipment | undefined>;
 
-  // Invoices
+  // Invoices / Accounts Receivable
   getInvoice(id: string): Promise<Invoice | undefined>;
   getAllInvoices(): Promise<Invoice[]>;
+  getInvoicesByCustomer(customerId: string): Promise<Invoice[]>;
+  getPendingInvoicesByCustomer(customerId: string): Promise<Invoice[]>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   updateInvoice(id: string, data: Partial<InsertInvoice>): Promise<Invoice | undefined>;
 
@@ -331,6 +333,23 @@ export class DatabaseStorage implements IStorage {
   async updateInvoice(id: string, data: Partial<InsertInvoice>): Promise<Invoice | undefined> {
     const [invoice] = await db.update(invoices).set(data).where(eq(invoices.id, id)).returning();
     return invoice || undefined;
+  }
+
+  async getInvoicesByCustomer(customerId: string): Promise<Invoice[]> {
+    return await db.select().from(invoices)
+      .where(eq(invoices.customerId, customerId))
+      .orderBy(desc(invoices.issuedAt));
+  }
+
+  async getPendingInvoicesByCustomer(customerId: string): Promise<Invoice[]> {
+    return await db.select().from(invoices)
+      .where(
+        and(
+          eq(invoices.customerId, customerId),
+          eq(invoices.status, "pending_payment")
+        )
+      )
+      .orderBy(desc(invoices.dueDate));
   }
 
   // Payments

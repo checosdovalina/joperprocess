@@ -203,10 +203,19 @@ export const shipments = pgTable("shipments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Invoice Status
+export const InvoiceStatus = {
+  DRAFT: "draft",
+  PENDING_PAYMENT: "pending_payment",
+  PARTIALLY_PAID: "partially_paid",
+  PAID: "paid",
+  CANCELLED: "cancelled",
+} as const;
+
 // Invoices table
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: varchar("order_id").notNull().references(() => orders.id),
+  orderId: varchar("order_id").references(() => orders.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   cfdiUuid: text("cfdi_uuid"),
   serie: text("serie").notNull(),
@@ -214,13 +223,18 @@ export const invoices = pgTable("invoices", {
   subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
   tax: decimal("tax", { precision: 12, scale: 2 }).notNull(),
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  balanceDue: decimal("balance_due", { precision: 12, scale: 2 }),
   currency: text("currency").notNull().default("MXN"),
   paymentMethod: text("payment_method"),
   paymentForm: text("payment_form"),
+  status: text("status").notNull().default(InvoiceStatus.PENDING_PAYMENT),
   xmlPath: text("xml_path"),
   pdfPath: text("pdf_path"),
   issuedAt: timestamp("issued_at").notNull().defaultNow(),
   dueDate: timestamp("due_date"),
+  paidAt: timestamp("paid_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Payments table
@@ -409,6 +423,7 @@ export const insertShipmentSchema = createInsertSchema(shipments).omit({
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   issuedAt: true,
+  createdAt: true,
 });
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({
