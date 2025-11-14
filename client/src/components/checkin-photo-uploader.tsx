@@ -80,6 +80,11 @@ export function CheckinPhotoUploader({
       },
       // No custom headers - let GCS signed URL handle content-type
       headers: {},
+      // GCS doesn't return JSON, so we need to tell Uppy to accept the response
+      getResponseData: () => {
+        // Return a valid response object - GCS upload succeeded if we get here
+        return { url: "uploaded" };
+      },
     });
 
     uppyInstance.on("upload-success", async (file) => {

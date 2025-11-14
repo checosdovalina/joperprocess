@@ -24,6 +24,7 @@ import {
   insertPaymentSchema,
   insertPendingUploadSchema,
   type InsertCustomer,
+  type InsertCheckin,
   UserRole,
   QuotationStatus,
   CreditAuthStatus,
