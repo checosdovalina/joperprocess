@@ -45,6 +45,7 @@ const formSchema = insertInvoiceSchema.extend({
   subtotal: z.string().min(1, "Ingresa el subtotal"),
   tax: z.string().min(1, "Ingresa el IVA"),
   total: z.string().min(1, "Ingresa el total"),
+  issuedAt: z.string().optional(),
   dueDate: z.string().optional(),
 });
 
@@ -61,6 +62,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
       tax: "",
       total: "",
       currency: "MXN",
+      issuedAt: new Date().toISOString().split('T')[0], // Default to today
       dueDate: "",
       notes: "",
     },
@@ -237,23 +239,43 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="dueDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fecha de Vencimiento</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="date"
-                      data-testid="input-due-date"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="issuedAt"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fecha de Emisión</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="date"
+                        data-testid="input-issued-at"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="dueDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fecha de Vencimiento</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="date"
+                        data-testid="input-due-date"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
