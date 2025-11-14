@@ -598,11 +598,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let receivables;
       if (customerId) {
-        if (status === "pending") {
-          receivables = await storage.getPendingInvoicesByCustomer(customerId as string);
-        } else {
-          receivables = await storage.getInvoicesByCustomer(customerId as string);
-        }
+        // Fetch with customer data joined
+        receivables = await db.query.invoices.findMany({
+          where: and(
+            eq(invoices.customerId, customerId as string),
+            status === "pending" ? eq(invoices.status, "pending_payment") : undefined
+          ),
+          with: {
+            customer: true,
+          },
+          orderBy: (invoices, { desc }) => [desc(invoices.dueDate)],
+        });
       } else {
         receivables = await db.query.invoices.findMany({
           where: status ? eq(invoices.status, status as string) : undefined,
@@ -643,12 +649,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/accounts-receivable", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.FACTURACION), async (req, res) => {
     try {
-      const validated = insertInvoiceSchema.parse({
-        ...req.body,
-        status: req.body.status || "pending_payment",
-        balanceDue: req.body.total,
-      });
-      const invoice = await storage.createInvoice(validated);
+      const validated = insertInvoiceSchema.parse(req.body);
+      
+      // Set default values for new receivable
+      const invoiceData = {
+        ...validated,
+        status: validated.status || "pending_payment",
+        balanceDue: validated.balanceDue || validated.total, // Initialize balance to total
+      };
+      
+      const invoice = await storage.createInvoice(invoiceData);
       res.status(201).json(invoice);
     } catch (error) {
       console.error("Error creating account receivable:", error);

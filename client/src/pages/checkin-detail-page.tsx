@@ -26,11 +26,30 @@ interface CustomerSummary {
   } | null;
   overdueInvoices?: Array<{
     id: string;
+    serie: string;
     folio: string;
     total: string;
+    balanceDue: string;
     dueDate: string;
-    daysPastDue: number;
   }>;
+  upcomingInvoices?: Array<{
+    id: string;
+    serie: string;
+    folio: string;
+    total: string;
+    balanceDue: string;
+    dueDate: string;
+  }>;
+  pendingInvoices?: Array<{
+    id: string;
+    serie: string;
+    folio: string;
+    total: string;
+    balanceDue: string;
+    dueDate: string;
+  }>;
+  hasPendingReceivables?: boolean;
+  totalBalanceDue?: number;
   pendingOrders?: Array<{
     id: string;
     status: string;
@@ -279,6 +298,98 @@ export default function CheckinDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {summary?.hasPendingReceivables && summary.pendingInvoices && summary.pendingInvoices.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Facturas por Cobrar
+              <Badge variant="destructive" data-testid="badge-pending-invoices">
+                {summary.pendingInvoices.length}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Total pendiente: ${safeNumber(summary.totalBalanceDue).toLocaleString("es-MX", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {summary.overdueInvoices && summary.overdueInvoices.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-red-600 mb-2">Facturas Vencidas</h4>
+                  <div className="space-y-2">
+                    {summary.overdueInvoices.map((invoice) => (
+                      <div
+                        key={invoice.id}
+                        className="flex justify-between items-center p-3 rounded-md border border-red-200 bg-red-50"
+                        data-testid={`invoice-overdue-${invoice.id}`}
+                      >
+                        <div>
+                          <div className="font-mono text-sm font-medium">
+                            {invoice.serie}-{invoice.folio}
+                          </div>
+                          {invoice.dueDate && (
+                            <div className="text-xs text-muted-foreground">
+                              Vence: {format(new Date(invoice.dueDate), "PP", { locale: es })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-red-700">
+                            ${parseFloat(invoice.balanceDue || invoice.total).toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Saldo</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {summary.upcomingInvoices && summary.upcomingInvoices.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Facturas Próximas a Vencer</h4>
+                  <div className="space-y-2">
+                    {summary.upcomingInvoices.map((invoice) => (
+                      <div
+                        key={invoice.id}
+                        className="flex justify-between items-center p-3 rounded-md border"
+                        data-testid={`invoice-upcoming-${invoice.id}`}
+                      >
+                        <div>
+                          <div className="font-mono text-sm font-medium">
+                            {invoice.serie}-{invoice.folio}
+                          </div>
+                          {invoice.dueDate && (
+                            <div className="text-xs text-muted-foreground">
+                              Vence: {format(new Date(invoice.dueDate), "PP", { locale: es })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">
+                            ${parseFloat(invoice.balanceDue || invoice.total).toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Saldo</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
