@@ -17,7 +17,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
 import { QuotationForm } from "@/components/quotation-form";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function QuotationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);

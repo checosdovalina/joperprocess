@@ -18,7 +18,7 @@ import { es } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
 import { OrderForm } from "@/components/order-form";
-import { useAuth } from "@/lib/auth";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function OrdersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
