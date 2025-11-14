@@ -10,6 +10,71 @@ The system manages the complete commercial workflow from customer check-ins and 
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### November 14, 2025 - Check-in/Checkout Backend Implementation
+
+**Completed Features:**
+1. **Customer Summary Endpoint** (`GET /api/customers/:id/summary`)
+   - Comprehensive customer data aggregation for sales visits
+   - Credit calculation across ALL quotations (not limited to 6 months)
+   - Overdue invoices with aging analysis
+   - Pending orders tracking
+   - Check-in history with GPS coordinates
+   - Response in camelCase for frontend consumption
+
+2. **Object Storage Integration** (`server/objectStorage.ts`, `server/objectAcl.ts`)
+   - Private ACL policies for check-in photos
+   - Presigned URL upload with secure path validation
+   - Entity-based access control (owner/visibility model)
+   - Path normalization prevents malicious URL injection
+   - All paths validated against PRIVATE_OBJECT_DIR
+
+3. **PDF Generation Service** (`server/pdf-generator.ts`)
+   - **Streaming architecture** - no memory buffering, constant memory usage
+   - Photo processing with Sharp (resize to max 1280px, JPEG quality 85)
+   - Concurrency control (max 3 photos in parallel with p-limit)
+   - Retry logic with exponential backoff (3 attempts)
+   - Soft failure handling (placeholder text if photo download fails)
+   - Limit of 6 photos per PDF document
+   - Professional minuta layout with GRUPO JOPER branding
+
+4. **Checkout Endpoint** (`POST /api/checkins/:id/checkout`)
+   - Ownership authorization (vendedor can only checkout own visits)
+   - PDF stream generation and direct upload to GCS
+   - Atomic update of checkoutAt timestamp and minutePdfPath
+   - Comprehensive error handling with structured logging
+   - Returns updated check-in with PDF entityId
+
+**Technical Decisions:**
+- Streaming PDF generation chosen over buffering to prevent memory spikes with large documents
+- Photo processing bounded by concurrency limits to protect server resources
+- ACL metadata stored in GCS custom metadata for scalable permission checks
+- SQL parameter binding throughout for injection prevention
+
+**Database Schema Changes:**
+- Added `customer_locations` table with GPS coordinates (latitude, longitude) and optional location descriptions
+- Extended `checkins` table:
+  - `checkoutAt` (timestamp, nullable) - Records when salesperson completes visit
+  - `minutePdfPath` (varchar, nullable) - Stores entityId of generated PDF in object storage
+
+**Environment Requirements:**
+- `DEFAULT_OBJECT_STORAGE_BUCKET_ID` - Google Cloud Storage bucket ID for file storage
+- `PRIVATE_OBJECT_DIR` - Path prefix for private objects (check-in photos, PDF minutes)
+- `PUBLIC_OBJECT_SEARCH_PATHS` - Colon-separated paths for public assets
+- Object storage ACL metadata stored in GCS custom metadata field `custom:aclPolicy`
+- **Service Account Credentials**: Managed automatically by Replit's object storage integration
+  - Uses `@google-cloud/storage` client with Replit-specific authentication
+  - Credentials are provided through the integration, no manual GOOGLE_APPLICATION_CREDENTIALS setup required
+  - Required GCS IAM permissions: `storage.objects.create`, `storage.objects.get`, `storage.objects.delete`
+
+**Implementation References:**
+- Customer summary: `server/routes.ts` (GET /api/customers/:id/summary)
+- Object storage: `server/objectStorage.ts`, `server/objectAcl.ts`
+- PDF generation: `server/pdf-generator.ts`
+- Checkout: `server/routes.ts` (POST /api/checkins/:id/checkout)
+- Database schema: `shared/schema.ts`
+
 ## System Architecture
 
 ### Frontend Architecture
