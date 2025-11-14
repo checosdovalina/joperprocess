@@ -115,6 +115,16 @@ export const checkins = pgTable("checkins", {
   minutePdfPath: text("minute_pdf_path"),
 });
 
+// Pending uploads table (for secure photo upload tracking)
+export const pendingUploads = pgTable("pending_uploads", {
+  entityId: text("entity_id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  checkinId: varchar("checkin_id").notNull().references(() => checkins.id),
+  used: boolean("used").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
 // Quotations table
 export const quotations = pgTable("quotations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -358,6 +368,10 @@ export const insertCustomerLocationSchema = createInsertSchema(customerLocations
 export const insertCheckinSchema = createInsertSchema(checkins).omit({
   id: true,
   checkinAt: true,
+});
+
+export const insertPendingUploadSchema = createInsertSchema(pendingUploads).omit({
+  createdAt: true,
 });
 
 export const insertQuotationSchema = createInsertSchema(quotations).omit({

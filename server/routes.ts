@@ -5,7 +5,7 @@ import { setupAuth, isAuthenticated, hasRole } from "./auth";
 import { db } from "./db";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { ObjectPermission } from "./objectAcl";
+import { ObjectPermission, setObjectAclPolicy, getObjectAclPolicy } from "./objectAcl";
 import { 
   insertCustomerSchema,
   insertCheckinSchema,
@@ -16,12 +16,13 @@ import {
   insertShipmentSchema,
   insertInvoiceSchema,
   insertPaymentSchema,
+  insertPendingUploadSchema,
   UserRole,
   QuotationStatus,
   CreditAuthStatus,
   OrderStatus,
 } from "@shared/schema";
-import { customers, quotations, checkins, users, orders, creditAuthorizations, shipments, invoices, payments } from "@shared/schema";
+import { customers, quotations, checkins, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -641,9 +642,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
     try {
+      const schema = z.object({
+        checkinId: z.string().uuid(),
+      });
+
+      const { checkinId } = schema.parse(req.body);
+      const userId = req.user!.id;
+
+      // Verify checkin exists and user owns it
+      const checkin = await storage.getCheckin(checkinId);
+      if (!checkin) {
+        return res.status(404).json({ error: "Check-in not found" });
+      }
+      if (checkin.userId !== userId) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
+      const { uploadURL, entityId } = await objectStorageService.getObjectEntityUploadURL();
+
+      // Create pending upload entry (expires in 1 hour) with schema validation
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      const validatedUpload = insertPendingUploadSchema.parse({
+        entityId,
+        userId,
+        checkinId,
+        used: false,
+        expiresAt,
+      });
+      await db.insert(pendingUploads).values(validatedUpload);
+
+      res.json({ uploadURL, entityId });
     } catch (error) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Error getting upload URL" });
@@ -654,36 +683,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const schema = z.object({
         checkinId: z.string().uuid(),
-        photoURL: z.string(),
+        entityId: z.string().refine(
+          (val) => {
+            // Prevent path traversal: no ".." or "\\"
+            // Allow "/" for valid paths like "uploads/<uuid>"
+            return !val.includes("..") && !val.includes("\\");
+          },
+          { message: "Invalid entityId: path traversal detected" }
+        ),
       });
 
-      const { checkinId, photoURL } = schema.parse(req.body);
+      const { checkinId, entityId } = schema.parse(req.body);
       const userId = req.user!.id;
 
+      // Pre-verify issuance (outside transaction) to prevent oracle exposure
+      const pendingUpload = await db.query.pendingUploads.findFirst({
+        where: eq(pendingUploads.entityId, entityId),
+      });
+
+      if (!pendingUpload) {
+        return res.status(403).json({ error: "Invalid or inaccessible photo" });
+      }
+
+      // Verify ownership, checkin match, unused, and not expired
+      if (
+        pendingUpload.userId !== userId ||
+        pendingUpload.checkinId !== checkinId ||
+        pendingUpload.used ||
+        pendingUpload.expiresAt < new Date()
+      ) {
+        return res.status(403).json({ error: "Invalid or inaccessible photo" });
+      }
+
+      // Transaction 1: verify constraints + mark issuance used
+      let checkin;
+      let updatedPhotos: string[];
+      try {
+        checkin = await db.transaction(async (tx) => {
+          // Lock checkin row for update to prevent races
+          const [locked] = await tx
+            .select()
+            .from(checkins)
+            .where(eq(checkins.id, checkinId))
+            .for("update");
+
+          if (!locked) {
+            throw new Error("CHECKIN_NOT_FOUND");
+          }
+
+          if (locked.userId !== userId) {
+            throw new Error("NOT_AUTHORIZED");
+          }
+
+          const currentPhotos = locked.photos || [];
+
+          // Verify constraints
+          if (currentPhotos.includes(entityId)) {
+            throw new Error("DUPLICATE_PHOTO");
+          }
+
+          if (currentPhotos.length >= 6) {
+            throw new Error("MAX_PHOTOS_REACHED");
+          }
+
+          // Mark issuance used
+          await tx
+            .update(pendingUploads)
+            .set({ used: true })
+            .where(eq(pendingUploads.entityId, entityId));
+
+          return locked;
+        });
+      } catch (txError: any) {
+        if (txError.message === "CHECKIN_NOT_FOUND") {
+          return res.status(404).json({ error: "Check-in not found" });
+        }
+        if (txError.message === "NOT_AUTHORIZED") {
+          return res.status(403).json({ error: "Not authorized" });
+        }
+        if (txError.message === "DUPLICATE_PHOTO") {
+          return res.status(409).json({ error: "Photo already attached to this check-in" });
+        }
+        if (txError.message === "MAX_PHOTOS_REACHED") {
+          return res.status(409).json({ error: "Maximum 6 photos per check-in" });
+        }
+        throw txError;
+      }
+
+      // Set ACL (after issuance marked, before photos update)
       const objectStorageService = new ObjectStorageService();
-      const entityId = await objectStorageService.trySetObjectEntityAclPolicy(
-        photoURL,
-        {
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(entityId);
+        await setObjectAclPolicy(objectFile, {
           owner: userId,
           visibility: "private",
-        },
-      );
-
-      const checkin = await storage.getCheckin(checkinId);
-      if (!checkin) {
-        return res.status(404).json({ error: "Check-in not found" });
+        });
+      } catch (aclError) {
+        // ACL failed - reset used flag and abort
+        await db.update(pendingUploads)
+          .set({ used: false })
+          .where(eq(pendingUploads.entityId, entityId));
+        
+        console.error("ACL update failed, reset pending upload:", aclError);
+        return res.status(500).json({ error: "Failed to set photo permissions" });
       }
 
-      if (checkin.userId !== userId) {
-        return res.status(403).json({ error: "Not authorized to update this check-in" });
+      // Transaction 2: update photos (only if ACL succeeded)
+      try {
+        updatedPhotos = await db.transaction(async (tx) => {
+          const [current] = await tx
+            .select()
+            .from(checkins)
+            .where(eq(checkins.id, checkinId));
+
+          const currentPhotos = current.photos || [];
+          const newPhotos = [...currentPhotos, entityId];
+
+          await tx
+            .update(checkins)
+            .set({ photos: newPhotos })
+            .where(eq(checkins.id, checkinId));
+
+          return newPhotos;
+        });
+      } catch (updateError) {
+        // Photos update failed - reset used flag
+        await db.update(pendingUploads)
+          .set({ used: false })
+          .where(eq(pendingUploads.entityId, entityId));
+        
+        console.error("Photos update failed, reset pending upload:", updateError);
+        return res.status(500).json({ error: "Failed to update check-in photos" });
       }
-
-      const currentPhotos = checkin.photos || [];
-      const updatedPhotos = [...currentPhotos, entityId];
-
-      await storage.updateCheckin(checkinId, {
-        photos: updatedPhotos,
-      });
 
       res.status(200).json({
         entityId: entityId,

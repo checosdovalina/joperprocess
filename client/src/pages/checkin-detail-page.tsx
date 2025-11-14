@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { CheckinPhotoUploader } from "@/components/checkin-photo-uploader";
 
 interface CustomerSummary {
   customer: Customer;
@@ -247,13 +248,51 @@ export default function CheckinDetailPage() {
         <CardHeader>
           <CardTitle>Fotografías de la Visita</CardTitle>
           <CardDescription>
-            {checkin.photos?.length || 0} fotos capturadas
+            {checkin.photos?.length || 0} de 6 fotos capturadas
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            Funcionalidad de carga de fotos en desarrollo
-          </div>
+        <CardContent className="space-y-6">
+          {checkin.photos && checkin.photos.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium mb-3">Fotos Actuales</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {checkin.photos.map((photoEntityId, index) => (
+                  <div
+                    key={photoEntityId}
+                    className="relative aspect-square rounded-md overflow-hidden bg-muted"
+                    data-testid={`image-photo-${index}`}
+                  >
+                    <img
+                      src={`/objects/${photoEntityId}`}
+                      alt={`Foto ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center">
+                      Foto {index + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!checkin.checkoutAt && (
+            <div>
+              <h3 className="text-sm font-medium mb-3">Agregar Fotos</h3>
+              <CheckinPhotoUploader
+                checkinId={checkin.id}
+                currentPhotoCount={checkin.photos?.length || 0}
+              />
+            </div>
+          )}
+
+          {checkin.checkoutAt && (checkin.photos?.length || 0) === 0 && (
+            <div className="text-center py-8 text-muted-foreground flex flex-col items-center gap-2">
+              <ImageIcon className="w-12 h-12 opacity-20" />
+              <p>No se capturaron fotos durante esta visita</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
