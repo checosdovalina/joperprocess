@@ -2,188 +2,39 @@
 
 ## Overview
 
-GRUPO JOPER Sistema Comercial is an enterprise-grade commercial management platform designed for sales, credit, production, shipping, and invoicing operations. The application serves multiple organizational roles including salespeople, credit/collections teams, logistics, factory operations, shipping departments, and accounting/invoicing teams. It's optimized for field operations with a mobile-first approach while maintaining full desktop functionality.
-
-The system manages the complete commercial workflow from customer check-ins and quotations through credit authorization, production orders, shipments, invoicing, and payment collection.
+GRUPO JOPER Sistema Comercial is an enterprise-grade platform designed for comprehensive commercial management, encompassing sales, credit, production, shipping, and invoicing. It supports various organizational roles and manages the entire commercial workflow from customer interactions and quotations to payment collection. The application is optimized for mobile field operations while providing full desktop functionality.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes
-
-### November 14, 2025 - Check-in/Checkout Backend Implementation
-
-**Completed Features:**
-1. **Customer Summary Endpoint** (`GET /api/customers/:id/summary`)
-   - Comprehensive customer data aggregation for sales visits
-   - Credit calculation across ALL quotations (not limited to 6 months)
-   - Overdue invoices with aging analysis
-   - Pending orders tracking
-   - Check-in history with GPS coordinates
-   - Response in camelCase for frontend consumption
-
-2. **Object Storage Integration** (`server/objectStorage.ts`, `server/objectAcl.ts`)
-   - Private ACL policies for check-in photos
-   - Presigned URL upload with secure path validation
-   - Entity-based access control (owner/visibility model)
-   - Path normalization prevents malicious URL injection
-   - All paths validated against PRIVATE_OBJECT_DIR
-
-3. **PDF Generation Service** (`server/pdf-generator.ts`)
-   - **Streaming architecture** - no memory buffering, constant memory usage
-   - Photo processing with Sharp (resize to max 1280px, JPEG quality 85)
-   - Concurrency control (max 3 photos in parallel with p-limit)
-   - Retry logic with exponential backoff (3 attempts)
-   - Soft failure handling (placeholder text if photo download fails)
-   - Limit of 6 photos per PDF document
-   - Professional minuta layout with GRUPO JOPER branding
-
-4. **Checkout Endpoint** (`POST /api/checkins/:id/checkout`)
-   - Ownership authorization (vendedor can only checkout own visits)
-   - PDF stream generation and direct upload to GCS
-   - Atomic update of checkoutAt timestamp and minutePdfPath
-   - Comprehensive error handling with structured logging
-   - Returns updated check-in with PDF entityId
-
-**Technical Decisions:**
-- Streaming PDF generation chosen over buffering to prevent memory spikes with large documents
-- Photo processing bounded by concurrency limits to protect server resources
-- ACL metadata stored in GCS custom metadata for scalable permission checks
-- SQL parameter binding throughout for injection prevention
-
-**Database Schema Changes:**
-- Added `customer_locations` table with GPS coordinates (latitude, longitude) and optional location descriptions
-- Extended `checkins` table:
-  - `checkoutAt` (timestamp, nullable) - Records when salesperson completes visit
-  - `minutePdfPath` (varchar, nullable) - Stores entityId of generated PDF in object storage
-
-**Environment Requirements:**
-- `DEFAULT_OBJECT_STORAGE_BUCKET_ID` - Google Cloud Storage bucket ID for file storage
-- `PRIVATE_OBJECT_DIR` - Path prefix for private objects (check-in photos, PDF minutes)
-- `PUBLIC_OBJECT_SEARCH_PATHS` - Colon-separated paths for public assets
-- Object storage ACL metadata stored in GCS custom metadata field `custom:aclPolicy`
-- **Service Account Credentials**: Managed automatically by Replit's object storage integration
-  - Uses `@google-cloud/storage` client with Replit-specific authentication
-  - Credentials are provided through the integration, no manual GOOGLE_APPLICATION_CREDENTIALS setup required
-  - Required GCS IAM permissions: `storage.objects.create`, `storage.objects.get`, `storage.objects.delete`
-
-**Implementation References:**
-- Customer summary: `server/routes.ts` (GET /api/customers/:id/summary)
-- Object storage: `server/objectStorage.ts`, `server/objectAcl.ts`
-- PDF generation: `server/pdf-generator.ts`
-- Checkout: `server/routes.ts` (POST /api/checkins/:id/checkout)
-- Database schema: `shared/schema.ts`
-
 ## System Architecture
 
 ### Frontend Architecture
 
-**Framework:** React 18 with TypeScript, using Vite as the build tool and development server.
-
-**Routing:** Wouter - A lightweight routing solution chosen for minimal bundle size while providing essential routing capabilities.
-
-**State Management:** TanStack Query (React Query v5) for server state management, eliminating the need for additional global state libraries. This provides built-in caching, automatic refetching, and optimistic updates.
-
-**UI Component System:** Shadcn/ui with Radix UI primitives - A collection of unstyled, accessible components that are copied into the project rather than installed as dependencies. This approach provides full control over styling and behavior while ensuring accessibility compliance.
-
-**Styling:** Tailwind CSS with a custom design system based on Material Design and Ant Design principles, optimized for data-heavy enterprise applications. Uses CSS variables for theming with dark mode support.
-
-**Form Management:** React Hook Form with Zod schema validation for type-safe form handling and validation.
-
-**Design System Philosophy:** Enterprise-focused with clarity-first approach, optimized for quick data scanning and mobile efficiency. Typography uses Inter font family with systematic scale. Spacing follows Tailwind unit primitives (2, 4, 6, 8, 12, 16).
+The frontend is built with React 18 and TypeScript, using Vite for development and bundling. Wouter handles routing, and TanStack Query manages server state, providing caching and automatic refetching. UI components are built with Shadcn/ui and Radix UI primitives, allowing for full control and accessibility. Styling is managed with Tailwind CSS, following a custom design system based on Material Design and Ant Design principles, optimized for data-heavy enterprise applications with dark mode support. React Hook Form with Zod is used for type-safe form handling and validation.
 
 ### Backend Architecture
 
-**Runtime:** Node.js with Express.js framework running in ESM module mode.
-
-**API Pattern:** RESTful API with session-based authentication. All endpoints follow `/api/*` convention.
-
-**Authentication:** Passport.js with LocalStrategy for username/password authentication. Passwords are hashed using Node's native scrypt algorithm with random salts. Sessions are stored server-side using connect-pg-simple.
-
-**Authorization:** Role-based access control (RBAC) with 7 distinct roles:
-- Admin (full system access)
-- Vendedor (salespeople - customer management, check-ins, quotations)
-- Crédito y Cobranza (credit/collections)
-- Ventas/Logística (sales logistics)
-- Fábrica (factory/production)
-- Embarques (shipping)
-- Facturación (invoicing)
-
-**Middleware Strategy:** Custom request logging middleware captures API performance metrics. Body parsing supports both JSON and URL-encoded data with raw body preservation for webhook processing.
-
-**Error Handling:** Centralized error responses with HTTP status codes. Authentication failures return 401, authorization failures return 403.
+The backend runs on Node.js with Express.js in ESM module mode, exposing a RESTful API. Authentication is session-based using Passport.js with a LocalStrategy and scrypt-hashed passwords, with sessions stored server-side using `connect-pg-simple`. Authorization is role-based (RBAC) with seven distinct roles. Custom middleware handles request logging, and centralized error handling provides consistent HTTP status codes.
 
 ### Data Layer
 
-**ORM:** Drizzle ORM - Type-safe SQL query builder chosen for its lightweight footprint and excellent TypeScript integration. Provides compile-time type checking for database queries.
+Drizzle ORM provides type-safe SQL querying with PostgreSQL (via Neon serverless) as the database. The schema is centrally defined in `shared/schema.ts` and managed with Drizzle Kit for migrations. Drizzle-Zod integration ensures data validation matches database constraints. Key tables include `users`, `customers`, `checkins`, `quotations`, `creditAuthorizations`, `orders`, `shipments`, `invoices`, and `payments`.
 
-**Database Driver:** @neondatabase/serverless with WebSocket support for serverless-compatible PostgreSQL connections.
+### Key Features
 
-**Schema Definition:** Centralized in `shared/schema.ts` for type sharing between client and server. Utilizes Drizzle's relational queries for efficient joins.
+- **Customer Summary Endpoint**: Aggregates comprehensive customer data for sales visits, including credit calculations, overdue invoices, pending orders, and check-in history.
+- **Check-in/Checkout Functionality**: Supports field visit tracking, including GPS coordinates, photo uploads, PDF generation of visit minutes, and secure checkout processes.
+- **Secure Photo Uploads**: Implements a robust system for handling photo uploads to object storage, including presigned URLs, issuance tracking, two-phase commit for atomicity, and strict ACL policies.
+- **Streaming PDF Generation**: Generates PDF documents for check-in minutes using a streaming architecture to prevent memory issues, including image processing and secure upload to object storage.
 
-**Migration Strategy:** Drizzle Kit manages schema migrations with push-based workflow for rapid development.
+## External Dependencies
 
-**Data Validation:** Drizzle-Zod integration generates Zod schemas from database schema definitions, ensuring validation rules match database constraints.
-
-**Key Tables:**
-- users (authentication and role management)
-- customers (client information and credit limits)
-- checkins (field visit tracking with geolocation)
-- quotations (sales quotes with line items)
-- creditAuthorizations (approval workflow for credit limits)
-- orders (production orders linked to quotations)
-- shipments (delivery tracking with digital signatures)
-- invoices (CFDI invoicing)
-- payments (collections and payment promises)
-
-### External Dependencies
-
-**Database:** PostgreSQL (via Neon serverless) - Enterprise-grade relational database chosen for ACID compliance, complex query support, and robust transaction handling required for financial operations.
-
-**Session Store:** PostgreSQL-backed sessions via connect-pg-simple, ensuring session persistence across server restarts and enabling horizontal scaling.
-
-**Font Delivery:** Google Fonts CDN for Inter font family (400, 500, 600, 700 weights).
-
-**Development Tools:**
-- Replit-specific plugins for development banner and cartographer (visual debugging)
-- Runtime error modal overlay for development
-
-**Date Handling:** date-fns library with Spanish locale support for date formatting and manipulation.
-
-**Build Process:** 
-- Client: Vite builds to `dist/public`
-- Server: esbuild bundles to `dist/index.js` with ESM output and external package references
-- Production deployment uses compiled artifacts with NODE_ENV=production
-
-### API Architecture
-
-**Route Organization:** Centralized in `server/routes.ts` with logical grouping by resource type.
-
-**Data Flow Pattern:**
-1. Client makes authenticated API request
-2. Session middleware validates user session
-3. Route handler checks role-based permissions
-4. Drizzle ORM executes type-safe database queries
-5. Response returns JSON with appropriate HTTP status
-6. React Query caches response and updates UI
-
-**Query Optimization:** Uses Drizzle's relational queries to minimize N+1 problems. Dashboard stats endpoint uses raw SQL for aggregation performance.
-
-**Real-time Updates:** Polling-based updates via React Query's refetch mechanisms. No WebSocket implementation currently (opportunity for future enhancement).
-
-### Security Architecture
-
-**Password Security:** Scrypt-based hashing with per-user random salts. Timing-safe comparison prevents timing attacks.
-
-**Session Management:** 
-- HTTP-only cookies prevent XSS attacks
-- 7-day session expiration
-- Server-side session storage prevents client tampering
-- Trust proxy enabled for proper IP detection behind reverse proxies
-
-**CSRF Protection:** Session-based authentication provides built-in CSRF protection through SameSite cookie attributes.
-
-**Input Validation:** Zod schemas validate all user inputs on both client and server, preventing injection attacks and ensuring data integrity.
-
-**File Upload Strategy:** Currently supports photo metadata storage (URLs/paths) rather than direct file uploads - actual file storage solution to be determined based on deployment environment.
+- **Database**: PostgreSQL (via Neon serverless) for ACID compliance and robust transaction handling.
+- **Object Storage**: Google Cloud Storage (GCS) for storing check-in photos and generated PDF minutes, leveraging Replit's integration for credentials and `@google-cloud/storage` client.
+- **Session Store**: `connect-pg-simple` for PostgreSQL-backed server-side session storage.
+- **Font Delivery**: Google Fonts CDN for the Inter font family.
+- **Date Handling**: `date-fns` library for date manipulation and formatting.
+- **Build Tools**: Vite (frontend) and esbuild (backend) for optimized production builds.
+- **Image Processing**: Sharp for resizing and optimizing images during PDF generation.
