@@ -1033,14 +1033,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Sending email notifications...`);
         const recipients: string[] = [];
         
+        // TEMPORAL: Solo enviar al vendedor para trial de Mailersend (límite 1 destinatario)
+        // TODO: Una vez verificado el dominio, descomentar las otras líneas
+        
+        // Add salesperson (user) email - PRIORIDAD
+        if (user.email) {
+          recipients.push(user.email);
+        }
+        
+        /* DESCOMENTAR cuando se verifique dominio en Mailersend:
         // Add customer email if exists
         if (customer.email) {
           recipients.push(customer.email);
-        }
-        
-        // Add salesperson (user) email
-        if (user.email) {
-          recipients.push(user.email);
         }
         
         // Get admin emails
@@ -1053,6 +1057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             recipients.push(admin.email);
           }
         });
+        */
         
         if (recipients.length > 0) {
           await sendCheckoutEmail({
