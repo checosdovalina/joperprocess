@@ -424,6 +424,9 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   issuedAt: true,
   createdAt: true,
+}).extend({
+  dueDate: z.coerce.date().optional(),
+  paidAt: z.coerce.date().optional(),
 });
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({
