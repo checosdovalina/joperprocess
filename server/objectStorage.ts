@@ -119,6 +119,33 @@ export class ObjectStorageService {
     }
   }
 
+  async downloadObjectAsBuffer(objectPath: string): Promise<Buffer> {
+    try {
+      // If objectPath is relative (doesn't start with /), prepend PRIVATE_OBJECT_DIR
+      let fullPath = objectPath;
+      if (!objectPath.startsWith('/')) {
+        const privateObjectDir = this.getPrivateObjectDir();
+        fullPath = `${privateObjectDir}/${objectPath}`;
+      }
+
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectName);
+
+      const [exists] = await file.exists();
+      if (!exists) {
+        console.error(`Object not found: ${fullPath}`);
+        throw new ObjectNotFoundError();
+      }
+
+      const [buffer] = await file.download();
+      return buffer;
+    } catch (error) {
+      console.error(`Error downloading object as buffer: ${objectPath}`, error);
+      throw error;
+    }
+  }
+
   async getObjectEntityUploadURL(): Promise<{ uploadURL: string; entityId: string }> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {

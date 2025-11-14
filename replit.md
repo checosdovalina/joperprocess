@@ -33,6 +33,7 @@ Drizzle ORM provides type-safe SQL querying with PostgreSQL (via Neon serverless
 
 - **Database**: PostgreSQL (via Neon serverless) for ACID compliance and robust transaction handling.
 - **Object Storage**: Google Cloud Storage (GCS) for storing check-in photos and generated PDF minutes, leveraging Replit's integration for credentials and `@google-cloud/storage` client.
+- **Email Service**: Resend for transactional email delivery. Automatically sends PDF minutes to customers, salespeople, and administrators upon check-in completion. Uses `RESEND_API_KEY` environment secret.
 - **Session Store**: `connect-pg-simple` for PostgreSQL-backed server-side session storage.
 - **Font Delivery**: Google Fonts CDN for the Inter font family.
 - **Date Handling**: `date-fns` library for date manipulation and formatting.

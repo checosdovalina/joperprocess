@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { readFile } from 'fs/promises';
+import { ObjectStorageService } from './objectStorage';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -20,8 +20,15 @@ export async function sendCheckoutEmail({
   pdfPath,
 }: SendCheckoutEmailParams): Promise<void> {
   try {
-    // Read PDF file from object storage path
-    const pdfBuffer = await readFile(pdfPath);
+    // Validate recipients
+    if (!to || to.length === 0) {
+      throw new Error('No recipients provided for email');
+    }
+
+    // Download PDF from Google Cloud Storage
+    console.log(`📥 Downloading PDF from GCS: ${pdfPath}`);
+    const objectStorageService = new ObjectStorageService();
+    const pdfBuffer = await objectStorageService.downloadObjectAsBuffer(pdfPath);
     
     // Format email subject
     const subject = `Minuta de Visita - ${checkinData.customerName}`;
