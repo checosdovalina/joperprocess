@@ -123,7 +123,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Cliente</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-customer">
                         <SelectValue placeholder="Selecciona un cliente" />
