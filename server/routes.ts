@@ -6,6 +6,9 @@ import { db } from "./db";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission, setObjectAclPolicy, getObjectAclPolicy } from "./objectAcl";
+import { sendCheckoutEmail } from "./email-service";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { 
   insertCustomerSchema,
   insertCheckinSchema,
@@ -991,6 +994,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         checkoutNotes,
         minutePdfPath: pdfPath,
       });
+
+      // Send email notifications with PDF attachment
+      try {
+        console.log(`Sending email notifications...`);
+        const recipients: string[] = [];
+        
+        // Add customer email if exists
+        if (customer.email) {
+          recipients.push(customer.email);
+        }
+        
+        // Add salesperson (user) email
+        if (user.email) {
+          recipients.push(user.email);
+        }
+        
+        // Get admin emails
+        const admins = await db.query.users.findMany({
+          where: eq(users.role, UserRole.ADMIN),
+        });
+        
+        admins.forEach(admin => {
+          if (admin.email && !recipients.includes(admin.email)) {
+            recipients.push(admin.email);
+          }
+        });
+        
+        if (recipients.length > 0) {
+          await sendCheckoutEmail({
+            to: recipients,
+            checkinData: {
+              customerName: customer.name,
+              vendedorName: user.fullName,
+              checkoutDate: format(new Date(), "PPP 'a las' p", { locale: es }),
+              notes: checkoutNotes,
+            },
+            pdfPath,
+          });
+          console.log(`✅ Emails sent to: ${recipients.join(', ')}`);
+        } else {
+          console.warn('⚠️ No recipients found for email notification');
+        }
+      } catch (emailError) {
+        // Log the error but don't fail the checkout
+        console.error('❌ Error sending emails:', emailError);
+      }
 
       res.status(200).json({
         checkin: updatedCheckin,
