@@ -1,7 +1,9 @@
-import { Resend } from 'resend';
+import { MailerSend, EmailParams, Sender, Recipient, Attachment } from 'mailersend';
 import { ObjectStorageService } from './objectStorage';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const mailerSend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY || '',
+});
 
 interface SendCheckoutEmailParams {
   to: string[];
@@ -161,19 +163,26 @@ export async function sendCheckoutEmail({
       </html>
     `;
     
-    // Send email with PDF attachment
-    await resend.emails.send({
-      from: 'GRUPO JOPER <noreply@updates.resend.dev>', // Resend test domain
-      to,
-      subject,
-      html: htmlContent,
-      attachments: [
-        {
-          filename: `minuta-${checkinData.customerName.replace(/\s+/g, '-')}.pdf`,
-          content: pdfBuffer,
-        },
-      ],
-    });
+    // Prepare sender and recipients
+    const sentFrom = new Sender('noreply@trial-0r83ql3zz5zg9yjr.mlsender.net', 'GRUPO JOPER');
+    const recipients = to.map(email => new Recipient(email));
+    
+    // Prepare PDF attachment
+    const attachment = new Attachment(
+      pdfBuffer.toString('base64'),
+      `minuta-${checkinData.customerName.replace(/\s+/g, '-')}.pdf`,
+      'attachment'
+    );
+    
+    // Send email with MailerSend
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setSubject(subject)
+      .setHtml(htmlContent)
+      .setAttachments([attachment]);
+    
+    await mailerSend.email.send(emailParams);
     
     console.log(`✅ Email sent successfully to: ${to.join(', ')}`);
   } catch (error) {
