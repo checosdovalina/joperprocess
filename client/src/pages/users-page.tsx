@@ -13,15 +13,63 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX } from "lucide-react";
+import { Users, UserCheck, UserX, UserPlus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function UsersPage() {
   const { toast } = useToast();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newUser, setNewUser] = useState({
+    username: "",
+    password: "",
+    fullName: "",
+    email: "",
+    role: UserRole.VENDEDOR as string,
+  });
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (userData: typeof newUser) => {
+      const res = await apiRequest("POST", "/api/register", { ...userData, active: true });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Usuario creado",
+        description: "El nuevo usuario ha sido creado exitosamente",
+      });
+      setIsCreateDialogOpen(false);
+      setNewUser({
+        username: "",
+        password: "",
+        fullName: "",
+        email: "",
+        role: UserRole.VENDEDOR,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo crear el usuario",
+        variant: "destructive",
+      });
+    },
   });
 
   const toggleUserMutation = useMutation({
@@ -58,13 +106,127 @@ export default function UsersPage() {
     return labels[role] || role;
   };
 
+  const roleOptions = [
+    { value: UserRole.VENDEDOR, label: "Vendedor" },
+    { value: UserRole.CREDITO_COBRANZA, label: "Crédito y Cobranza" },
+    { value: UserRole.VENTAS_LOGISTICA, label: "Ventas/Logística" },
+    { value: UserRole.FABRICA, label: "Fábrica" },
+    { value: UserRole.EMBARQUES, label: "Embarques" },
+    { value: UserRole.FACTURACION, label: "Facturación" },
+    { value: UserRole.ADMIN, label: "Administrador" },
+  ];
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    createUserMutation.mutate(newUser);
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Administración de Usuarios</h1>
-        <p className="text-muted-foreground mt-1">
-          Gestiona usuarios, roles y permisos del sistema
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Administración de Usuarios</h1>
+          <p className="text-muted-foreground mt-1">
+            Gestiona usuarios, roles y permisos del sistema
+          </p>
+        </div>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-create-user">
+              <UserPlus className="mr-2 h-4 w-4" />
+              Crear Usuario
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+              <DialogDescription>
+                Completa los datos para crear un nuevo usuario en el sistema
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-fullName">Nombre Completo</Label>
+                <Input
+                  id="new-fullName"
+                  data-testid="input-new-fullname"
+                  type="text"
+                  value={newUser.fullName}
+                  onChange={(e) => setNewUser({ ...newUser, fullName: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-email">Correo Electrónico</Label>
+                <Input
+                  id="new-email"
+                  data-testid="input-new-email"
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-username">Usuario</Label>
+                <Input
+                  id="new-username"
+                  data-testid="input-new-username"
+                  type="text"
+                  value={newUser.username}
+                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Contraseña</Label>
+                <Input
+                  id="new-password"
+                  data-testid="input-new-password"
+                  type="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-role">Rol</Label>
+                <Select
+                  value={newUser.role}
+                  onValueChange={(value) => setNewUser({ ...newUser, role: value })}
+                >
+                  <SelectTrigger id="new-role" data-testid="select-new-role">
+                    <SelectValue placeholder="Selecciona un rol" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roleOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCreateDialogOpen(false)}
+                  data-testid="button-cancel-create"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createUserMutation.isPending}
+                  data-testid="button-submit-create"
+                >
+                  {createUserMutation.isPending ? "Creando..." : "Crear Usuario"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

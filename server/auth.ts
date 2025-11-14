@@ -5,7 +5,10 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
+import { User as SelectUser, UserRole, users } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
 
 declare global {
   namespace Express {
@@ -88,22 +91,96 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // Register endpoint - only for admin use (or manual first setup)
   app.post("/api/register", async (req, res, next) => {
     try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
-      if (existingUser) {
-        return res.status(400).send("El usuario ya existe");
+      // Validate request body with Zod schema
+      const registerSchema = z.object({
+        username: z.string().min(3).max(50),
+        password: z.string().min(6),
+        fullName: z.string().min(1).max(100),
+        email: z.string().email(),
+        role: z.enum([
+          UserRole.ADMIN,
+          UserRole.VENDEDOR,
+          UserRole.CREDITO_COBRANZA,
+          UserRole.VENTAS_LOGISTICA,
+          UserRole.FABRICA,
+          UserRole.EMBARQUES,
+          UserRole.FACTURACION,
+        ]),
+        active: z.boolean().optional(),
+      });
+
+      const validationResult = registerSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Datos inválidos",
+          details: validationResult.error.errors,
+        });
       }
 
+      const userData = validationResult.data;
+
+      // Always require authentication except for first user
+      // This prevents race condition by checking auth BEFORE counting users
+      const isAuthenticated = req.isAuthenticated();
+      const isAdmin = isAuthenticated && req.user?.role === UserRole.ADMIN;
+      
+      // Check user count
+      const allUsers = await storage.getAllUsers();
+      const isFirstUser = allUsers.length === 0;
+      
+      // Security: Only allow if (first user) OR (authenticated admin)
+      if (!isFirstUser && !isAdmin) {
+        return res.status(403).json({ 
+          error: isAuthenticated 
+            ? "Solo administradores pueden crear usuarios"
+            : "No autorizado. El registro público está deshabilitado."
+        });
+      }
+
+      // Validate username doesn't exist
+      const existingUser = await storage.getUserByUsername(userData.username);
+      if (existingUser) {
+        return res.status(400).json({ error: "El usuario ya existe" });
+      }
+
+      // Create user with hashed password (using validated data)
       const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
+        username: userData.username,
+        password: await hashPassword(userData.password),
+        fullName: userData.fullName,
+        email: userData.email,
+        role: userData.role,
+        active: userData.active ?? true,
       });
 
-      req.login(user, (err) => {
-        if (err) return next(err);
+      // RACE CONDITION PROTECTION:
+      // Re-check user count after creation to detect concurrent registrations
+      if (isFirstUser && !isAuthenticated) {
+        const usersAfterCreate = await storage.getAllUsers();
+        
+        // If more than one user now exists, we had a race condition
+        if (usersAfterCreate.length > 1) {
+          // Delete the user we just created (rollback)
+          // Note: We keep the first one that was written to DB
+          await db.delete(users).where(eq(users.id, user.id));
+          
+          return res.status(409).json({ 
+            error: "El registro público ya no está disponible. Por favor contacta al administrador."
+          });
+        }
+        
+        // Safe to auto-login - this is the genuine first user
+        req.login(user, (err) => {
+          if (err) return next(err);
+          res.status(201).json(user);
+        });
+      } else {
+        // Admin created the user, return without login
         res.status(201).json(user);
-      });
+      }
     } catch (error) {
       next(error);
     }
@@ -123,6 +200,16 @@ export function setupAuth(app: Express) {
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     res.json(req.user);
+  });
+
+  // Check if public registration is allowed (only for first user)
+  app.get("/api/allow-registration", async (_req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      res.json({ allowed: allUsers.length === 0 });
+    } catch (error) {
+      res.status(500).json({ allowed: false });
+    }
   });
 }
 

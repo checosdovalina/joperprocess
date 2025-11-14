@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, Loader2 } from "lucide-react";
 import { UserRole } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -20,6 +21,13 @@ export default function AuthPage() {
     email: "",
     role: "vendedor" as string,
   });
+
+  // Check if public registration is allowed (only for first user)
+  const { data: registrationStatus } = useQuery<{ allowed: boolean }>({
+    queryKey: ["/api/allow-registration"],
+  });
+
+  const allowRegistration = registrationStatus?.allowed ?? false;
 
   if (user) {
     return <Redirect to="/" />;
@@ -63,10 +71,16 @@ export default function AuthPage() {
           </div>
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="register" data-testid="tab-register">Registro</TabsTrigger>
-            </TabsList>
+            {allowRegistration ? (
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
+                <TabsTrigger value="register" data-testid="tab-register">Registro</TabsTrigger>
+              </TabsList>
+            ) : (
+              <TabsList className="grid w-full grid-cols-1">
+                <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
+              </TabsList>
+            )}
 
             <TabsContent value="login">
               <Card>
@@ -124,14 +138,15 @@ export default function AuthPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="register">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Crear Cuenta</CardTitle>
-                  <CardDescription>
-                    Completa el formulario para crear una nueva cuenta
-                  </CardDescription>
-                </CardHeader>
+            {allowRegistration && (
+              <TabsContent value="register">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Crear Cuenta</CardTitle>
+                    <CardDescription>
+                      Configuración inicial del sistema - Crear primer usuario administrador
+                    </CardDescription>
+                  </CardHeader>
                 <CardContent>
                   <form onSubmit={handleRegister} className="space-y-4">
                     <div className="space-y-2">
@@ -225,6 +240,7 @@ export default function AuthPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+            )}
           </Tabs>
         </div>
       </div>
