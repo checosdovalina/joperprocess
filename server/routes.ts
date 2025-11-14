@@ -141,15 +141,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer not found" });
       }
 
-      // Get overdue invoices
-      const overdueInvoices = await db.query.invoices.findMany({
-        where: and(
-          eq(invoices.customerId, id),
-          sql`${invoices.dueDate} < NOW()`
-        ),
-        orderBy: (invoices, { desc }) => [desc(invoices.dueDate)],
-        limit: 10,
-      });
+      // Get pending/overdue invoices (accounts receivable)
+      const pendingInvoices = await storage.getPendingInvoicesByCustomer(id);
+      
+      const overdueInvoices = pendingInvoices.filter(inv => 
+        inv.dueDate && new Date(inv.dueDate) < new Date()
+      );
+      
+      const upcomingInvoices = pendingInvoices.filter(inv =>
+        !inv.dueDate || new Date(inv.dueDate) >= new Date()
+      );
+
+      // Calculate total balance due
+      const totalBalanceDue = pendingInvoices.reduce((sum, inv) => {
+        const balance = parseFloat(inv.balanceDue || inv.total || '0');
+        return sum + (Number.isFinite(balance) ? balance : 0);
+      }, 0);
 
       // Get customer's quotation IDs first
       const customerQuotations = await db.query.quotations.findMany({
@@ -225,6 +232,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         customer,
         overdueInvoices,
+        upcomingInvoices,
+        pendingInvoices,
+        hasPendingReceivables: pendingInvoices.length > 0,
+        totalBalanceDue: parseFloat(totalBalanceDue.toFixed(2)),
         pendingOrders,
         recentQuotations,
         recentCheckins,
@@ -563,6 +574,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating invoice:", error);
       res.status(400).json({ error: "Error creating invoice" });
+    }
+  });
+
+  app.patch("/api/invoices/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updatedInvoice = await storage.updateInvoice(id, req.body);
+      if (!updatedInvoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      res.json(updatedInvoice);
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      res.status(500).json({ error: "Error updating invoice" });
+    }
+  });
+
+  // Accounts Receivable endpoints (facturas por cobrar)
+  app.get("/api/accounts-receivable", isAuthenticated, async (req, res) => {
+    try {
+      const { customerId, status } = req.query;
+      
+      let receivables;
+      if (customerId) {
+        if (status === "pending") {
+          receivables = await storage.getPendingInvoicesByCustomer(customerId as string);
+        } else {
+          receivables = await storage.getInvoicesByCustomer(customerId as string);
+        }
+      } else {
+        receivables = await db.query.invoices.findMany({
+          where: status ? eq(invoices.status, status as string) : undefined,
+          with: {
+            customer: true,
+          },
+          orderBy: (invoices, { desc }) => [desc(invoices.dueDate)],
+        });
+      }
+      
+      res.json(receivables);
+    } catch (error) {
+      console.error("Error fetching accounts receivable:", error);
+      res.status(500).json({ error: "Error fetching accounts receivable" });
+    }
+  });
+
+  app.get("/api/accounts-receivable/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const invoice = await db.query.invoices.findFirst({
+        where: eq(invoices.id, id),
+        with: {
+          customer: true,
+        },
+      });
+      
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      
+      res.json(invoice);
+    } catch (error) {
+      console.error("Error fetching invoice:", error);
+      res.status(500).json({ error: "Error fetching invoice" });
+    }
+  });
+
+  app.post("/api/accounts-receivable", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const validated = insertInvoiceSchema.parse({
+        ...req.body,
+        status: req.body.status || "pending_payment",
+        balanceDue: req.body.total,
+      });
+      const invoice = await storage.createInvoice(validated);
+      res.status(201).json(invoice);
+    } catch (error) {
+      console.error("Error creating account receivable:", error);
+      res.status(400).json({ error: "Error creating account receivable" });
+    }
+  });
+
+  app.patch("/api/accounts-receivable/:id", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.FACTURACION, UserRole.CREDITO_COBRANZA), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updatedInvoice = await storage.updateInvoice(id, req.body);
+      if (!updatedInvoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      res.json(updatedInvoice);
+    } catch (error) {
+      console.error("Error updating account receivable:", error);
+      res.status(500).json({ error: "Error updating account receivable" });
     }
   });
 
