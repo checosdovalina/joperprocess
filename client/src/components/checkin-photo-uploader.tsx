@@ -78,14 +78,8 @@ export function CheckinPhotoUploader({
         }
         return uploadURL;
       },
-      headers: (file) => {
-        if (Array.isArray(file)) {
-          return { "Content-Type": "application/octet-stream" };
-        }
-        return {
-          "Content-Type": file.type || "application/octet-stream",
-        };
-      },
+      // No custom headers - let GCS signed URL handle content-type
+      headers: {},
     });
 
     uppyInstance.on("upload-success", async (file) => {
@@ -155,7 +149,7 @@ export function CheckinPhotoUploader({
   useEffect(() => {
     return () => {
       if (uppy) {
-        uppy.close({ reason: "unmount" });
+        uppy.cancelAll();
       }
     };
   }, [uppy]);

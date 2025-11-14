@@ -831,6 +831,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = req.user!.id;
 
     try {
+      // Parse optional checkoutNotes from body
+      const schema = z.object({
+        checkoutNotes: z.string().optional(),
+      });
+      const { checkoutNotes } = schema.parse(req.body);
+
       const checkin = await storage.getCheckin(checkinId);
       if (!checkin) {
         return res.status(404).json({ error: "Check-in not found" });
@@ -868,6 +874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Updating check-in with checkout time and PDF path...`);
       const updatedCheckin = await storage.updateCheckin(checkinId, {
         checkoutAt: new Date(),
+        checkoutNotes,
         minutePdfPath: pdfPath,
       });
 

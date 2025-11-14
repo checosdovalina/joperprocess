@@ -1,15 +1,21 @@
 import { useParams, Redirect } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
 import { Checkin, Customer } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CheckinPhotoUploader } from "@/components/checkin-photo-uploader";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface CustomerSummary {
   customer: Customer;
@@ -40,11 +46,14 @@ interface CustomerSummary {
 }
 
 function safeNumber(value: number | undefined | null): number {
-  return Number.isFinite(value) ? value : 0;
+  return Number.isFinite(value) ? (value as number) : 0;
 }
 
 export default function CheckinDetailPage() {
   const { id } = useParams();
+  const { toast } = useToast();
+  const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
+  const [checkoutNotes, setCheckoutNotes] = useState("");
 
   const { data: checkin, isLoading: checkinLoading } = useQuery<Checkin & { customer: Customer }>({
     queryKey: [`/api/checkins/${id}`],
@@ -54,6 +63,30 @@ export default function CheckinDetailPage() {
   const { data: summary, isLoading: summaryLoading, error: summaryError } = useQuery<CustomerSummary>({
     queryKey: [`/api/customers/${checkin?.customerId}/summary`],
     enabled: !!checkin?.customerId,
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/checkins/${id}/checkout`, {
+        checkoutNotes: checkoutNotes || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      setCheckoutDialogOpen(false);
+      toast({
+        title: "Visita finalizada",
+        description: "La minuta PDF se ha generado correctamente",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo finalizar la visita",
+      });
+    },
   });
 
   if (!id) {
@@ -100,7 +133,10 @@ export default function CheckinDetailPage() {
           </p>
         </div>
         {!checkin.checkoutAt && (
-          <Button data-testid="button-checkout">
+          <Button 
+            data-testid="button-checkout"
+            onClick={() => setCheckoutDialogOpen(true)}
+          >
             <FileText className="h-4 w-4 mr-2" />
             Finalizar Visita
           </Button>
@@ -295,6 +331,64 @@ export default function CheckinDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={checkoutDialogOpen} onOpenChange={setCheckoutDialogOpen}>
+        <DialogContent data-testid="dialog-checkout">
+          <DialogHeader>
+            <DialogTitle>Finalizar Visita</DialogTitle>
+            <DialogDescription>
+              Se generará una minuta PDF con las fotos y la información de la visita.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="checkout-notes">
+                Acuerdos y Comentarios
+              </Label>
+              <Textarea
+                id="checkout-notes"
+                data-testid="textarea-checkout-notes"
+                placeholder="Describe los acuerdos alcanzados, próximos pasos, o cualquier comentario relevante..."
+                value={checkoutNotes}
+                onChange={(e) => setCheckoutNotes(e.target.value)}
+                className="min-h-[120px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Opcional. Esta información aparecerá en la minuta PDF.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCheckoutDialogOpen(false)}
+              disabled={checkoutMutation.isPending}
+              data-testid="button-cancel-checkout"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => checkoutMutation.mutate()}
+              disabled={checkoutMutation.isPending}
+              data-testid="button-confirm-checkout"
+            >
+              {checkoutMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generando PDF...
+                </>
+              ) : (
+                <>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Finalizar y Generar PDF
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

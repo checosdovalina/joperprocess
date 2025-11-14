@@ -111,6 +111,7 @@ export const checkins = pgTable("checkins", {
   checkoutAt: timestamp("checkout_at"),
   topics: text("topics").array(),
   notes: text("notes"),
+  checkoutNotes: text("checkout_notes"), // Acuerdos/comentarios del checkout
   photos: text("photos").array(),
   minutePdfPath: text("minute_pdf_path"),
 });
@@ -370,6 +371,11 @@ export const insertCheckinSchema = createInsertSchema(checkins).omit({
   checkinAt: true,
 });
 
+// Schema for updating check-ins (includes checkout fields)
+export const updateCheckinSchema = createInsertSchema(checkins).omit({
+  id: true,
+}).partial();
+
 export const insertPendingUploadSchema = createInsertSchema(pendingUploads).omit({
   createdAt: true,
 });
@@ -421,6 +427,7 @@ export type InsertCustomerLocation = z.infer<typeof insertCustomerLocationSchema
 export type CustomerLocation = typeof customerLocations.$inferSelect;
 
 export type InsertCheckin = z.infer<typeof insertCheckinSchema>;
+export type UpdateCheckin = z.infer<typeof updateCheckinSchema>;
 export type Checkin = typeof checkins.$inferSelect;
 
 export type InsertQuotation = z.infer<typeof insertQuotationSchema>;

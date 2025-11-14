@@ -18,6 +18,7 @@ import {
   type InsertCustomerLocation,
   type Checkin,
   type InsertCheckin,
+  type UpdateCheckin,
   type Quotation,
   type InsertQuotation,
   type QuotationItem,
@@ -69,7 +70,7 @@ export interface IStorage {
   getCheckin(id: string): Promise<Checkin | undefined>;
   getAllCheckins(): Promise<Checkin[]>;
   createCheckin(checkin: InsertCheckin): Promise<Checkin>;
-  updateCheckin(id: string, data: Partial<InsertCheckin>): Promise<Checkin | undefined>;
+  updateCheckin(id: string, data: UpdateCheckin): Promise<Checkin | undefined>;
 
   // Quotations
   getQuotation(id: string): Promise<Quotation | undefined>;
@@ -206,7 +207,7 @@ export class DatabaseStorage implements IStorage {
     return checkin;
   }
 
-  async updateCheckin(id: string, data: Partial<InsertCheckin>): Promise<Checkin | undefined> {
+  async updateCheckin(id: string, data: UpdateCheckin): Promise<Checkin | undefined> {
     const [checkin] = await db.update(checkins).set(data).where(eq(checkins.id, id)).returning();
     return checkin || undefined;
   }
