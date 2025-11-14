@@ -1007,7 +1007,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Generating and uploading PDF for check-in ${checkinId}...`);
       const { generateMinutePDFStream } = await import("./pdf-generator");
-      const pdfStream = await generateMinutePDFStream({ checkin, customer, user });
+      const pdfStream = await generateMinutePDFStream({ 
+        checkin, 
+        customer, 
+        user, 
+        checkoutNotes 
+      });
 
       const objectStorageService = new ObjectStorageService();
       const pdfPath = await objectStorageService.uploadPdfStreamToStorage(

@@ -9,6 +9,7 @@ interface MinuteData {
   checkin: Checkin;
   customer: Customer;
   user: User;
+  checkoutNotes?: string;
 }
 
 const MAX_PHOTOS_PER_PDF = 6;
@@ -137,6 +138,14 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
         doc.fontSize(12).font("Helvetica-Bold").text("Notas y Observaciones");
         doc.fontSize(10).font("Helvetica").moveDown(0.3);
         doc.text(checkin.notes, { align: "justify" });
+        doc.moveDown(1);
+      }
+
+      // Checkout Notes (Acuerdos y Comentarios)
+      if (data.checkoutNotes) {
+        doc.fontSize(12).font("Helvetica-Bold").text("Acuerdos y Comentarios");
+        doc.fontSize(10).font("Helvetica").moveDown(0.3);
+        doc.text(data.checkoutNotes, { align: "justify" });
         doc.moveDown(1);
       }
 
