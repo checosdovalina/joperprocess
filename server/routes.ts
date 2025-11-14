@@ -29,7 +29,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
-      const [stats] = await db.execute(sql`
+      const result = await db.execute(sql`
         SELECT 
           (SELECT COUNT(*) FROM ${quotations} WHERE status IN ('draft', 'sent')) as "pendingQuotations",
           (SELECT COUNT(*) FROM ${orders} WHERE status IN ('pending', 'in_production')) as "activeOrders",
@@ -40,6 +40,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (SELECT COUNT(*) FROM ${creditAuthorizations} WHERE status = 'pending') as "pendingCreditAuth"
       `);
 
+      const stats = result.rows[0];
       res.json(stats);
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -149,6 +150,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId: req.user!.id,
       });
+
+      // Validate that customerLocationId belongs to the specified customerId
+      if (validated.customerLocationId) {
+        const location = await storage.getCustomerLocation(validated.customerLocationId);
+        if (!location) {
+          return res.status(400).json({ error: "Customer location not found" });
+        }
+        if (location.customerId !== validated.customerId) {
+          return res.status(400).json({ error: "Customer location does not belong to the specified customer" });
+        }
+      }
+
       const checkin = await storage.createCheckin(validated);
       res.status(201).json(checkin);
     } catch (error) {

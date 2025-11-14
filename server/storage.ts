@@ -1,6 +1,7 @@
 import {
   users,
   customers,
+  customerLocations,
   checkins,
   quotations,
   quotationItems,
@@ -13,6 +14,8 @@ import {
   type InsertUser,
   type Customer,
   type InsertCustomer,
+  type CustomerLocation,
+  type InsertCustomerLocation,
   type Checkin,
   type InsertCheckin,
   type Quotation,
@@ -54,6 +57,13 @@ export interface IStorage {
   getAllCustomers(): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   updateCustomer(id: string, data: Partial<InsertCustomer>): Promise<Customer | undefined>;
+
+  // Customer Locations
+  getCustomerLocation(id: string): Promise<CustomerLocation | undefined>;
+  getAllCustomerLocations(): Promise<CustomerLocation[]>;
+  getCustomerLocationsByCustomerId(customerId: string): Promise<CustomerLocation[]>;
+  createCustomerLocation(location: InsertCustomerLocation): Promise<CustomerLocation>;
+  updateCustomerLocation(id: string, data: Partial<InsertCustomerLocation>): Promise<CustomerLocation | undefined>;
 
   // Check-ins
   getCheckin(id: string): Promise<Checkin | undefined>;
@@ -155,6 +165,30 @@ export class DatabaseStorage implements IStorage {
   async updateCustomer(id: string, data: Partial<InsertCustomer>): Promise<Customer | undefined> {
     const [customer] = await db.update(customers).set(data).where(eq(customers.id, id)).returning();
     return customer || undefined;
+  }
+
+  // Customer Locations
+  async getCustomerLocation(id: string): Promise<CustomerLocation | undefined> {
+    const [location] = await db.select().from(customerLocations).where(eq(customerLocations.id, id));
+    return location || undefined;
+  }
+
+  async getAllCustomerLocations(): Promise<CustomerLocation[]> {
+    return await db.select().from(customerLocations).orderBy(desc(customerLocations.createdAt));
+  }
+
+  async getCustomerLocationsByCustomerId(customerId: string): Promise<CustomerLocation[]> {
+    return await db.select().from(customerLocations).where(eq(customerLocations.customerId, customerId));
+  }
+
+  async createCustomerLocation(insertLocation: InsertCustomerLocation): Promise<CustomerLocation> {
+    const [location] = await db.insert(customerLocations).values(insertLocation).returning();
+    return location;
+  }
+
+  async updateCustomerLocation(id: string, data: Partial<InsertCustomerLocation>): Promise<CustomerLocation | undefined> {
+    const [location] = await db.update(customerLocations).set(data).where(eq(customerLocations.id, id)).returning();
+    return location || undefined;
   }
 
   // Check-ins

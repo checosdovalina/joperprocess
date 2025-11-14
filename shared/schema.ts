@@ -86,11 +86,25 @@ export const customers = pgTable("customers", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Customer locations table (for GPS validation and multi-site support)
+export const customerLocations = pgTable("customer_locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id),
+  name: text("name"), // Optional: "Sucursal Centro", "Bodega Norte", etc.
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  radiusMeters: integer("radius_meters").notNull().default(100), // Validation radius
+  isPrimary: boolean("is_primary").notNull().default(false),
+  address: text("address"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Check-ins table
 export const checkins = pgTable("checkins", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
+  customerLocationId: varchar("customer_location_id").references(() => customerLocations.id),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   checkinAt: timestamp("checkin_at").notNull().defaultNow(),
@@ -224,6 +238,15 @@ export const customersRelations = relations(customers, ({ many }) => ({
   quotations: many(quotations),
   invoices: many(invoices),
   payments: many(payments),
+  locations: many(customerLocations),
+}));
+
+export const customerLocationsRelations = relations(customerLocations, ({ one, many }) => ({
+  customer: one(customers, {
+    fields: [customerLocations.customerId],
+    references: [customers.id],
+  }),
+  checkins: many(checkins),
 }));
 
 export const checkinsRelations = relations(checkins, ({ one }) => ({
@@ -234,6 +257,10 @@ export const checkinsRelations = relations(checkins, ({ one }) => ({
   customer: one(customers, {
     fields: [checkins.customerId],
     references: [customers.id],
+  }),
+  customerLocation: one(customerLocations, {
+    fields: [checkins.customerLocationId],
+    references: [customerLocations.id],
   }),
 }));
 
@@ -323,6 +350,11 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   createdAt: true,
 });
 
+export const insertCustomerLocationSchema = createInsertSchema(customerLocations).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCheckinSchema = createInsertSchema(checkins).omit({
   id: true,
   checkinAt: true,
@@ -370,6 +402,9 @@ export type User = typeof users.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
+
+export type InsertCustomerLocation = z.infer<typeof insertCustomerLocationSchema>;
+export type CustomerLocation = typeof customerLocations.$inferSelect;
 
 export type InsertCheckin = z.infer<typeof insertCheckinSchema>;
 export type Checkin = typeof checkins.$inferSelect;
