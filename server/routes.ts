@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated, hasRole } from "./auth";
 import { db } from "./db";
 import { z } from "zod";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectPermission } from "./objectAcl";
 import { 
   insertCustomerSchema,
   insertCheckinSchema,
@@ -564,6 +566,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating payment:", error);
       res.status(400).json({ error: "Error creating payment" });
+    }
+  });
+
+  // Object Storage endpoints for check-in photos
+  app.get("/public-objects/:filePath(*)", async (req, res) => {
+    const filePath = req.params.filePath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      objectStorageService.downloadObject(file, res);
+    } catch (error) {
+      console.error("Error searching for public object:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
+    const userId = req.user!.id;
+    const objectPath = req.params.objectPath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(
+        objectPath,
+      );
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: userId,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!canAccess) {
+        return res.sendStatus(403);
+      }
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error checking object access:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Error getting upload URL" });
+    }
+  });
+
+  app.put("/api/checkin-photos", isAuthenticated, async (req, res) => {
+    try {
+      const schema = z.object({
+        checkinId: z.string().uuid(),
+        photoURL: z.string(),
+      });
+
+      const { checkinId, photoURL } = schema.parse(req.body);
+      const userId = req.user!.id;
+
+      const objectStorageService = new ObjectStorageService();
+      const entityId = await objectStorageService.trySetObjectEntityAclPolicy(
+        photoURL,
+        {
+          owner: userId,
+          visibility: "private",
+        },
+      );
+
+      const checkin = await storage.getCheckin(checkinId);
+      if (!checkin) {
+        return res.status(404).json({ error: "Check-in not found" });
+      }
+
+      if (checkin.userId !== userId) {
+        return res.status(403).json({ error: "Not authorized to update this check-in" });
+      }
+
+      const currentPhotos = checkin.photos || [];
+      const updatedPhotos = [...currentPhotos, entityId];
+
+      await storage.updateCheckin(checkinId, {
+        photos: updatedPhotos,
+      });
+
+      res.status(200).json({
+        entityId: entityId,
+        photos: updatedPhotos,
+      });
+    } catch (error) {
+      console.error("Error setting check-in photo:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
