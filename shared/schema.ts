@@ -20,9 +20,11 @@ export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 export const QuotationStatus = {
   DRAFT: "draft",
   SENT: "sent",
+  PENDING_APPROVAL: "pending_approval",
   AUTHORIZED: "authorized",
   CONVERTED: "converted",
   REJECTED: "rejected",
+  EXPIRED: "expired",
 } as const;
 
 export type QuotationStatusType = typeof QuotationStatus[keyof typeof QuotationStatus];
@@ -161,29 +163,55 @@ export const quotations = pgTable("quotations", {
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   folio: text("folio").notNull().unique(),
+  version: integer("version").notNull().default(1),
   status: text("status").notNull().default(QuotationStatus.DRAFT),
+  currency: text("currency").notNull().default("MXN"),
+  paymentTerms: text("payment_terms"),
+  deliveryTime: text("delivery_time"),
+  validUntil: timestamp("valid_until"),
   subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
+  globalDiscount: decimal("global_discount", { precision: 5, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 12, scale: 2 }).notNull().default("0"),
   total: decimal("total", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalSavings: decimal("total_savings", { precision: 12, scale: 2 }).default("0"),
   notes: text("notes"),
+  conditions: text("conditions"),
   pdfPath: text("pdf_path"),
+  requiresApproval: boolean("requires_approval").notNull().default(false),
+  approvalReason: text("approval_reason"),
   authorizedBy: varchar("authorized_by").references(() => users.id),
   authorizedAt: timestamp("authorized_at"),
   rejectedBy: varchar("rejected_by").references(() => users.id),
   rejectedAt: timestamp("rejected_at"),
   rejectionReason: text("rejection_reason"),
+  sentAt: timestamp("sent_at"),
+  sentMethod: text("sent_method"),
+  convertedToOrderId: varchar("converted_to_order_id"),
+  parentQuotationId: varchar("parent_quotation_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Quotation items table
 export const quotationItems = pgTable("quotation_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   quotationId: varchar("quotation_id").notNull().references(() => quotations.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").references(() => products.id),
+  productCode: text("product_code"),
   productName: text("product_name").notNull(),
   description: text("description"),
+  unitOfMeasure: text("unit_of_measure").notNull().default("PZA"),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
+  listPrice: decimal("list_price", { precision: 12, scale: 2 }).notNull(),
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
+  discountPercent: decimal("discount_percent", { precision: 5, scale: 2 }).default("0"),
+  discountAmount: decimal("discount_amount", { precision: 12, scale: 2 }).default("0"),
+  subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("16"),
+  taxAmount: decimal("tax_amount", { precision: 12, scale: 2 }).default("0"),
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  exceedsMaxDiscount: boolean("exceeds_max_discount").default(false),
+  position: integer("position").notNull().default(0),
 });
 
 // Credit authorizations table
@@ -279,6 +307,49 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Product Categories table
+export const productCategories = pgTable("product_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  parentId: varchar("parent_id"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Products table
+export const products = pgTable("products", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  categoryId: varchar("category_id").references(() => productCategories.id),
+  brand: text("brand"),
+  unitOfMeasure: text("unit_of_measure").notNull().default("PZA"),
+  listPrice: decimal("list_price", { precision: 12, scale: 2 }).notNull(),
+  cost: decimal("cost", { precision: 12, scale: 2 }),
+  stock: decimal("stock", { precision: 10, scale: 2 }).notNull().default("0"),
+  minStock: decimal("min_stock", { precision: 10, scale: 2 }).default("0"),
+  maxDiscount: decimal("max_discount", { precision: 5, scale: 2 }).default("0"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default("16"),
+  imageUrl: text("image_url"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Customer-specific product prices
+export const customerProductPrices = pgTable("customer_product_prices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id),
+  productId: varchar("product_id").notNull().references(() => products.id),
+  specialPrice: decimal("special_price", { precision: 12, scale: 2 }).notNull(),
+  maxDiscount: decimal("max_discount", { precision: 5, scale: 2 }),
+  validFrom: timestamp("valid_from"),
+  validUntil: timestamp("valid_until"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkins: many(checkins),
@@ -358,6 +429,34 @@ export const quotationItemsRelations = relations(quotationItems, ({ one }) => ({
   quotation: one(quotations, {
     fields: [quotationItems.quotationId],
     references: [quotations.id],
+  }),
+  product: one(products, {
+    fields: [quotationItems.productId],
+    references: [products.id],
+  }),
+}));
+
+export const productCategoriesRelations = relations(productCategories, ({ many }) => ({
+  products: many(products),
+}));
+
+export const productsRelations = relations(products, ({ one, many }) => ({
+  category: one(productCategories, {
+    fields: [products.categoryId],
+    references: [productCategories.id],
+  }),
+  customerPrices: many(customerProductPrices),
+  quotationItems: many(quotationItems),
+}));
+
+export const customerProductPricesRelations = relations(customerProductPrices, ({ one }) => ({
+  customer: one(customers, {
+    fields: [customerProductPrices.customerId],
+    references: [customers.id],
+  }),
+  product: one(products, {
+    fields: [customerProductPrices.productId],
+    references: [products.id],
   }),
 }));
 
@@ -523,6 +622,35 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   createdAt: true,
 });
 
+export const insertProductCategorySchema = createInsertSchema(productCategories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateProductSchema = createInsertSchema(products).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export const insertCustomerProductPriceSchema = createInsertSchema(customerProductPrices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateQuotationSchema = createInsertSchema(quotations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  folio: true,
+}).partial();
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -562,3 +690,15 @@ export type Invoice = typeof invoices.$inferSelect;
 
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
+
+export type InsertProductCategory = z.infer<typeof insertProductCategorySchema>;
+export type ProductCategory = typeof productCategories.$inferSelect;
+
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type UpdateProduct = z.infer<typeof updateProductSchema>;
+export type Product = typeof products.$inferSelect;
+
+export type InsertCustomerProductPrice = z.infer<typeof insertCustomerProductPriceSchema>;
+export type CustomerProductPrice = typeof customerProductPrices.$inferSelect;
+
+export type UpdateQuotation = z.infer<typeof updateQuotationSchema>;

@@ -18,6 +18,7 @@ import InvoicesPage from "@/pages/invoices-page";
 import AccountsReceivablePage from "@/pages/accounts-receivable-page";
 import PaymentsPage from "@/pages/payments-page";
 import UsersPage from "@/pages/users-page";
+import ProductsPage from "@/pages/products-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -40,6 +41,7 @@ function Router() {
       <ProtectedRoute path="/accounts-receivable" component={AccountsReceivablePage} />
       <ProtectedRoute path="/payments" component={PaymentsPage} />
       <ProtectedRoute path="/users" component={UsersPage} />
+      <ProtectedRoute path="/products" component={ProductsPage} />
       <Route component={NotFound} />
     </Switch>
   );

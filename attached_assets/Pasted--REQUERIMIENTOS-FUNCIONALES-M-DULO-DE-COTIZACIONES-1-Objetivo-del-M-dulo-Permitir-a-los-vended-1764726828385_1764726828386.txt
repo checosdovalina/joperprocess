@@ -1,0 +1,201 @@
+📘 REQUERIMIENTOS FUNCIONALES – MÓDULO DE COTIZACIONES
+1. Objetivo del Módulo
+
+Permitir a los vendedores generar, administrar y compartir cotizaciones de productos de manera rápida, precisa y alineada a políticas comerciales, incluyendo control de descuentos, precios finales, disponibilidad y vigencia.
+
+2. Funcionalidades Principales
+2.1 Crear Cotización
+
+El sistema debe permitir:
+
+RF-2.1.1 Crear una nueva cotización para un cliente existente o capturar uno nuevo.
+
+RF-2.1.2 Seleccionar una moneda (si aplica).
+
+RF-2.1.3 Definir condiciones comerciales:
+
+Forma de pago
+
+Tiempo de entrega
+
+Vigencia de la cotización
+
+Notas o condiciones especiales
+
+RF-2.1.4 Asignar automáticamente el vendedor responsable (usuario actual).
+
+2.2 Búsqueda y Selección de Productos
+
+El sistema debe:
+
+RF-2.2.1 Permitir búsqueda por:
+
+Código
+
+Nombre
+
+Categoría
+
+Marca
+
+Palabras clave
+
+RF-2.2.2 Mostrar información del producto:
+
+Precio de lista
+
+Precio especial (si el cliente tiene)
+
+Existencias en almacén(es)
+
+Imagen del producto (opcional)
+
+Unidad de medida
+
+RF-2.2.3 Permitir agregar productos a la cotización seleccionando:
+
+Cantidad
+
+Precio unitario (auto llenado con precio de lista)
+
+Descuento %
+
+Precio final unitario
+
+2.3 Interacción Dinámica entre Precio Final y Descuento
+
+Este es el punto clave.
+
+El sistema debe:
+
+RF-2.3.1 Recalcular el descuento (%) automáticamente cuando el vendedor modifica el precio final unitario.
+
+RF-2.3.2 Recalcular el precio final unitario automáticamente cuando se modifica el descuento (%).
+
+RF-2.3.3 Restringir descuentos máximos según reglas comerciales (por rol o cliente).
+
+RF-2.3.4 Resaltar visualmente cuando un descuento excede los límites permitidos.
+
+RF-2.3.5 Permitir solicitar autorización de descuento cuando el usuario excede su límite.
+
+2.4 Cálculos Automáticos de Totales
+
+El sistema debe:
+
+RF-2.4.1 Calcular subtotal por línea.
+
+RF-2.4.2 Calcular subtotal de la cotización.
+
+RF-2.4.3 Calcular impuestos (IVA y otros configurables).
+
+RF-2.4.4 Calcular total general.
+
+RF-2.4.5 Permitir aplicar descuentos globales opcionales (si el negocio lo permite).
+
+RF-2.4.6 Mostrar resumen financiero:
+
+Subtotal
+
+IVA
+
+Total
+
+Ahorro total por descuentos
+
+2.5 Gestión del Flujo de Aprobaciones
+
+El sistema debe:
+
+RF-2.5.1 Determinar si una cotización requiere autorización (descuentos fuera del rango permitido, margen mínimo, etc.).
+
+RF-2.5.2 Permitir enviar solicitud de autorización a un rol superior.
+
+RF-2.5.3 Notificar aprobaciones o rechazos.
+
+RF-2.5.4 Registrar nombre del aprobador y fecha/hora.
+
+2.6 Almacenamiento y Versionado
+
+El sistema debe:
+
+RF-2.6.1 Guardar cotizaciones con número de folio único.
+
+RF-2.6.2 Mantener histórico de:
+
+Modificaciones
+
+Descuentos aplicados
+
+Cambios de precio
+
+Versiones de la cotización (v1, v2…)
+
+RF-2.6.3 Permitir duplicar una cotización para reutilizarla.
+
+RF-2.6.4 Permitir convertir una cotización a pedido/venta (integración con módulo de ventas).
+
+2.7 Exportación y Envío
+
+El sistema debe:
+
+RF-2.7.1 Generar PDF profesional con:
+
+Datos del cliente
+
+Productos
+
+Precios
+
+Condiciones
+
+Vigencia
+
+RF-2.7.2 Enviar cotización por correo desde el sistema.
+
+RF-2.7.3 Compartir link web de visualización (opcional).
+
+RF-2.7.4 Registrar fecha y método de envío.
+
+2.8 Control de Vigencia
+
+El sistema debe:
+
+RF-2.8.1 Registrar fecha de expiración.
+
+RF-2.8.2 Bloquear edición de cotizaciones vencidas (según reglas).
+
+RF-2.8.3 Permitir reactivar o extender vigencia.
+
+RF-2.8.4 Enviar alertas automáticas cuando falten X días para vencer.
+
+2.9 Seguimiento y Estado
+
+El sistema debe manejar estados como:
+
+RF-2.9.1 Borrador
+
+RF-2.9.2 Enviada
+
+RF-2.9.3 Aprobación pendiente
+
+RF-2.9.4 Aprobada
+
+RF-2.9.5 Rechazada
+
+RF-2.9.6 Convertida a venta
+
+RF-2.9.7 Vencida
+
+Y permitir filtrado por estado.
+
+2.10 Integración con Inventarios
+
+El sistema debe:
+
+RF-2.10.1 Mostrar disponibilidad del producto en tiempo real.
+
+RF-2.10.2 Permitir cotizar productos sin stock (configurable).
+
+RF-2.10.3 Mostrar tiempo estimado de entrega según inventario y proveedor.
+
+RF-2.10.4 Registrar compromisos de inventario cuando se convierta a pedido.

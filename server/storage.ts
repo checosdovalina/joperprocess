@@ -10,6 +10,9 @@ import {
   shipments,
   invoices,
   payments,
+  products,
+  productCategories,
+  customerProductPrices,
   type User,
   type InsertUser,
   type Customer,
@@ -33,6 +36,13 @@ import {
   type InsertInvoice,
   type Payment,
   type InsertPayment,
+  type Product,
+  type InsertProduct,
+  type UpdateProduct,
+  type ProductCategory,
+  type InsertProductCategory,
+  type CustomerProductPrice,
+  type InsertCustomerProductPrice,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -113,6 +123,25 @@ export interface IStorage {
   getPayment(id: string): Promise<Payment | undefined>;
   getAllPayments(): Promise<Payment[]>;
   createPayment(payment: InsertPayment): Promise<Payment>;
+
+  // Product Categories
+  getProductCategory(id: string): Promise<ProductCategory | undefined>;
+  getAllProductCategories(): Promise<ProductCategory[]>;
+  createProductCategory(category: InsertProductCategory): Promise<ProductCategory>;
+  updateProductCategory(id: string, data: Partial<InsertProductCategory>): Promise<ProductCategory | undefined>;
+
+  // Products
+  getProduct(id: string): Promise<Product | undefined>;
+  getProductByCode(code: string): Promise<Product | undefined>;
+  getAllProducts(): Promise<Product[]>;
+  searchProducts(query: string): Promise<Product[]>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  updateProduct(id: string, data: UpdateProduct): Promise<Product | undefined>;
+
+  // Customer Product Prices
+  getCustomerProductPrice(customerId: string, productId: string): Promise<CustomerProductPrice | undefined>;
+  getCustomerProductPrices(customerId: string): Promise<CustomerProductPrice[]>;
+  createCustomerProductPrice(price: InsertCustomerProductPrice): Promise<CustomerProductPrice>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -365,6 +394,87 @@ export class DatabaseStorage implements IStorage {
   async createPayment(insertPayment: InsertPayment): Promise<Payment> {
     const [payment] = await db.insert(payments).values(insertPayment).returning();
     return payment;
+  }
+
+  // Product Categories
+  async getProductCategory(id: string): Promise<ProductCategory | undefined> {
+    const [category] = await db.select().from(productCategories).where(eq(productCategories.id, id));
+    return category || undefined;
+  }
+
+  async getAllProductCategories(): Promise<ProductCategory[]> {
+    return await db.select().from(productCategories).orderBy(productCategories.name);
+  }
+
+  async createProductCategory(insertCategory: InsertProductCategory): Promise<ProductCategory> {
+    const [category] = await db.insert(productCategories).values(insertCategory).returning();
+    return category;
+  }
+
+  async updateProductCategory(id: string, data: Partial<InsertProductCategory>): Promise<ProductCategory | undefined> {
+    const [category] = await db.update(productCategories).set(data).where(eq(productCategories.id, id)).returning();
+    return category || undefined;
+  }
+
+  // Products
+  async getProduct(id: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product || undefined;
+  }
+
+  async getProductByCode(code: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.code, code));
+    return product || undefined;
+  }
+
+  async getAllProducts(): Promise<Product[]> {
+    return await db.select().from(products).orderBy(products.name);
+  }
+
+  async searchProducts(query: string): Promise<Product[]> {
+    const searchQuery = `%${query.toLowerCase()}%`;
+    return await db.query.products.findMany({
+      where: (products, { or, ilike }) =>
+        or(
+          ilike(products.code, searchQuery),
+          ilike(products.name, searchQuery),
+          ilike(products.brand, searchQuery)
+        ),
+      with: {
+        category: true,
+      },
+      orderBy: (products, { asc }) => [asc(products.name)],
+    });
+  }
+
+  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    const [product] = await db.insert(products).values(insertProduct).returning();
+    return product;
+  }
+
+  async updateProduct(id: string, data: UpdateProduct): Promise<Product | undefined> {
+    const [product] = await db.update(products).set({ ...data, updatedAt: new Date() }).where(eq(products.id, id)).returning();
+    return product || undefined;
+  }
+
+  // Customer Product Prices
+  async getCustomerProductPrice(customerId: string, productId: string): Promise<CustomerProductPrice | undefined> {
+    const [price] = await db.select().from(customerProductPrices)
+      .where(and(
+        eq(customerProductPrices.customerId, customerId),
+        eq(customerProductPrices.productId, productId)
+      ));
+    return price || undefined;
+  }
+
+  async getCustomerProductPrices(customerId: string): Promise<CustomerProductPrice[]> {
+    return await db.select().from(customerProductPrices)
+      .where(eq(customerProductPrices.customerId, customerId));
+  }
+
+  async createCustomerProductPrice(insertPrice: InsertCustomerProductPrice): Promise<CustomerProductPrice> {
+    const [price] = await db.insert(customerProductPrices).values(insertPrice).returning();
+    return price;
   }
 }
 

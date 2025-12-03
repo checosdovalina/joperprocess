@@ -99,6 +99,12 @@ export function AppSidebar() {
       roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA],
     },
     {
+      title: "Productos",
+      url: "/products",
+      icon: Package,
+      roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA],
+    },
+    {
       title: "Usuarios",
       url: "/users",
       icon: Users,

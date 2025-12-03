@@ -23,6 +23,10 @@ import {
   insertInvoiceSchema,
   insertPaymentSchema,
   insertPendingUploadSchema,
+  insertProductCategorySchema,
+  insertProductSchema,
+  updateProductSchema,
+  insertCustomerProductPriceSchema,
   type InsertCustomer,
   type InsertCheckin,
   UserRole,
@@ -31,7 +35,7 @@ import {
   OrderStatus,
   ScheduledVisitStatus,
 } from "@shared/schema";
-import { customers, quotations, checkins, scheduledVisits, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads } from "@shared/schema";
+import { customers, quotations, checkins, scheduledVisits, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
 import { eq, and, sql, gte, lt } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -565,6 +569,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error converting scheduled visit to checkin:", error);
       res.status(400).json({ error: "Error converting scheduled visit" });
+    }
+  });
+
+  // Product Categories endpoints
+  app.get("/api/product-categories", isAuthenticated, async (req, res) => {
+    try {
+      const categories = await storage.getAllProductCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching product categories:", error);
+      res.status(500).json({ error: "Error fetching product categories" });
+    }
+  });
+
+  app.post("/api/product-categories", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const validated = insertProductCategorySchema.parse(req.body);
+      const category = await storage.createProductCategory(validated);
+      res.status(201).json(category);
+    } catch (error) {
+      console.error("Error creating product category:", error);
+      res.status(400).json({ error: "Error creating product category" });
+    }
+  });
+
+  app.patch("/api/product-categories/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const category = await storage.updateProductCategory(id, req.body);
+      if (!category) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      console.error("Error updating product category:", error);
+      res.status(500).json({ error: "Error updating product category" });
+    }
+  });
+
+  // Products endpoints
+  app.get("/api/products", isAuthenticated, async (req, res) => {
+    try {
+      const { q } = req.query;
+      let productsData;
+      
+      if (q && typeof q === 'string') {
+        productsData = await storage.searchProducts(q);
+      } else {
+        productsData = await db.query.products.findMany({
+          with: {
+            category: true,
+          },
+          orderBy: (products, { asc }) => [asc(products.name)],
+        });
+      }
+      
+      res.json(productsData);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      res.status(500).json({ error: "Error fetching products" });
+    }
+  });
+
+  app.get("/api/products/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const product = await db.query.products.findFirst({
+        where: eq(products.id, id),
+        with: {
+          category: true,
+          customerPrices: true,
+        },
+      });
+      
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      
+      res.json(product);
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      res.status(500).json({ error: "Error fetching product" });
+    }
+  });
+
+  app.post("/api/products", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const validated = insertProductSchema.parse(req.body);
+      
+      // Check if code already exists
+      const existing = await storage.getProductByCode(validated.code);
+      if (existing) {
+        return res.status(400).json({ error: "Product code already exists" });
+      }
+      
+      const product = await storage.createProduct(validated);
+      res.status(201).json(product);
+    } catch (error) {
+      console.error("Error creating product:", error);
+      res.status(400).json({ error: "Error creating product" });
+    }
+  });
+
+  app.patch("/api/products/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validated = updateProductSchema.parse(req.body);
+      
+      // Check if code already exists for another product
+      if (validated.code) {
+        const existing = await storage.getProductByCode(validated.code);
+        if (existing && existing.id !== id) {
+          return res.status(400).json({ error: "Product code already exists" });
+        }
+      }
+      
+      const product = await storage.updateProduct(id, validated);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      
+      res.json(product);
+    } catch (error) {
+      console.error("Error updating product:", error);
+      res.status(500).json({ error: "Error updating product" });
+    }
+  });
+
+  // Customer Product Prices endpoints
+  app.get("/api/customers/:customerId/product-prices", isAuthenticated, async (req, res) => {
+    try {
+      const { customerId } = req.params;
+      const prices = await storage.getCustomerProductPrices(customerId);
+      res.json(prices);
+    } catch (error) {
+      console.error("Error fetching customer product prices:", error);
+      res.status(500).json({ error: "Error fetching customer product prices" });
+    }
+  });
+
+  app.post("/api/customer-product-prices", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const validated = insertCustomerProductPriceSchema.parse(req.body);
+      const price = await storage.createCustomerProductPrice(validated);
+      res.status(201).json(price);
+    } catch (error) {
+      console.error("Error creating customer product price:", error);
+      res.status(400).json({ error: "Error creating customer product price" });
     }
   });
 
