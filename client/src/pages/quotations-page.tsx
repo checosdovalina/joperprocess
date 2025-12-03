@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Quotation, Customer, QuotationStatus, InsertQuotation } from "@shared/schema";
+import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -19,17 +19,22 @@ import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
 import { QuotationForm } from "@/components/quotation-form";
 import { useAuth } from "@/hooks/use-auth";
 
+type QuotationWithDetails = Quotation & { 
+  customer: Customer; 
+  items?: QuotationItem[];
+};
+
 export default function QuotationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { user } = useAuth();
 
-  const { data: quotations, isLoading } = useEntityQuery<(Quotation & { customer: Customer })[]>(
+  const { data: quotations, isLoading } = useEntityQuery<QuotationWithDetails[]>(
     "/api/quotations"
   );
 
   const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
 
-  const createQuotationMutation = useEntityMutation<Quotation, InsertQuotation>({
+  const createQuotationMutation = useEntityMutation<Quotation, InsertQuotation & { items: InsertQuotationItem[] }>({
     endpoint: "/api/quotations",
     method: "POST",
     successMessage: "Cotización creada exitosamente",
@@ -38,15 +43,23 @@ export default function QuotationsPage() {
   });
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; className: string }> = {
-      [QuotationStatus.DRAFT]: { label: "Borrador", className: "bg-gray-100 text-gray-800" },
-      [QuotationStatus.SENT]: { label: "Enviada", className: "bg-blue-100 text-blue-800" },
-      [QuotationStatus.AUTHORIZED]: { label: "Autorizada", className: "bg-green-100 text-green-800" },
-      [QuotationStatus.CONVERTED]: { label: "Convertida", className: "bg-purple-100 text-purple-800" },
-      [QuotationStatus.REJECTED]: { label: "Rechazada", className: "bg-red-100 text-red-800" },
+    const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock }> = {
+      [QuotationStatus.DRAFT]: { label: "Borrador", variant: "secondary", icon: FileText },
+      [QuotationStatus.SENT]: { label: "Enviada", variant: "outline", icon: Send },
+      [QuotationStatus.PENDING_APPROVAL]: { label: "Pendiente Aprobación", variant: "default", icon: Clock },
+      [QuotationStatus.AUTHORIZED]: { label: "Autorizada", variant: "default", icon: CheckCircle },
+      [QuotationStatus.CONVERTED]: { label: "Convertida", variant: "default", icon: ShoppingCart },
+      [QuotationStatus.REJECTED]: { label: "Rechazada", variant: "destructive", icon: XCircle },
+      [QuotationStatus.EXPIRED]: { label: "Expirada", variant: "secondary", icon: AlertTriangle },
     };
     const config = statusConfig[status] || statusConfig[QuotationStatus.DRAFT];
-    return <Badge className={config.className} data-testid={`status-${status}`}>{config.label}</Badge>;
+    const Icon = config.icon;
+    return (
+      <Badge variant={config.variant} data-testid={`status-${status}`}>
+        <Icon className="h-3 w-3 mr-1" />
+        {config.label}
+      </Badge>
+    );
   };
 
   return (
@@ -88,6 +101,7 @@ export default function QuotationsPage() {
                     <TableHead>Fecha</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Items</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -107,14 +121,22 @@ export default function QuotationsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="font-medium">
+                        <div className="font-medium font-mono">
                           ${parseFloat(quotation.total).toLocaleString("es-MX", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })}
                         </div>
+                        <div className="text-xs text-muted-foreground">
+                          {quotation.currency || "MXN"}
+                        </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(quotation.status)}</TableCell>
+                      <TableCell>
+                        <div className="text-xs text-muted-foreground">
+                          {quotation.items?.length || 0} productos
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -122,7 +144,7 @@ export default function QuotationsPage() {
                           data-testid={`button-view-quotation-${quotation.id}`}
                         >
                           <FileText className="h-4 w-4 mr-1" />
-                          Ver Detalles
+                          Ver
                         </Button>
                       </TableCell>
                     </TableRow>
