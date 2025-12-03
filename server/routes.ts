@@ -661,14 +661,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if code already exists
       const existing = await storage.getProductByCode(validated.code);
       if (existing) {
-        return res.status(400).json({ error: "Product code already exists" });
+        return res.status(400).json({ error: "El código del producto ya existe" });
+      }
+
+      // Validate category exists if provided
+      if (validated.categoryId) {
+        const category = await storage.getProductCategory(validated.categoryId);
+        if (!category) {
+          return res.status(400).json({ error: "La categoría seleccionada no existe. Por favor, crea la categoría primero." });
+        }
       }
       
       const product = await storage.createProduct(validated);
       res.status(201).json(product);
     } catch (error) {
       console.error("Error creating product:", error);
-      res.status(400).json({ error: "Error creating product" });
+      res.status(400).json({ error: "Error al crear producto" });
     }
   });
 
