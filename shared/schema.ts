@@ -21,6 +21,7 @@ export const QuotationStatus = {
   DRAFT: "draft",
   SENT: "sent",
   PENDING_APPROVAL: "pending_approval",
+  PENDING_AUTHORIZATION: "pending_authorization",
   AUTHORIZED: "authorized",
   CONVERTED: "converted",
   REJECTED: "rejected",

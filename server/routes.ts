@@ -790,6 +790,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate and download quotation PDF
+  app.get("/api/quotations/:id/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const userRole = req.user!.role;
+      
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+        with: { customer: true, user: true },
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+
+      // Authorization check: user must own the quotation or be admin/credit role
+      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA];
+      if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
+      }
+
+      const items = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, id),
+        orderBy: (items, { asc }) => [asc(items.createdAt)],
+      });
+
+      const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
+      const pdfStream = generateQuotationPDFStream({
+        quotation,
+        items,
+        customer: quotation.customer,
+        user: quotation.user,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="cotizacion-${quotation.folio}.pdf"`);
+
+      pdfStream.pipe(res);
+    } catch (error) {
+      console.error("Error generating quotation PDF:", error);
+      res.status(500).json({ error: "Error generating PDF" });
+    }
+  });
+
+  // Send quotation by email
+  app.post("/api/quotations/:id/send-email", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { additionalEmails = [] } = req.body;
+      const userId = req.user!.id;
+      const userRole = req.user!.role;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+        with: { customer: true, user: true },
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+
+      // Authorization check: user must own the quotation or be admin
+      const allowedRoles = [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA];
+      if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ error: "No autorizado para enviar esta cotización" });
+      }
+
+      const items = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, id),
+      });
+
+      // Generate PDF and upload to storage
+      const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
+      const pdfStream = generateQuotationPDFStream({
+        quotation,
+        items,
+        customer: quotation.customer,
+        user: quotation.user,
+      });
+
+      const objectStorageService = new ObjectStorageService();
+      const pdfPath = await objectStorageService.uploadQuotationPdfToStorage(
+        pdfStream,
+        quotation.folio,
+        userId
+      );
+
+      // Update quotation with PDF path
+      await storage.updateQuotation(id, { pdfPath });
+
+      // Collect recipients
+      const recipients: string[] = [];
+      
+      // Add customer email if exists
+      if (quotation.customer.email) {
+        recipients.push(quotation.customer.email);
+      }
+
+      // Add seller email
+      if (quotation.user.email) {
+        recipients.push(quotation.user.email);
+      }
+
+      // Add any additional emails
+      if (additionalEmails && Array.isArray(additionalEmails)) {
+        additionalEmails.forEach((email: string) => {
+          if (email && !recipients.includes(email)) {
+            recipients.push(email);
+          }
+        });
+      }
+
+      if (recipients.length === 0) {
+        return res.status(400).json({ error: "No hay destinatarios de correo válidos" });
+      }
+
+      // Send email
+      const { sendQuotationEmail } = await import("./quotation-email-service");
+      await sendQuotationEmail({
+        to: recipients,
+        quotationData: {
+          folio: quotation.folio,
+          customerName: quotation.customer.name,
+          vendedorName: quotation.user.fullName,
+          total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+          currency: quotation.currency || "MXN",
+          validUntil: quotation.validUntil ? new Date(quotation.validUntil).toLocaleDateString("es-MX") : undefined,
+          itemsCount: items.length,
+        },
+        pdfPath,
+      });
+
+      // Update quotation status to sent
+      await storage.updateQuotation(id, { 
+        status: QuotationStatus.SENT,
+        sentAt: new Date(),
+        sentMethod: "email",
+      });
+
+      // Automatically create credit authorization request
+      const authReason = quotation.requiresApproval 
+        ? `Requiere autorización: ${quotation.approvalReason || "Descuento excede límite permitido"}`
+        : "Cotización enviada - Pendiente de autorización de crédito";
+
+      const creditAuth = await storage.createCreditAuthorization({
+        quotationId: id,
+        userId: req.user!.id,
+        status: CreditAuthStatus.PENDING,
+        notes: authReason,
+      });
+
+      // Update quotation to pending authorization status
+      await storage.updateQuotation(id, { 
+        status: QuotationStatus.PENDING_AUTHORIZATION,
+      });
+
+      res.json({ 
+        success: true, 
+        message: `Cotización enviada a: ${recipients.join(", ")}. Ahora está en proceso de autorización.`,
+        recipients,
+        creditAuthorizationId: creditAuth.id,
+      });
+    } catch (error) {
+      console.error("Error sending quotation email:", error);
+      res.status(500).json({ error: "Error al enviar el correo" });
+    }
+  });
+
   // Credit Authorizations endpoints
   app.get("/api/credit-authorizations", isAuthenticated, async (req, res) => {
     try {

@@ -364,6 +364,39 @@ export class ObjectStorageService {
         .on("finish", () => resolve(`minutes/${filename}.pdf`));
     });
   }
+
+  async uploadQuotationPdfToStorage(
+    pdfStream: NodeJS.ReadableStream,
+    folio: string,
+    ownerId: string
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const privateObjectDir = this.getPrivateObjectDir();
+      const timestamp = Date.now();
+      const fullPath = `${privateObjectDir}/quotations/${folio}-${timestamp}.pdf`;
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectName);
+
+      const writeStream = file.createWriteStream({
+        metadata: {
+          contentType: "application/pdf",
+          metadata: {
+            [ACL_POLICY_METADATA_KEY]: JSON.stringify({
+              owner: ownerId,
+              visibility: "private",
+            } as ObjectAclPolicy),
+          },
+        },
+      });
+
+      pdfStream
+        .pipe(writeStream)
+        .on("error", (error) => reject(error))
+        .on("finish", () => resolve(`quotations/${folio}-${timestamp}.pdf`));
+    });
+  }
 }
 
 function parseObjectPath(path: string): {
