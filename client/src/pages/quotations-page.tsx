@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem } from "@shared/schema";
+import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -37,6 +37,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 type QuotationWithDetails = Quotation & { 
   customer: Customer; 
@@ -44,11 +53,14 @@ type QuotationWithDetails = Quotation & {
 };
 
 export default function QuotationsPage() {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<QuotationWithDetails | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -57,14 +69,76 @@ export default function QuotationsPage() {
   );
 
   const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
+  const { data: products } = useEntityQuery<Product[]>("/api/products");
 
   const createQuotationMutation = useEntityMutation<Quotation, InsertQuotation & { items: InsertQuotationItem[] }>({
     endpoint: "/api/quotations",
     method: "POST",
     successMessage: "Cotización creada exitosamente",
     invalidateQueries: ["/api/quotations"],
-    onSuccessCallback: () => setDialogOpen(false),
+    onSuccessCallback: () => setCreateDialogOpen(false),
   });
+
+  const updateQuotationMutation = useEntityMutation<Quotation, Partial<InsertQuotation> & { items?: InsertQuotationItem[] }>({
+    endpoint: selectedQuotation ? `/api/quotations/${selectedQuotation.id}` : "/api/quotations",
+    method: "PATCH",
+    successMessage: "Cotización actualizada exitosamente",
+    invalidateQueries: ["/api/quotations"],
+    onSuccessCallback: () => {
+      setEditDialogOpen(false);
+      setSelectedQuotation(null);
+    },
+  });
+
+  const handleViewDetails = async (quotation: QuotationWithDetails) => {
+    setIsLoadingDetails(true);
+    try {
+      const response = await fetch(`/api/quotations/${quotation.id}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Error al cargar detalles");
+      const data = await response.json();
+      setSelectedQuotation(data);
+      setDetailsDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los detalles",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
+
+  const handleEdit = async (quotation: QuotationWithDetails) => {
+    if (quotation.status !== QuotationStatus.DRAFT) {
+      toast({
+        title: "No se puede editar",
+        description: "Solo se pueden editar cotizaciones en estado Borrador",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsLoadingDetails(true);
+    try {
+      const response = await fetch(`/api/quotations/${quotation.id}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Error al cargar detalles");
+      const data = await response.json();
+      setSelectedQuotation(data);
+      setEditDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los detalles para editar",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
 
   const handleDownloadPDF = async (quotation: QuotationWithDetails) => {
     setIsDownloading(quotation.id);
@@ -131,6 +205,16 @@ export default function QuotationsPage() {
     setSendEmailDialogOpen(true);
   };
 
+  const formatCurrency = (value: string | number, currency: string = "MXN") => {
+    const num = typeof value === "string" ? parseFloat(value) : value;
+    return num.toLocaleString("es-MX", {
+      style: "currency",
+      currency: currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock }> = {
       [QuotationStatus.DRAFT]: { label: "Borrador", variant: "secondary", icon: FileText },
@@ -152,6 +236,23 @@ export default function QuotationsPage() {
     );
   };
 
+  const PAYMENT_TERMS_LABELS: Record<string, string> = {
+    contado: "Contado",
+    "15_dias": "15 días",
+    "30_dias": "30 días",
+    "45_dias": "45 días",
+    "60_dias": "60 días",
+  };
+
+  const DELIVERY_TIME_LABELS: Record<string, string> = {
+    inmediato: "Inmediato",
+    "1_semana": "1 semana",
+    "2_semanas": "2 semanas",
+    "3_semanas": "3 semanas",
+    "1_mes": "1 mes",
+    por_confirmar: "Por confirmar",
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -161,7 +262,7 @@ export default function QuotationsPage() {
             Gestiona cotizaciones y conviértelas en pedidos
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} data-testid="button-add-quotation">
+        <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-add-quotation">
           <Plus className="h-4 w-4 mr-2" />
           Nueva Cotización
         </Button>
@@ -212,10 +313,7 @@ export default function QuotationsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="font-medium font-mono">
-                          ${parseFloat(quotation.total).toLocaleString("es-MX", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatCurrency(quotation.total, quotation.currency || "MXN")}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {quotation.currency || "MXN"}
@@ -232,27 +330,24 @@ export default function QuotationsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDownloadPDF(quotation)}
-                            disabled={isDownloading === quotation.id}
-                            title="Descargar PDF"
-                            data-testid={`button-pdf-quotation-${quotation.id}`}
+                            onClick={() => handleViewDetails(quotation)}
+                            disabled={isLoadingDetails}
+                            title="Ver detalles"
+                            data-testid={`button-view-quotation-${quotation.id}`}
                           >
-                            {isDownloading === quotation.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Download className="h-4 w-4" />
-                            )}
+                            <Eye className="h-4 w-4" />
                           </Button>
-                          
-                          {(quotation.status === QuotationStatus.DRAFT || quotation.status === QuotationStatus.SENT) && (
+
+                          {quotation.status === QuotationStatus.DRAFT && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => openSendEmailDialog(quotation)}
-                              title="Enviar por correo"
-                              data-testid={`button-email-quotation-${quotation.id}`}
+                              onClick={() => handleEdit(quotation)}
+                              disabled={isLoadingDetails}
+                              title="Editar"
+                              data-testid={`button-edit-quotation-${quotation.id}`}
                             >
-                              <Mail className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" />
                             </Button>
                           )}
 
@@ -263,30 +358,32 @@ export default function QuotationsPage() {
                                 size="icon"
                                 data-testid={`button-menu-quotation-${quotation.id}`}
                               >
-                                <Eye className="h-4 w-4" />
+                                <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem data-testid={`menu-view-quotation-${quotation.id}`}>
-                                <FileText className="h-4 w-4 mr-2" />
-                                Ver detalles
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 onClick={() => handleDownloadPDF(quotation)}
                                 data-testid={`menu-pdf-quotation-${quotation.id}`}
                               >
-                                <Download className="h-4 w-4 mr-2" />
+                                {isDownloading === quotation.id ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4 mr-2" />
+                                )}
                                 Descargar PDF
                               </DropdownMenuItem>
                               {(quotation.status === QuotationStatus.DRAFT || quotation.status === QuotationStatus.SENT) && (
-                                <DropdownMenuItem 
-                                  onClick={() => openSendEmailDialog(quotation)}
-                                  data-testid={`menu-email-quotation-${quotation.id}`}
-                                >
-                                  <Mail className="h-4 w-4 mr-2" />
-                                  Enviar por correo
-                                </DropdownMenuItem>
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    onClick={() => openSendEmailDialog(quotation)}
+                                    data-testid={`menu-email-quotation-${quotation.id}`}
+                                  >
+                                    <Mail className="h-4 w-4 mr-2" />
+                                    Enviar por correo
+                                  </DropdownMenuItem>
+                                </>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -303,7 +400,7 @@ export default function QuotationsPage() {
               <p className="text-muted-foreground">No hay cotizaciones registradas</p>
               <Button
                 className="mt-4"
-                onClick={() => setDialogOpen(true)}
+                onClick={() => setCreateDialogOpen(true)}
                 data-testid="button-add-first-quotation"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -314,37 +411,225 @@ export default function QuotationsPage() {
         </CardContent>
       </Card>
 
+      {/* Create Quotation Dialog */}
       <QuotationForm
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
         onSubmit={createQuotationMutation.mutate}
         isPending={createQuotationMutation.isPending}
         customers={customers?.map(c => ({ id: c.id, name: c.name })) || []}
         userId={user?.id}
       />
 
+      {/* Edit Quotation Dialog */}
+      {selectedQuotation && (
+        <QuotationForm
+          open={editDialogOpen}
+          onOpenChange={(open) => {
+            setEditDialogOpen(open);
+            if (!open) setSelectedQuotation(null);
+          }}
+          onSubmit={(data) => updateQuotationMutation.mutate(data)}
+          isPending={updateQuotationMutation.isPending}
+          customers={customers?.map(c => ({ id: c.id, name: c.name })) || []}
+          userId={user?.id}
+          initialData={selectedQuotation}
+          isEditing
+        />
+      )}
+
+      {/* Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Cotización {selectedQuotation?.folio}
+            </DialogTitle>
+            <DialogDescription>
+              Detalles completos de la cotización
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedQuotation && (
+            <ScrollArea className="max-h-[60vh] pr-4">
+              <div className="space-y-6">
+                {/* Header Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Cliente</h4>
+                    <p className="font-medium">{selectedQuotation.customer.name}</p>
+                    {selectedQuotation.customer.rfc && (
+                      <p className="text-sm text-muted-foreground">{selectedQuotation.customer.rfc}</p>
+                    )}
+                    {selectedQuotation.customer.email && (
+                      <p className="text-sm text-muted-foreground">{selectedQuotation.customer.email}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Estado</h4>
+                    {getStatusBadge(selectedQuotation.status)}
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Creada: {format(new Date(selectedQuotation.createdAt), "PPP", { locale: es })}
+                    </p>
+                    {selectedQuotation.validUntil && (
+                      <p className="text-sm text-muted-foreground">
+                        Vigente hasta: {format(new Date(selectedQuotation.validUntil), "PPP", { locale: es })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Commercial Conditions */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Moneda</h4>
+                    <p>{selectedQuotation.currency || "MXN"}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Condiciones de Pago</h4>
+                    <p>{selectedQuotation.paymentTerms ? PAYMENT_TERMS_LABELS[selectedQuotation.paymentTerms] || selectedQuotation.paymentTerms : "No especificado"}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Tiempo de Entrega</h4>
+                    <p>{selectedQuotation.deliveryTime ? DELIVERY_TIME_LABELS[selectedQuotation.deliveryTime] || selectedQuotation.deliveryTime : "No especificado"}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Products Table */}
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-3">Productos</h4>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Código</TableHead>
+                          <TableHead>Producto</TableHead>
+                          <TableHead className="text-center">Cantidad</TableHead>
+                          <TableHead className="text-right">P. Unitario</TableHead>
+                          <TableHead className="text-center">Desc %</TableHead>
+                          <TableHead className="text-right">Subtotal</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedQuotation.items?.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-mono text-xs">{item.productCode || "-"}</TableCell>
+                            <TableCell>{item.productName}</TableCell>
+                            <TableCell className="text-center">{parseFloat(item.quantity)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(item.unitPrice, selectedQuotation.currency || "MXN")}</TableCell>
+                            <TableCell className="text-center">{parseFloat(item.discountPercent || "0").toFixed(1)}%</TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(item.subtotal, selectedQuotation.currency || "MXN")}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* Totals */}
+                <div className="flex justify-end">
+                  <div className="w-64 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span>{formatCurrency(selectedQuotation.subtotal, selectedQuotation.currency || "MXN")}</span>
+                    </div>
+                    {parseFloat(selectedQuotation.globalDiscount || "0") > 0 && (
+                      <div className="flex justify-between text-sm text-red-600">
+                        <span>Descuento Global ({selectedQuotation.globalDiscount}%):</span>
+                        <span>-{formatCurrency(parseFloat(selectedQuotation.subtotal) * (parseFloat(selectedQuotation.globalDiscount || "0") / 100), selectedQuotation.currency || "MXN")}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">IVA:</span>
+                      <span>{formatCurrency(selectedQuotation.tax, selectedQuotation.currency || "MXN")}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total:</span>
+                      <span>{formatCurrency(selectedQuotation.total, selectedQuotation.currency || "MXN")}</span>
+                    </div>
+                    {parseFloat(selectedQuotation.totalSavings || "0") > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Ahorro total:</span>
+                        <span>{formatCurrency(selectedQuotation.totalSavings || "0", selectedQuotation.currency || "MXN")}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {(selectedQuotation.notes || selectedQuotation.conditions) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      {selectedQuotation.notes && (
+                        <div>
+                          <h4 className="text-sm font-medium text-muted-foreground mb-1">Notas</h4>
+                          <p className="text-sm">{selectedQuotation.notes}</p>
+                        </div>
+                      )}
+                      {selectedQuotation.conditions && (
+                        <div>
+                          <h4 className="text-sm font-medium text-muted-foreground mb-1">Condiciones</h4>
+                          <p className="text-sm">{selectedQuotation.conditions}</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </ScrollArea>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
+              Cerrar
+            </Button>
+            <Button 
+              onClick={() => selectedQuotation && handleDownloadPDF(selectedQuotation)}
+              disabled={isDownloading === selectedQuotation?.id}
+            >
+              {isDownloading === selectedQuotation?.id ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              Descargar PDF
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Email Dialog */}
       <AlertDialog open={sendEmailDialogOpen} onOpenChange={setSendEmailDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Enviar Cotización por Correo</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <p>
-                Se enviará la cotización <strong>{selectedQuotation?.folio}</strong> al cliente{" "}
-                <strong>{selectedQuotation?.customer.name}</strong>.
-              </p>
-              <p className="text-sm">
-                El correo incluirá el PDF de la cotización y se enviará a:
-              </p>
-              <ul className="text-sm list-disc list-inside ml-2 space-y-1">
-                {selectedQuotation?.customer.email && (
-                  <li>{selectedQuotation.customer.email} (cliente)</li>
-                )}
-                {user?.email && <li>{user.email} (vendedor)</li>}
-              </ul>
-              <div className="mt-4 p-3 bg-muted rounded-md">
-                <p className="text-sm font-medium">
-                  Al enviar, la cotización pasará automáticamente a proceso de autorización de crédito.
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Se enviará la cotización <strong>{selectedQuotation?.folio}</strong> al cliente{" "}
+                  <strong>{selectedQuotation?.customer.name}</strong>.
                 </p>
+                <p className="text-sm">
+                  El correo incluirá el PDF de la cotización y se enviará a:
+                </p>
+                <ul className="text-sm list-disc list-inside ml-2 space-y-1">
+                  {selectedQuotation?.customer.email && (
+                    <li>{selectedQuotation.customer.email} (cliente)</li>
+                  )}
+                  {user?.email && <li>{user.email} (vendedor)</li>}
+                </ul>
+                <div className="mt-4 p-3 bg-muted rounded-md">
+                  <p className="text-sm font-medium">
+                    Al enviar, la cotización pasará automáticamente a proceso de autorización de crédito.
+                  </p>
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

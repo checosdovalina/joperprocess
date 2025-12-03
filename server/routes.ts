@@ -35,7 +35,7 @@ import {
   OrderStatus,
   ScheduledVisitStatus,
 } from "@shared/schema";
-import { customers, quotations, checkins, scheduledVisits, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
 import { eq, and, sql, gte, lt } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -776,14 +776,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single quotation with all details
+  app.get("/api/quotations/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const userRole = req.user!.role;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+        with: { customer: true, user: true },
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+
+      // Authorization check: user must own the quotation or have authorized role
+      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA];
+      if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
+      }
+
+      // Get items
+      const items = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, id),
+        orderBy: (items, { asc }) => [asc(items.position)],
+      });
+
+      res.json({ ...quotation, items });
+    } catch (error) {
+      console.error("Error fetching quotation:", error);
+      res.status(500).json({ error: "Error fetching quotation" });
+    }
+  });
+
   app.patch("/api/quotations/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const updatedQuotation = await storage.updateQuotation(id, req.body);
-      if (!updatedQuotation) {
+      const userId = req.user!.id;
+      const userRole = req.user!.role;
+
+      // Check quotation exists and user has permission
+      const existingQuotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+      });
+
+      if (!existingQuotation) {
         return res.status(404).json({ error: "Quotation not found" });
       }
-      res.json(updatedQuotation);
+
+      // Authorization check
+      const allowedRoles = [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA];
+      if (existingQuotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ error: "No autorizado para editar esta cotización" });
+      }
+
+      // Only allow editing DRAFT quotations
+      if (existingQuotation.status !== QuotationStatus.DRAFT) {
+        return res.status(400).json({ error: "Solo se pueden editar cotizaciones en estado Borrador" });
+      }
+
+      const { items, ...quotationData } = req.body;
+
+      // Update quotation data
+      const updatedQuotation = await storage.updateQuotation(id, quotationData);
+
+      // Update items if provided
+      if (items && Array.isArray(items)) {
+        // Delete existing items
+        await db.delete(quotationItems).where(eq(quotationItems.quotationId, id));
+
+        // Create new items
+        for (const item of items) {
+          const validatedItem = insertQuotationItemSchema.parse({
+            ...item,
+            quotationId: id,
+          });
+          await storage.createQuotationItem(validatedItem);
+        }
+      }
+
+      // Fetch updated quotation with items
+      const finalQuotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+        with: { customer: true, user: true },
+      });
+      const finalItems = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, id),
+        orderBy: (items, { asc }) => [asc(items.position)],
+      });
+
+      res.json({ ...finalQuotation, items: finalItems });
     } catch (error) {
       console.error("Error updating quotation:", error);
       res.status(500).json({ error: "Error updating quotation" });
@@ -814,7 +898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const items = await db.query.quotationItems.findMany({
         where: eq(quotationItems.quotationId, id),
-        orderBy: (items, { asc }) => [asc(items.createdAt)],
+        orderBy: (items, { asc }) => [asc(items.position)],
       });
 
       const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
@@ -1168,6 +1252,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating invoice:", error);
       res.status(500).json({ error: "Error updating invoice" });
+    }
+  });
+
+  // Get single invoice with details
+  app.get("/api/invoices/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const invoice = await db.query.invoices.findFirst({
+        where: eq(invoices.id, id),
+        with: { customer: true, order: true },
+      });
+
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      res.json(invoice);
+    } catch (error) {
+      console.error("Error fetching invoice:", error);
+      res.status(500).json({ error: "Error fetching invoice" });
+    }
+  });
+
+  // Generate and download invoice PDF
+  app.get("/api/invoices/:id/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const invoice = await db.query.invoices.findFirst({
+        where: eq(invoices.id, id),
+        with: { customer: true, order: true },
+      });
+
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      const { generateInvoicePDFStream } = await import("./invoice-pdf-generator");
+      const pdfStream = generateInvoicePDFStream({ invoice, customer: invoice.customer });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="factura-${invoice.serie}-${invoice.folio}.pdf"`);
+
+      pdfStream.pipe(res);
+    } catch (error) {
+      console.error("Error generating invoice PDF:", error);
+      res.status(500).json({ error: "Error generating PDF" });
+    }
+  });
+
+  // Send invoice by email
+  app.post("/api/invoices/:id/send-email", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const invoice = await db.query.invoices.findFirst({
+        where: eq(invoices.id, id),
+        with: { customer: true },
+      });
+
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      if (!invoice.customer.email) {
+        return res.status(400).json({ error: "El cliente no tiene correo electrónico configurado" });
+      }
+
+      const { sendInvoiceEmail } = await import("./invoice-email-service");
+      await sendInvoiceEmail({
+        invoice,
+        customer: invoice.customer,
+        recipientEmail: invoice.customer.email,
+        ccEmails: req.user?.email ? [req.user.email] : [],
+      });
+
+      res.json({ 
+        success: true, 
+        message: `Factura ${invoice.serie}-${invoice.folio} enviada exitosamente` 
+      });
+    } catch (error) {
+      console.error("Error sending invoice email:", error);
+      res.status(500).json({ error: "Error al enviar la factura por correo" });
     }
   });
 

@@ -66,6 +66,8 @@ interface QuotationFormProps {
   onCancel?: () => void;
   customers?: Array<{ id: string; name: string }>;
   userId?: string;
+  initialData?: any;
+  isEditing?: boolean;
 }
 
 interface QuotationLineItem {
@@ -151,10 +153,13 @@ export function QuotationForm({
   onCancel,
   customers = [],
   userId,
+  initialData,
+  isEditing = false,
 }: QuotationFormProps) {
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0)]);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [initialized, setInitialized] = useState(false);
 
   const { data: products } = useEntityQuery<ProductWithCategory[]>(
     searchQuery ? `/api/products?q=${encodeURIComponent(searchQuery)}` : "/api/products"
@@ -173,6 +178,64 @@ export function QuotationForm({
       conditions: "",
     },
   });
+
+  useEffect(() => {
+    if (isEditing && initialData && open && !initialized) {
+      form.reset({
+        customerId: initialData.customerId || "",
+        currency: initialData.currency || "MXN",
+        paymentTerms: initialData.paymentTerms || "",
+        deliveryTime: initialData.deliveryTime || "",
+        validUntil: initialData.validUntil ? new Date(initialData.validUntil).toISOString().split('T')[0] : "",
+        globalDiscount: initialData.globalDiscount || "0",
+        notes: initialData.notes || "",
+        conditions: initialData.conditions || "",
+      });
+
+      if (initialData.items && initialData.items.length > 0) {
+        const items: QuotationLineItem[] = initialData.items.map((item: any, index: number) => ({
+          productId: item.productId || null,
+          productCode: item.productCode || "",
+          productName: item.productName || "",
+          description: item.description || "",
+          unitOfMeasure: item.unitOfMeasure || "PZA",
+          quantity: item.quantity?.toString() || "1",
+          listPrice: item.listPrice?.toString() || "0",
+          unitPrice: item.unitPrice?.toString() || "0",
+          discountPercent: item.discountPercent?.toString() || "0",
+          discountAmount: item.discountAmount?.toString() || "0",
+          subtotal: item.subtotal?.toString() || "0",
+          taxRate: item.taxRate?.toString() || "16",
+          taxAmount: item.taxAmount?.toString() || "0",
+          total: item.total?.toString() || "0",
+          exceedsMaxDiscount: false,
+          maxDiscount: "0",
+          position: item.position ?? index,
+        }));
+        setLineItems(items);
+      }
+      setInitialized(true);
+    }
+  }, [isEditing, initialData, open, form, initialized]);
+
+  useEffect(() => {
+    if (!open) {
+      setInitialized(false);
+      if (!isEditing) {
+        form.reset({
+          customerId: "",
+          currency: "MXN",
+          paymentTerms: "",
+          deliveryTime: "",
+          validUntil: "",
+          globalDiscount: "0",
+          notes: "",
+          conditions: "",
+        });
+        setLineItems([createEmptyLineItem(0)]);
+      }
+    }
+  }, [open, form, isEditing]);
 
   const calculateLineItem = useCallback((item: QuotationLineItem, field: 'discountPercent' | 'unitPrice'): QuotationLineItem => {
     const quantity = parseFloat(item.quantity) || 0;
@@ -354,20 +417,15 @@ export function QuotationForm({
     });
   };
 
-  useEffect(() => {
-    if (!open) {
-      form.reset();
-      setLineItems([createEmptyLineItem(0)]);
-    }
-  }, [open, form]);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Nueva Cotización</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Cotización" : "Nueva Cotización"}</DialogTitle>
           <DialogDescription>
-            Crea una cotización agregando productos y configurando términos comerciales
+            {isEditing 
+              ? "Modifica los datos de la cotización y sus productos" 
+              : "Crea una cotización agregando productos y configurando términos comerciales"}
           </DialogDescription>
         </DialogHeader>
 
