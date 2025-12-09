@@ -750,6 +750,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { items, ...quotationData } = req.body;
       
+      // Convert validUntil from string to Date if present
+      if (quotationData.validUntil && typeof quotationData.validUntil === 'string') {
+        quotationData.validUntil = new Date(quotationData.validUntil);
+      }
+      
       const validated = insertQuotationSchema.parse({
         ...quotationData,
         userId: req.user!.id,
