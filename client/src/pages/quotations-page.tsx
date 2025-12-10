@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -43,7 +43,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
@@ -173,6 +175,9 @@ export default function QuotationsPage() {
     }
   };
 
+  const [approvalLinkDialogOpen, setApprovalLinkDialogOpen] = useState(false);
+  const [approvalLink, setApprovalLink] = useState("");
+
   const handleSendEmail = async () => {
     if (!selectedQuotation) return;
     setIsSending(true);
@@ -180,15 +185,25 @@ export default function QuotationsPage() {
       const response = await apiRequest("POST", `/api/quotations/${selectedQuotation.id}/send-email`, {});
       const data = await response.json();
       
-      toast({
-        title: "Cotización enviada",
-        description: data.message,
-      });
-      
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/credit-authorizations"] });
       setSendEmailDialogOpen(false);
       setSelectedQuotation(null);
+
+      // If email failed but we have approval URL, show the link dialog
+      if (data.warning && data.approvalUrl) {
+        setApprovalLink(data.approvalUrl);
+        setApprovalLinkDialogOpen(true);
+        toast({
+          title: "Enlace generado",
+          description: "El correo no pudo enviarse. Copia el enlace para compartirlo.",
+        });
+      } else {
+        toast({
+          title: "Cotización enviada",
+          description: data.message,
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -198,6 +213,14 @@ export default function QuotationsPage() {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const copyApprovalLink = () => {
+    navigator.clipboard.writeText(approvalLink);
+    toast({
+      title: "Enlace copiado",
+      description: "El enlace de aprobación ha sido copiado al portapapeles",
+    });
   };
 
   const openSendEmailDialog = (quotation: QuotationWithDetails) => {
@@ -651,6 +674,41 @@ export default function QuotationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Approval Link Dialog - shown when email fails */}
+      <Dialog open={approvalLinkDialogOpen} onOpenChange={setApprovalLinkDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Enlace de Aprobación Generado</DialogTitle>
+            <DialogDescription>
+              El correo no pudo enviarse, pero el enlace de aprobación está listo. 
+              Copia este enlace y envíalo al cliente por WhatsApp u otro medio.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-2">
+              <Input 
+                value={approvalLink} 
+                readOnly 
+                className="flex-1 text-sm"
+                data-testid="input-approval-link"
+              />
+              <Button onClick={copyApprovalLink} variant="outline" data-testid="button-copy-link">
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Al abrir este enlace, el cliente podrá ver la cotización y aprobarla o rechazarla.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setApprovalLinkDialogOpen(false)} data-testid="button-close-link-dialog">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

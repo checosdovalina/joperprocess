@@ -1010,36 +1010,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const protocol = req.protocol || "https";
       const approvalUrl = `${protocol}://${host}/aprobar-cotizacion/${approvalToken}`;
 
-      // Send email with approval link
-      const { sendQuotationEmail } = await import("./quotation-email-service");
-      await sendQuotationEmail({
-        to: recipients,
-        quotationData: {
-          folio: quotation.folio,
-          customerName: quotation.customer.name,
-          vendedorName: quotation.user.fullName,
-          total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
-          currency: quotation.currency || "MXN",
-          validUntil: quotation.validUntil ? new Date(quotation.validUntil).toLocaleDateString("es-MX") : undefined,
-          itemsCount: items.length,
-        },
-        pdfPath,
-        approvalUrl,
-      });
+      // Try to send email, but don't fail if email service has issues
+      let emailSent = false;
+      let emailError = null;
+      try {
+        const { sendQuotationEmail } = await import("./quotation-email-service");
+        await sendQuotationEmail({
+          to: recipients,
+          quotationData: {
+            folio: quotation.folio,
+            customerName: quotation.customer.name,
+            vendedorName: quotation.user.fullName,
+            total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+            currency: quotation.currency || "MXN",
+            validUntil: quotation.validUntil ? new Date(quotation.validUntil).toLocaleDateString("es-MX") : undefined,
+            itemsCount: items.length,
+          },
+          pdfPath,
+          approvalUrl,
+        });
+        emailSent = true;
+      } catch (err: any) {
+        console.warn("Email send failed, but continuing with approval link generation:", err.message || err);
+        emailError = err.message || "Error del servicio de correo";
+      }
 
       // Update quotation status to pending customer approval
       await storage.updateQuotation(id, { 
         status: QuotationStatus.PENDING_APPROVAL,
         sentAt: new Date(),
-        sentMethod: "email",
+        sentMethod: emailSent ? "email" : "manual",
       });
 
-      res.json({ 
-        success: true, 
-        message: `Cotización enviada a: ${recipients.join(", ")}. Esperando aprobación del cliente.`,
-        recipients,
-        approvalUrl,
-      });
+      if (emailSent) {
+        res.json({ 
+          success: true, 
+          message: `Cotización enviada a: ${recipients.join(", ")}. Esperando aprobación del cliente.`,
+          recipients,
+          approvalUrl,
+        });
+      } else {
+        // Email failed but we still have the approval URL
+        res.json({ 
+          success: true, 
+          message: `El correo no pudo enviarse, pero el enlace de aprobación está listo. Copia y comparte el enlace con el cliente.`,
+          approvalUrl,
+          emailError,
+          warning: "El servicio de correo tuvo problemas. Comparte el enlace manualmente.",
+        });
+      }
     } catch (error) {
       console.error("Error sending quotation email:", error);
       res.status(500).json({ error: "Error al enviar el correo" });
