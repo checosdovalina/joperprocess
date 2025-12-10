@@ -36,7 +36,7 @@ import {
   OrderStatus,
   ScheduledVisitStatus,
 } from "@shared/schema";
-import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, creditAuthorizations, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, creditAuthorizations, creditAuthorizationComments, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
 import { eq, and, sql, gte, lt } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1105,10 +1105,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/credit-authorizations/:id", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA), async (req, res) => {
     try {
       const { id } = req.params;
-      const updatedAuth = await storage.updateCreditAuthorization(id, {
-        ...req.body,
-        authorizedAt: req.body.status === CreditAuthStatus.APPROVED ? new Date() : undefined,
-      });
+      const { status, notes, approvalSignature, rejectionNotes } = req.body;
+      
+      // Require signature for approval
+      if (status === CreditAuthStatus.APPROVED && !approvalSignature) {
+        return res.status(400).json({ error: "Se requiere firma digital para aprobar" });
+      }
+
+      const updateData: any = {
+        status,
+        notes,
+      };
+
+      if (status === CreditAuthStatus.APPROVED) {
+        updateData.authorizedAt = new Date();
+        updateData.approvedById = req.user!.id;
+        updateData.approvalSignature = approvalSignature;
+        updateData.approvalSignedAt = new Date();
+      } else if (status === CreditAuthStatus.REJECTED) {
+        updateData.rejectedById = req.user!.id;
+        updateData.rejectionNotes = rejectionNotes;
+      }
+
+      const updatedAuth = await storage.updateCreditAuthorization(id, updateData);
       if (!updatedAuth) {
         return res.status(404).json({ error: "Credit authorization not found" });
       }
@@ -1123,6 +1142,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json(updatedAuth);
+    } catch (error) {
+      console.error("Error updating credit authorization:", error);
+      res.status(500).json({ error: "Error updating credit authorization" });
+    }
+  });
+
+  // Get comments for a credit authorization
+  app.get("/api/credit-authorizations/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const comments = await db.query.creditAuthorizationComments.findMany({
+        where: eq(creditAuthorizationComments.creditAuthorizationId, id),
+        with: {
+          user: true,
+        },
+        orderBy: (comments, { desc }) => [desc(comments.createdAt)],
+      });
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+      res.status(500).json({ error: "Error fetching comments" });
+    }
+  });
+
+  // Add comment to credit authorization
+  app.post("/api/credit-authorizations/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { content } = req.body;
+
+      if (!content || content.trim() === "") {
+        return res.status(400).json({ error: "El contenido del comentario es requerido" });
+      }
+
+      const [comment] = await db.insert(creditAuthorizationComments).values({
+        creditAuthorizationId: id,
+        userId: req.user!.id,
+        content: content.trim(),
+      }).returning();
+
+      // Fetch the comment with user info
+      const commentWithUser = await db.query.creditAuthorizationComments.findFirst({
+        where: eq(creditAuthorizationComments.id, comment.id),
+        with: {
+          user: true,
+        },
+      });
+
+      res.status(201).json(commentWithUser);
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      res.status(500).json({ error: "Error adding comment" });
+    }
+  });
+
+  // Update credit authorization (edit notes/details while pending)
+  app.put("/api/credit-authorizations/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { notes, creditAvailable, creditUsed, overdueBalance } = req.body;
+
+      // Check if authorization exists and is pending
+      const auth = await db.query.creditAuthorizations.findFirst({
+        where: eq(creditAuthorizations.id, id),
+      });
+
+      if (!auth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
+      if (auth.status !== CreditAuthStatus.PENDING) {
+        return res.status(400).json({ error: "Solo se pueden editar autorizaciones pendientes" });
+      }
+
+      // Only admin, credit/collection, or the requester can edit
+      if (req.user!.role !== UserRole.ADMIN && 
+          req.user!.role !== UserRole.CREDITO_COBRANZA && 
+          req.user!.id !== auth.userId) {
+        return res.status(403).json({ error: "No tiene permisos para editar esta autorización" });
+      }
+
+      const [updated] = await db.update(creditAuthorizations)
+        .set({
+          notes,
+          creditAvailable,
+          creditUsed,
+          overdueBalance,
+          lastEditedById: req.user!.id,
+          lastEditedAt: new Date(),
+        })
+        .where(eq(creditAuthorizations.id, id))
+        .returning();
+
+      res.json(updated);
     } catch (error) {
       console.error("Error updating credit authorization:", error);
       res.status(500).json({ error: "Error updating credit authorization" });
