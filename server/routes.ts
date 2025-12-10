@@ -1132,13 +1132,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Credit authorization not found" });
       }
 
-      // If approved, update quotation status
+      // If approved, create order and update quotation status to converted
       if (updatedAuth.status === CreditAuthStatus.APPROVED) {
+        // Create order from quotation
+        const order = await storage.createOrder({
+          quotationId: updatedAuth.quotationId,
+          status: OrderStatus.PENDING,
+        });
+
+        // Update quotation status to converted and link to order
         await storage.updateQuotation(updatedAuth.quotationId, {
-          status: QuotationStatus.AUTHORIZED,
+          status: QuotationStatus.CONVERTED,
           authorizedBy: req.user!.id,
           authorizedAt: new Date(),
+          convertedToOrderId: order.id,
         });
+
+        return res.json({ ...updatedAuth, order });
       }
 
       res.json(updatedAuth);
