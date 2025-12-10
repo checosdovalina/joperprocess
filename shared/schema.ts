@@ -35,6 +35,8 @@ export const OrderStatus = {
   PENDING: "pending",
   IN_PRODUCTION: "in_production",
   READY: "ready",
+  PARTIALLY_RELEASED: "partially_released",
+  RELEASED: "released",
   SHIPPED: "shipped",
   DELIVERED: "delivered",
 } as const;
@@ -262,6 +264,19 @@ export const orders = pgTable("orders", {
   lastUpdatedBy: varchar("last_updated_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Order releases table - tracks partial/full product releases for invoicing/shipping
+export const orderReleases = pgTable("order_releases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  quotationItemId: varchar("quotation_item_id").notNull().references(() => quotationItems.id),
+  quantityReleased: decimal("quantity_released", { precision: 10, scale: 2 }).notNull(),
+  releasedById: varchar("released_by_id").notNull().references(() => users.id),
+  invoiceId: varchar("invoice_id"),
+  shipmentId: varchar("shipment_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Shipments table
@@ -524,6 +539,22 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   }),
   shipment: many(shipments),
   invoice: many(invoices),
+  releases: many(orderReleases),
+}));
+
+export const orderReleasesRelations = relations(orderReleases, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderReleases.orderId],
+    references: [orders.id],
+  }),
+  quotationItem: one(quotationItems, {
+    fields: [orderReleases.quotationItemId],
+    references: [quotationItems.id],
+  }),
+  releasedBy: one(users, {
+    fields: [orderReleases.releasedById],
+    references: [users.id],
+  }),
 }));
 
 export const shipmentsRelations = relations(shipments, ({ one }) => ({
@@ -654,6 +685,11 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   updatedAt: true,
 });
 
+export const insertOrderReleaseSchema = createInsertSchema(orderReleases).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertShipmentSchema = createInsertSchema(shipments).omit({
   id: true,
   createdAt: true,
@@ -735,6 +771,9 @@ export type CreditAuthorizationComment = typeof creditAuthorizationComments.$inf
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
+
+export type InsertOrderRelease = z.infer<typeof insertOrderReleaseSchema>;
+export type OrderRelease = typeof orderReleases.$inferSelect;
 
 export type InsertShipment = z.infer<typeof insertShipmentSchema>;
 export type Shipment = typeof shipments.$inferSelect;
