@@ -189,6 +189,11 @@ export const quotations = pgTable("quotations", {
   sentMethod: text("sent_method"),
   convertedToOrderId: varchar("converted_to_order_id"),
   parentQuotationId: varchar("parent_quotation_id"),
+  // Customer approval workflow fields
+  approvalToken: text("approval_token").unique(), // Unique token for customer approval link
+  customerApprovedAt: timestamp("customer_approved_at"),
+  customerRejectedAt: timestamp("customer_rejected_at"),
+  customerRejectionReason: text("customer_rejection_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
