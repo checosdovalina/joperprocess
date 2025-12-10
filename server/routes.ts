@@ -814,7 +814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Authorization check: user must own the quotation or have authorized role
       // Vendedores can view all quotations for sales follow-up purposes
-      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDORES];
+      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
@@ -912,7 +912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Authorization check: user must own the quotation or be admin/credit/sales role
-      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDORES];
+      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
@@ -1956,6 +1956,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const now = new Date();
 
+      // Check if credit authorization already exists (idempotency)
+      const existingAuth = await db.query.creditAuthorizations.findFirst({
+        where: eq(creditAuthorizations.quotationId, quotation.id),
+      });
+
+      if (existingAuth) {
+        return res.status(400).json({ error: "Ya existe una solicitud de autorización para esta cotización" });
+      }
+
       // Update quotation: mark as customer approved and move to credit authorization
       const [updated] = await db.update(quotations)
         .set({
@@ -1969,12 +1978,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
 
       // Create credit authorization request automatically
+      // Note: userId is the sales rep who created the quotation
       await db.insert(creditAuthorizations).values({
         quotationId: quotation.id,
-        customerId: quotation.customerId,
-        requestedAmount: quotation.total,
+        userId: quotation.userId,
         status: CreditAuthStatus.PENDING,
-        notes: `Solicitud automática: Cliente aprobó cotización ${quotation.folio}`,
+        notes: `Solicitud automática: Cliente aprobó cotización ${quotation.folio} - Total: $${quotation.total}`,
       });
 
       res.json({
