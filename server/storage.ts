@@ -7,6 +7,7 @@ import {
   quotationItems,
   creditAuthorizations,
   orders,
+  orderReleases,
   shipments,
   invoices,
   payments,
@@ -30,6 +31,8 @@ import {
   type InsertCreditAuthorization,
   type Order,
   type InsertOrder,
+  type OrderRelease,
+  type InsertOrderRelease,
   type Shipment,
   type InsertShipment,
   type Invoice,
@@ -104,6 +107,10 @@ export interface IStorage {
   getAllOrders(): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined>;
+
+  // Order Releases
+  getOrderReleases(orderId: string): Promise<OrderRelease[]>;
+  createOrderRelease(release: InsertOrderRelease): Promise<OrderRelease>;
 
   // Shipments
   getShipment(id: string): Promise<Shipment | undefined>;
@@ -322,6 +329,16 @@ export class DatabaseStorage implements IStorage {
   async updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined> {
     const [order] = await db.update(orders).set(data).where(eq(orders.id, id)).returning();
     return order || undefined;
+  }
+
+  // Order Releases
+  async getOrderReleases(orderId: string): Promise<OrderRelease[]> {
+    return await db.select().from(orderReleases).where(eq(orderReleases.orderId, orderId)).orderBy(desc(orderReleases.createdAt));
+  }
+
+  async createOrderRelease(insertRelease: InsertOrderRelease): Promise<OrderRelease> {
+    const [release] = await db.insert(orderReleases).values(insertRelease).returning();
+    return release;
   }
 
   // Shipments

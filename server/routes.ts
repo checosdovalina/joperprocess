@@ -20,6 +20,7 @@ import {
   insertQuotationItemSchema,
   insertCreditAuthorizationSchema,
   insertOrderSchema,
+  insertOrderReleaseSchema,
   insertShipmentSchema,
   insertInvoiceSchema,
   insertPaymentSchema,
@@ -36,7 +37,7 @@ import {
   OrderStatus,
   ScheduledVisitStatus,
 } from "@shared/schema";
-import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, creditAuthorizations, creditAuthorizationComments, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
 import { eq, and, sql, gte, lt } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1741,6 +1742,176 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error updating order:", error);
       res.status(500).json({ error: "Error updating order" });
+    }
+  });
+
+  // Get order with full details including quotation items and releases
+  app.get("/api/orders/:id/details", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await db.query.orders.findFirst({
+        where: eq(orders.id, id),
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+              items: {
+                with: {
+                  product: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+
+      // Get all releases for this order
+      const releases = await storage.getOrderReleases(id);
+
+      res.json({ ...order, releases });
+    } catch (error) {
+      console.error("Error fetching order details:", error);
+      res.status(500).json({ error: "Error fetching order details" });
+    }
+  });
+
+  // Get order releases
+  app.get("/api/orders/:id/releases", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const releases = await storage.getOrderReleases(id);
+      res.json(releases);
+    } catch (error) {
+      console.error("Error fetching order releases:", error);
+      res.status(500).json({ error: "Error fetching order releases" });
+    }
+  });
+
+  // Create order release (partial or total release of products)
+  // Roles allowed: ADMIN, VENTAS_LOGISTICA, EMBARQUES
+  app.post("/api/orders/:id/releases", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.EMBARQUES), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { createInvoice, createShipment, shipmentData, ...releaseData } = req.body;
+      
+      // Validate shipmentData if createShipment is requested
+      if (createShipment && shipmentData) {
+        const validTransportTypes = ["propio", "paqueteria"];
+        if (shipmentData.transportType && !validTransportTypes.includes(shipmentData.transportType)) {
+          return res.status(400).json({ error: "Tipo de transporte inválido. Debe ser 'propio' o 'paqueteria'" });
+        }
+      }
+      
+      const order = await db.query.orders.findFirst({
+        where: eq(orders.id, id),
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+              items: {
+                with: {
+                  product: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+
+      let invoiceId: string | undefined;
+      let shipmentId: string | undefined;
+
+      // Create invoice if requested
+      if (createInvoice) {
+        const quotationItem = order.quotation.items.find(i => i.id === releaseData.quotationItemId);
+        if (quotationItem) {
+          const unitPrice = Number(quotationItem.unitPrice);
+          const quantity = Number(releaseData.quantityReleased);
+          const subtotal = unitPrice * quantity;
+          const tax = subtotal * 0.16;
+          const total = subtotal + tax;
+
+          const invoice = await storage.createInvoice({
+            orderId: id,
+            customerId: order.quotation.customerId,
+            serie: "A",
+            folio: `INV-${Date.now()}`,
+            subtotal: subtotal.toFixed(2),
+            tax: tax.toFixed(2),
+            total: total.toFixed(2),
+            balanceDue: total.toFixed(2),
+            currency: "MXN",
+          });
+          invoiceId = invoice.id;
+        }
+      }
+
+      // Create shipment if requested
+      if (createShipment && shipmentData) {
+        const shipment = await storage.createShipment({
+          orderId: id,
+          transporter: shipmentData.transporter || "Por definir",
+          transportType: shipmentData.transportType || "propio",
+          trackingNumber: shipmentData.trackingNumber,
+          driverName: shipmentData.driverName,
+          vehiclePlates: shipmentData.vehiclePlates,
+        });
+        shipmentId = shipment.id;
+      }
+
+      // Validate release data
+      const validated = insertOrderReleaseSchema.parse({
+        ...releaseData,
+        orderId: id,
+        releasedById: req.user!.id,
+        invoiceId,
+        shipmentId,
+      });
+
+      // Create the release
+      const release = await storage.createOrderRelease(validated);
+
+      // Check if all items are fully released to update order status
+      const quotationItemsResult = order.quotation.items;
+
+      const allReleases = await storage.getOrderReleases(id);
+
+      // Calculate total released per item
+      const releasedByItem: Record<string, number> = {};
+      for (const rel of allReleases) {
+        releasedByItem[rel.quotationItemId] = (releasedByItem[rel.quotationItemId] || 0) + Number(rel.quantityReleased);
+      }
+
+      // Check if all items are fully released
+      let allFullyReleased = true;
+      let someReleased = false;
+
+      for (const item of quotationItemsResult) {
+        const released = releasedByItem[item.id] || 0;
+        const quantity = Number(item.quantity);
+        if (released > 0) someReleased = true;
+        if (released < quantity) allFullyReleased = false;
+      }
+
+      // Update order status based on release state
+      if (allFullyReleased) {
+        await storage.updateOrder(id, { status: OrderStatus.SHIPPED });
+      } else if (someReleased) {
+        await storage.updateOrder(id, { status: OrderStatus.PARTIALLY_RELEASED });
+      }
+
+      res.status(201).json({ release, invoiceId, shipmentId });
+    } catch (error) {
+      console.error("Error creating order release:", error);
+      res.status(400).json({ error: "Error creating order release" });
     }
   });
 
