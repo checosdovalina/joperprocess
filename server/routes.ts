@@ -990,30 +990,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update quotation with PDF path and approval token
       await storage.updateQuotation(id, { pdfPath, approvalToken });
 
-      // Collect recipients
+      // Collect recipients - only send to customer to comply with MailerSend free tier limits
       const recipients: string[] = [];
       
-      // Add customer email if exists
+      // Add customer email if exists (primary recipient)
       if (quotation.customer.email) {
         recipients.push(quotation.customer.email);
       }
 
-      // Add seller email
-      if (quotation.user.email) {
-        recipients.push(quotation.user.email);
-      }
-
-      // Add any additional emails
-      if (additionalEmails && Array.isArray(additionalEmails)) {
-        additionalEmails.forEach((email: string) => {
-          if (email && !recipients.includes(email)) {
-            recipients.push(email);
-          }
-        });
-      }
+      // Note: Additional recipients removed due to MailerSend free tier limitations
+      // For production, consider upgrading the email service plan
 
       if (recipients.length === 0) {
-        return res.status(400).json({ error: "No hay destinatarios de correo válidos" });
+        return res.status(400).json({ error: "El cliente no tiene email registrado" });
       }
 
       // Build approval URL
