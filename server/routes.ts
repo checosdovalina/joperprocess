@@ -1129,7 +1129,214 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI Credit Analysis endpoint
+  // Rule-based Credit Analysis endpoint (free, instant)
+  app.get("/api/credit-authorizations/:id/analyze-rules", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA), async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const auth = await db.query.creditAuthorizations.findFirst({
+        where: eq(creditAuthorizations.id, id),
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+            },
+          },
+          user: true,
+        },
+      });
+
+      if (!auth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
+      const customer = auth.quotation.customer;
+      const quotation = auth.quotation;
+
+      // Get customer's invoice history
+      const customerInvoices = await db.query.invoices.findMany({
+        where: eq(invoices.customerId, customer.id),
+        orderBy: (invoices, { desc }) => [desc(invoices.issuedAt)],
+        limit: 50,
+      });
+
+      // Get customer's payment history
+      const customerPayments = await db.query.payments.findMany({
+        where: eq(payments.customerId, customer.id),
+        orderBy: (payments, { desc }) => [desc(payments.paymentDate)],
+        limit: 50,
+      });
+
+      // Calculate metrics
+      const totalInvoices = customerInvoices.length;
+      const overdueInvoices = customerInvoices.filter(inv => 
+        inv.dueDate && new Date(inv.dueDate) < new Date() && parseFloat(inv.balanceDue || "0") > 0
+      );
+      const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + parseFloat(inv.balanceDue || "0"), 0);
+      const totalPaid = customerPayments.reduce((sum, pay) => sum + parseFloat(pay.amount || "0"), 0);
+      const paidInvoices = customerInvoices.filter(inv => parseFloat(inv.balanceDue || "0") === 0);
+      
+      const creditLimit = parseFloat(customer.creditLimit || "0");
+      const creditUsed = parseFloat(auth.creditUsed || "0");
+      const creditAvailable = parseFloat(auth.creditAvailable || "0");
+      const quotationTotal = parseFloat(quotation.total || "0");
+
+      // Rule-based scoring system
+      let score = 100;
+      const positiveFactors: string[] = [];
+      const negativeFactors: string[] = [];
+      const conditions: string[] = [];
+
+      // Rule 1: Credit limit check (-30 points if exceeds)
+      const exceedsCreditLimit = quotationTotal > creditAvailable;
+      if (exceedsCreditLimit) {
+        score -= 30;
+        negativeFactors.push(`El monto ($${quotationTotal.toLocaleString("es-MX")}) excede el crédito disponible ($${creditAvailable.toLocaleString("es-MX")})`);
+        conditions.push("Solicitar anticipo o pago parcial");
+      } else {
+        positiveFactors.push("El monto está dentro del límite de crédito disponible");
+      }
+
+      // Rule 2: Overdue invoices (-25 points if has overdue)
+      const hasOverdueBalance = overdueAmount > 0;
+      if (hasOverdueBalance) {
+        score -= 25;
+        negativeFactors.push(`Tiene ${overdueInvoices.length} factura(s) vencida(s) por $${overdueAmount.toLocaleString("es-MX")}`);
+        conditions.push("Regularizar saldos vencidos antes de autorizar");
+      } else if (totalInvoices > 0) {
+        positiveFactors.push("Sin facturas vencidas");
+      }
+
+      // Rule 3: Credit utilization (-15 points if over 80%)
+      const creditUtilization = creditLimit > 0 ? (creditUsed / creditLimit) * 100 : 0;
+      if (creditUtilization > 80) {
+        score -= 15;
+        negativeFactors.push(`Alta utilización de crédito (${creditUtilization.toFixed(1)}%)`);
+        conditions.push("Considerar aumentar límite de crédito");
+      } else if (creditUtilization > 50) {
+        score -= 5;
+        negativeFactors.push(`Utilización de crédito moderada (${creditUtilization.toFixed(1)}%)`);
+      } else if (creditLimit > 0) {
+        positiveFactors.push(`Baja utilización de crédito (${creditUtilization.toFixed(1)}%)`);
+      }
+
+      // Rule 4: Payment history (+10 if good history)
+      if (paidInvoices.length >= 3) {
+        positiveFactors.push(`Historial de pago con ${paidInvoices.length} facturas liquidadas`);
+        score = Math.min(100, score + 10);
+      } else if (totalInvoices === 0) {
+        negativeFactors.push("Sin historial de crédito previo");
+        score -= 10;
+        conditions.push("Considerar crédito reducido para primera compra");
+      }
+
+      // Rule 5: Customer approved the quotation (+5)
+      if (quotation.customerApprovedAt) {
+        positiveFactors.push("Cotización aprobada formalmente por el cliente");
+        score = Math.min(100, score + 5);
+      }
+
+      // Rule 6: Recent payments (+5)
+      const recentPayments = customerPayments.filter(p => {
+        const paymentDate = new Date(p.paymentDate);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        return paymentDate >= thirtyDaysAgo;
+      });
+      if (recentPayments.length > 0) {
+        positiveFactors.push(`${recentPayments.length} pago(s) registrado(s) en los últimos 30 días`);
+        score = Math.min(100, score + 5);
+      }
+
+      // Ensure score is between 0 and 100
+      score = Math.max(0, Math.min(100, score));
+
+      // Determine risk level and recommendation
+      let riskLevel: string;
+      let recommendation: string;
+
+      if (score >= 80) {
+        riskLevel = "bajo";
+        recommendation = "aprobar";
+      } else if (score >= 60) {
+        riskLevel = "medio";
+        recommendation = conditions.length > 0 ? "aprobar_con_condiciones" : "aprobar";
+      } else if (score >= 40) {
+        riskLevel = "alto";
+        recommendation = "revisar_manualmente";
+      } else {
+        riskLevel = "muy_alto";
+        recommendation = "rechazar";
+      }
+
+      // Generate summary
+      let summary = "";
+      if (recommendation === "aprobar") {
+        summary = `Cliente con buen perfil crediticio. Score ${score}/100 indica bajo riesgo.`;
+      } else if (recommendation === "aprobar_con_condiciones") {
+        summary = `Se puede aprobar con condiciones. Score ${score}/100 indica riesgo moderado.`;
+      } else if (recommendation === "revisar_manualmente") {
+        summary = `Requiere revisión manual. Score ${score}/100 indica factores de riesgo importantes.`;
+      } else {
+        summary = `Se recomienda rechazar. Score ${score}/100 indica alto riesgo de incumplimiento.`;
+      }
+
+      const analysis = {
+        riskLevel,
+        recommendation,
+        score,
+        summary,
+        factors: {
+          positive: positiveFactors,
+          negative: negativeFactors,
+        },
+        conditions,
+        reasoning: `Análisis automático basado en: límite de crédito, saldos vencidos, utilización de crédito, e historial de pagos.`,
+      };
+
+      const analysisContext = {
+        customer: {
+          name: customer.name,
+          rfc: customer.rfc,
+          creditLimit,
+          creditUsed,
+          creditAvailable,
+          paymentTerms: (customer as any).paymentTerms || "Contado",
+          createdAt: customer.createdAt,
+        },
+        quotation: {
+          folio: quotation.folio,
+          total: quotationTotal,
+          validUntil: quotation.validUntil,
+          customerApprovedAt: quotation.customerApprovedAt,
+        },
+        history: {
+          totalInvoices,
+          overdueInvoicesCount: overdueInvoices.length,
+          overdueAmount,
+          totalPaid,
+          recentPaymentsCount: customerPayments.length,
+        },
+        analysis: {
+          exceedsCreditLimit,
+          creditUtilization: creditUtilization.toFixed(1),
+          hasOverdueBalance,
+        },
+      };
+
+      res.json({
+        success: true,
+        analysis,
+        context: analysisContext,
+        type: "rules",
+      });
+    } catch (error) {
+      console.error("Error in rule-based credit analysis:", error);
+      res.status(500).json({ error: "Error al analizar la solicitud de crédito" });
+    }
+  });
+
+  // AI Credit Analysis endpoint (optional, uses credits)
   app.post("/api/credit-authorizations/:id/analyze", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA), async (req, res) => {
     try {
       const { id } = req.params;

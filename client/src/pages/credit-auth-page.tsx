@@ -91,9 +91,11 @@ type AnalysisContext = {
 export default function CreditAuthPage() {
   const [selectedAuth, setSelectedAuth] = useState<CreditAuthWithDetails | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [rulesAnalysis, setRulesAnalysis] = useState<AIAnalysis | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [analysisContext, setAnalysisContext] = useState<AnalysisContext | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoadingRules, setIsLoadingRules] = useState(false);
+  const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionNotes, setRejectionNotes] = useState("");
@@ -115,6 +117,7 @@ export default function CreditAuthPage() {
       setApproveDialogOpen(false);
       setRejectDialogOpen(false);
       setSelectedAuth(null);
+      setRulesAnalysis(null);
       setAiAnalysis(null);
       setAnalysisContext(null);
       toast({
@@ -131,16 +134,34 @@ export default function CreditAuthPage() {
     },
   });
 
-  const handleOpenDetails = (auth: CreditAuthWithDetails) => {
+  const handleOpenDetails = async (auth: CreditAuthWithDetails) => {
     setSelectedAuth(auth);
+    setRulesAnalysis(null);
     setAiAnalysis(null);
     setAnalysisContext(null);
     setDetailsOpen(true);
+    
+    // Auto-load rules-based analysis (free)
+    setIsLoadingRules(true);
+    try {
+      const response = await fetch(`/api/credit-authorizations/${auth.id}/analyze-rules`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setRulesAnalysis(data.analysis);
+        setAnalysisContext(data.context);
+      }
+    } catch (error) {
+      console.error("Error loading rules analysis:", error);
+    } finally {
+      setIsLoadingRules(false);
+    }
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyzeAI = async () => {
     if (!selectedAuth) return;
-    setIsAnalyzing(true);
+    setIsAnalyzingAI(true);
     try {
       const response = await apiRequest("POST", `/api/credit-authorizations/${selectedAuth.id}/analyze`, {});
       const data = await response.json();
@@ -148,8 +169,8 @@ export default function CreditAuthPage() {
         setAiAnalysis(data.analysis);
         setAnalysisContext(data.context);
         toast({
-          title: "Análisis completado",
-          description: "El análisis de crédito está listo.",
+          title: "Análisis IA completado",
+          description: "El análisis avanzado con IA está listo.",
         });
       }
     } catch (error) {
@@ -159,16 +180,19 @@ export default function CreditAuthPage() {
         variant: "destructive",
       });
     } finally {
-      setIsAnalyzing(false);
+      setIsAnalyzingAI(false);
     }
   };
+
+  // Use AI analysis if available, otherwise use rules analysis
+  const currentAnalysis = aiAnalysis || rulesAnalysis;
 
   const handleApprove = () => {
     if (!selectedAuth) return;
     updateMutation.mutate({ 
       id: selectedAuth.id, 
       status: "approved",
-      notes: aiAnalysis ? `Análisis IA: ${aiAnalysis.summary}` : undefined,
+      notes: currentAnalysis ? `Análisis: ${currentAnalysis.summary}` : undefined,
     });
   };
 
@@ -177,7 +201,7 @@ export default function CreditAuthPage() {
     updateMutation.mutate({ 
       id: selectedAuth.id, 
       status: "rejected",
-      notes: rejectionNotes || (aiAnalysis ? `Análisis IA: ${aiAnalysis.summary}` : undefined),
+      notes: rejectionNotes || (currentAnalysis ? `Análisis: ${currentAnalysis.summary}` : undefined),
     });
   };
 
@@ -432,46 +456,39 @@ export default function CreditAuthPage() {
 
               <Separator />
 
-              {/* AI Analysis Section */}
+              {/* Analysis Section */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="font-semibold flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-purple-500" />
-                    Análisis Inteligente
+                    Análisis de Crédito
+                    {aiAnalysis && <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">IA</Badge>}
+                    {rulesAnalysis && !aiAnalysis && <Badge variant="outline">Automático</Badge>}
                   </h3>
-                  <Button 
-                    onClick={handleAnalyze} 
-                    disabled={isAnalyzing}
-                    variant="outline"
-                    data-testid="button-analyze"
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Analizando...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Analizar con IA
-                      </>
-                    )}
-                  </Button>
+                  {!aiAnalysis && (
+                    <Button 
+                      onClick={handleAnalyzeAI} 
+                      disabled={isAnalyzingAI || isLoadingRules}
+                      variant="outline"
+                      size="sm"
+                      data-testid="button-analyze-ai"
+                    >
+                      {isAnalyzingAI ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Analizando...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Análisis IA (Avanzado)
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
 
-                {!aiAnalysis && !isAnalyzing && (
-                  <Card className="bg-muted/50">
-                    <CardContent className="py-8 text-center">
-                      <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">
-                        Haz clic en "Analizar con IA" para obtener una evaluación 
-                        detallada del riesgo crediticio basada en el historial del cliente.
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {isAnalyzing && (
+                {isLoadingRules && (
                   <Card>
                     <CardContent className="py-8">
                       <div className="flex flex-col items-center gap-4">
@@ -482,7 +499,7 @@ export default function CreditAuthPage() {
                   </Card>
                 )}
 
-                {aiAnalysis && (
+                {currentAnalysis && !isLoadingRules && (
                   <div className="space-y-4">
                     {/* Score and Recommendation */}
                     <Card>
@@ -490,16 +507,16 @@ export default function CreditAuthPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="text-center">
                             <p className="text-sm text-muted-foreground mb-2">Score de Crédito</p>
-                            <div className="text-4xl font-bold text-primary">{aiAnalysis.score}</div>
-                            <Progress value={aiAnalysis.score} className="mt-2" />
+                            <div className="text-4xl font-bold text-primary">{currentAnalysis.score}</div>
+                            <Progress value={currentAnalysis.score} className="mt-2" />
                           </div>
                           <div className="text-center">
                             <p className="text-sm text-muted-foreground mb-2">Nivel de Riesgo</p>
-                            <div className="mt-2">{getRiskBadge(aiAnalysis.riskLevel)}</div>
+                            <div className="mt-2">{getRiskBadge(currentAnalysis.riskLevel)}</div>
                           </div>
                           <div className="text-center">
                             <p className="text-sm text-muted-foreground mb-2">Recomendación</p>
-                            <div className="mt-2">{getRecommendationBadge(aiAnalysis.recommendation)}</div>
+                            <div className="mt-2">{getRecommendationBadge(currentAnalysis.recommendation)}</div>
                           </div>
                         </div>
                       </CardContent>
@@ -511,7 +528,7 @@ export default function CreditAuthPage() {
                         <CardTitle className="text-sm">Resumen Ejecutivo</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-sm">{aiAnalysis.summary}</p>
+                        <p className="text-sm">{currentAnalysis.summary}</p>
                       </CardContent>
                     </Card>
 
@@ -526,8 +543,8 @@ export default function CreditAuthPage() {
                         </CardHeader>
                         <CardContent>
                           <ul className="space-y-1 text-sm">
-                            {aiAnalysis.factors.positive.length > 0 ? (
-                              aiAnalysis.factors.positive.map((factor, i) => (
+                            {currentAnalysis.factors.positive.length > 0 ? (
+                              currentAnalysis.factors.positive.map((factor, i) => (
                                 <li key={i} className="flex items-start gap-2">
                                   <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
                                   <span>{factor}</span>
@@ -549,8 +566,8 @@ export default function CreditAuthPage() {
                         </CardHeader>
                         <CardContent>
                           <ul className="space-y-1 text-sm">
-                            {aiAnalysis.factors.negative.length > 0 ? (
-                              aiAnalysis.factors.negative.map((factor, i) => (
+                            {currentAnalysis.factors.negative.length > 0 ? (
+                              currentAnalysis.factors.negative.map((factor, i) => (
                                 <li key={i} className="flex items-start gap-2">
                                   <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
                                   <span>{factor}</span>
@@ -565,7 +582,7 @@ export default function CreditAuthPage() {
                     </div>
 
                     {/* Conditions */}
-                    {aiAnalysis.conditions && aiAnalysis.conditions.length > 0 && (
+                    {currentAnalysis.conditions && currentAnalysis.conditions.length > 0 && (
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm flex items-center gap-2">
@@ -575,7 +592,7 @@ export default function CreditAuthPage() {
                         </CardHeader>
                         <CardContent>
                           <ul className="space-y-1 text-sm">
-                            {aiAnalysis.conditions.map((condition, i) => (
+                            {currentAnalysis.conditions.map((condition, i) => (
                               <li key={i} className="flex items-start gap-2">
                                 <span className="text-yellow-600">•</span>
                                 <span>{condition}</span>
@@ -592,7 +609,7 @@ export default function CreditAuthPage() {
                         <CardTitle className="text-sm">Análisis Detallado</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{aiAnalysis.reasoning}</p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{currentAnalysis.reasoning}</p>
                       </CardContent>
                     </Card>
                   </div>
@@ -638,10 +655,10 @@ export default function CreditAuthPage() {
             <AlertDialogDescription>
               ¿Estás seguro de que deseas aprobar esta solicitud de crédito para la cotización{" "}
               <strong>{selectedAuth?.quotation.folio}</strong>?
-              {aiAnalysis && (
+              {currentAnalysis && (
                 <div className="mt-2 p-2 bg-muted rounded-md">
                   <p className="text-sm">
-                    <strong>Análisis IA:</strong> {aiAnalysis.summary}
+                    <strong>Análisis:</strong> {currentAnalysis.summary}
                   </p>
                 </div>
               )}
