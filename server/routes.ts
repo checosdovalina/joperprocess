@@ -1867,6 +1867,209 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==========================================
+  // PUBLIC QUOTATION APPROVAL ENDPOINTS
+  // These don't require authentication - they use approval tokens
+  // ==========================================
+
+  // Get quotation by approval token (public)
+  app.get("/api/public/quotations/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.approvalToken, token),
+        with: {
+          customer: true,
+          user: true,
+        },
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      // Check if already approved/rejected
+      if (quotation.customerApprovedAt) {
+        return res.json({
+          ...quotation,
+          alreadyProcessed: true,
+          decision: "approved",
+          processedAt: quotation.customerApprovedAt,
+        });
+      }
+
+      if (quotation.customerRejectedAt) {
+        return res.json({
+          ...quotation,
+          alreadyProcessed: true,
+          decision: "rejected",
+          processedAt: quotation.customerRejectedAt,
+          rejectionReason: quotation.customerRejectionReason,
+        });
+      }
+
+      // Check if expired
+      if (quotation.validUntil && new Date(quotation.validUntil) < new Date()) {
+        return res.json({
+          ...quotation,
+          alreadyProcessed: true,
+          decision: "expired",
+        });
+      }
+
+      // Get items
+      const items = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, quotation.id),
+        orderBy: (items, { asc }) => [asc(items.position)],
+      });
+
+      res.json({
+        ...quotation,
+        items,
+        alreadyProcessed: false,
+      });
+    } catch (error) {
+      console.error("Error fetching quotation by token:", error);
+      res.status(500).json({ error: "Error al cargar la cotización" });
+    }
+  });
+
+  // Customer approves quotation (public)
+  app.post("/api/public/quotations/:token/approve", async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.approvalToken, token),
+        with: {
+          customer: true,
+        },
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      // Check if already processed
+      if (quotation.customerApprovedAt || quotation.customerRejectedAt) {
+        return res.status(400).json({ error: "Esta cotización ya fue procesada" });
+      }
+
+      // Check if expired
+      if (quotation.validUntil && new Date(quotation.validUntil) < new Date()) {
+        return res.status(400).json({ error: "Esta cotización ha expirado" });
+      }
+
+      const now = new Date();
+
+      // Update quotation: mark as customer approved and move to credit authorization
+      const [updated] = await db.update(quotations)
+        .set({
+          customerApprovedAt: now,
+          status: QuotationStatus.PENDING_AUTHORIZATION,
+          requiresApproval: true,
+          approvalReason: "Aprobada por el cliente - pendiente autorización de crédito",
+          updatedAt: now,
+        })
+        .where(eq(quotations.id, quotation.id))
+        .returning();
+
+      // Create credit authorization request automatically
+      await db.insert(creditAuthorizations).values({
+        quotationId: quotation.id,
+        customerId: quotation.customerId,
+        requestedAmount: quotation.total,
+        status: CreditAuthStatus.PENDING,
+        notes: `Solicitud automática: Cliente aprobó cotización ${quotation.folio}`,
+      });
+
+      res.json({
+        success: true,
+        message: "Cotización aprobada exitosamente. Se ha enviado para autorización de crédito.",
+        quotation: updated,
+      });
+    } catch (error) {
+      console.error("Error approving quotation:", error);
+      res.status(500).json({ error: "Error al aprobar la cotización" });
+    }
+  });
+
+  // Customer rejects quotation (public)
+  app.post("/api/public/quotations/:token/reject", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { reason } = req.body;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.approvalToken, token),
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      // Check if already processed
+      if (quotation.customerApprovedAt || quotation.customerRejectedAt) {
+        return res.status(400).json({ error: "Esta cotización ya fue procesada" });
+      }
+
+      const now = new Date();
+
+      // Update quotation: mark as rejected by customer
+      const [updated] = await db.update(quotations)
+        .set({
+          customerRejectedAt: now,
+          customerRejectionReason: reason || "Sin razón especificada",
+          status: QuotationStatus.REJECTED,
+          updatedAt: now,
+        })
+        .where(eq(quotations.id, quotation.id))
+        .returning();
+
+      res.json({
+        success: true,
+        message: "Cotización rechazada.",
+        quotation: updated,
+      });
+    } catch (error) {
+      console.error("Error rejecting quotation:", error);
+      res.status(500).json({ error: "Error al rechazar la cotización" });
+    }
+  });
+
+  // Download quotation PDF by token (public)
+  app.get("/api/public/quotations/:token/pdf", async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.approvalToken, token),
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      if (!quotation.pdfPath) {
+        return res.status(404).json({ error: "PDF no disponible" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      await objectStorageService.downloadObjectByPath(quotation.pdfPath, res, {
+        isPublic: false,
+        contentType: "application/pdf",
+        disposition: "inline",
+        filename: `cotizacion-${quotation.folio}.pdf`,
+      });
+    } catch (error) {
+      console.error("Error downloading quotation PDF:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Error al descargar el PDF" });
+      }
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
