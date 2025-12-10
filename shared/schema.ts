@@ -231,6 +231,22 @@ export const creditAuthorizations = pgTable("credit_authorizations", {
   overdueBalance: decimal("overdue_balance", { precision: 12, scale: 2 }),
   notes: text("notes"),
   authorizedAt: timestamp("authorized_at"),
+  approvedById: varchar("approved_by_id").references(() => users.id),
+  approvalSignature: text("approval_signature"),
+  approvalSignedAt: timestamp("approval_signed_at"),
+  rejectedById: varchar("rejected_by_id").references(() => users.id),
+  rejectionNotes: text("rejection_notes"),
+  lastEditedById: varchar("last_edited_by_id").references(() => users.id),
+  lastEditedAt: timestamp("last_edited_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Credit authorization comments table
+export const creditAuthorizationComments = pgTable("credit_authorization_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  creditAuthorizationId: varchar("credit_authorization_id").notNull().references(() => creditAuthorizations.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -466,13 +482,37 @@ export const customerProductPricesRelations = relations(customerProductPrices, (
   }),
 }));
 
-export const creditAuthorizationsRelations = relations(creditAuthorizations, ({ one }) => ({
+export const creditAuthorizationsRelations = relations(creditAuthorizations, ({ one, many }) => ({
   quotation: one(quotations, {
     fields: [creditAuthorizations.quotationId],
     references: [quotations.id],
   }),
   user: one(users, {
     fields: [creditAuthorizations.userId],
+    references: [users.id],
+  }),
+  approvedBy: one(users, {
+    fields: [creditAuthorizations.approvedById],
+    references: [users.id],
+  }),
+  rejectedBy: one(users, {
+    fields: [creditAuthorizations.rejectedById],
+    references: [users.id],
+  }),
+  lastEditedBy: one(users, {
+    fields: [creditAuthorizations.lastEditedById],
+    references: [users.id],
+  }),
+  comments: many(creditAuthorizationComments),
+}));
+
+export const creditAuthorizationCommentsRelations = relations(creditAuthorizationComments, ({ one }) => ({
+  creditAuthorization: one(creditAuthorizations, {
+    fields: [creditAuthorizationComments.creditAuthorizationId],
+    references: [creditAuthorizations.id],
+  }),
+  user: one(users, {
+    fields: [creditAuthorizationComments.userId],
     references: [users.id],
   }),
 }));
@@ -603,6 +643,11 @@ export const insertCreditAuthorizationSchema = createInsertSchema(creditAuthoriz
   createdAt: true,
 });
 
+export const insertCreditAuthorizationCommentSchema = createInsertSchema(creditAuthorizationComments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
   createdAt: true,
@@ -684,6 +729,9 @@ export type QuotationItem = typeof quotationItems.$inferSelect;
 
 export type InsertCreditAuthorization = z.infer<typeof insertCreditAuthorizationSchema>;
 export type CreditAuthorization = typeof creditAuthorizations.$inferSelect;
+
+export type InsertCreditAuthorizationComment = z.infer<typeof insertCreditAuthorizationCommentSchema>;
+export type CreditAuthorizationComment = typeof creditAuthorizationComments.$inferSelect;
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
