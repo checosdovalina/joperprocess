@@ -1207,6 +1207,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Download credit authorization as PDF
+  app.get("/api/credit-authorizations/:id/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const auth = await db.query.creditAuthorizations.findFirst({
+        where: eq(creditAuthorizations.id, id),
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+            },
+          },
+          user: true,
+        },
+      });
+
+      if (!auth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
+      // Get approved by user if exists
+      let approvedBy = null;
+      if (auth.approvedById) {
+        approvedBy = await db.query.users.findFirst({
+          where: eq(users.id, auth.approvedById),
+        });
+      }
+
+      const { generateCreditAuthPDFStream } = await import("./credit-auth-pdf-generator");
+      
+      const pdfStream = generateCreditAuthPDFStream({
+        authorization: auth,
+        quotation: auth.quotation,
+        customer: auth.quotation.customer,
+        requestedBy: auth.user,
+        approvedBy,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="autorizacion-credito-${auth.quotation.folio}.pdf"`);
+      
+      pdfStream.pipe(res);
+    } catch (error) {
+      console.error("Error generating credit authorization PDF:", error);
+      res.status(500).json({ error: "Error al generar el PDF" });
+    }
+  });
+
   // Update credit authorization (edit notes/details while pending)
   app.put("/api/credit-authorizations/:id", isAuthenticated, async (req, res) => {
     try {

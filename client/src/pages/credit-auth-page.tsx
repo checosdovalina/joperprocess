@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, XCircle, Eye, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2, MessageSquare, Send, PenLine, User2 } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, Eye, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2, MessageSquare, Send, PenLine, User2, Download } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -803,6 +803,18 @@ export default function CreditAuthPage() {
           </ScrollArea>
 
           <DialogFooter className="flex-wrap gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                if (selectedAuth) {
+                  window.open(`/api/credit-authorizations/${selectedAuth.id}/pdf`, '_blank');
+                }
+              }}
+              data-testid="button-download-pdf"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Descargar PDF
+            </Button>
             <Button variant="outline" onClick={() => setDetailsOpen(false)}>
               Cerrar
             </Button>
