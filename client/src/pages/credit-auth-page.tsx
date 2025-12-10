@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { CreditAuthorization, Quotation, Customer } from "@shared/schema";
+import { CreditAuthorization, Quotation, Customer, User, CreditAuthorizationComment } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, XCircle, Eye, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2 } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, Eye, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2, MessageSquare, Send, PenLine, User2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -43,6 +43,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 type CreditAuthWithDetails = CreditAuthorization & { 
   quotation: Quotation & { customer: Customer };
+};
+
+type CommentWithUser = CreditAuthorizationComment & {
+  user: User;
 };
 
 type AIAnalysis = {
@@ -99,15 +103,65 @@ export default function CreditAuthPage() {
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionNotes, setRejectionNotes] = useState("");
+  const [newComment, setNewComment] = useState("");
+  const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
   const { toast } = useToast();
 
   const { data: authorizations, isLoading } = useQuery<CreditAuthWithDetails[]>({
     queryKey: ["/api/credit-authorizations"],
   });
 
+  // Load comments when auth is selected
+  const { data: comments, refetch: refetchComments } = useQuery<CommentWithUser[]>({
+    queryKey: ["/api/credit-authorizations", selectedAuth?.id, "comments"],
+    queryFn: async () => {
+      if (!selectedAuth) return [];
+      const response = await fetch(`/api/credit-authorizations/${selectedAuth.id}/comments`, {
+        credentials: "include",
+      });
+      return response.json();
+    },
+    enabled: !!selectedAuth,
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      const response = await apiRequest("POST", `/api/credit-authorizations/${id}/comments`, { content });
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchComments();
+      setNewComment("");
+      toast({
+        title: "Comentario agregado",
+        description: "El comentario se ha guardado correctamente.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudo agregar el comentario.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateMutation = useMutation({
-    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
-      const response = await apiRequest("PATCH", `/api/credit-authorizations/${id}`, { status, notes });
+    mutationFn: async ({ id, status, notes, approvalSignature, rejectionNotes }: { 
+      id: string; 
+      status: string; 
+      notes?: string;
+      approvalSignature?: string;
+      rejectionNotes?: string;
+    }) => {
+      const response = await apiRequest("PATCH", `/api/credit-authorizations/${id}`, { 
+        status, 
+        notes,
+        approvalSignature,
+        rejectionNotes,
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -187,12 +241,80 @@ export default function CreditAuthPage() {
   // Use AI analysis if available, otherwise use rules analysis
   const currentAnalysis = aiAnalysis || rulesAnalysis;
 
+  // Canvas signature functions
+  const initCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      setApprovalSignature(canvas.toDataURL("image/png"));
+    }
+  };
+
+  const clearSignature = () => {
+    setApprovalSignature(null);
+    initCanvas();
+  };
+
+  const handleAddComment = () => {
+    if (!selectedAuth || !newComment.trim()) return;
+    addCommentMutation.mutate({ id: selectedAuth.id, content: newComment.trim() });
+  };
+
   const handleApprove = () => {
     if (!selectedAuth) return;
+    if (!approvalSignature) {
+      toast({
+        title: "Firma requerida",
+        description: "Por favor, firme en el recuadro antes de aprobar.",
+        variant: "destructive",
+      });
+      return;
+    }
     updateMutation.mutate({ 
       id: selectedAuth.id, 
       status: "approved",
       notes: currentAnalysis ? `Análisis: ${currentAnalysis.summary}` : undefined,
+      approvalSignature,
     });
   };
 
@@ -201,7 +323,8 @@ export default function CreditAuthPage() {
     updateMutation.mutate({ 
       id: selectedAuth.id, 
       status: "rejected",
-      notes: rejectionNotes || (currentAnalysis ? `Análisis: ${currentAnalysis.summary}` : undefined),
+      notes: currentAnalysis ? `Análisis: ${currentAnalysis.summary}` : undefined,
+      rejectionNotes: rejectionNotes || undefined,
     });
   };
 
@@ -615,6 +738,67 @@ export default function CreditAuthPage() {
                   </div>
                 )}
               </div>
+
+              <Separator />
+
+              {/* Comments Section */}
+              <div className="space-y-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-blue-500" />
+                  Comentarios ({comments?.length || 0})
+                </h3>
+
+                {/* Add Comment */}
+                <div className="flex gap-2">
+                  <Textarea 
+                    placeholder="Agregar un comentario..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="flex-1 min-h-[60px]"
+                    data-testid="input-new-comment"
+                  />
+                  <Button 
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim() || addCommentMutation.isPending}
+                    size="icon"
+                    data-testid="button-add-comment"
+                  >
+                    {addCommentMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+
+                {/* Comments List */}
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {comments && comments.length > 0 ? (
+                    comments.map((comment) => (
+                      <Card key={comment.id} className="p-3">
+                        <div className="flex items-start gap-2">
+                          <div className="bg-primary/10 rounded-full p-1.5">
+                            <User2 className="h-3 w-3 text-primary" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">{comment.user?.fullName || "Usuario"}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(comment.createdAt), "dd/MM/yyyy HH:mm", { locale: es })}
+                              </span>
+                            </div>
+                            <p className="text-sm mt-1">{comment.content}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No hay comentarios aún
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           </ScrollArea>
 
@@ -647,34 +831,89 @@ export default function CreditAuthPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Approve Confirmation Dialog */}
-      <AlertDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
-        <AlertDialogContent>
+      {/* Approve Confirmation Dialog with Signature */}
+      <AlertDialog open={approveDialogOpen} onOpenChange={(open) => {
+        setApproveDialogOpen(open);
+        if (open) {
+          setApprovalSignature(null);
+          setTimeout(initCanvas, 100);
+        }
+      }}>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Aprobación</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que deseas aprobar esta solicitud de crédito para la cotización{" "}
-              <strong>{selectedAuth?.quotation.folio}</strong>?
-              {currentAnalysis && (
-                <div className="mt-2 p-2 bg-muted rounded-md">
-                  <p className="text-sm">
-                    <strong>Análisis:</strong> {currentAnalysis.summary}
-                  </p>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  ¿Estás seguro de que deseas aprobar esta solicitud de crédito para la cotización{" "}
+                  <strong>{selectedAuth?.quotation.folio}</strong>?
+                </p>
+                {currentAnalysis && (
+                  <div className="p-2 bg-muted rounded-md">
+                    <p className="text-sm">
+                      <strong>Análisis:</strong> {currentAnalysis.summary}
+                    </p>
+                  </div>
+                )}
+                
+                {/* Signature Canvas */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <PenLine className="h-4 w-4" />
+                      Firma Digital (Requerida)
+                    </label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={clearSignature}
+                      type="button"
+                    >
+                      Limpiar
+                    </Button>
+                  </div>
+                  <div className="border rounded-md overflow-hidden bg-white">
+                    <canvas
+                      ref={canvasRef}
+                      width={350}
+                      height={120}
+                      className="w-full cursor-crosshair touch-none"
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                      data-testid="canvas-signature"
+                    />
+                  </div>
+                  {!approvalSignature && (
+                    <p className="text-xs text-muted-foreground">
+                      Dibuje su firma en el recuadro para confirmar la aprobación
+                    </p>
+                  )}
+                  {approvalSignature && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Firma capturada
+                    </p>
+                  )}
                 </div>
-              )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={updateMutation.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleApprove}
-              disabled={updateMutation.isPending}
+              disabled={updateMutation.isPending || !approvalSignature}
               className="bg-green-600 hover:bg-green-700"
             >
               {updateMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "Aprobar"
+                "Aprobar con Firma"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
