@@ -9,6 +9,7 @@ import { ObjectPermission, setObjectAclPolicy, getObjectAclPolicy } from "./obje
 import { sendCheckoutEmail } from "./email-service";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import OpenAI from "openai";
 import { 
   insertCustomerSchema,
   updateCustomerSchema,
@@ -1125,6 +1126,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating credit authorization:", error);
       res.status(500).json({ error: "Error updating credit authorization" });
+    }
+  });
+
+  // AI Credit Analysis endpoint
+  app.post("/api/credit-authorizations/:id/analyze", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA), async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Get the credit authorization with all related data
+      const auth = await db.query.creditAuthorizations.findFirst({
+        where: eq(creditAuthorizations.id, id),
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+            },
+          },
+          user: true,
+        },
+      });
+
+      if (!auth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
+      const customer = auth.quotation.customer;
+      const quotation = auth.quotation;
+
+      // Get customer's invoice history
+      const customerInvoices = await db.query.invoices.findMany({
+        where: eq(invoices.customerId, customer.id),
+        orderBy: (invoices, { desc }) => [desc(invoices.issuedAt)],
+        limit: 20,
+      });
+
+      // Get customer's payment history
+      const customerPayments = await db.query.payments.findMany({
+        where: eq(payments.customerId, customer.id),
+        orderBy: (payments, { desc }) => [desc(payments.paymentDate)],
+        limit: 20,
+      });
+
+      // Calculate metrics
+      const totalInvoices = customerInvoices.length;
+      const overdueInvoices = customerInvoices.filter(inv => 
+        inv.dueDate && new Date(inv.dueDate) < new Date() && parseFloat(inv.balanceDue || "0") > 0
+      );
+      const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + parseFloat(inv.balanceDue || "0"), 0);
+      const totalPaid = customerPayments.reduce((sum, pay) => sum + parseFloat(pay.amount || "0"), 0);
+      
+      const creditLimit = parseFloat(customer.creditLimit || "0");
+      const creditUsed = parseFloat(auth.creditUsed || "0");
+      const creditAvailable = parseFloat(auth.creditAvailable || "0");
+      const quotationTotal = parseFloat(quotation.total || "0");
+
+      // Prepare context for AI analysis
+      const analysisContext = {
+        customer: {
+          name: customer.name,
+          rfc: customer.rfc,
+          creditLimit,
+          creditUsed,
+          creditAvailable,
+          paymentTerms: (customer as any).paymentTerms || "Contado",
+          createdAt: customer.createdAt,
+        },
+        quotation: {
+          folio: quotation.folio,
+          total: quotationTotal,
+          validUntil: quotation.validUntil,
+          customerApprovedAt: quotation.customerApprovedAt,
+        },
+        history: {
+          totalInvoices,
+          overdueInvoicesCount: overdueInvoices.length,
+          overdueAmount,
+          totalPaid,
+          recentPaymentsCount: customerPayments.length,
+        },
+        analysis: {
+          exceedsCreditLimit: quotationTotal > creditAvailable,
+          creditUtilization: creditLimit > 0 ? ((creditUsed / creditLimit) * 100).toFixed(1) : "N/A",
+          hasOverdueBalance: overdueAmount > 0,
+        },
+      };
+
+      // Initialize OpenAI client with Replit AI Integrations
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const prompt = `Eres un analista de crédito experto para una empresa comercial mexicana. Analiza la siguiente solicitud de autorización de crédito y proporciona una evaluación detallada con recomendación.
+
+DATOS DEL CLIENTE:
+- Nombre: ${analysisContext.customer.name}
+- RFC: ${analysisContext.customer.rfc}
+- Límite de crédito: $${creditLimit.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+- Crédito utilizado: $${creditUsed.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+- Crédito disponible: $${creditAvailable.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+- Condiciones de pago: ${analysisContext.customer.paymentTerms}
+- Cliente desde: ${format(new Date(analysisContext.customer.createdAt), "PP", { locale: es })}
+
+COTIZACIÓN SOLICITADA:
+- Folio: ${analysisContext.quotation.folio}
+- Monto: $${quotationTotal.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+- Aprobada por cliente: ${analysisContext.quotation.customerApprovedAt ? "Sí" : "No"}
+
+HISTORIAL:
+- Total de facturas: ${totalInvoices}
+- Facturas vencidas: ${overdueInvoices.length}
+- Monto vencido: $${overdueAmount.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+- Total pagado históricamente: $${totalPaid.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+
+ANÁLISIS PRELIMINAR:
+- Excede límite de crédito: ${analysisContext.analysis.exceedsCreditLimit ? "SÍ" : "NO"}
+- Utilización del crédito: ${analysisContext.analysis.creditUtilization}%
+- Tiene saldo vencido: ${analysisContext.analysis.hasOverdueBalance ? "SÍ" : "NO"}
+
+Proporciona tu análisis en el siguiente formato JSON:
+{
+  "riskLevel": "bajo|medio|alto|muy_alto",
+  "recommendation": "aprobar|aprobar_con_condiciones|rechazar|revisar_manualmente",
+  "score": (número del 0 al 100 indicando la probabilidad de pago),
+  "summary": "Resumen ejecutivo de 2-3 oraciones",
+  "factors": {
+    "positive": ["lista de factores positivos"],
+    "negative": ["lista de factores negativos"]
+  },
+  "conditions": ["condiciones recomendadas si aplica"],
+  "reasoning": "Explicación detallada del análisis"
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "Eres un analista de crédito experto. Responde únicamente con JSON válido, sin markdown ni texto adicional.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 1000,
+      });
+
+      const responseText = completion.choices[0]?.message?.content || "";
+      
+      // Parse the JSON response
+      let analysis;
+      try {
+        // Remove potential markdown code blocks
+        const jsonStr = responseText.replace(/```json\n?|\n?```/g, "").trim();
+        analysis = JSON.parse(jsonStr);
+      } catch (parseError) {
+        console.error("Error parsing AI response:", parseError, responseText);
+        analysis = {
+          riskLevel: "revisar",
+          recommendation: "revisar_manualmente",
+          score: 50,
+          summary: "No se pudo completar el análisis automático. Se requiere revisión manual.",
+          factors: { positive: [], negative: ["Error en análisis automático"] },
+          conditions: [],
+          reasoning: responseText,
+        };
+      }
+
+      res.json({
+        success: true,
+        analysis,
+        context: analysisContext,
+      });
+    } catch (error) {
+      console.error("Error analyzing credit authorization:", error);
+      res.status(500).json({ error: "Error al analizar la solicitud de crédito" });
     }
   });
 
