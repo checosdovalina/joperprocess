@@ -813,7 +813,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Authorization check: user must own the quotation or have authorized role
-      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA];
+      // Vendedores can view all quotations for sales follow-up purposes
+      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDORES];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
@@ -910,8 +911,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Quotation not found" });
       }
 
-      // Authorization check: user must own the quotation or be admin/credit role
-      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA];
+      // Authorization check: user must own the quotation or be admin/credit/sales role
+      const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDORES];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
