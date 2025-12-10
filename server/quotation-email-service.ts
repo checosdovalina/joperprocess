@@ -13,6 +13,7 @@ interface SendQuotationEmailParams {
     itemsCount: number;
   };
   pdfPath: string;
+  approvalUrl?: string;
 }
 
 const mailerSend = new MailerSend({
@@ -23,6 +24,7 @@ export async function sendQuotationEmail({
   to,
   quotationData,
   pdfPath,
+  approvalUrl,
 }: SendQuotationEmailParams): Promise<void> {
   try {
     if (!to || to.length === 0) {
@@ -133,6 +135,35 @@ export async function sendQuotationEmail({
               color: #4a5568;
               margin-bottom: 10px;
             }
+            .approval-section {
+              background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+              padding: 25px;
+              border-radius: 8px;
+              margin: 30px 0;
+              text-align: center;
+            }
+            .approval-title {
+              color: white;
+              font-size: 18px;
+              font-weight: 600;
+              margin-bottom: 15px;
+            }
+            .approval-btn {
+              display: inline-block;
+              background: white;
+              color: #38a169;
+              padding: 14px 32px;
+              border-radius: 6px;
+              text-decoration: none;
+              font-weight: 700;
+              font-size: 16px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            .approval-note {
+              color: rgba(255,255,255,0.9);
+              font-size: 12px;
+              margin-top: 12px;
+            }
             .footer {
               text-align: center;
               padding: 20px;
@@ -185,8 +216,16 @@ export async function sendQuotationEmail({
               </div>
 
               <div class="cta-box">
-                <p class="cta-text">📎 La cotización completa en formato PDF se encuentra adjunta a este correo.</p>
+                <p class="cta-text">La cotización completa en formato PDF se encuentra adjunta a este correo.</p>
               </div>
+
+              ${approvalUrl ? `
+              <div class="approval-section">
+                <p class="approval-title">¿Desea proceder con esta cotización?</p>
+                <a href="${approvalUrl}" class="approval-btn">Revisar y Aprobar Cotización</a>
+                <p class="approval-note">Al hacer clic, podrá revisar los detalles y confirmar su decisión.</p>
+              </div>
+              ` : ''}
 
               <p>Si tiene alguna pregunta o desea realizar algún cambio, no dude en contactarnos. Estamos a sus órdenes.</p>
               

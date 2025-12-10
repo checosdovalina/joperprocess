@@ -967,6 +967,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(quotationItems.quotationId, id),
       });
 
+      // Generate approval token for customer workflow
+      const crypto = await import("crypto");
+      const approvalToken = crypto.randomBytes(32).toString("hex");
+
       // Generate PDF and upload to storage
       const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
       const pdfStream = generateQuotationPDFStream({
@@ -983,8 +987,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId
       );
 
-      // Update quotation with PDF path
-      await storage.updateQuotation(id, { pdfPath });
+      // Update quotation with PDF path and approval token
+      await storage.updateQuotation(id, { pdfPath, approvalToken });
 
       // Collect recipients
       const recipients: string[] = [];
@@ -1012,7 +1016,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No hay destinatarios de correo válidos" });
       }
 
-      // Send email
+      // Build approval URL
+      const host = req.get("host") || "localhost:5000";
+      const protocol = req.protocol || "https";
+      const approvalUrl = `${protocol}://${host}/aprobar-cotizacion/${approvalToken}`;
+
+      // Send email with approval link
       const { sendQuotationEmail } = await import("./quotation-email-service");
       await sendQuotationEmail({
         to: recipients,
@@ -1026,37 +1035,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           itemsCount: items.length,
         },
         pdfPath,
+        approvalUrl,
       });
 
-      // Update quotation status to sent
+      // Update quotation status to pending customer approval
       await storage.updateQuotation(id, { 
-        status: QuotationStatus.SENT,
+        status: QuotationStatus.PENDING_APPROVAL,
         sentAt: new Date(),
         sentMethod: "email",
       });
 
-      // Automatically create credit authorization request
-      const authReason = quotation.requiresApproval 
-        ? `Requiere autorización: ${quotation.approvalReason || "Descuento excede límite permitido"}`
-        : "Cotización enviada - Pendiente de autorización de crédito";
-
-      const creditAuth = await storage.createCreditAuthorization({
-        quotationId: id,
-        userId: req.user!.id,
-        status: CreditAuthStatus.PENDING,
-        notes: authReason,
-      });
-
-      // Update quotation to pending authorization status
-      await storage.updateQuotation(id, { 
-        status: QuotationStatus.PENDING_AUTHORIZATION,
-      });
-
       res.json({ 
         success: true, 
-        message: `Cotización enviada a: ${recipients.join(", ")}. Ahora está en proceso de autorización.`,
+        message: `Cotización enviada a: ${recipients.join(", ")}. Esperando aprobación del cliente.`,
         recipients,
-        creditAuthorizationId: creditAuth.id,
+        approvalUrl,
       });
     } catch (error) {
       console.error("Error sending quotation email:", error);
