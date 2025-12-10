@@ -249,21 +249,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get customer locations
       const locations = await storage.getCustomerLocationsByCustomerId(id);
 
-      // Calculate credit usage (ALL authorized/converted quotations, not just recent)
-      const creditUsageResult = await db.execute(sql`
-        SELECT COALESCE(SUM(total::numeric), 0) as total_used
-        FROM ${quotations}
-        WHERE customer_id = ${id}
-        AND status IN ('authorized', 'converted')
-      `);
-      
-      // Sanitize credit values to prevent NaN
-      let creditUsed = parseFloat(creditUsageResult.rows[0].total_used as string);
+      // Calculate credit usage based on UNPAID INVOICES (pending_payment status)
+      // Use balanceDue (outstanding balance) instead of total to account for partial payments
+      // Credit Used = Sum of all outstanding balances on pending invoices
+      let creditUsed = pendingInvoices.reduce((sum, inv) => {
+        // Use balanceDue if available, otherwise fall back to total
+        const balance = parseFloat(inv.balanceDue || inv.total || '0');
+        return sum + (Number.isFinite(balance) ? balance : 0);
+      }, 0);
       creditUsed = Number.isFinite(creditUsed) ? creditUsed : 0;
       
+      // Calculate overdue and upcoming totals separately (using outstanding balance)
+      const overdueTotal = overdueInvoices.reduce((sum, inv) => {
+        const balance = parseFloat(inv.balanceDue || inv.total || '0');
+        return sum + (Number.isFinite(balance) ? balance : 0);
+      }, 0);
+      
+      const upcomingTotal = upcomingInvoices.reduce((sum, inv) => {
+        const balance = parseFloat(inv.balanceDue || inv.total || '0');
+        return sum + (Number.isFinite(balance) ? balance : 0);
+      }, 0);
+      
+      // Sanitize credit values to prevent NaN
       let creditLimitNum = parseFloat(customer.creditLimit || '0');
       creditLimitNum = Number.isFinite(creditLimitNum) ? creditLimitNum : 0;
       
+      // Available Credit = Credit Limit - Credit Used (unpaid invoices)
       let creditAvailable = creditLimitNum - creditUsed;
       creditAvailable = Number.isFinite(creditAvailable) ? creditAvailable : 0;
 
@@ -282,6 +293,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           creditLimit: parseFloat(creditLimitNum.toFixed(2)),
           creditUsed: parseFloat(creditUsed.toFixed(2)),
           creditAvailable: parseFloat(Math.max(0, creditAvailable).toFixed(2)),
+          overdueCount: overdueInvoices.length,
+          overdueTotal: parseFloat(overdueTotal.toFixed(2)),
+          upcomingCount: upcomingInvoices.length,
+          upcomingTotal: parseFloat(upcomingTotal.toFixed(2)),
         },
       });
     } catch (error) {

@@ -23,6 +23,10 @@ interface CustomerSummary {
     creditLimit?: number;
     creditUsed?: number;
     creditAvailable?: number;
+    overdueCount?: number;
+    overdueTotal?: number;
+    upcomingCount?: number;
+    upcomingTotal?: number;
   } | null;
   overdueInvoices?: Array<{
     id: string;
@@ -280,10 +284,15 @@ export default function CheckinDetailPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-muted-foreground">Facturas Vencidas</div>
-                    <div className="mt-1">
-                      <Badge variant={(summary.overdueInvoices?.length || 0) > 0 ? "destructive" : "outline"}>
-                        {summary.overdueInvoices?.length || 0}
+                    <div className="mt-1 flex items-center gap-2">
+                      <Badge variant={(summary.creditSummary?.overdueCount || 0) > 0 ? "destructive" : "outline"}>
+                        {summary.creditSummary?.overdueCount || 0}
                       </Badge>
+                      {(summary.creditSummary?.overdueTotal || 0) > 0 && (
+                        <span className="text-sm font-medium text-red-600">
+                          ${safeNumber(summary.creditSummary?.overdueTotal).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
