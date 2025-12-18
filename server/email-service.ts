@@ -163,9 +163,8 @@ export async function sendCheckoutEmail({
       </html>
     `;
     
-    // Prepare sender and recipients
+    // Prepare sender
     const sentFrom = new Sender('noreply@nexxo.com.mx', 'GRUPO JOPER');
-    const recipients = to.map(email => new Recipient(email));
     
     // Prepare PDF attachment
     const attachment = new Attachment(
@@ -174,17 +173,22 @@ export async function sendCheckoutEmail({
       'attachment'
     );
     
-    // Send email with MailerSend
-    const emailParams = new EmailParams()
-      .setFrom(sentFrom)
-      .setTo(recipients)
-      .setSubject(subject)
-      .setHtml(htmlContent)
-      .setAttachments([attachment]);
-    
-    await mailerSend.email.send(emailParams);
-    
-    console.log(`✅ Email sent successfully to: ${to.join(', ')}`);
+    // Send individual emails to each recipient (to avoid MailerSend trial limits)
+    for (const email of to) {
+      try {
+        const emailParams = new EmailParams()
+          .setFrom(sentFrom)
+          .setTo([new Recipient(email)])
+          .setSubject(subject)
+          .setHtml(htmlContent)
+          .setAttachments([attachment]);
+        
+        await mailerSend.email.send(emailParams);
+        console.log(`✅ Email sent successfully to: ${email}`);
+      } catch (individualError) {
+        console.error(`❌ Failed to send email to ${email}:`, individualError);
+      }
+    }
   } catch (error) {
     console.error('❌ Error sending email:', error);
     throw new Error('Failed to send email');
