@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MeetingType } from "@shared/schema";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -112,6 +114,27 @@ export default function CheckinDetailPage() {
     },
   });
 
+  const updateMeetingTypeMutation = useMutation({
+    mutationFn: async (meetingType: MeetingType) => {
+      return await apiRequest("PATCH", `/api/checkins/${id}`, { meetingType });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      toast({
+        title: "Tipo de reunión actualizado",
+        description: "El cambio se guardó correctamente",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo actualizar el tipo de reunión",
+      });
+    },
+  });
+
   if (!id) {
     return <Redirect to="/checkins" />;
   }
@@ -193,13 +216,60 @@ export default function CheckinDetailPage() {
               <div className="text-sm font-medium text-muted-foreground">Estado</div>
               <div className="mt-1">
                 {checkin.checkoutAt ? (
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
                     Finalizado
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
                     En curso
                   </Badge>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">Tipo de Reunión</div>
+              <div className="mt-1">
+                {!checkin.checkoutAt ? (
+                  <Select
+                    value={checkin.meetingType || MeetingType.VISITA}
+                    onValueChange={(value) => updateMeetingTypeMutation.mutate(value as MeetingType)}
+                    disabled={updateMeetingTypeMutation.isPending}
+                  >
+                    <SelectTrigger className="w-[200px]" data-testid="select-meeting-type-edit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={MeetingType.LLAMADA}>
+                        <span className="flex items-center gap-2">
+                          <Phone className="h-4 w-4" />
+                          Llamada
+                        </span>
+                      </SelectItem>
+                      <SelectItem value={MeetingType.VISITA}>
+                        <span className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Visita
+                        </span>
+                      </SelectItem>
+                      <SelectItem value={MeetingType.VIDEOLLAMADA}>
+                        <span className="flex items-center gap-2">
+                          <Video className="h-4 w-4" />
+                          Videollamada
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm">
+                    {checkin.meetingType === MeetingType.LLAMADA && <Phone className="h-4 w-4" />}
+                    {checkin.meetingType === MeetingType.VISITA && <Users className="h-4 w-4" />}
+                    {checkin.meetingType === MeetingType.VIDEOLLAMADA && <Video className="h-4 w-4" />}
+                    {checkin.meetingType === MeetingType.LLAMADA && "Llamada"}
+                    {checkin.meetingType === MeetingType.VISITA && "Visita"}
+                    {checkin.meetingType === MeetingType.VIDEOLLAMADA && "Videollamada"}
+                    {!checkin.meetingType && "Visita"}
+                  </div>
                 )}
               </div>
             </div>

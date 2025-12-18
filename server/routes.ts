@@ -36,6 +36,7 @@ import {
   CreditAuthStatus,
   OrderStatus,
   ScheduledVisitStatus,
+  MeetingType,
 } from "@shared/schema";
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
 import { eq, and, sql, gte, lt } from "drizzle-orm";
@@ -372,11 +373,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update check-in (only allowed for in-progress check-ins)
+  // Update check-in (only allowed for in-progress check-ins, by owner or admin)
   app.patch("/api/checkins/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const { meetingType } = req.body;
+      const user = req.user!;
+
+      // Validate request body with Zod schema
+      const updateCheckinSchema = z.object({
+        meetingType: z.enum([MeetingType.LLAMADA, MeetingType.VISITA, MeetingType.VIDEOLLAMADA]),
+      });
+
+      const validationResult = updateCheckinSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ error: "Tipo de reunión inválido" });
+      }
+
+      const { meetingType } = validationResult.data;
 
       // Fetch the existing check-in
       const existingCheckin = await db.query.checkins.findFirst({
@@ -387,15 +400,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Check-in no encontrado" });
       }
 
+      // Check ownership or admin role
+      const isOwner = existingCheckin.userId === user.id;
+      const isAdmin = user.role === UserRole.ADMIN;
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ error: "No tienes permiso para editar este check-in" });
+      }
+
       // Only allow editing if check-in is still in progress (no checkout)
       if (existingCheckin.checkoutAt) {
         return res.status(400).json({ error: "No se puede editar un check-in ya finalizado" });
-      }
-
-      // Validate meetingType
-      const validMeetingTypes = ["llamada", "visita", "videollamada"];
-      if (meetingType && !validMeetingTypes.includes(meetingType)) {
-        return res.status(400).json({ error: "Tipo de reunión inválido" });
       }
 
       // Update the check-in
