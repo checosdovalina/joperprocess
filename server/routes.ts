@@ -1153,12 +1153,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Esta cotización no está pendiente de aprobación de envío" });
       }
 
-      // Update quotation with shipping approval
+      // Update quotation with shipping approval - change to SENT status so customer can approve
+      // After customer approves, it will go to credit authorization
       await storage.updateQuotation(id, {
         shippingApprovalStatus: "approved",
         shippingApprovedBy: adminId,
         shippingApprovedAt: new Date(),
-        status: QuotationStatus.AUTHORIZED,
+        status: QuotationStatus.SENT, // SENT so customer can review and approve
       });
 
       // Get quotation items for email
@@ -1221,7 +1222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ 
         success: true, 
-        message: "Envío gratuito aprobado. Se ha notificado al cliente y vendedor." 
+        message: "Envío gratuito aprobado. La cotización ha sido enviada al cliente para su aprobación. Una vez aprobada, pasará a autorización de crédito." 
       });
     } catch (error) {
       console.error("Error approving shipping:", error);
