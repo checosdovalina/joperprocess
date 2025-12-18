@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, UserPlus } from "lucide-react";
+import { Users, UserCheck, UserX, UserPlus, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -31,6 +31,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function UsersPage() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editData, setEditData] = useState({
+    fullName: "",
+    email: "",
+    role: "",
+  });
   const [newUser, setNewUser] = useState({
     username: "",
     password: "",
@@ -92,6 +99,46 @@ export default function UsersPage() {
       });
     },
   });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ userId, data }: { userId: string; data: typeof editData }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}`, data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Usuario actualizado",
+        description: "Los datos del usuario han sido modificados",
+      });
+      setIsEditDialogOpen(false);
+      setEditingUser(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setEditData({
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingUser) {
+      updateUserMutation.mutate({ userId: editingUser.id, data: editData });
+    }
+  };
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
@@ -317,20 +364,30 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            toggleUserMutation.mutate({
-                              userId: user.id,
-                              active: !user.active,
-                            })
-                          }
-                          disabled={toggleUserMutation.isPending}
-                          data-testid={`button-toggle-user-${user.id}`}
-                        >
-                          {user.active ? "Desactivar" : "Activar"}
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleEditUser(user)}
+                            data-testid={`button-edit-user-${user.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              toggleUserMutation.mutate({
+                                userId: user.id,
+                                active: !user.active,
+                              })
+                            }
+                            disabled={toggleUserMutation.isPending}
+                            data-testid={`button-toggle-user-${user.id}`}
+                          >
+                            {user.active ? "Desactivar" : "Activar"}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -345,6 +402,76 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Usuario</DialogTitle>
+            <DialogDescription>
+              Modifica los datos del usuario: {editingUser?.username}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-fullName">Nombre Completo</Label>
+              <Input
+                id="edit-fullName"
+                data-testid="input-edit-fullname"
+                type="text"
+                value={editData.fullName}
+                onChange={(e) => setEditData({ ...editData, fullName: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Correo Electrónico</Label>
+              <Input
+                id="edit-email"
+                data-testid="input-edit-email"
+                type="email"
+                value={editData.email}
+                onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Rol</Label>
+              <Select
+                value={editData.role}
+                onValueChange={(value) => setEditData({ ...editData, role: value })}
+              >
+                <SelectTrigger id="edit-role" data-testid="select-edit-role">
+                  <SelectValue placeholder="Selecciona un rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+                data-testid="button-cancel-edit"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateUserMutation.isPending}
+                data-testid="button-submit-edit"
+              >
+                {updateUserMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
