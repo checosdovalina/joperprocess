@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -63,8 +63,12 @@ export default function QuotationsPage() {
   const [isSending, setIsSending] = useState(false);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [shippingRejectDialogOpen, setShippingRejectDialogOpen] = useState(false);
+  const [shippingRejectReason, setShippingRejectReason] = useState("");
+  const [isProcessingShipping, setIsProcessingShipping] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+  const isAdmin = user?.role === "admin";
 
   const { data: quotations, isLoading } = useEntityQuery<QuotationWithDetails[]>(
     "/api/quotations"
@@ -223,6 +227,64 @@ export default function QuotationsPage() {
     });
   };
 
+  const handleApproveShipping = async (quotation: QuotationWithDetails) => {
+    setIsProcessingShipping(quotation.id);
+    try {
+      const response = await apiRequest("POST", `/api/quotations/${quotation.id}/approve-shipping`);
+      const result = await response.json();
+      
+      toast({
+        title: "Envío aprobado",
+        description: result.message || "Se ha aprobado el envío sin costo",
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo aprobar el envío",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingShipping(null);
+    }
+  };
+
+  const handleRejectShipping = async () => {
+    if (!selectedQuotation) return;
+    
+    setIsProcessingShipping(selectedQuotation.id);
+    try {
+      const response = await apiRequest("POST", `/api/quotations/${selectedQuotation.id}/reject-shipping`, {
+        reason: shippingRejectReason,
+      });
+      const result = await response.json();
+      
+      toast({
+        title: "Envío rechazado",
+        description: result.message || "Se ha rechazado el envío sin costo",
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
+      setShippingRejectDialogOpen(false);
+      setShippingRejectReason("");
+      setSelectedQuotation(null);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo rechazar el envío",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingShipping(null);
+    }
+  };
+
+  const openShippingRejectDialog = (quotation: QuotationWithDetails) => {
+    setSelectedQuotation(quotation);
+    setShippingRejectDialogOpen(true);
+  };
+
   const openSendEmailDialog = (quotation: QuotationWithDetails) => {
     setSelectedQuotation(quotation);
     setSendEmailDialogOpen(true);
@@ -342,7 +404,17 @@ export default function QuotationsPage() {
                           {quotation.currency || "MXN"}
                         </div>
                       </TableCell>
-                      <TableCell>{getStatusBadge(quotation.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {getStatusBadge(quotation.status)}
+                          {(quotation as any).shippingHandledByJoper && (quotation as any).shippingApprovalStatus === "pending" && (
+                            <Badge variant="outline" className="text-orange-600 border-orange-600 text-xs">
+                              <Truck className="h-3 w-3 mr-1" />
+                              Envío pendiente
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="text-xs text-muted-foreground">
                           {quotation.items?.length || 0} productos
@@ -405,6 +477,33 @@ export default function QuotationsPage() {
                                   >
                                     <Mail className="h-4 w-4 mr-2" />
                                     Enviar por correo
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {isAdmin && (quotation as any).shippingHandledByJoper && (quotation as any).shippingApprovalStatus === "pending" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    onClick={() => handleApproveShipping(quotation)}
+                                    disabled={isProcessingShipping === quotation.id}
+                                    data-testid={`menu-approve-shipping-${quotation.id}`}
+                                    className="text-green-600"
+                                  >
+                                    {isProcessingShipping === quotation.id ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <Check className="h-4 w-4 mr-2" />
+                                    )}
+                                    Aprobar Envío Gratis
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => openShippingRejectDialog(quotation)}
+                                    disabled={isProcessingShipping === quotation.id}
+                                    data-testid={`menu-reject-shipping-${quotation.id}`}
+                                    className="text-destructive"
+                                  >
+                                    <X className="h-4 w-4 mr-2" />
+                                    Rechazar Envío Gratis
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -520,6 +619,31 @@ export default function QuotationsPage() {
                     <p>{selectedQuotation.deliveryTime ? DELIVERY_TIME_LABELS[selectedQuotation.deliveryTime] || selectedQuotation.deliveryTime : "No especificado"}</p>
                   </div>
                 </div>
+
+                {/* Shipping Info */}
+                {(selectedQuotation as any).shippingHandledByJoper && (
+                  <div className="flex items-center gap-2 p-3 rounded-md bg-muted">
+                    <Truck className="h-5 w-5" />
+                    <div className="flex-1">
+                      <p className="font-medium">Envío por cuenta de Joper</p>
+                      {(selectedQuotation as any).shippingApprovalStatus === "pending" && (
+                        <Badge variant="outline" className="text-orange-600 border-orange-600 mt-1">
+                          Pendiente de aprobación
+                        </Badge>
+                      )}
+                      {(selectedQuotation as any).shippingApprovalStatus === "approved" && (
+                        <Badge variant="outline" className="text-green-600 border-green-600 mt-1">
+                          Aprobado
+                        </Badge>
+                      )}
+                      {(selectedQuotation as any).shippingApprovalStatus === "rejected" && (
+                        <Badge variant="destructive" className="mt-1">
+                          Rechazado
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <Separator />
 
@@ -709,6 +833,67 @@ export default function QuotationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Shipping Rejection Dialog */}
+      <AlertDialog open={shippingRejectDialogOpen} onOpenChange={setShippingRejectDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              Rechazar Envío Gratuito
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  ¿Estás seguro de rechazar el envío gratuito para la cotización{" "}
+                  <strong>{selectedQuotation?.folio}</strong>?
+                </p>
+                <div>
+                  <label className="text-sm font-medium">Motivo del rechazo:</label>
+                  <Input
+                    value={shippingRejectReason}
+                    onChange={(e) => setShippingRejectReason(e.target.value)}
+                    placeholder="Ingresa el motivo del rechazo..."
+                    className="mt-2"
+                    data-testid="input-shipping-reject-reason"
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Se notificará al vendedor para que modifique la cotización.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setShippingRejectReason("");
+                setSelectedQuotation(null);
+              }}
+              disabled={isProcessingShipping !== null}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleRejectShipping} 
+              disabled={isProcessingShipping !== null}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isProcessingShipping !== null ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Rechazando...
+                </>
+              ) : (
+                <>
+                  <X className="h-4 w-4 mr-2" />
+                  Rechazar Envío
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

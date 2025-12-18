@@ -1130,6 +1130,171 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Approve free shipping for a quotation (Admin only)
+  app.post("/api/quotations/:id/approve-shipping", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user!.id;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+        with: { customer: true, user: true },
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      if (!quotation.shippingHandledByJoper) {
+        return res.status(400).json({ error: "Esta cotización no tiene envío por cuenta de Joper" });
+      }
+
+      if (quotation.shippingApprovalStatus !== "pending") {
+        return res.status(400).json({ error: "Esta cotización no está pendiente de aprobación de envío" });
+      }
+
+      // Update quotation with shipping approval
+      await storage.updateQuotation(id, {
+        shippingApprovalStatus: "approved",
+        shippingApprovedBy: adminId,
+        shippingApprovedAt: new Date(),
+        status: QuotationStatus.AUTHORIZED,
+      });
+
+      // Get quotation items for email
+      const items = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, id),
+      });
+
+      // Generate PDF and send to customer and salesperson
+      try {
+        const crypto = await import("crypto");
+        const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
+        
+        const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
+        const pdfStream = generateQuotationPDFStream({
+          quotation: { ...quotation, shippingApprovalStatus: "approved" },
+          items,
+          customer: quotation.customer,
+          user: quotation.user,
+        });
+
+        const objectStorageService = new ObjectStorageService();
+        const pdfPath = await objectStorageService.uploadQuotationPdfToStorage(
+          pdfStream,
+          quotation.folio,
+          adminId
+        );
+
+        // Update PDF path and approval token
+        await storage.updateQuotation(id, { pdfPath, approvalToken });
+
+        // Send email to customer and salesperson
+        const recipients: string[] = [];
+        if (quotation.customer.email) recipients.push(quotation.customer.email);
+        if (quotation.user.email) recipients.push(quotation.user.email);
+
+        if (recipients.length > 0) {
+          const host = req.get("host") || "localhost:5000";
+          const protocol = req.protocol || "https";
+          const approvalUrl = `${protocol}://${host}/aprobar-cotizacion/${approvalToken}`;
+
+          const { sendQuotationEmail } = await import("./quotation-email-service");
+          await sendQuotationEmail({
+            to: recipients,
+            quotationData: {
+              folio: quotation.folio,
+              customerName: quotation.customer.name,
+              vendedorName: quotation.user.fullName,
+              total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+              currency: quotation.currency || "MXN",
+              validUntil: quotation.validUntil ? new Date(quotation.validUntil).toLocaleDateString("es-MX") : undefined,
+              itemsCount: items.length,
+            },
+            pdfPath,
+            approvalUrl,
+          });
+        }
+      } catch (emailError: any) {
+        console.warn("Email send failed after shipping approval:", emailError.message || emailError);
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Envío gratuito aprobado. Se ha notificado al cliente y vendedor." 
+      });
+    } catch (error) {
+      console.error("Error approving shipping:", error);
+      res.status(500).json({ error: "Error al aprobar el envío" });
+    }
+  });
+
+  // Reject free shipping for a quotation (Admin only)
+  app.post("/api/quotations/:id/reject-shipping", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      const adminId = req.user!.id;
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+        with: { customer: true, user: true },
+      });
+
+      if (!quotation) {
+        return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      if (!quotation.shippingHandledByJoper) {
+        return res.status(400).json({ error: "Esta cotización no tiene envío por cuenta de Joper" });
+      }
+
+      if (quotation.shippingApprovalStatus !== "pending") {
+        return res.status(400).json({ error: "Esta cotización no está pendiente de aprobación de envío" });
+      }
+
+      // Update quotation with shipping rejection
+      await storage.updateQuotation(id, {
+        shippingApprovalStatus: "rejected",
+        shippingRejectedBy: adminId,
+        shippingRejectedAt: new Date(),
+        shippingRejectionReason: reason || "No se proporcionó motivo",
+        status: QuotationStatus.DRAFT, // Return to draft for vendor to modify
+      });
+
+      // Send notification to salesperson
+      try {
+        if (quotation.user.email) {
+          const { Resend } = await import("resend");
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          
+          await resend.emails.send({
+            from: "GRUPO JOPER <noreply@resend.dev>",
+            to: quotation.user.email,
+            subject: `Envío sin costo rechazado - Cotización ${quotation.folio}`,
+            html: `
+              <h2>Cotización ${quotation.folio}</h2>
+              <p>El envío sin costo por cuenta de Joper ha sido <strong>rechazado</strong>.</p>
+              <p><strong>Motivo:</strong> ${reason || "No se proporcionó motivo"}</p>
+              <p>Por favor, modifica la cotización y ajusta el costo de envío según sea necesario.</p>
+              <p>Saludos,<br>Sistema GRUPO JOPER</p>
+            `,
+          });
+        }
+      } catch (emailError: any) {
+        console.warn("Email notification failed after shipping rejection:", emailError.message || emailError);
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Envío sin costo rechazado. Se ha notificado al vendedor." 
+      });
+    } catch (error) {
+      console.error("Error rejecting shipping:", error);
+      res.status(500).json({ error: "Error al rechazar el envío" });
+    }
+  });
+
   // Credit Authorizations endpoints
   app.get("/api/credit-authorizations", isAuthenticated, async (req, res) => {
     try {

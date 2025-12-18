@@ -38,7 +38,8 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Trash2, Search, AlertTriangle, Calculator } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Plus, Trash2, Search, AlertTriangle, Calculator, Truck } from "lucide-react";
 import { useEntityQuery } from "@/hooks/use-entity-query";
 import {
   Command,
@@ -121,6 +122,9 @@ const quotationFormSchema = z.object({
   globalDiscount: z.string().default("0"),
   notes: z.string().optional(),
   conditions: z.string().optional(),
+  shippingHandledByJoper: z.boolean().default(false),
+  shippingCost: z.string().default("0"),
+  shippingCostStatus: z.string().default("confirmed"),
 });
 
 type QuotationFormData = z.infer<typeof quotationFormSchema>;
@@ -176,6 +180,9 @@ export function QuotationForm({
       globalDiscount: "0",
       notes: "",
       conditions: "",
+      shippingHandledByJoper: false,
+      shippingCost: "0",
+      shippingCostStatus: "confirmed",
     },
   });
 
@@ -190,6 +197,9 @@ export function QuotationForm({
         globalDiscount: initialData.globalDiscount || "0",
         notes: initialData.notes || "",
         conditions: initialData.conditions || "",
+        shippingHandledByJoper: initialData.shippingHandledByJoper || false,
+        shippingCost: initialData.shippingCost || "0",
+        shippingCostStatus: initialData.shippingCostStatus || "confirmed",
       });
 
       if (initialData.items && initialData.items.length > 0) {
@@ -231,6 +241,9 @@ export function QuotationForm({
           globalDiscount: "0",
           notes: "",
           conditions: "",
+          shippingHandledByJoper: false,
+          shippingCost: "0",
+          shippingCostStatus: "confirmed",
         });
         setLineItems([createEmptyLineItem(0)]);
       }
@@ -376,10 +389,24 @@ export function QuotationForm({
         position: item.position,
       }));
 
+    // Determine if requires approval (either for discounts or free shipping by Joper)
+    const requiresFreeShippingApproval = data.shippingHandledByJoper;
+    const requiresAnyApproval = hasExceedingDiscounts || requiresFreeShippingApproval;
+    
+    // Build approval reason
+    let approvalReason = null;
+    if (hasExceedingDiscounts && requiresFreeShippingApproval) {
+      approvalReason = "Descuentos exceden el máximo permitido y envío sin costo por cuenta de Joper";
+    } else if (hasExceedingDiscounts) {
+      approvalReason = "Descuentos exceden el máximo permitido";
+    } else if (requiresFreeShippingApproval) {
+      approvalReason = "Envío sin costo por cuenta de Joper requiere autorización";
+    }
+
     const quotationData: InsertQuotation & { items: InsertQuotationItem[] } = {
       customerId: data.customerId,
       userId: userId || "",
-      status: hasExceedingDiscounts ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
+      status: requiresAnyApproval ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
       currency: data.currency,
       paymentTerms: data.paymentTerms || null,
       deliveryTime: data.deliveryTime || null,
@@ -391,8 +418,12 @@ export function QuotationForm({
       totalSavings: totals.totalSavings,
       notes: data.notes || null,
       conditions: data.conditions || null,
-      requiresApproval: hasExceedingDiscounts,
-      approvalReason: hasExceedingDiscounts ? "Descuentos exceden el máximo permitido" : null,
+      requiresApproval: requiresAnyApproval,
+      approvalReason,
+      shippingHandledByJoper: data.shippingHandledByJoper,
+      shippingCost: data.shippingCost,
+      shippingCostStatus: data.shippingCostStatus,
+      shippingApprovalStatus: data.shippingHandledByJoper ? "pending" : "not_required",
       items,
     };
 
@@ -763,6 +794,97 @@ export function QuotationForm({
                         </FormItem>
                       )}
                     />
+
+                    <Card className="mt-4">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Truck className="h-4 w-4" />
+                          Envío
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="shippingHandledByJoper"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={(checked) => {
+                                    field.onChange(checked);
+                                    if (checked) {
+                                      form.setValue("shippingCost", "0");
+                                    }
+                                  }}
+                                  data-testid="checkbox-shipping-joper"
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="cursor-pointer">
+                                  Envío por cuenta de Joper (sin costo)
+                                </FormLabel>
+                                <p className="text-xs text-muted-foreground">
+                                  Requiere autorización del administrador antes de enviar al cliente
+                                </p>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+
+                        {!form.watch("shippingHandledByJoper") && (
+                          <>
+                            <div className="flex items-center gap-4">
+                              <FormField
+                                control={form.control}
+                                name="shippingCost"
+                                render={({ field }) => (
+                                  <FormItem className="flex-1">
+                                    <FormLabel>Costo de Envío</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        {...field}
+                                        disabled={form.watch("shippingCostStatus") === "pending"}
+                                        placeholder="0.00"
+                                        data-testid="input-shipping-cost"
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            <FormField
+                              control={form.control}
+                              name="shippingCostStatus"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value === "pending"}
+                                      onCheckedChange={(checked) => {
+                                        field.onChange(checked ? "pending" : "confirmed");
+                                        if (checked) {
+                                          form.setValue("shippingCost", "0");
+                                        }
+                                      }}
+                                      data-testid="checkbox-shipping-pending"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="cursor-pointer text-sm font-normal">
+                                    Costo pendiente por cotizar
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
 
                   <Card>
@@ -808,11 +930,30 @@ export function QuotationForm({
                         <span className="font-mono">{formatCurrency(totals.tax)}</span>
                       </div>
 
+                      <div className="flex justify-between text-sm">
+                        <span>Envío:</span>
+                        <span className="font-mono">
+                          {form.watch("shippingHandledByJoper") 
+                            ? "$0.00 (Joper)" 
+                            : form.watch("shippingCostStatus") === "pending"
+                              ? "Por cotizar"
+                              : formatCurrency(form.watch("shippingCost") || "0")}
+                        </span>
+                      </div>
+
                       <Separator />
 
                       <div className="flex justify-between text-lg font-bold">
                         <span>Total:</span>
-                        <span className="font-mono">{formatCurrency(totals.total)}</span>
+                        <span className="font-mono">
+                          {formatCurrency(
+                            (parseFloat(totals.total) + 
+                              (form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending" 
+                                ? 0 
+                                : parseFloat(form.watch("shippingCost") || "0"))
+                            ).toFixed(2)
+                          )}
+                        </span>
                       </div>
 
                       {parseFloat(totals.totalSavings) > 0 && (
@@ -822,14 +963,18 @@ export function QuotationForm({
                         </div>
                       )}
 
-                      {hasExceedingDiscounts && (
+                      {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) && (
                         <div className="mt-4 p-3 bg-destructive/10 rounded-lg">
                           <div className="flex items-center gap-2 text-destructive text-sm font-medium">
                             <AlertTriangle className="h-4 w-4" />
                             Requiere Aprobación
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Algunos descuentos exceden el máximo permitido. La cotización será enviada para autorización.
+                            {hasExceedingDiscounts && form.watch("shippingHandledByJoper")
+                              ? "Descuentos exceden el máximo y envío sin costo requiere autorización."
+                              : hasExceedingDiscounts
+                                ? "Algunos descuentos exceden el máximo permitido."
+                                : "Envío sin costo por cuenta de Joper requiere autorización del administrador."}
                           </p>
                         </div>
                       )}
@@ -861,7 +1006,7 @@ export function QuotationForm({
                   data-testid="button-submit"
                 >
                   {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {hasExceedingDiscounts ? "Enviar a Autorización" : "Guardar Cotización"}
+                  {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) ? "Enviar a Autorización" : "Guardar Cotización"}
                 </Button>
               </div>
             </div>

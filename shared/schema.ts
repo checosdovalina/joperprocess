@@ -32,6 +32,24 @@ export const QuotationStatus = {
 
 export type QuotationStatusType = typeof QuotationStatus[keyof typeof QuotationStatus];
 
+// Enum for shipping cost status in quotations
+export const ShippingCostStatus = {
+  CONFIRMED: "confirmed",
+  PENDING: "pending",
+} as const;
+
+export type ShippingCostStatusType = typeof ShippingCostStatus[keyof typeof ShippingCostStatus];
+
+// Enum for shipping approval status (when Joper handles shipping for free)
+export const ShippingApprovalStatus = {
+  NOT_REQUIRED: "not_required",
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+} as const;
+
+export type ShippingApprovalStatusType = typeof ShippingApprovalStatus[keyof typeof ShippingApprovalStatus];
+
 // Enum for order status
 export const OrderStatus = {
   PENDING: "pending",
@@ -253,6 +271,16 @@ export const quotations = pgTable("quotations", {
   customerApprovedAt: timestamp("customer_approved_at"),
   customerRejectedAt: timestamp("customer_rejected_at"),
   customerRejectionReason: text("customer_rejection_reason"),
+  // Shipping fields
+  shippingHandledByJoper: boolean("shipping_handled_by_joper").notNull().default(false),
+  shippingCost: decimal("shipping_cost", { precision: 12, scale: 2 }).default("0"),
+  shippingCostStatus: text("shipping_cost_status").default("confirmed"), // confirmed, pending
+  shippingApprovalStatus: text("shipping_approval_status").default("not_required"), // not_required, pending, approved, rejected
+  shippingApprovedBy: varchar("shipping_approved_by").references(() => users.id),
+  shippingApprovedAt: timestamp("shipping_approved_at"),
+  shippingRejectedBy: varchar("shipping_rejected_by").references(() => users.id),
+  shippingRejectedAt: timestamp("shipping_rejected_at"),
+  shippingRejectionReason: text("shipping_rejection_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
