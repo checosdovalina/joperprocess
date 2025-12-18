@@ -1889,32 +1889,50 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Order not found" });
       }
 
+      // VALIDATE FIRST before creating any records to prevent orphaned invoices/shipments
+      const quotationItem = order.quotation.items.find(i => i.id === releaseData.quotationItemId);
+      if (!quotationItem) {
+        return res.status(400).json({ error: "Producto no encontrado en la cotización" });
+      }
+
+      // Validate quantity
+      const quantityToRelease = Number(releaseData.quantityReleased);
+      if (isNaN(quantityToRelease) || quantityToRelease <= 0) {
+        return res.status(400).json({ error: "Cantidad inválida" });
+      }
+
+      // Pre-validate release data schema (without invoice/shipment IDs for now)
+      insertOrderReleaseSchema.parse({
+        quotationItemId: releaseData.quotationItemId,
+        quantityReleased: String(releaseData.quantityReleased),
+        orderId: id,
+        releasedById: req.user!.id,
+        notes: releaseData.notes,
+      });
+
+      // Now safe to create invoice and shipment
       let invoiceId: string | undefined;
       let shipmentId: string | undefined;
 
       // Create invoice if requested
       if (createInvoice) {
-        const quotationItem = order.quotation.items.find(i => i.id === releaseData.quotationItemId);
-        if (quotationItem) {
-          const unitPrice = Number(quotationItem.unitPrice);
-          const quantity = Number(releaseData.quantityReleased);
-          const subtotal = unitPrice * quantity;
-          const tax = subtotal * 0.16;
-          const total = subtotal + tax;
+        const unitPrice = Number(quotationItem.unitPrice);
+        const subtotal = unitPrice * quantityToRelease;
+        const tax = subtotal * 0.16;
+        const total = subtotal + tax;
 
-          const invoice = await storage.createInvoice({
-            orderId: id,
-            customerId: order.quotation.customerId,
-            serie: "A",
-            folio: `INV-${Date.now()}`,
-            subtotal: subtotal.toFixed(2),
-            tax: tax.toFixed(2),
-            total: total.toFixed(2),
-            balanceDue: total.toFixed(2),
-            currency: "MXN",
-          });
-          invoiceId = invoice.id;
-        }
+        const invoice = await storage.createInvoice({
+          orderId: id,
+          customerId: order.quotation.customerId,
+          serie: "A",
+          folio: `INV-${Date.now()}`,
+          subtotal: subtotal.toFixed(2),
+          tax: tax.toFixed(2),
+          total: total.toFixed(2),
+          balanceDue: total.toFixed(2),
+          currency: "MXN",
+        });
+        invoiceId = invoice.id;
       }
 
       // Create shipment if requested
@@ -1930,18 +1948,16 @@ Proporciona tu análisis en el siguiente formato JSON:
         shipmentId = shipment.id;
       }
 
-      // Validate release data - ensure quantityReleased is a string
-      const validated = insertOrderReleaseSchema.parse({
-        ...releaseData,
+      // Create the release with validated data
+      const release = await storage.createOrderRelease({
+        quotationItemId: releaseData.quotationItemId,
         quantityReleased: String(releaseData.quantityReleased),
         orderId: id,
         releasedById: req.user!.id,
+        notes: releaseData.notes,
         invoiceId,
         shipmentId,
       });
-
-      // Create the release
-      const release = await storage.createOrderRelease(validated);
 
       // Check if all items are fully released to update order status
       const quotationItemsResult = order.quotation.items;
