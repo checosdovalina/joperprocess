@@ -590,6 +590,96 @@ export function QuotationForm({
                   />
                 </div>
 
+                {/* Shipping Section - Visible early in the form */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Truck className="h-4 w-4" />
+                      Envío
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="shippingHandledByJoper"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => {
+                                field.onChange(checked);
+                                if (checked) {
+                                  form.setValue("shippingCost", "0");
+                                }
+                              }}
+                              data-testid="checkbox-shipping-joper"
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="cursor-pointer">
+                              Envío por cuenta de Joper (sin costo)
+                            </FormLabel>
+                            <p className="text-xs text-muted-foreground">
+                              Requiere autorización del administrador antes de enviar al cliente
+                            </p>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+
+                    {!form.watch("shippingHandledByJoper") && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="shippingCost"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Costo de Envío</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  {...field}
+                                  disabled={form.watch("shippingCostStatus") === "pending"}
+                                  placeholder="0.00"
+                                  data-testid="input-shipping-cost"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="shippingCostStatus"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-3 space-y-0 md:mt-8">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value === "pending"}
+                                  onCheckedChange={(checked) => {
+                                    field.onChange(checked ? "pending" : "confirmed");
+                                    if (checked) {
+                                      form.setValue("shippingCost", "0");
+                                    }
+                                  }}
+                                  data-testid="checkbox-shipping-pending"
+                                />
+                              </FormControl>
+                              <FormLabel className="cursor-pointer text-sm font-normal">
+                                Costo pendiente por cotizar
+                              </FormLabel>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 <Card>
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -794,97 +884,6 @@ export function QuotationForm({
                         </FormItem>
                       )}
                     />
-
-                    <Card className="mt-4">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Truck className="h-4 w-4" />
-                          Envío
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <FormField
-                          control={form.control}
-                          name="shippingHandledByJoper"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={(checked) => {
-                                    field.onChange(checked);
-                                    if (checked) {
-                                      form.setValue("shippingCost", "0");
-                                    }
-                                  }}
-                                  data-testid="checkbox-shipping-joper"
-                                />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                <FormLabel className="cursor-pointer">
-                                  Envío por cuenta de Joper (sin costo)
-                                </FormLabel>
-                                <p className="text-xs text-muted-foreground">
-                                  Requiere autorización del administrador antes de enviar al cliente
-                                </p>
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-
-                        {!form.watch("shippingHandledByJoper") && (
-                          <>
-                            <div className="flex items-center gap-4">
-                              <FormField
-                                control={form.control}
-                                name="shippingCost"
-                                render={({ field }) => (
-                                  <FormItem className="flex-1">
-                                    <FormLabel>Costo de Envío</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        {...field}
-                                        disabled={form.watch("shippingCostStatus") === "pending"}
-                                        placeholder="0.00"
-                                        data-testid="input-shipping-cost"
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-
-                            <FormField
-                              control={form.control}
-                              name="shippingCostStatus"
-                              render={({ field }) => (
-                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value === "pending"}
-                                      onCheckedChange={(checked) => {
-                                        field.onChange(checked ? "pending" : "confirmed");
-                                        if (checked) {
-                                          form.setValue("shippingCost", "0");
-                                        }
-                                      }}
-                                      data-testid="checkbox-shipping-pending"
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="cursor-pointer text-sm font-normal">
-                                    Costo pendiente por cotizar
-                                  </FormLabel>
-                                </FormItem>
-                              )}
-                            />
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
                   </div>
 
                   <Card>
