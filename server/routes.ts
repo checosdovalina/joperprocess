@@ -36,6 +36,7 @@ import {
   QuotationStatus,
   CreditAuthStatus,
   OrderStatus,
+  InvoiceStatus,
   ScheduledVisitStatus,
   MeetingType,
   IncidentType,
@@ -2553,12 +2554,51 @@ Proporciona tu análisis en el siguiente formato JSON:
       const validated = insertPaymentSchema.parse({
         ...req.body,
         registeredBy: req.user!.id,
+        paymentDate: new Date(req.body.paymentDate),
       });
+
+      // Get the invoice to update balance
+      const invoice = await storage.getInvoice(validated.invoiceId);
+      if (!invoice) {
+        return res.status(404).json({ error: "Factura no encontrada" });
+      }
+
+      // Create the payment
       const payment = await storage.createPayment(validated);
-      res.status(201).json(payment);
+
+      // Calculate new balance
+      const paymentAmount = parseFloat(validated.amount);
+      const currentBalance = parseFloat(invoice.balanceDue || invoice.total);
+      const newBalance = Math.max(0, currentBalance - paymentAmount);
+
+      // Determine new status
+      let newStatus = invoice.status;
+      if (newBalance === 0) {
+        newStatus = InvoiceStatus.PAID;
+      } else if (newBalance < parseFloat(invoice.total)) {
+        newStatus = InvoiceStatus.PARTIALLY_PAID;
+      }
+
+      // Update invoice balance and status
+      await storage.updateInvoice(invoice.id, {
+        balanceDue: newBalance.toFixed(2),
+        status: newStatus,
+      });
+
+      // Fetch full payment with relations
+      const fullPayment = await db.query.payments.findFirst({
+        where: eq(payments.id, payment.id),
+        with: {
+          invoice: true,
+          customer: true,
+          registeredBy: true,
+        },
+      });
+
+      res.status(201).json(fullPayment);
     } catch (error) {
       console.error("Error creating payment:", error);
-      res.status(400).json({ error: "Error creating payment" });
+      res.status(400).json({ error: "Error al registrar el pago" });
     }
   });
 

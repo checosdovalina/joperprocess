@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Payment, Invoice, Customer } from "@shared/schema";
+import { Payment, Invoice, Customer, User } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -10,19 +11,48 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Plus } from "lucide-react";
+import { DollarSign, Plus, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { PaymentForm } from "@/components/payment-form";
+
+type PaymentWithDetails = Payment & {
+  invoice: Invoice;
+  customer: Customer;
+  registeredBy: User;
+};
 
 export default function PaymentsPage() {
-  const { data: payments, isLoading } = useQuery<
-    (Payment & { invoice: Invoice; customer: Customer })[]
-  >({
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentWithDetails | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const { data: payments, isLoading } = useQuery<PaymentWithDetails[]>({
     queryKey: ["/api/payments"],
   });
 
   const totalPayments = payments?.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) || 0;
+
+  const thisMonthPayments = payments?.filter((p) => {
+    const paymentDate = new Date(p.paymentDate);
+    const now = new Date();
+    return paymentDate.getMonth() === now.getMonth() &&
+      paymentDate.getFullYear() === now.getFullYear();
+  }) || [];
+
+  const thisMonthTotal = thisMonthPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
+  const handleViewDetails = (payment: PaymentWithDetails) => {
+    setSelectedPayment(payment);
+    setDetailsOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -33,7 +63,7 @@ export default function PaymentsPage() {
             Gestiona pagos, estados de cuenta y promesas de pago
           </p>
         </div>
-        <Button data-testid="button-add-payment">
+        <Button onClick={() => setDialogOpen(true)} data-testid="button-add-payment">
           <Plus className="h-4 w-4 mr-2" />
           Registrar Pago
         </Button>
@@ -41,7 +71,7 @@ export default function PaymentsPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
             <CardTitle className="text-sm font-medium">Total Pagos</CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
@@ -50,7 +80,7 @@ export default function PaymentsPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
             <CardTitle className="text-sm font-medium">Monto Total</CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
@@ -64,19 +94,18 @@ export default function PaymentsPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
             <CardTitle className="text-sm font-medium">Este Mes</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {payments?.filter((p) => {
-                const paymentDate = new Date(p.paymentDate);
-                const now = new Date();
-                return paymentDate.getMonth() === now.getMonth() &&
-                  paymentDate.getFullYear() === now.getFullYear();
-              }).length || 0}
+              ${thisMonthTotal.toLocaleString("es-MX", {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
             </div>
+            <p className="text-xs text-muted-foreground">{thisMonthPayments.length} pagos</p>
           </CardContent>
         </Card>
       </div>
@@ -140,10 +169,11 @@ export default function PaymentsPage() {
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          onClick={() => handleViewDetails(payment)}
                           data-testid={`button-view-payment-${payment.id}`}
                         >
-                          Ver Detalles
+                          <Eye className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -157,6 +187,7 @@ export default function PaymentsPage() {
               <p className="text-muted-foreground">No hay pagos registrados</p>
               <Button
                 className="mt-4"
+                onClick={() => setDialogOpen(true)}
                 data-testid="button-add-first-payment"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -166,6 +197,77 @@ export default function PaymentsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Registrar Pago</DialogTitle>
+          </DialogHeader>
+          {dialogOpen && (
+            <PaymentForm
+              onSuccess={() => setDialogOpen(false)}
+              onCancel={() => setDialogOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Detalles del Pago</DialogTitle>
+          </DialogHeader>
+          {selectedPayment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha de Pago</p>
+                  <p className="font-medium">
+                    {format(new Date(selectedPayment.paymentDate), "PPP", { locale: es })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Monto</p>
+                  <p className="font-medium text-green-700 text-lg">
+                    ${parseFloat(selectedPayment.amount).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Cliente</p>
+                <p className="font-medium">{selectedPayment.customer.name}</p>
+                <p className="text-sm text-muted-foreground">{selectedPayment.customer.rfc}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Factura</p>
+                <p className="font-mono">{selectedPayment.invoice.serie}-{selectedPayment.invoice.folio}</p>
+              </div>
+              {selectedPayment.reference && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Referencia</p>
+                  <p className="font-medium">{selectedPayment.reference}</p>
+                </div>
+              )}
+              {selectedPayment.notes && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Notas</p>
+                  <p className="text-sm">{selectedPayment.notes}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-sm text-muted-foreground">Registrado por</p>
+                <p className="text-sm">{selectedPayment.registeredBy?.fullName || "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Fecha de Registro</p>
+                <p className="text-sm">
+                  {format(new Date(selectedPayment.createdAt), "PPP 'a las' p", { locale: es })}
+                </p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
