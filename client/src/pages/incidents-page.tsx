@@ -341,12 +341,12 @@ export default function IncidentsPage() {
           {showFilters && (
             <div className="flex flex-wrap gap-4 pt-4">
               <div className="w-48">
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <Select value={filterStatus || "_all"} onValueChange={(v) => setFilterStatus(v === "_all" ? "" : v)}>
                   <SelectTrigger data-testid="select-filter-status">
                     <SelectValue placeholder="Estado" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="_all">Todos</SelectItem>
                     {Object.entries(statusLabels).map(([value, label]) => (
                       <SelectItem key={value} value={value}>{label}</SelectItem>
                     ))}
@@ -354,12 +354,12 @@ export default function IncidentsPage() {
                 </Select>
               </div>
               <div className="w-48">
-                <Select value={filterType} onValueChange={setFilterType}>
+                <Select value={filterType || "_all"} onValueChange={(v) => setFilterType(v === "_all" ? "" : v)}>
                   <SelectTrigger data-testid="select-filter-type">
                     <SelectValue placeholder="Tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="_all">Todos</SelectItem>
                     {Object.entries(typeLabels).map(([value, label]) => (
                       <SelectItem key={value} value={value}>{label}</SelectItem>
                     ))}
@@ -367,12 +367,12 @@ export default function IncidentsPage() {
                 </Select>
               </div>
               <div className="w-48">
-                <Select value={filterUrgency} onValueChange={setFilterUrgency}>
+                <Select value={filterUrgency || "_all"} onValueChange={(v) => setFilterUrgency(v === "_all" ? "" : v)}>
                   <SelectTrigger data-testid="select-filter-urgency">
                     <SelectValue placeholder="Urgencia" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todas</SelectItem>
+                    <SelectItem value="_all">Todas</SelectItem>
                     {Object.entries(urgencyLabels).map(([value, label]) => (
                       <SelectItem key={value} value={value}>{label}</SelectItem>
                     ))}

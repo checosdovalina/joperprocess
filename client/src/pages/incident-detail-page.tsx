@@ -618,15 +618,15 @@ export default function IncidentDetailPage() {
                 <div>
                   <Label className="text-xs">Asignado a</Label>
                   <Select
-                    value={incident.assignedTo || ""}
-                    onValueChange={(value) => updateMutation.mutate({ assignedTo: value || null })}
+                    value={incident.assignedTo || "_none"}
+                    onValueChange={(value) => updateMutation.mutate({ assignedTo: value === "_none" ? null : value })}
                     disabled={updateMutation.isPending}
                   >
                     <SelectTrigger className="mt-1" data-testid="select-assignee">
                       <SelectValue placeholder="Sin asignar" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Sin asignar</SelectItem>
+                      <SelectItem value="_none">Sin asignar</SelectItem>
                       {allUsers
                         ?.filter(u => u.active)
                         .map((u) => (
