@@ -1161,37 +1161,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Esta cotización no está pendiente de aprobación de envío" });
       }
 
-      // Update quotation with shipping approval and send directly to credit authorization
+      // Update quotation with shipping approval - change to SENT status so customer can approve
+      // After customer approves, it will go to credit authorization
       await storage.updateQuotation(id, {
         shippingApprovalStatus: "approved",
         shippingApprovedBy: adminId,
         shippingApprovedAt: new Date(),
-        status: QuotationStatus.PENDING_AUTHORIZATION,
-        requiresApproval: true,
-        approvalReason: "Envío gratuito aprobado - pendiente autorización de crédito",
+        status: QuotationStatus.SENT,
       });
-
-      // Check if credit authorization already exists
-      const existingAuth = await db.query.creditAuthorizations.findFirst({
-        where: eq(creditAuthorizations.quotationId, id),
-      });
-
-      if (!existingAuth) {
-        // Create credit authorization
-        await db.insert(creditAuthorizations).values({
-          quotationId: id,
-          userId: quotation.userId,
-          status: CreditAuthStatus.PENDING,
-          notes: `Envío gratuito aprobado por admin. Cotización ${quotation.folio} - Total: $${quotation.total}`,
-        });
-      }
 
       // Get quotation items for email
       const items = await db.query.quotationItems.findMany({
         where: eq(quotationItems.quotationId, id),
       });
 
-      // Generate PDF and send notification
+      // Generate PDF and send to customer for approval
       try {
         const crypto = await import("crypto");
         const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
@@ -1214,12 +1198,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update PDF path and approval token
         await storage.updateQuotation(id, { pdfPath, approvalToken });
 
-        // Send email to salesperson to notify credit authorization is pending
-        if (quotation.user.email) {
+        // Send email to customer and salesperson with approval link
+        const recipients: string[] = [];
+        if (quotation.customer.email) recipients.push(quotation.customer.email);
+        if (quotation.user.email) recipients.push(quotation.user.email);
+
+        if (recipients.length > 0) {
+          const host = req.get("host") || "localhost:5000";
+          const protocol = req.protocol || "https";
+          const approvalUrl = `${protocol}://${host}/aprobar-cotizacion/${approvalToken}`;
+
           try {
             const { sendQuotationEmail } = await import("./quotation-email-service");
             await sendQuotationEmail({
-              to: [quotation.user.email],
+              to: recipients,
               quotationData: {
                 folio: quotation.folio,
                 customerName: quotation.customer.name,
@@ -1230,9 +1222,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 itemsCount: items.length,
               },
               pdfPath,
+              approvalUrl,
             });
           } catch (emailErr: any) {
-            console.warn("Email to salesperson failed:", emailErr.message || emailErr);
+            console.warn("Email send failed:", emailErr.message || emailErr);
           }
         }
       } catch (emailError: any) {
@@ -1241,7 +1234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ 
         success: true, 
-        message: "Envío gratuito aprobado. La cotización ha sido enviada a autorización de crédito." 
+        message: "Envío gratuito aprobado. La cotización ha sido enviada al cliente para su aprobación." 
       });
     } catch (error) {
       console.error("Error approving shipping:", error);
