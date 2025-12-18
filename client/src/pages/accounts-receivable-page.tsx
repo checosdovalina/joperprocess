@@ -11,18 +11,26 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, AlertCircle } from "lucide-react";
+import { Plus, FileText, AlertCircle, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { AccountReceivableForm } from "@/components/account-receivable-form";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 
 type InvoiceWithCustomer = Invoice & { customer: Customer };
 
 export default function AccountsReceivablePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithCustomer | null>(null);
   const { user } = useAuth();
 
   const { data: invoices, isLoading } = useQuery<InvoiceWithCustomer[]>({
@@ -150,6 +158,7 @@ export default function AccountsReceivablePage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => setSelectedInvoice(invoice)}
                           data-testid={`button-view-invoice-${invoice.id}`}
                         >
                           <FileText className="h-4 w-4 mr-1" />
@@ -180,6 +189,109 @@ export default function AccountsReceivablePage() {
           onOpenChange={setDialogOpen}
         />
       )}
+
+      <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Detalle de Factura
+            </DialogTitle>
+          </DialogHeader>
+          {selectedInvoice && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Serie/Folio</p>
+                  <p className="font-mono text-lg font-bold">{selectedInvoice.serie}-{selectedInvoice.folio}</p>
+                </div>
+                {getStatusBadge(selectedInvoice.status)}
+              </div>
+              
+              <Separator />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Cliente</p>
+                  <p className="font-medium">{selectedInvoice.customer.name}</p>
+                  <p className="text-xs text-muted-foreground">{selectedInvoice.customer.rfc}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Moneda</p>
+                  <p className="font-medium">{selectedInvoice.currency}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha de Emisión</p>
+                  <p className="font-medium">{format(new Date(selectedInvoice.issuedAt), "PP", { locale: es })}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha de Vencimiento</p>
+                  <p className="font-medium">
+                    {selectedInvoice.dueDate 
+                      ? format(new Date(selectedInvoice.dueDate), "PP", { locale: es }) 
+                      : "Sin definir"}
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">
+                    ${parseFloat(selectedInvoice.subtotal || "0").toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">IVA (16%)</span>
+                  <span className="font-medium">
+                    ${parseFloat(selectedInvoice.tax || "0").toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-lg">
+                  <span className="font-semibold">Total</span>
+                  <span className="font-bold">
+                    ${parseFloat(selectedInvoice.total).toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-lg">
+                  <span className="font-semibold text-muted-foreground">Saldo Pendiente</span>
+                  <span className="font-bold text-primary">
+                    ${parseFloat(selectedInvoice.balanceDue || selectedInvoice.total).toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {selectedInvoice.notes && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Notas</p>
+                    <p className="text-sm mt-1">{selectedInvoice.notes}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
