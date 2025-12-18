@@ -261,9 +261,49 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuotation(insertQuotation: InsertQuotation): Promise<Quotation> {
-    // Generate folio (simple implementation - could be improved)
+    // Get customer country to generate country-based folio prefix
+    let countryPrefix = 'COT'; // Default prefix
+    
+    if (insertQuotation.customerId) {
+      const customer = await this.getCustomer(insertQuotation.customerId);
+      if (customer?.country) {
+        // Map country names to prefixes
+        const countryPrefixes: Record<string, string> = {
+          'México': 'MEX',
+          'Mexico': 'MEX',
+          'MX': 'MEX',
+          'Estados Unidos': 'USA',
+          'United States': 'USA',
+          'US': 'USA',
+          'USA': 'USA',
+          'Canadá': 'CAN',
+          'Canada': 'CAN',
+          'CA': 'CAN',
+          'Guatemala': 'GTM',
+          'GT': 'GTM',
+          'Colombia': 'COL',
+          'CO': 'COL',
+          'Brasil': 'BRA',
+          'Brazil': 'BRA',
+          'BR': 'BRA',
+          'Argentina': 'ARG',
+          'AR': 'ARG',
+          'Chile': 'CHL',
+          'CL': 'CHL',
+          'Perú': 'PER',
+          'Peru': 'PER',
+          'PE': 'PER',
+          'España': 'ESP',
+          'Spain': 'ESP',
+          'ES': 'ESP',
+        };
+        countryPrefix = countryPrefixes[customer.country] || customer.country.substring(0, 3).toUpperCase();
+      }
+    }
+    
+    // Generate folio with country prefix
     const folioNumber = Date.now().toString().slice(-6);
-    const folio = `COT-${folioNumber}`;
+    const folio = `${countryPrefix}-${folioNumber}`;
     
     const [quotation] = await db
       .insert(quotations)
