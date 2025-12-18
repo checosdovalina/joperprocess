@@ -12,6 +12,7 @@ import {
   Building2,
   Settings,
   LogOut,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -103,6 +104,12 @@ export function AppSidebar() {
       url: "/products",
       icon: Package,
       roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA],
+    },
+    {
+      title: "Incidentes",
+      url: "/incidents",
+      icon: AlertTriangle,
+      roles: [UserRole.ADMIN, UserRole.SERVICIO_CLIENTE, UserRole.SERVICIO_TECNICO],
     },
     {
       title: "Usuarios",

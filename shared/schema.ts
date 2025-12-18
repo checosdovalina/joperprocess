@@ -85,6 +85,8 @@ export type MeetingTypeType = typeof MeetingType[keyof typeof MeetingType];
 export const IncidentType = {
   GARANTIA: "garantia",
   RETRABAJO: "retrabajo",
+  QUEJA: "queja",
+  CONSULTA: "consulta",
   ADMINISTRATIVO: "administrativo",
 } as const;
 
@@ -96,8 +98,10 @@ export const IncidentStatus = {
   ASIGNADO: "asignado",
   EN_PROCESO: "en_proceso",
   ESPERANDO_CLIENTE: "esperando_cliente",
+  ESPERANDO_INTERNO: "esperando_interno",
   RESUELTO: "resuelto",
   CERRADO: "cerrado",
+  CANCELADO: "cancelado",
 } as const;
 
 export type IncidentStatusType = typeof IncidentStatus[keyof typeof IncidentStatus];
@@ -453,6 +457,9 @@ export const incidents = pgTable("incidents", {
   orderId: varchar("order_id").references(() => orders.id),
   invoiceId: varchar("invoice_id").references(() => invoices.id),
   referenceNumber: text("reference_number"),
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
   assignedTo: varchar("assigned_to").references(() => users.id),
   assignedArea: text("assigned_area"),
   reworkCause: text("rework_cause"),

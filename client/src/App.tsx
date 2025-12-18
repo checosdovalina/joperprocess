@@ -19,6 +19,7 @@ import AccountsReceivablePage from "@/pages/accounts-receivable-page";
 import PaymentsPage from "@/pages/payments-page";
 import UsersPage from "@/pages/users-page";
 import ProductsPage from "@/pages/products-page";
+import IncidentsPage from "@/pages/incidents-page";
 import PublicQuotationApproval from "@/pages/public-quotation-approval";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
@@ -43,6 +44,7 @@ function Router() {
       <ProtectedRoute path="/payments" component={PaymentsPage} />
       <ProtectedRoute path="/users" component={UsersPage} />
       <ProtectedRoute path="/products" component={ProductsPage} />
+      <ProtectedRoute path="/incidents" component={IncidentsPage} />
       <Route component={NotFound} />
     </Switch>
   );
