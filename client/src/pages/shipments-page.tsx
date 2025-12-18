@@ -85,10 +85,7 @@ export default function ShipmentsPage() {
         productId: i.productId,
         serialNumber: i.serialNumber,
       }));
-      return apiRequest("/api/product-instances/bulk", {
-        method: "POST",
-        body: JSON.stringify({ instances: data }),
-      });
+      return apiRequest("POST", "/api/product-instances/bulk", { instances: data });
     },
     onSuccess: () => {
       refetchInstances();
