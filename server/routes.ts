@@ -37,8 +37,16 @@ import {
   OrderStatus,
   ScheduledVisitStatus,
   MeetingType,
+  IncidentType,
+  IncidentStatus,
+  IncidentUrgency,
+  CommentVisibility,
+  insertIncidentSchema,
+  insertIncidentCommentSchema,
+  insertIncidentAttachmentSchema,
 } from "@shared/schema";
-import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, invoices, payments, pendingUploads, products, productCategories } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities } from "@shared/schema";
+import { randomBytes } from "crypto";
 import { eq, and, sql, gte, lt } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2860,6 +2868,463 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!res.headersSent) {
         res.status(500).json({ error: "Error al descargar el PDF" });
       }
+    }
+  });
+
+  // ========== INCIDENTS MODULE ==========
+
+  // Helper function to generate ticket number
+  async function generateTicketNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const result = await db.execute(sql`
+      SELECT COUNT(*) as count FROM ${incidents} 
+      WHERE EXTRACT(YEAR FROM created_at) = ${year}
+    `);
+    const count = Number(result.rows[0].count) + 1;
+    return `INC-${year}-${String(count).padStart(5, '0')}`;
+  }
+
+  // Helper function to log incident activity
+  async function logIncidentActivity(
+    incidentId: string,
+    action: string,
+    userId: string | null,
+    previousValue?: string,
+    newValue?: string,
+    details?: string,
+    isFromCustomer: boolean = false
+  ) {
+    await db.insert(incidentActivities).values({
+      incidentId,
+      userId,
+      action,
+      previousValue,
+      newValue,
+      details,
+      isFromCustomer,
+    });
+  }
+
+  // Get all incidents (with filters)
+  app.get("/api/incidents", isAuthenticated, async (req, res) => {
+    try {
+      const { status, type, urgency, customerId, assignedTo, search, fromDate, toDate } = req.query;
+
+      let allIncidents = await db.query.incidents.findMany({
+        with: {
+          customer: true,
+          assignee: true,
+          creator: true,
+          product: true,
+        },
+        orderBy: (incidents, { desc }) => [desc(incidents.createdAt)],
+      });
+
+      // Apply filters
+      if (status && typeof status === 'string') {
+        allIncidents = allIncidents.filter(i => i.status === status);
+      }
+      if (type && typeof type === 'string') {
+        allIncidents = allIncidents.filter(i => i.type === type);
+      }
+      if (urgency && typeof urgency === 'string') {
+        allIncidents = allIncidents.filter(i => i.urgency === urgency);
+      }
+      if (customerId && typeof customerId === 'string') {
+        allIncidents = allIncidents.filter(i => i.customerId === customerId);
+      }
+      if (assignedTo && typeof assignedTo === 'string') {
+        allIncidents = allIncidents.filter(i => i.assignedTo === assignedTo);
+      }
+      if (search && typeof search === 'string') {
+        const searchLower = search.toLowerCase();
+        allIncidents = allIncidents.filter(i => 
+          i.ticketNumber.toLowerCase().includes(searchLower) ||
+          i.subject.toLowerCase().includes(searchLower) ||
+          i.description.toLowerCase().includes(searchLower)
+        );
+      }
+      if (fromDate && typeof fromDate === 'string') {
+        const from = new Date(fromDate);
+        allIncidents = allIncidents.filter(i => new Date(i.createdAt) >= from);
+      }
+      if (toDate && typeof toDate === 'string') {
+        const to = new Date(toDate);
+        allIncidents = allIncidents.filter(i => new Date(i.createdAt) <= to);
+      }
+
+      res.json(allIncidents);
+    } catch (error) {
+      console.error("Error fetching incidents:", error);
+      res.status(500).json({ error: "Error al obtener incidentes" });
+    }
+  });
+
+  // Get single incident with details
+  app.get("/api/incidents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.id, id),
+        with: {
+          customer: true,
+          assignee: true,
+          creator: true,
+          resolver: true,
+          closer: true,
+          product: true,
+          order: true,
+          invoice: true,
+          comments: {
+            with: { user: true },
+            orderBy: (comments, { asc }) => [asc(comments.createdAt)],
+          },
+          attachments: {
+            with: { uploader: true },
+            orderBy: (attachments, { desc }) => [desc(attachments.createdAt)],
+          },
+          activities: {
+            with: { user: true },
+            orderBy: (activities, { desc }) => [desc(activities.createdAt)],
+          },
+        },
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      res.json(incident);
+    } catch (error) {
+      console.error("Error fetching incident:", error);
+      res.status(500).json({ error: "Error al obtener el incidente" });
+    }
+  });
+
+  // Create new incident
+  app.post("/api/incidents", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const ticketNumber = await generateTicketNumber();
+      const accessToken = randomBytes(32).toString('hex');
+      const accessTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+      const validated = insertIncidentSchema.parse({
+        ...req.body,
+        createdBy: user.id,
+      });
+
+      const [newIncident] = await db.insert(incidents).values({
+        ...validated,
+        ticketNumber,
+        accessToken,
+        accessTokenExpires,
+      }).returning();
+
+      await logIncidentActivity(
+        newIncident.id,
+        'created',
+        user.id,
+        undefined,
+        undefined,
+        `Incidente creado con número ${ticketNumber}`
+      );
+
+      res.status(201).json(newIncident);
+    } catch (error) {
+      console.error("Error creating incident:", error);
+      res.status(400).json({ error: "Error al crear el incidente" });
+    }
+  });
+
+  // Update incident
+  app.patch("/api/incidents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user!;
+      const updates = req.body;
+
+      const existing = await db.query.incidents.findFirst({
+        where: eq(incidents.id, id),
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      // Log changes
+      if (updates.status && updates.status !== existing.status) {
+        await logIncidentActivity(id, 'status_change', user.id, existing.status, updates.status);
+      }
+      if (updates.assignedTo && updates.assignedTo !== existing.assignedTo) {
+        await logIncidentActivity(id, 'assignment_change', user.id, existing.assignedTo || 'Sin asignar', updates.assignedTo);
+        if (updates.status === undefined && existing.status === IncidentStatus.NUEVO) {
+          updates.status = IncidentStatus.ASIGNADO;
+        }
+      }
+      if (updates.type && updates.type !== existing.type) {
+        await logIncidentActivity(id, 'type_change', user.id, existing.type, updates.type);
+      }
+      if (updates.urgency && updates.urgency !== existing.urgency) {
+        await logIncidentActivity(id, 'urgency_change', user.id, existing.urgency, updates.urgency);
+      }
+
+      // Handle resolution
+      if (updates.resolution && !existing.resolution) {
+        updates.resolvedAt = new Date();
+        updates.resolvedBy = user.id;
+        if (!updates.status) {
+          updates.status = IncidentStatus.RESUELTO;
+        }
+      }
+
+      // Handle closing
+      if (updates.status === IncidentStatus.CERRADO && existing.status !== IncidentStatus.CERRADO) {
+        if (!existing.resolution && !updates.resolution) {
+          return res.status(400).json({ error: "No se puede cerrar un incidente sin resolución" });
+        }
+        updates.closedAt = new Date();
+        updates.closedBy = user.id;
+      }
+
+      const [updated] = await db.update(incidents)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(incidents.id, id))
+        .returning();
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating incident:", error);
+      res.status(500).json({ error: "Error al actualizar el incidente" });
+    }
+  });
+
+  // Add comment to incident
+  app.post("/api/incidents/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user!;
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.id, id),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      const validated = insertIncidentCommentSchema.parse({
+        ...req.body,
+        incidentId: id,
+        userId: user.id,
+      });
+
+      const [comment] = await db.insert(incidentComments).values(validated).returning();
+
+      await logIncidentActivity(
+        id,
+        'comment_added',
+        user.id,
+        undefined,
+        undefined,
+        validated.visibility === CommentVisibility.CUSTOMER ? 'Comentario visible para cliente' : 'Comentario interno'
+      );
+
+      // Update incident status if waiting for customer and agent comments
+      if (incident.status === IncidentStatus.ESPERANDO_CLIENTE && validated.visibility === CommentVisibility.CUSTOMER) {
+        await db.update(incidents)
+          .set({ status: IncidentStatus.EN_PROCESO, updatedAt: new Date() })
+          .where(eq(incidents.id, id));
+      }
+
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      res.status(400).json({ error: "Error al agregar comentario" });
+    }
+  });
+
+  // Get incident comments
+  app.get("/api/incidents/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const comments = await db.query.incidentComments.findMany({
+        where: eq(incidentComments.incidentId, id),
+        with: { user: true },
+        orderBy: (c, { asc }) => [asc(c.createdAt)],
+      });
+
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+      res.status(500).json({ error: "Error al obtener comentarios" });
+    }
+  });
+
+  // Get incident activity log
+  app.get("/api/incidents/:id/activities", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const activities = await db.query.incidentActivities.findMany({
+        where: eq(incidentActivities.incidentId, id),
+        with: { user: true },
+        orderBy: (a, { desc }) => [desc(a.createdAt)],
+      });
+
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ error: "Error al obtener actividades" });
+    }
+  });
+
+  // ========== PUBLIC INCIDENTS (Customer Portal) ==========
+
+  // Get incident by access token (public)
+  app.get("/api/public/incidents/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.accessToken, token),
+        with: {
+          customer: true,
+          assignee: true,
+          product: true,
+          comments: {
+            where: eq(incidentComments.visibility, CommentVisibility.CUSTOMER),
+            with: { user: true },
+            orderBy: (c, { asc }) => [asc(c.createdAt)],
+          },
+          attachments: true,
+        },
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      if (incident.accessTokenExpires && new Date(incident.accessTokenExpires) < new Date()) {
+        return res.status(403).json({ error: "El enlace ha expirado" });
+      }
+
+      // Filter activities to show only non-internal ones
+      const activities = await db.query.incidentActivities.findMany({
+        where: and(
+          eq(incidentActivities.incidentId, incident.id),
+          eq(incidentActivities.isFromCustomer, false)
+        ),
+        orderBy: (a, { desc }) => [desc(a.createdAt)],
+      });
+
+      res.json({ ...incident, activities });
+    } catch (error) {
+      console.error("Error fetching public incident:", error);
+      res.status(500).json({ error: "Error al obtener el incidente" });
+    }
+  });
+
+  // Add customer comment (public)
+  app.post("/api/public/incidents/:token/comments", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { content } = req.body;
+
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        return res.status(400).json({ error: "El comentario no puede estar vacío" });
+      }
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.accessToken, token),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      if (incident.accessTokenExpires && new Date(incident.accessTokenExpires) < new Date()) {
+        return res.status(403).json({ error: "El enlace ha expirado" });
+      }
+
+      if (incident.status === IncidentStatus.CERRADO) {
+        return res.status(400).json({ error: "No se pueden agregar comentarios a un incidente cerrado" });
+      }
+
+      const [comment] = await db.insert(incidentComments).values({
+        incidentId: incident.id,
+        content: content.trim(),
+        visibility: CommentVisibility.CUSTOMER,
+        isFromCustomer: true,
+      }).returning();
+
+      await logIncidentActivity(
+        incident.id,
+        'customer_comment',
+        null,
+        undefined,
+        undefined,
+        'Comentario agregado por el cliente',
+        true
+      );
+
+      // Update status if waiting for customer
+      if (incident.status === IncidentStatus.ESPERANDO_CLIENTE) {
+        await db.update(incidents)
+          .set({ status: IncidentStatus.EN_PROCESO, updatedAt: new Date() })
+          .where(eq(incidents.id, incident.id));
+      }
+
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Error adding customer comment:", error);
+      res.status(500).json({ error: "Error al agregar comentario" });
+    }
+  });
+
+  // Confirm incident closure (public)
+  app.post("/api/public/incidents/:token/confirm-close", async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.accessToken, token),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      if (incident.status !== IncidentStatus.RESUELTO) {
+        return res.status(400).json({ error: "Solo se pueden confirmar incidentes resueltos" });
+      }
+
+      const [updated] = await db.update(incidents)
+        .set({
+          status: IncidentStatus.CERRADO,
+          customerConfirmedClose: true,
+          closedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(incidents.id, incident.id))
+        .returning();
+
+      await logIncidentActivity(
+        incident.id,
+        'customer_confirmed_close',
+        null,
+        IncidentStatus.RESUELTO,
+        IncidentStatus.CERRADO,
+        'Cliente confirmó el cierre del incidente',
+        true
+      );
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error confirming closure:", error);
+      res.status(500).json({ error: "Error al confirmar el cierre" });
     }
   });
 
