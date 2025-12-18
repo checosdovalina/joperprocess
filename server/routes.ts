@@ -1972,9 +1972,9 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       res.status(201).json({ release, invoiceId, shipmentId });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating order release:", error);
-      res.status(400).json({ error: "Error creating order release" });
+      res.status(400).json({ error: error.message || "Error creating order release" });
     }
   });
 
