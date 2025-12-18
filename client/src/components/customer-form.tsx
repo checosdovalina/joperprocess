@@ -33,6 +33,7 @@ const defaultFormValues = {
   address: "",
   city: "",
   state: "",
+  country: "",
   zipCode: "",
   creditLimit: "0",
   creditDays: 30,
@@ -73,6 +74,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
           address: customer.address || "",
           city: customer.city || "",
           state: customer.state || "",
+          country: customer.country || "",
           zipCode: customer.zipCode || "",
           creditLimit: customer.creditLimit || "0",
           creditDays: customer.creditDays,
@@ -253,6 +255,25 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                         value={field.value || ""}
                         placeholder="Estado"
                         data-testid="input-customer-state"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>País</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value || ""}
+                        placeholder="México"
+                        data-testid="input-customer-country"
                       />
                     </FormControl>
                     <FormMessage />

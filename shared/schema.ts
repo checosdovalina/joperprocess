@@ -146,6 +146,7 @@ export const customers = pgTable("customers", {
   address: text("address"),
   city: text("city"),
   state: text("state"),
+  country: text("country"),
   zipCode: text("zip_code"),
   creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
   creditDays: integer("credit_days").notNull().default(30),
