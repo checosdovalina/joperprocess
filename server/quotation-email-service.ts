@@ -241,7 +241,7 @@ export async function sendQuotationEmail({
     `;
 
     const sentFrom = new Sender(
-      "noreply@trial-3yxj6ljnzr0ldo2r.mlsender.net",
+      "noreply@nexxo.com.mx",
       "GRUPO JOPER - Sistema Comercial"
     );
 

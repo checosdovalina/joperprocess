@@ -164,7 +164,7 @@ export async function sendCheckoutEmail({
     `;
     
     // Prepare sender and recipients
-    const sentFrom = new Sender('noreply@trial-0r83ql3zz5zg9yjr.mlsender.net', 'GRUPO JOPER');
+    const sentFrom = new Sender('noreply@nexxo.com.mx', 'GRUPO JOPER');
     const recipients = to.map(email => new Recipient(email));
     
     // Prepare PDF attachment

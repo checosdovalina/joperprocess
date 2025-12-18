@@ -129,7 +129,7 @@ export async function sendInvoiceEmail({
     </html>
   `;
 
-  const sentFrom = new Sender("noreply@trial-pxkjn41evrdgz781.mlsender.net", "GRUPO JOPER");
+  const sentFrom = new Sender("noreply@nexxo.com.mx", "GRUPO JOPER");
 
   const recipients = [new Recipient(recipientEmail, customer.name)];
   
