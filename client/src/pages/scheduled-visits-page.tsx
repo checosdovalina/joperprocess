@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ScheduledVisit, Customer, InsertScheduledVisit } from "@shared/schema";
+import { ScheduledVisit, Customer, InsertScheduledVisit, MeetingType } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ export default function ScheduledVisitsPage() {
   const [editingVisit, setEditingVisit] = useState<ScheduledVisit | null>(null);
   const [formData, setFormData] = useState<Partial<InsertScheduledVisit>>({
     customerId: "",
+    meetingType: MeetingType.VISITA,
     scheduledDate: new Date(),
     topics: [],
     notes: "",
@@ -129,6 +130,7 @@ export default function ScheduledVisitsPage() {
   const resetForm = () => {
     setFormData({
       customerId: "",
+      meetingType: MeetingType.VISITA,
       scheduledDate: new Date(),
       topics: [],
       notes: "",
@@ -155,6 +157,7 @@ export default function ScheduledVisitsPage() {
 
     const data = {
       customerId: formData.customerId,
+      meetingType: formData.meetingType || MeetingType.VISITA,
       scheduledDate: selectedDate,
       topics: topics,
       notes: formData.notes ?? "",
@@ -171,6 +174,7 @@ export default function ScheduledVisitsPage() {
     setEditingVisit(visit);
     setFormData({
       customerId: visit.customerId,
+      meetingType: visit.meetingType || MeetingType.VISITA,
       scheduledDate: new Date(visit.scheduledDate),
       topics: visit.topics,
       notes: visit.notes || "",
@@ -243,6 +247,23 @@ export default function ScheduledVisitsPage() {
                         {customer.name}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="meetingType" data-testid="label-meeting-type">Tipo de Reunión</Label>
+                <Select
+                  value={formData.meetingType}
+                  onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
+                >
+                  <SelectTrigger data-testid="select-meeting-type">
+                    <SelectValue placeholder="Selecciona tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
+                    <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
+                    <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

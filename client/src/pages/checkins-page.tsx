@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Checkin, Customer, InsertCheckin, ScheduledVisit } from "@shared/schema";
+import { Checkin, Customer, InsertCheckin, ScheduledVisit, MeetingType } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ export default function CheckinsPage() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [formData, setFormData] = useState<Partial<InsertCheckin>>({
     customerId: "",
+    meetingType: MeetingType.VISITA,
     latitude: "",
     longitude: "",
     topics: [],
@@ -122,6 +123,7 @@ export default function CheckinsPage() {
       setIsDialogOpen(false);
       setFormData({
         customerId: "",
+        meetingType: MeetingType.VISITA,
         latitude: "",
         longitude: "",
         topics: [],
@@ -230,6 +232,23 @@ export default function CheckinsPage() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="meetingType">Tipo de Reunión *</Label>
+                <Select
+                  value={formData.meetingType}
+                  onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
+                >
+                  <SelectTrigger id="meetingType" data-testid="select-meeting-type">
+                    <SelectValue placeholder="Selecciona tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
+                    <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
+                    <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Ubicación GPS</Label>
                 <Button
                   type="button"
@@ -268,7 +287,7 @@ export default function CheckinsPage() {
                 <Textarea
                   id="notes"
                   data-testid="textarea-checkin-notes"
-                  value={formData.notes}
+                  value={formData.notes ?? ""}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Describe los temas tratados en la visita..."
                   rows={4}
