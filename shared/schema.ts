@@ -353,6 +353,20 @@ export const shipments = pgTable("shipments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Shipment Product Instances - for tracking serial numbers
+export const shipmentProductInstances = pgTable("shipment_product_instances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  shipmentId: varchar("shipment_id").notNull().references(() => shipments.id),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  customerId: varchar("customer_id").notNull().references(() => customers.id),
+  productId: varchar("product_id").notNull().references(() => products.id),
+  serialNumber: text("serial_number").notNull().unique(),
+  status: text("status").notNull().default("active"), // active, returned, defective
+  deliveredAt: timestamp("delivered_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Invoice Status
 export const InvoiceStatus = {
   DRAFT: "draft",
@@ -454,6 +468,7 @@ export const incidents = pgTable("incidents", {
   subject: text("subject").notNull(),
   description: text("description").notNull(),
   productId: varchar("product_id").references(() => products.id),
+  productInstanceId: varchar("product_instance_id").references(() => shipmentProductInstances.id),
   orderId: varchar("order_id").references(() => orders.id),
   invoiceId: varchar("invoice_id").references(() => invoices.id),
   referenceNumber: text("reference_number"),
@@ -686,10 +701,30 @@ export const orderReleasesRelations = relations(orderReleases, ({ one }) => ({
   }),
 }));
 
-export const shipmentsRelations = relations(shipments, ({ one }) => ({
+export const shipmentsRelations = relations(shipments, ({ one, many }) => ({
   order: one(orders, {
     fields: [shipments.orderId],
     references: [orders.id],
+  }),
+  productInstances: many(shipmentProductInstances),
+}));
+
+export const shipmentProductInstancesRelations = relations(shipmentProductInstances, ({ one }) => ({
+  shipment: one(shipments, {
+    fields: [shipmentProductInstances.shipmentId],
+    references: [shipments.id],
+  }),
+  order: one(orders, {
+    fields: [shipmentProductInstances.orderId],
+    references: [orders.id],
+  }),
+  customer: one(customers, {
+    fields: [shipmentProductInstances.customerId],
+    references: [customers.id],
+  }),
+  product: one(products, {
+    fields: [shipmentProductInstances.productId],
+    references: [products.id],
   }),
 }));
 
@@ -728,6 +763,10 @@ export const incidentsRelations = relations(incidents, ({ one, many }) => ({
   product: one(products, {
     fields: [incidents.productId],
     references: [products.id],
+  }),
+  productInstance: one(shipmentProductInstances, {
+    fields: [incidents.productInstanceId],
+    references: [shipmentProductInstances.id],
   }),
   order: one(orders, {
     fields: [incidents.orderId],
@@ -899,6 +938,11 @@ export const insertShipmentSchema = createInsertSchema(shipments).omit({
   createdAt: true,
 });
 
+export const insertShipmentProductInstanceSchema = createInsertSchema(shipmentProductInstances).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   issuedAt: true,
@@ -1014,6 +1058,9 @@ export type OrderRelease = typeof orderReleases.$inferSelect;
 
 export type InsertShipment = z.infer<typeof insertShipmentSchema>;
 export type Shipment = typeof shipments.$inferSelect;
+
+export type InsertShipmentProductInstance = z.infer<typeof insertShipmentProductInstanceSchema>;
+export type ShipmentProductInstance = typeof shipmentProductInstances.$inferSelect;
 
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Invoice = typeof invoices.$inferSelect;
