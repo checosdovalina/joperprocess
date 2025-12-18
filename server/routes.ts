@@ -2893,15 +2893,11 @@ Proporciona tu análisis en el siguiente formato JSON:
         console.log(`Sending email notifications...`);
         const recipients: string[] = [];
         
-        // TEMPORAL: Solo enviar al vendedor para trial de Mailersend (límite 1 destinatario)
-        // TODO: Una vez verificado el dominio, descomentar las otras líneas
-        
-        // Add salesperson (user) email - PRIORIDAD
+        // Add salesperson (user) email
         if (user.email) {
           recipients.push(user.email);
         }
         
-        /* DESCOMENTAR cuando se verifique dominio en Mailersend:
         // Add customer email if exists
         if (customer.email) {
           recipients.push(customer.email);
@@ -2917,7 +2913,6 @@ Proporciona tu análisis en el siguiente formato JSON:
             recipients.push(admin.email);
           }
         });
-        */
         
         if (recipients.length > 0) {
           await sendCheckoutEmail({
