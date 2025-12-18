@@ -66,7 +66,9 @@ export default function ShipmentsPage() {
     queryKey: ["/api/product-instances", selectedShipment?.id],
     queryFn: async () => {
       if (!selectedShipment) return [];
-      const response = await fetch(`/api/product-instances?shipmentId=${selectedShipment.id}`);
+      const response = await fetch(`/api/product-instances?shipmentId=${selectedShipment.id}`, {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Error fetching instances");
       return response.json();
     },

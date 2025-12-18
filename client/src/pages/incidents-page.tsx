@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Incident, Customer, User, IncidentType, IncidentStatus, IncidentUrgency } from "@shared/schema";
+import { Incident, Customer, User, IncidentType, IncidentStatus, IncidentUrgency, ShipmentProductInstance, Product } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -40,6 +40,8 @@ import {
   Link2,
   Copy,
   ExternalLink,
+  Barcode,
+  Package,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -82,6 +84,7 @@ type IncidentWithDetails = Incident & {
 
 const incidentFormSchema = z.object({
   customerId: z.string().min(1, "Selecciona un cliente"),
+  productInstanceId: z.string().optional(),
   type: z.enum([
     IncidentType.GARANTIA,
     IncidentType.RETRABAJO,
@@ -101,6 +104,8 @@ const incidentFormSchema = z.object({
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().optional(),
 });
+
+type ProductInstanceWithProduct = ShipmentProductInstance & { product: Product };
 
 type IncidentFormData = z.infer<typeof incidentFormSchema>;
 
@@ -209,6 +214,7 @@ export default function IncidentsPage() {
     resolver: zodResolver(incidentFormSchema),
     defaultValues: {
       customerId: "",
+      productInstanceId: "",
       type: IncidentType.CONSULTA,
       urgency: IncidentUrgency.MEDIA,
       subject: "",
@@ -217,6 +223,21 @@ export default function IncidentsPage() {
       contactEmail: "",
       contactPhone: "",
     },
+  });
+
+  const selectedCustomerId = form.watch("customerId");
+
+  const { data: customerProductInstances } = useQuery<ProductInstanceWithProduct[]>({
+    queryKey: ["/api/product-instances", { customerId: selectedCustomerId }],
+    queryFn: async () => {
+      if (!selectedCustomerId) return [];
+      const response = await fetch(`/api/product-instances?customerId=${selectedCustomerId}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Error fetching product instances");
+      return response.json();
+    },
+    enabled: !!selectedCustomerId,
   });
 
   const { data: incidents, isLoading } = useQuery<IncidentWithDetails[]>({
@@ -577,7 +598,13 @@ export default function IncidentsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cliente</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        form.setValue("productInstanceId", "");
+                      }} 
+                      value={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-customer">
                           <SelectValue placeholder="Selecciona un cliente" />
@@ -595,6 +622,45 @@ export default function IncidentsPage() {
                   </FormItem>
                 )}
               />
+
+              {selectedCustomerId && customerProductInstances && customerProductInstances.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="productInstanceId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Barcode className="h-4 w-4" />
+                        Número de Serie (Opcional)
+                      </FormLabel>
+                      <Select 
+                        onValueChange={(v) => field.onChange(v === "_none" ? "" : v)} 
+                        value={field.value || "_none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-product-instance">
+                            <SelectValue placeholder="Selecciona un número de serie" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="_none">Sin número de serie</SelectItem>
+                          {customerProductInstances.map((instance) => (
+                            <SelectItem key={instance.id} value={instance.id}>
+                              <div className="flex items-center gap-2">
+                                <Package className="h-3 w-3" />
+                                <span className="font-mono">{instance.serialNumber}</span>
+                                <span className="text-muted-foreground">-</span>
+                                <span className="text-muted-foreground">{instance.product?.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
