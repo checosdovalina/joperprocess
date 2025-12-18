@@ -70,6 +70,15 @@ export const ScheduledVisitStatus = {
 
 export type ScheduledVisitStatusType = typeof ScheduledVisitStatus[keyof typeof ScheduledVisitStatus];
 
+// Enum for meeting type
+export const MeetingType = {
+  LLAMADA: "llamada",
+  VISITA: "visita",
+  VIDEOLLAMADA: "videollamada",
+} as const;
+
+export type MeetingTypeType = typeof MeetingType[keyof typeof MeetingType];
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -119,6 +128,7 @@ export const checkins = pgTable("checkins", {
   userId: varchar("user_id").notNull().references(() => users.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   customerLocationId: varchar("customer_location_id").references(() => customerLocations.id),
+  meetingType: text("meeting_type").notNull().default(MeetingType.VISITA),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   checkinAt: timestamp("checkin_at").notNull().defaultNow(),
@@ -136,6 +146,7 @@ export const scheduledVisits = pgTable("scheduled_visits", {
   userId: varchar("user_id").notNull().references(() => users.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   customerLocationId: varchar("customer_location_id").references(() => customerLocations.id),
+  meetingType: text("meeting_type").notNull().default(MeetingType.VISITA),
   scheduledDate: timestamp("scheduled_date", { withTimezone: true }).notNull(),
   topics: text("topics").array().notNull().default(sql`ARRAY[]::text[]`),
   notes: text("notes"),
