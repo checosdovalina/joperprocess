@@ -22,6 +22,7 @@ import {
   insertOrderSchema,
   insertOrderReleaseSchema,
   insertShipmentSchema,
+  insertShipmentProductInstanceSchema,
   insertInvoiceSchema,
   insertPaymentSchema,
   insertPendingUploadSchema,
@@ -45,7 +46,7 @@ import {
   insertIncidentCommentSchema,
   insertIncidentAttachmentSchema,
 } from "@shared/schema";
-import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { eq, and, sql, gte, lt } from "drizzle-orm";
 
@@ -2023,6 +2024,102 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error updating shipment:", error);
       res.status(500).json({ error: "Error updating shipment" });
+    }
+  });
+
+  // Product Instances (Serial Numbers) endpoints
+  app.get("/api/product-instances", isAuthenticated, async (req, res) => {
+    try {
+      const { customerId, shipmentId, productId } = req.query;
+      const instances = await db.query.shipmentProductInstances.findMany({
+        where: and(
+          customerId ? eq(shipmentProductInstances.customerId, customerId as string) : undefined,
+          shipmentId ? eq(shipmentProductInstances.shipmentId, shipmentId as string) : undefined,
+          productId ? eq(shipmentProductInstances.productId, productId as string) : undefined,
+        ),
+        with: {
+          product: true,
+          shipment: true,
+          customer: true,
+        },
+        orderBy: (instances, { desc }) => [desc(instances.createdAt)],
+      });
+      res.json(instances);
+    } catch (error) {
+      console.error("Error fetching product instances:", error);
+      res.status(500).json({ error: "Error fetching product instances" });
+    }
+  });
+
+  app.get("/api/product-instances/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const instance = await db.query.shipmentProductInstances.findFirst({
+        where: eq(shipmentProductInstances.id, id),
+        with: {
+          product: true,
+          shipment: true,
+          customer: true,
+        },
+      });
+      if (!instance) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
+      res.json(instance);
+    } catch (error) {
+      console.error("Error fetching product instance:", error);
+      res.status(500).json({ error: "Error fetching product instance" });
+    }
+  });
+
+  app.post("/api/product-instances", isAuthenticated, async (req, res) => {
+    try {
+      const validated = insertShipmentProductInstanceSchema.parse(req.body);
+      const [instance] = await db.insert(shipmentProductInstances).values(validated).returning();
+      res.status(201).json(instance);
+    } catch (error: any) {
+      console.error("Error creating product instance:", error);
+      if (error?.code === '23505') {
+        return res.status(400).json({ error: "El número de serie ya existe" });
+      }
+      res.status(400).json({ error: "Error creating product instance" });
+    }
+  });
+
+  app.post("/api/product-instances/bulk", isAuthenticated, async (req, res) => {
+    try {
+      const { instances } = req.body;
+      if (!Array.isArray(instances) || instances.length === 0) {
+        return res.status(400).json({ error: "Se requiere un arreglo de instancias" });
+      }
+      const validated = instances.map(i => insertShipmentProductInstanceSchema.parse(i));
+      const created = await db.insert(shipmentProductInstances).values(validated).returning();
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating product instances:", error);
+      if (error?.code === '23505') {
+        return res.status(400).json({ error: "Uno o más números de serie ya existen" });
+      }
+      res.status(400).json({ error: "Error creating product instances" });
+    }
+  });
+
+  app.patch("/api/product-instances/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, notes, deliveredAt } = req.body;
+      const [updated] = await db
+        .update(shipmentProductInstances)
+        .set({ status, notes, deliveredAt })
+        .where(eq(shipmentProductInstances.id, id))
+        .returning();
+      if (!updated) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating product instance:", error);
+      res.status(500).json({ error: "Error updating product instance" });
     }
   });
 
