@@ -372,6 +372,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update check-in (only allowed for in-progress check-ins)
+  app.patch("/api/checkins/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { meetingType } = req.body;
+
+      // Fetch the existing check-in
+      const existingCheckin = await db.query.checkins.findFirst({
+        where: eq(checkins.id, id),
+      });
+
+      if (!existingCheckin) {
+        return res.status(404).json({ error: "Check-in no encontrado" });
+      }
+
+      // Only allow editing if check-in is still in progress (no checkout)
+      if (existingCheckin.checkoutAt) {
+        return res.status(400).json({ error: "No se puede editar un check-in ya finalizado" });
+      }
+
+      // Validate meetingType
+      const validMeetingTypes = ["llamada", "visita", "videollamada"];
+      if (meetingType && !validMeetingTypes.includes(meetingType)) {
+        return res.status(400).json({ error: "Tipo de reunión inválido" });
+      }
+
+      // Update the check-in
+      const [updated] = await db
+        .update(checkins)
+        .set({ meetingType })
+        .where(eq(checkins.id, id))
+        .returning();
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating check-in:", error);
+      res.status(500).json({ error: "Error al actualizar el check-in" });
+    }
+  });
+
   // Scheduled visits endpoints
   app.get("/api/scheduled-visits", isAuthenticated, async (req, res) => {
     try {
