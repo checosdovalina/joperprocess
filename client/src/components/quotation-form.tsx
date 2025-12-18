@@ -366,6 +366,39 @@ export function QuotationForm({
 
   const hasExceedingDiscounts = lineItems.some(item => item.exceedsMaxDiscount && item.productId);
 
+  // Calculate global discount from desired total
+  const handleTotalChange = useCallback((desiredTotal: string) => {
+    const targetTotal = parseFloat(desiredTotal) || 0;
+    const shippingCost = form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending"
+      ? 0
+      : parseFloat(form.watch("shippingCost") || "0");
+    
+    // Target total without shipping
+    const targetTotalWithoutShipping = targetTotal - shippingCost;
+    
+    // Subtotal before any global discount
+    const subtotalBeforeDiscount = lineItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
+    const totalTax = lineItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
+    
+    if (subtotalBeforeDiscount <= 0) return;
+    
+    // Formula: targetTotal = subtotal * (1 - globalDiscount/100) + tax * (1 - globalDiscount/100)
+    // targetTotal = (subtotal + tax) * (1 - globalDiscount/100)
+    // globalDiscount/100 = 1 - targetTotal / (subtotal + tax)
+    // globalDiscount = 100 * (1 - targetTotal / (subtotal + tax))
+    
+    const subtotalPlusTax = subtotalBeforeDiscount + totalTax;
+    
+    if (subtotalPlusTax <= 0) return;
+    
+    const calculatedDiscount = 100 * (1 - targetTotalWithoutShipping / subtotalPlusTax);
+    
+    // Clamp between 0 and 100
+    const finalDiscount = Math.max(0, Math.min(100, calculatedDiscount));
+    
+    form.setValue("globalDiscount", finalDiscount.toFixed(2));
+  }, [form, lineItems]);
+
   const handleSubmit = (data: QuotationFormData) => {
     const items: InsertQuotationItem[] = lineItems
       .filter(item => item.productName)
@@ -942,18 +975,28 @@ export function QuotationForm({
 
                       <Separator />
 
-                      <div className="flex justify-between text-lg font-bold">
+                      <div className="flex justify-between items-center text-lg font-bold gap-2">
                         <span>Total:</span>
-                        <span className="font-mono">
-                          {formatCurrency(
-                            (parseFloat(totals.total) + 
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm text-muted-foreground">$</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={(parseFloat(totals.total) + 
                               (form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending" 
                                 ? 0 
                                 : parseFloat(form.watch("shippingCost") || "0"))
-                            ).toFixed(2)
-                          )}
-                        </span>
+                            ).toFixed(2)}
+                            onChange={(e) => handleTotalChange(e.target.value)}
+                            className="w-28 h-8 text-right font-mono font-bold"
+                            data-testid="input-total"
+                          />
+                        </div>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        Edita el total para ajustar el descuento global automáticamente
+                      </p>
 
                       {parseFloat(totals.totalSavings) > 0 && (
                         <div className="flex justify-between text-sm text-green-600">
