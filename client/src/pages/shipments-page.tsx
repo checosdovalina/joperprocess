@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { Shipment, Order, Quotation, Customer, ShipmentStatus } from "@shared/schema";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Shipment, Order, Quotation, Customer, ShipmentStatus, ShipmentProductInstance, Product } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -11,16 +12,97 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Truck } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Truck, Barcode, Plus, Trash2, Loader2, Package } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+type ShipmentWithDetails = Shipment & { 
+  order: Order & { 
+    quotation: Quotation & { 
+      customer: Customer 
+    } 
+  } 
+};
+
+type ProductInstanceWithDetails = ShipmentProductInstance & {
+  product: Product;
+};
 
 export default function ShipmentsPage() {
-  const { data: shipments, isLoading } = useQuery<
-    (Shipment & { order: Order & { quotation: Quotation & { customer: Customer } } })[]
-  >({
+  const { toast } = useToast();
+  const [selectedShipment, setSelectedShipment] = useState<ShipmentWithDetails | null>(null);
+  const [serialDialogOpen, setSerialDialogOpen] = useState(false);
+  const [newSerials, setNewSerials] = useState<{ productId: string; serialNumber: string }[]>([]);
+
+  const { data: shipments, isLoading } = useQuery<ShipmentWithDetails[]>({
     queryKey: ["/api/shipments"],
+  });
+
+  const { data: products } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+  });
+
+  const { data: productInstances, refetch: refetchInstances } = useQuery<ProductInstanceWithDetails[]>({
+    queryKey: ["/api/product-instances", selectedShipment?.id],
+    queryFn: async () => {
+      if (!selectedShipment) return [];
+      const response = await fetch(`/api/product-instances?shipmentId=${selectedShipment.id}`);
+      if (!response.ok) throw new Error("Error fetching instances");
+      return response.json();
+    },
+    enabled: !!selectedShipment,
+  });
+
+  const addSerialsMutation = useMutation({
+    mutationFn: async (instances: { productId: string; serialNumber: string }[]) => {
+      if (!selectedShipment) throw new Error("No shipment selected");
+      const data = instances.map(i => ({
+        shipmentId: selectedShipment.id,
+        orderId: selectedShipment.orderId,
+        customerId: selectedShipment.order.quotation.customer.id,
+        productId: i.productId,
+        serialNumber: i.serialNumber,
+      }));
+      return apiRequest("/api/product-instances/bulk", {
+        method: "POST",
+        body: JSON.stringify({ instances: data }),
+      });
+    },
+    onSuccess: () => {
+      refetchInstances();
+      setNewSerials([]);
+      toast({
+        title: "Números de serie registrados",
+        description: "Los números de serie se guardaron correctamente.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudieron guardar los números de serie",
+        variant: "destructive",
+      });
+    },
   });
 
   const getStatusBadge = (status: string) => {
@@ -33,18 +115,51 @@ export default function ShipmentsPage() {
     return <Badge className={config.className} data-testid={`status-${status}`}>{config.label}</Badge>;
   };
 
+  const openSerialDialog = (shipment: ShipmentWithDetails) => {
+    setSelectedShipment(shipment);
+    setSerialDialogOpen(true);
+    setNewSerials([]);
+  };
+
+  const addNewSerialRow = () => {
+    setNewSerials([...newSerials, { productId: "", serialNumber: "" }]);
+  };
+
+  const updateSerialRow = (index: number, field: "productId" | "serialNumber", value: string) => {
+    const updated = [...newSerials];
+    updated[index][field] = value;
+    setNewSerials(updated);
+  };
+
+  const removeSerialRow = (index: number) => {
+    setNewSerials(newSerials.filter((_, i) => i !== index));
+  };
+
+  const handleSaveSerials = () => {
+    const validSerials = newSerials.filter(s => s.productId && s.serialNumber.trim());
+    if (validSerials.length === 0) {
+      toast({
+        title: "Sin datos",
+        description: "Agrega al menos un número de serie válido",
+        variant: "destructive",
+      });
+      return;
+    }
+    addSerialsMutation.mutate(validSerials);
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Embarques</h1>
         <p className="text-muted-foreground mt-1">
-          Gestiona embarques, firmas digitales y trazabilidad
+          Gestiona embarques, números de serie y trazabilidad
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
             <Truck className="h-4 w-4 text-yellow-600" />
           </CardHeader>
@@ -55,7 +170,7 @@ export default function ShipmentsPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">En Tránsito</CardTitle>
             <Truck className="h-4 w-4 text-blue-600" />
           </CardHeader>
@@ -66,7 +181,7 @@ export default function ShipmentsPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Entregados</CardTitle>
             <Truck className="h-4 w-4 text-green-600" />
           </CardHeader>
@@ -139,13 +254,24 @@ export default function ShipmentsPage() {
                       </TableCell>
                       <TableCell>{getStatusBadge(shipment.status)}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          data-testid={`button-view-shipment-${shipment.id}`}
-                        >
-                          Ver Detalles
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openSerialDialog(shipment)}
+                            data-testid={`button-serial-${shipment.id}`}
+                          >
+                            <Barcode className="h-4 w-4 mr-1" />
+                            Series
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            data-testid={`button-view-shipment-${shipment.id}`}
+                          >
+                            Ver Detalles
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -160,6 +286,136 @@ export default function ShipmentsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={serialDialogOpen} onOpenChange={setSerialDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Barcode className="h-5 w-5" />
+              Números de Serie - {selectedShipment?.order.quotation.folio}
+            </DialogTitle>
+            <DialogDescription>
+              Cliente: {selectedShipment?.order.quotation.customer.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {productInstances && productInstances.length > 0 && (
+              <div>
+                <Label className="text-sm font-medium">Series Registradas</Label>
+                <ScrollArea className="h-40 mt-2 border rounded-md">
+                  <div className="p-3 space-y-2">
+                    {productInstances.map((instance) => (
+                      <div
+                        key={instance.id}
+                        className="flex items-center justify-between p-2 bg-muted/50 rounded"
+                        data-testid={`serial-${instance.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <div className="font-mono text-sm">{instance.serialNumber}</div>
+                            <div className="text-xs text-muted-foreground">{instance.product?.name}</div>
+                          </div>
+                        </div>
+                        <Badge variant={instance.status === "active" ? "secondary" : "outline"}>
+                          {instance.status === "active" ? "Activo" : instance.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-medium">Agregar Nuevas Series</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addNewSerialRow}
+                  data-testid="button-add-serial-row"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Agregar
+                </Button>
+              </div>
+
+              {newSerials.length === 0 ? (
+                <div className="text-center py-6 border rounded-md border-dashed">
+                  <Barcode className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Haz clic en "Agregar" para registrar números de serie
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {newSerials.map((serial, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Select
+                        value={serial.productId || "_select"}
+                        onValueChange={(v) => updateSerialRow(index, "productId", v === "_select" ? "" : v)}
+                      >
+                        <SelectTrigger className="w-48" data-testid={`select-product-${index}`}>
+                          <SelectValue placeholder="Producto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_select">Seleccionar producto</SelectItem>
+                          {products?.filter(p => p.active).map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              {product.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        placeholder="Número de serie"
+                        value={serial.serialNumber}
+                        onChange={(e) => updateSerialRow(index, "serialNumber", e.target.value)}
+                        className="flex-1"
+                        data-testid={`input-serial-${index}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeSerialRow(index)}
+                        data-testid={`button-remove-serial-${index}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {newSerials.length > 0 && (
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => setNewSerials([])}
+                  data-testid="button-cancel-serials"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSaveSerials}
+                  disabled={addSerialsMutation.isPending}
+                  data-testid="button-save-serials"
+                >
+                  {addSerialsMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  Guardar Series
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
