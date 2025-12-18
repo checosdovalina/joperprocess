@@ -12,6 +12,8 @@ export const UserRole = {
   FABRICA: "fabrica",
   EMBARQUES: "embarques",
   FACTURACION: "facturacion",
+  SERVICIO_CLIENTE: "servicio_cliente",
+  SERVICIO_TECNICO: "servicio_tecnico",
 } as const;
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
@@ -78,6 +80,45 @@ export const MeetingType = {
 } as const;
 
 export type MeetingTypeType = typeof MeetingType[keyof typeof MeetingType];
+
+// Enum for incident type
+export const IncidentType = {
+  GARANTIA: "garantia",
+  RETRABAJO: "retrabajo",
+  ADMINISTRATIVO: "administrativo",
+} as const;
+
+export type IncidentTypeType = typeof IncidentType[keyof typeof IncidentType];
+
+// Enum for incident status
+export const IncidentStatus = {
+  NUEVO: "nuevo",
+  ASIGNADO: "asignado",
+  EN_PROCESO: "en_proceso",
+  ESPERANDO_CLIENTE: "esperando_cliente",
+  RESUELTO: "resuelto",
+  CERRADO: "cerrado",
+} as const;
+
+export type IncidentStatusType = typeof IncidentStatus[keyof typeof IncidentStatus];
+
+// Enum for incident urgency
+export const IncidentUrgency = {
+  BAJA: "baja",
+  MEDIA: "media",
+  ALTA: "alta",
+  CRITICA: "critica",
+} as const;
+
+export type IncidentUrgencyType = typeof IncidentUrgency[keyof typeof IncidentUrgency];
+
+// Enum for incident comment visibility
+export const CommentVisibility = {
+  INTERNAL: "internal",
+  CUSTOMER: "customer",
+} as const;
+
+export type CommentVisibilityType = typeof CommentVisibility[keyof typeof CommentVisibility];
 
 // Users table
 export const users = pgTable("users", {
@@ -398,6 +439,76 @@ export const customerProductPrices = pgTable("customer_product_prices", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Incidents (Tickets) table
+export const incidents = pgTable("incidents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketNumber: text("ticket_number").notNull().unique(),
+  customerId: varchar("customer_id").notNull().references(() => customers.id),
+  type: text("type").notNull().default(IncidentType.ADMINISTRATIVO),
+  status: text("status").notNull().default(IncidentStatus.NUEVO),
+  urgency: text("urgency").notNull().default(IncidentUrgency.MEDIA),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  productId: varchar("product_id").references(() => products.id),
+  orderId: varchar("order_id").references(() => orders.id),
+  invoiceId: varchar("invoice_id").references(() => invoices.id),
+  referenceNumber: text("reference_number"),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  assignedArea: text("assigned_area"),
+  reworkCause: text("rework_cause"),
+  warrantyValidated: boolean("warranty_validated"),
+  warrantyValid: boolean("warranty_valid"),
+  resolution: text("resolution"),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  closedAt: timestamp("closed_at"),
+  closedBy: varchar("closed_by").references(() => users.id),
+  customerConfirmedClose: boolean("customer_confirmed_close"),
+  createdBy: varchar("created_by").references(() => users.id),
+  accessToken: text("access_token"),
+  accessTokenExpires: timestamp("access_token_expires"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Incident comments table
+export const incidentComments = pgTable("incident_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  incidentId: varchar("incident_id").notNull().references(() => incidents.id),
+  userId: varchar("user_id").references(() => users.id),
+  content: text("content").notNull(),
+  visibility: text("visibility").notNull().default(CommentVisibility.INTERNAL),
+  isFromCustomer: boolean("is_from_customer").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Incident attachments table
+export const incidentAttachments = pgTable("incident_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  incidentId: varchar("incident_id").notNull().references(() => incidents.id),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  storagePath: text("storage_path").notNull(),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  isFromCustomer: boolean("is_from_customer").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Incident activity log (bitácora)
+export const incidentActivities = pgTable("incident_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  incidentId: varchar("incident_id").notNull().references(() => incidents.id),
+  userId: varchar("user_id").references(() => users.id),
+  action: text("action").notNull(),
+  previousValue: text("previous_value"),
+  newValue: text("new_value"),
+  details: text("details"),
+  isFromCustomer: boolean("is_from_customer").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkins: many(checkins),
@@ -602,6 +713,81 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
+export const incidentsRelations = relations(incidents, ({ one, many }) => ({
+  customer: one(customers, {
+    fields: [incidents.customerId],
+    references: [customers.id],
+  }),
+  product: one(products, {
+    fields: [incidents.productId],
+    references: [products.id],
+  }),
+  order: one(orders, {
+    fields: [incidents.orderId],
+    references: [orders.id],
+  }),
+  invoice: one(invoices, {
+    fields: [incidents.invoiceId],
+    references: [invoices.id],
+  }),
+  assignee: one(users, {
+    fields: [incidents.assignedTo],
+    references: [users.id],
+    relationName: "assignedIncidents",
+  }),
+  resolver: one(users, {
+    fields: [incidents.resolvedBy],
+    references: [users.id],
+    relationName: "resolvedIncidents",
+  }),
+  closer: one(users, {
+    fields: [incidents.closedBy],
+    references: [users.id],
+    relationName: "closedIncidents",
+  }),
+  creator: one(users, {
+    fields: [incidents.createdBy],
+    references: [users.id],
+    relationName: "createdIncidents",
+  }),
+  comments: many(incidentComments),
+  attachments: many(incidentAttachments),
+  activities: many(incidentActivities),
+}));
+
+export const incidentCommentsRelations = relations(incidentComments, ({ one }) => ({
+  incident: one(incidents, {
+    fields: [incidentComments.incidentId],
+    references: [incidents.id],
+  }),
+  user: one(users, {
+    fields: [incidentComments.userId],
+    references: [users.id],
+  }),
+}));
+
+export const incidentAttachmentsRelations = relations(incidentAttachments, ({ one }) => ({
+  incident: one(incidents, {
+    fields: [incidentAttachments.incidentId],
+    references: [incidents.id],
+  }),
+  uploader: one(users, {
+    fields: [incidentAttachments.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const incidentActivitiesRelations = relations(incidentActivities, ({ one }) => ({
+  incident: one(incidents, {
+    fields: [incidentActivities.incidentId],
+    references: [incidents.id],
+  }),
+  user: one(users, {
+    fields: [incidentActivities.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -749,6 +935,39 @@ export const updateQuotationSchema = createInsertSchema(quotations).omit({
   folio: true,
 }).partial();
 
+export const insertIncidentSchema = createInsertSchema(incidents).omit({
+  id: true,
+  ticketNumber: true,
+  createdAt: true,
+  updatedAt: true,
+  accessToken: true,
+  accessTokenExpires: true,
+});
+
+export const updateIncidentSchema = createInsertSchema(incidents).omit({
+  id: true,
+  ticketNumber: true,
+  createdAt: true,
+  updatedAt: true,
+  accessToken: true,
+  accessTokenExpires: true,
+}).partial();
+
+export const insertIncidentCommentSchema = createInsertSchema(incidentComments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertIncidentAttachmentSchema = createInsertSchema(incidentAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertIncidentActivitySchema = createInsertSchema(incidentActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -806,3 +1025,16 @@ export type InsertCustomerProductPrice = z.infer<typeof insertCustomerProductPri
 export type CustomerProductPrice = typeof customerProductPrices.$inferSelect;
 
 export type UpdateQuotation = z.infer<typeof updateQuotationSchema>;
+
+export type InsertIncident = z.infer<typeof insertIncidentSchema>;
+export type UpdateIncident = z.infer<typeof updateIncidentSchema>;
+export type Incident = typeof incidents.$inferSelect;
+
+export type InsertIncidentComment = z.infer<typeof insertIncidentCommentSchema>;
+export type IncidentComment = typeof incidentComments.$inferSelect;
+
+export type InsertIncidentAttachment = z.infer<typeof insertIncidentAttachmentSchema>;
+export type IncidentAttachment = typeof incidentAttachments.$inferSelect;
+
+export type InsertIncidentActivity = z.infer<typeof insertIncidentActivitySchema>;
+export type IncidentActivity = typeof incidentActivities.$inferSelect;

@@ -1,0 +1,157 @@
+Módulo de Incidentes para Clientes
+
+1. Gestión de Usuarios y Roles
+
+1.1 El sistema deberá permitir el acceso mediante usuarios autenticados.
+1.2 El sistema deberá manejar los siguientes roles:
+
+Cliente
+
+Agente/Técnico
+
+Administrador
+1.3 Cada rol deberá tener permisos diferenciados sobre las acciones del sistema.
+
+2. Creación de Incidentes (Tickets)
+
+2.1 El sistema deberá permitir al cliente crear un nuevo incidente.
+2.2 El sistema deberá solicitar como mínimo la siguiente información:
+
+Tipo de incidente (Garantía, Retrabajo, Administrativo)
+
+Producto o servicio relacionado
+
+Número de orden, factura o referencia
+
+Descripción del incidente
+
+Nivel de urgencia
+2.3 El sistema deberá permitir adjuntar archivos (imágenes, PDF u otros) al incidente.
+2.4 Al crear un incidente, el sistema deberá asignarle automáticamente un número único de ticket.
+
+3. Clasificación de Incidentes
+
+3.1 El sistema deberá permitir clasificar los incidentes por tipo.
+3.2 El sistema deberá permitir modificar la clasificación por parte de un administrador.
+3.3 El sistema deberá registrar cualquier cambio de clasificación en la bitácora del incidente.
+
+4. Asignación de Incidentes
+
+4.1 El sistema deberá permitir asignar un incidente a un área o responsable.
+4.2 El sistema deberá permitir la asignación automática mediante reglas configurables.
+4.3 El sistema deberá permitir la reasignación manual de incidentes por parte del administrador.
+4.4 El sistema deberá registrar la fecha, hora y usuario de cada asignación o reasignación.
+
+5. Estados del Incidente
+
+5.1 El sistema deberá manejar los siguientes estados:
+
+Nuevo
+
+Asignado
+
+En proceso
+
+En espera de cliente
+
+Resuelto
+
+Cerrado
+5.2 El sistema deberá permitir cambiar el estado del incidente según el rol del usuario.
+5.3 El sistema deberá impedir el cierre de un incidente sin una resolución registrada.
+
+6. Seguimiento y Bitácora
+
+6.1 El sistema deberá mantener una bitácora automática de todas las acciones del incidente.
+6.2 El sistema deberá registrar:
+
+Cambios de estado
+
+Cambios de responsable
+
+Comentarios
+
+Archivos adjuntos
+6.3 La bitácora deberá ser visible para administradores y agentes, y parcialmente para el cliente.
+
+7. Comunicación y Comentarios
+
+7.1 El sistema deberá permitir agregar comentarios a los incidentes.
+7.2 El sistema deberá distinguir entre comentarios internos y comentarios visibles para el cliente.
+7.3 El sistema deberá notificar al cliente cuando haya comentarios visibles o cambios relevantes.
+
+8. Gestión de Garantías
+
+8.1 El sistema deberá permitir identificar incidentes relacionados con garantía.
+8.2 El sistema deberá validar si el producto o servicio se encuentra dentro del período de garantía.
+8.3 El sistema deberá permitir registrar la resolución aplicada en la garantía.
+
+9. Gestión de Retrabajos
+
+9.1 El sistema deberá permitir identificar incidentes clasificados como retrabajo.
+9.2 El sistema deberá permitir registrar la causa del retrabajo.
+9.3 El sistema deberá permitir asociar el retrabajo a un área o responsable específico.
+
+10. Cierre de Incidentes
+
+10.1 El sistema deberá permitir cerrar incidentes únicamente cuando estén resueltos.
+10.2 El sistema deberá registrar la fecha y responsable del cierre.
+10.3 El sistema deberá permitir solicitar confirmación del cliente antes del cierre (opcional).
+
+11. Consulta y Búsqueda
+
+11.1 El sistema deberá permitir consultar incidentes por:
+
+Cliente
+
+Estado
+
+Tipo
+
+Responsable
+
+Rango de fechas
+11.2 El sistema deberá permitir búsqueda por número de ticket o palabra clave.
+
+12. Reportes
+
+12.1 El sistema deberá generar reportes de incidentes por:
+
+Tipo de incidente
+
+Estado
+
+Responsable
+
+Cliente
+12.2 El sistema deberá mostrar tiempos de atención y resolución.
+12.3 El sistema deberá permitir exportar reportes a formatos como Excel o PDF.
+
+13. Configuración del Sistema
+
+13.1 El sistema deberá permitir administrar catálogos de:
+
+Tipos de incidentes
+
+Estados
+
+Áreas
+
+Reglas de asignación
+13.2 El sistema deberá permitir activar o desactivar reglas de asignación automática.
+
+14. Notificaciones
+
+14.1 El sistema deberá notificar al cliente cuando:
+
+Se cree un incidente
+
+Cambie el estado
+
+Sea resuelto o cerrado
+14.2 El sistema deberá notificar al responsable cuando se le asigne un incidente.
+
+15. Auditoría
+
+15.1 El sistema deberá almacenar un historial completo de acciones realizadas.
+15.2 El historial no deberá ser modificable por usuarios finales.
