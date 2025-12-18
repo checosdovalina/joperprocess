@@ -925,6 +925,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { items, ...quotationData } = req.body;
 
+      // Convert date strings to Date objects for Drizzle
+      if (quotationData.validUntil && typeof quotationData.validUntil === 'string') {
+        quotationData.validUntil = new Date(quotationData.validUntil);
+      }
+      if (quotationData.shippingApprovedAt && typeof quotationData.shippingApprovedAt === 'string') {
+        quotationData.shippingApprovedAt = new Date(quotationData.shippingApprovedAt);
+      }
+
       // Update quotation data
       const updatedQuotation = await storage.updateQuotation(id, quotationData);
 
