@@ -22,6 +22,7 @@ import ProductsPage from "@/pages/products-page";
 import IncidentsPage from "@/pages/incidents-page";
 import IncidentDetailPage from "@/pages/incident-detail-page";
 import PublicQuotationApproval from "@/pages/public-quotation-approval";
+import PublicIncidentPortal from "@/pages/public-incident-portal";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -76,7 +77,9 @@ function MainLayout() {
 }
 
 export default function App() {
-  const [isPublicRoute] = useRoute("/aprobar-cotizacion/:token");
+  const [isQuotationApproval] = useRoute("/aprobar-cotizacion/:token");
+  const [isIncidentPortal] = useRoute("/public/incidents/:token");
+  const isPublicRoute = isQuotationApproval || isIncidentPortal;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -85,6 +88,7 @@ export default function App() {
           {isPublicRoute ? (
             <Switch>
               <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
+              <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
             </Switch>
           ) : (
             <MainLayout />
