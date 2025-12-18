@@ -450,8 +450,8 @@ export function QuotationForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-6xl h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>{isEditing ? "Editar Cotización" : "Nueva Cotización"}</DialogTitle>
           <DialogDescription>
             {isEditing 
@@ -461,8 +461,8 @@ export function QuotationForm({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 overflow-hidden flex flex-col">
-            <ScrollArea className="flex-1 pr-4">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
+            <ScrollArea className="flex-1 pr-4 min-h-0">
               <div className="space-y-6 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField
