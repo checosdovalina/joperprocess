@@ -1930,9 +1930,10 @@ Proporciona tu análisis en el siguiente formato JSON:
         shipmentId = shipment.id;
       }
 
-      // Validate release data
+      // Validate release data - ensure quantityReleased is a string
       const validated = insertOrderReleaseSchema.parse({
         ...releaseData,
+        quantityReleased: String(releaseData.quantityReleased),
         orderId: id,
         releasedById: req.user!.id,
         invoiceId,
