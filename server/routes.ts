@@ -3535,7 +3535,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       const objectStorageService = new ObjectStorageService();
       const objectFile = await objectStorageService.getObjectEntityFile(attachment.storagePath);
       
-      res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+      const encodedFilename = encodeURIComponent(attachment.originalName);
+      res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
       res.setHeader('Content-Type', attachment.mimeType);
       
       objectStorageService.downloadObject(objectFile, res);
@@ -4013,7 +4014,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       const objectStorage = new ObjectStorageService();
       const objectFile = await objectStorage.getObjectEntityFile(attachment.storagePath);
       
-      res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+      const encodedFilename = encodeURIComponent(attachment.originalName);
+      res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
       res.setHeader('Content-Type', attachment.mimeType);
       
       objectStorage.downloadObject(objectFile, res);
