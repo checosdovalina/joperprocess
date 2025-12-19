@@ -484,7 +484,7 @@ export default function PublicTicketPage() {
                       return (
                         <a
                           key={attachment.id}
-                          href={`/api/storage/entity/${attachment.storagePath}`}
+                          href={`/api/public/incidents/${token}/attachments/${attachment.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-3 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors"

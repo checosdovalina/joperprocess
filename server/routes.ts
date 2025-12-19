@@ -3935,12 +3935,54 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Tipo de archivo no permitido" });
       }
 
-      const { uploadURL, entityId } = await objectStorageService.getObjectEntityUploadURL();
+      const objectStorage = new ObjectStorageService();
+      const { uploadURL, entityId } = await objectStorage.getObjectEntityUploadURL();
       
       res.json({ uploadURL, entityId });
     } catch (error) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Error al obtener URL de subida" });
+    }
+  });
+
+  // Download incident attachment (public - with token)
+  app.get("/api/public/incidents/:token/attachments/:attachmentId", async (req, res) => {
+    try {
+      const { token, attachmentId } = req.params;
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.accessToken, token),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      if (incident.accessTokenExpires && new Date(incident.accessTokenExpires) < new Date()) {
+        return res.status(403).json({ error: "El enlace ha expirado" });
+      }
+
+      const attachment = await db.query.incidentAttachments.findFirst({
+        where: and(
+          eq(incidentAttachments.id, parseInt(attachmentId)),
+          eq(incidentAttachments.incidentId, incident.id)
+        ),
+      });
+
+      if (!attachment) {
+        return res.status(404).json({ error: "Archivo no encontrado" });
+      }
+
+      const objectStorage = new ObjectStorageService();
+      const objectFile = await objectStorage.getObjectEntityFile(attachment.storagePath);
+      
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+      res.setHeader('Content-Type', attachment.mimeType);
+      
+      objectStorage.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error downloading attachment:", error);
+      res.status(500).json({ error: "Error al descargar el archivo" });
     }
   });
 
