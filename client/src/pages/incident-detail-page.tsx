@@ -48,6 +48,11 @@ import {
   Link2,
   Mail,
   Phone,
+  Paperclip,
+  Download,
+  Image,
+  Video,
+  File,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -81,6 +86,18 @@ type IncidentActivity = {
   user: User | null;
 };
 
+type IncidentAttachment = {
+  id: number;
+  incidentId: number;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  storagePath: string;
+  isFromCustomer: boolean;
+  createdAt: string;
+};
+
 type IncidentWithDetails = Incident & {
   customer: Customer;
   assignee: User | null;
@@ -89,7 +106,20 @@ type IncidentWithDetails = Incident & {
   closer: User | null;
   comments: IncidentComment[];
   activities: IncidentActivity[];
+  attachments?: IncidentAttachment[];
 };
+
+function getFileIcon(mimeType: string) {
+  if (mimeType.startsWith("image/")) return Image;
+  if (mimeType.startsWith("video/")) return Video;
+  return File;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
 
 const typeLabels: Record<string, string> = {
   [IncidentType.GARANTIA]: "Garantía",
@@ -380,6 +410,42 @@ export default function IncidentDetailPage() {
                 <Label className="text-muted-foreground text-xs">Descripción</Label>
                 <p className="text-sm mt-2 whitespace-pre-wrap">{incident.description}</p>
               </div>
+
+              {incident.attachments && incident.attachments.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <Label className="text-muted-foreground text-xs flex items-center gap-1">
+                      <Paperclip className="h-3 w-3" />
+                      Archivos Adjuntos ({incident.attachments.length})
+                    </Label>
+                    <div className="grid gap-2 mt-2">
+                      {incident.attachments.map((attachment) => {
+                        const FileIcon = getFileIcon(attachment.mimeType);
+                        return (
+                          <a
+                            key={attachment.id}
+                            href={`/objects/${attachment.storagePath}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
+                            data-testid={`attachment-${attachment.id}`}
+                          >
+                            <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{attachment.originalName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(attachment.size)} · {format(new Date(attachment.createdAt), "d MMM, HH:mm", { locale: es })}
+                              </p>
+                            </div>
+                            <Download className="h-4 w-4 text-muted-foreground" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {incident.resolution && (
                 <>
