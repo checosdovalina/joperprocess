@@ -425,7 +425,7 @@ export default function IncidentDetailPage() {
                         return (
                           <a
                             key={attachment.id}
-                            href={`/objects/${attachment.storagePath}`}
+                            href={`/api/incidents/${incident.id}/attachments/${attachment.id}/download`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"

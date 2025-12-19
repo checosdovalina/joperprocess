@@ -3508,6 +3508,43 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Download incident attachment (admin - authenticated)
+  app.get("/api/incidents/:incidentId/attachments/:attachmentId/download", isAuthenticated, async (req, res) => {
+    try {
+      const { incidentId, attachmentId } = req.params;
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.id, incidentId),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      const attachment = await db.query.incidentAttachments.findFirst({
+        where: and(
+          eq(incidentAttachments.id, attachmentId),
+          eq(incidentAttachments.incidentId, incidentId)
+        ),
+      });
+
+      if (!attachment) {
+        return res.status(404).json({ error: "Archivo no encontrado" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(attachment.storagePath);
+      
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+      res.setHeader('Content-Type', attachment.mimeType);
+      
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error downloading attachment:", error);
+      res.status(500).json({ error: "Error al descargar el archivo" });
+    }
+  });
+
   // ========== PUBLIC INCIDENTS (Customer Portal) ==========
 
   // Search customers for public portal (minimal info for security)
