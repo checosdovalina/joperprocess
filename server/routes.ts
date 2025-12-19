@@ -3780,13 +3780,14 @@ Proporciona tu análisis en el siguiente formato JSON:
           'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         ];
         const maxFileSize = 50 * 1024 * 1024; // 50MB
+        const objectStorage = new ObjectStorageService();
 
         for (const att of attachments) {
           if (att.entityId && att.filename && att.originalName && att.mimeType && att.size) {
             if (!allowedMimeTypes.includes(att.mimeType)) continue;
             if (att.size > maxFileSize) continue;
             try {
-              await objectStorageService.getObjectEntityFile(att.entityId);
+              await objectStorage.getObjectEntityFile(att.entityId);
               await db.insert(incidentAttachments).values({
                 incidentId: incident.id,
                 filename: att.filename,

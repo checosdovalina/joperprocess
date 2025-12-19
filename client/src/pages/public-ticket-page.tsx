@@ -33,6 +33,7 @@ import {
   Video,
   File,
   X,
+  Download,
 } from "lucide-react";
 import { IncidentType, IncidentStatus, IncidentUrgency } from "@shared/schema";
 
@@ -42,6 +43,18 @@ type UploadedFile = {
   originalName: string;
   mimeType: string;
   size: number;
+};
+
+type Attachment = {
+  id: number;
+  incidentId: number;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  storagePath: string;
+  isFromCustomer: boolean;
+  createdAt: string;
 };
 
 type Comment = {
@@ -81,6 +94,7 @@ type IncidentDetails = {
   product: { name: string } | null;
   comments: Comment[];
   activities: Activity[];
+  attachments: Attachment[];
 };
 
 const typeLabels: Record<string, { label: string; icon: typeof AlertTriangle }> = {
@@ -455,6 +469,42 @@ export default function PublicTicketPage() {
                 {incident.description}
               </p>
             </div>
+
+            {incident.attachments && incident.attachments.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="font-medium mb-3 flex items-center gap-2">
+                    <Paperclip className="h-4 w-4" />
+                    Archivos Adjuntos ({incident.attachments.length})
+                  </h3>
+                  <div className="grid gap-2">
+                    {incident.attachments.map((attachment) => {
+                      const FileIcon = getFileIcon(attachment.mimeType);
+                      return (
+                        <a
+                          key={attachment.id}
+                          href={`/api/storage/entity/${attachment.storagePath}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+                          data-testid={`attachment-${attachment.id}`}
+                        >
+                          <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{attachment.originalName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatFileSize(attachment.size)} · {format(new Date(attachment.createdAt), "d MMM, HH:mm", { locale: es })}
+                            </p>
+                          </div>
+                          <Download className="h-4 w-4 text-muted-foreground" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
 
             {incident.resolution && (
               <>
