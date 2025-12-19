@@ -10,10 +10,10 @@ import {
   FileSpreadsheet,
   DollarSign,
   Building2,
-  Settings,
   LogOut,
   AlertTriangle,
 } from "lucide-react";
+import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
   Sidebar,
   SidebarContent,
@@ -41,7 +41,7 @@ export function AppSidebar() {
   const menuItems = [
     {
       title: "Dashboard",
-      url: "/",
+      url: "/dashboard",
       icon: LayoutDashboard,
       roles: Object.values(UserRole),
     },
@@ -149,11 +149,9 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Building2 className="h-6 w-6" />
-          </div>
+          <img src={nexxoLogo} alt="Nexxo" className="h-10 w-10" />
           <div>
-            <h2 className="font-semibold text-base">GRUPO JOPER</h2>
+            <h2 className="font-semibold text-base bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">NEXXO</h2>
             <p className="text-xs text-muted-foreground">Sistema Comercial</p>
           </div>
         </div>

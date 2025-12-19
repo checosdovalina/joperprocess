@@ -1,11 +1,14 @@
-import { Switch, Route, useRoute } from "wouter";
+import { Switch, Route, useRoute, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
+import { useAuth } from "./hooks/use-auth";
+import { Loader2 } from "lucide-react";
 import CustomersPage from "@/pages/customers-page";
 import CheckinsPage from "@/pages/checkins-page";
 import CheckinDetailPage from "@/pages/checkin-detail-page";
@@ -30,11 +33,28 @@ import { AuthProvider } from "./hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 
+function SmartLandingPage() {
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
+  if (user) {
+    return <Redirect to="/dashboard" />;
+  }
+  
+  return <LandingPage />;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/auth" component={AuthPage} />
-      <ProtectedRoute path="/" component={Dashboard} />
+      <ProtectedRoute path="/dashboard" component={Dashboard} />
       <ProtectedRoute path="/customers" component={CustomersPage} />
       <ProtectedRoute path="/checkins/:id" component={CheckinDetailPage} />
       <ProtectedRoute path="/checkins" component={CheckinsPage} />
@@ -79,11 +99,13 @@ function MainLayout() {
 }
 
 export default function App() {
+  const [isLandingPage] = useRoute("/");
+  const [isAuthPage] = useRoute("/auth");
   const [isQuotationApproval] = useRoute("/aprobar-cotizacion/:token");
   const [isIncidentPortal] = useRoute("/public/incidents/:token");
   const [isSupportPage] = useRoute("/soporte");
   const [isTicketPage] = useRoute("/soporte/ticket/:token");
-  const isPublicRoute = isQuotationApproval || isIncidentPortal || isSupportPage || isTicketPage;
+  const isPublicRoute = isLandingPage || isAuthPage || isQuotationApproval || isIncidentPortal || isSupportPage || isTicketPage;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -91,6 +113,8 @@ export default function App() {
         <TooltipProvider>
           {isPublicRoute ? (
             <Switch>
+              <Route path="/" component={SmartLandingPage} />
+              <Route path="/auth" component={AuthPage} />
               <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
               <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
               <Route path="/soporte/ticket/:token" component={PublicTicketPage} />

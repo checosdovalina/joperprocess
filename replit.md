@@ -1,8 +1,12 @@
-# GRUPO JOPER - Sistema Comercial
+# Nexxo - Sistema Comercial
 
 ## Overview
 
-GRUPO JOPER Sistema Comercial is an enterprise-grade platform designed for comprehensive commercial management, encompassing sales, credit, production, shipping, and invoicing. It supports various organizational roles and manages the entire commercial workflow from customer interactions and quotations to payment collection. The application is optimized for mobile field operations while providing full desktop functionality.
+Nexxo is an enterprise-grade commercial management platform designed for comprehensive sales, credit, production, shipping, and invoicing workflows. It supports various organizational roles and manages the entire commercial process from customer interactions and quotations to payment collection. The application is optimized for mobile field operations while providing full desktop functionality.
+
+**Brand**: Nexxo - Sistema Comercial de Nueva Generación
+**Domain**: nexxo.com.mx
+**Logo**: Modern tech logo with interconnected hexagonal shapes in blue gradient
 
 ## User Preferences
 

@@ -1,18 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Redirect } from "wouter";
+import { Redirect, useSearch, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { UserRole } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
+import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const tabFromUrl = urlParams.get("tab");
+  
   const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [registerData, setRegisterData] = useState({
     username: "",
@@ -22,15 +27,24 @@ export default function AuthPage() {
     role: "vendedor" as string,
   });
 
-  // Check if public registration is allowed (only for first user)
   const { data: registrationStatus } = useQuery<{ allowed: boolean }>({
     queryKey: ["/api/allow-registration"],
   });
 
   const allowRegistration = registrationStatus?.allowed ?? false;
+  
+  const [activeTab, setActiveTab] = useState("login");
+  
+  useEffect(() => {
+    if (tabFromUrl === "register" && allowRegistration) {
+      setActiveTab("register");
+    } else {
+      setActiveTab("login");
+    }
+  }, [tabFromUrl, allowRegistration]);
 
   if (user) {
-    return <Redirect to="/" />;
+    return <Redirect to="/dashboard" />;
   }
 
   const handleLogin = (e: React.FormEvent) => {
@@ -60,17 +74,20 @@ export default function AuthPage() {
     <div className="min-h-screen grid md:grid-cols-2">
       <div className="flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md">
+          <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+            Volver al inicio
+          </Link>
+          
           <div className="flex items-center gap-3 mb-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Building2 className="h-7 w-7" />
-            </div>
+            <img src={nexxoLogo} alt="Nexxo" className="h-12 w-12" />
             <div>
-              <h1 className="text-2xl font-bold">GRUPO JOPER</h1>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">NEXXO</h1>
               <p className="text-sm text-muted-foreground">Sistema Comercial</p>
             </div>
           </div>
 
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {allowRegistration ? (
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
@@ -245,39 +262,48 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <div className="hidden md:flex items-center justify-center p-8 bg-primary text-primary-foreground">
+      <div className="hidden md:flex items-center justify-center p-8 bg-gradient-to-br from-blue-600 to-purple-600 text-white">
         <div className="max-w-lg space-y-6">
-          <h2 className="text-4xl font-bold">
-            Gestión Comercial Integral
-          </h2>
-          <p className="text-lg text-primary-foreground/90">
-            Sistema completo para gestionar todo el proceso comercial de GRUPO JOPER,
-            desde el check-in del vendedor hasta la facturación y cobranza.
+          <div className="flex items-center gap-4 mb-4">
+            <img src={nexxoLogo} alt="Nexxo" className="h-16 w-16" />
+            <h2 className="text-4xl font-bold">NEXXO</h2>
+          </div>
+          <p className="text-lg text-white/90">
+            Sistema comercial de nueva generación. Gestiona todo tu proceso 
+            comercial desde un solo lugar, de manera eficiente y segura.
           </p>
-          <ul className="space-y-3 text-primary-foreground/80">
+          <ul className="space-y-3 text-white/80">
             <li className="flex items-start gap-2">
-              <div className="h-6 w-6 rounded-full bg-primary-foreground/20 flex items-center justify-center mt-0.5 flex-shrink-0">
-                ✓
+              <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center mt-0.5 flex-shrink-0 text-white">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
               </div>
-              <span>Cotizaciones y seguimiento de pedidos en tiempo real</span>
+              <span>Cotizaciones con precios dinámicos y aprobaciones</span>
             </li>
             <li className="flex items-start gap-2">
-              <div className="h-6 w-6 rounded-full bg-primary-foreground/20 flex items-center justify-center mt-0.5 flex-shrink-0">
-                ✓
+              <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center mt-0.5 flex-shrink-0 text-white">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
               </div>
-              <span>Autorización de crédito y control de morosidad automatizado</span>
+              <span>Autorización de crédito con análisis automático e IA</span>
             </li>
             <li className="flex items-start gap-2">
-              <div className="h-6 w-6 rounded-full bg-primary-foreground/20 flex items-center justify-center mt-0.5 flex-shrink-0">
-                ✓
+              <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center mt-0.5 flex-shrink-0 text-white">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
               </div>
-              <span>Embarques con firmas digitales y trazabilidad completa</span>
+              <span>Control de embarques con trazabilidad completa</span>
             </li>
             <li className="flex items-start gap-2">
-              <div className="h-6 w-6 rounded-full bg-primary-foreground/20 flex items-center justify-center mt-0.5 flex-shrink-0">
-                ✓
+              <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center mt-0.5 flex-shrink-0 text-white">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
               </div>
-              <span>Facturación CFDI y cobranza con estados de cuenta automáticos</span>
+              <span>Facturación y cobranza con estados de cuenta</span>
             </li>
           </ul>
         </div>
