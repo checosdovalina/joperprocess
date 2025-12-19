@@ -518,6 +518,7 @@ export const incidents = pgTable("incidents", {
   createdBy: varchar("created_by").references(() => users.id),
   accessToken: text("access_token"),
   accessTokenExpires: timestamp("access_token_expires"),
+  isFromCustomerPortal: boolean("is_from_customer_portal").default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -3510,6 +3510,136 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   // ========== PUBLIC INCIDENTS (Customer Portal) ==========
 
+  // Search customers for public portal (limited info)
+  app.get("/api/public/customers/search", async (req, res) => {
+    try {
+      const { q } = req.query;
+      
+      if (!q || typeof q !== 'string' || q.trim().length < 3) {
+        return res.status(400).json({ error: "La búsqueda debe tener al menos 3 caracteres" });
+      }
+
+      const searchTerm = q.trim().toLowerCase();
+      
+      const allCustomers = await db.query.customers.findMany({
+        columns: {
+          id: true,
+          name: true,
+          rfc: true,
+          email: true,
+        },
+      });
+
+      // Filter by name or RFC
+      const filtered = allCustomers.filter(c => 
+        c.name.toLowerCase().includes(searchTerm) ||
+        (c.rfc && c.rfc.toLowerCase().includes(searchTerm))
+      ).slice(0, 10); // Limit to 10 results
+
+      res.json(filtered);
+    } catch (error) {
+      console.error("Error searching customers:", error);
+      res.status(500).json({ error: "Error al buscar clientes" });
+    }
+  });
+
+  // Create incident from public portal (no auth required)
+  app.post("/api/public/incidents", async (req, res) => {
+    try {
+      const { customerId, type, urgency, subject, description, contactName, contactEmail, contactPhone } = req.body;
+
+      // Validate required fields
+      if (!customerId || !type || !subject || !description || !contactName || !contactEmail) {
+        return res.status(400).json({ 
+          error: "Faltan campos requeridos: empresa, tipo, asunto, descripción, nombre de contacto y correo" 
+        });
+      }
+
+      // Verify customer exists
+      const customer = await storage.getCustomer(customerId);
+      if (!customer) {
+        return res.status(404).json({ error: "Empresa no encontrada" });
+      }
+
+      // Generate ticket number and access token
+      const ticketNumber = await generateTicketNumber();
+      const accessToken = randomBytes(32).toString('hex');
+      const accessTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+      // Create the incident
+      const [newIncident] = await db.insert(incidents).values({
+        customerId,
+        type: type as typeof IncidentType[keyof typeof IncidentType],
+        urgency: urgency || IncidentUrgency.MEDIA,
+        status: IncidentStatus.NUEVO,
+        subject,
+        description,
+        contactName,
+        contactEmail,
+        contactPhone: contactPhone || null,
+        ticketNumber,
+        accessToken,
+        accessTokenExpires,
+        isFromCustomerPortal: true,
+      }).returning();
+
+      await logIncidentActivity(
+        newIncident.id,
+        'created',
+        null,
+        undefined,
+        undefined,
+        `Incidente creado desde portal de clientes con número ${ticketNumber}`,
+        true
+      );
+
+      // Return the ticket info and access URL
+      res.status(201).json({
+        success: true,
+        ticketNumber: newIncident.ticketNumber,
+        accessToken: newIncident.accessToken,
+        message: `Su ticket #${newIncident.ticketNumber} ha sido creado exitosamente.`,
+      });
+    } catch (error) {
+      console.error("Error creating public incident:", error);
+      res.status(500).json({ error: "Error al crear el incidente" });
+    }
+  });
+
+  // Look up incident by ticket number (public)
+  app.get("/api/public/incidents/lookup/:ticketNumber", async (req, res) => {
+    try {
+      const { ticketNumber } = req.params;
+      const { email } = req.query;
+
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ error: "Se requiere el correo electrónico para verificar" });
+      }
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.ticketNumber, ticketNumber),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Ticket no encontrado" });
+      }
+
+      // Verify email matches the contact email
+      if (incident.contactEmail?.toLowerCase() !== email.toLowerCase()) {
+        return res.status(403).json({ error: "El correo no coincide con el registrado para este ticket" });
+      }
+
+      if (incident.accessTokenExpires && new Date(incident.accessTokenExpires) < new Date()) {
+        return res.status(403).json({ error: "El enlace de acceso ha expirado" });
+      }
+
+      res.json({ accessToken: incident.accessToken });
+    } catch (error) {
+      console.error("Error looking up incident:", error);
+      res.status(500).json({ error: "Error al buscar el ticket" });
+    }
+  });
+
   // Get incident by access token (public)
   app.get("/api/public/incidents/:token", async (req, res) => {
     try {
