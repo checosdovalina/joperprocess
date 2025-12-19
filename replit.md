@@ -36,7 +36,31 @@ The backend runs on Node.js with Express.js in ESM module mode, exposing a RESTf
 
 ### Data Layer
 
-Drizzle ORM provides type-safe SQL querying with PostgreSQL (via Neon serverless) as the database. The schema is centrally defined in `shared/schema.ts` and managed with Drizzle Kit for migrations. Drizzle-Zod integration ensures data validation matches database constraints. Key tables include `users`, `customers`, `checkins`, `quotations`, `creditAuthorizations`, `orders`, `shipments`, `invoices`, and `payments`.
+Drizzle ORM provides type-safe SQL querying with PostgreSQL (via Neon serverless) as the database. The schema is centrally defined in `shared/schema.ts` and managed with Drizzle Kit for migrations. Drizzle-Zod integration ensures data validation matches database constraints. Key tables include `tenants`, `users`, `customers`, `checkins`, `quotations`, `creditAuthorizations`, `orders`, `shipments`, `invoices`, and `payments`.
+
+### Multi-Tenancy Architecture
+
+The system implements subdomain-based multi-tenancy, allowing each company (tenant) to have its own isolated environment:
+
+**Key Components:**
+- **Tenants Table**: Stores company configuration including subdomain, logo URL, primary/secondary colors, plan, and max users.
+- **Tenant Detection Middleware** (`server/tenant.ts`): Resolves tenant from request hostname (e.g., `joper.nexxo.com.mx` → "joper" subdomain). In development, uses `?tenant=` query param or `X-Tenant-Subdomain` header.
+- **Data Isolation**: Core tables (`users`, `customers`, `products`, `productCategories`) have `tenantId` foreign keys for data segregation.
+- **SuperAdmin Role**: Users with `isSuperAdmin: true` can access the platform-level tenant management panel at `/tenants`.
+
+**Branding:**
+- Each tenant can customize `logoUrl`, `primaryColor`, and `secondaryColor`
+- Frontend `TenantProvider` (`client/src/hooks/use-tenant.tsx`) fetches `/api/tenant-config` and dynamically applies CSS variables
+
+**Endpoints:**
+- `GET /api/tenant-config`: Returns current tenant's branding (public, based on subdomain)
+- `GET /api/tenants`: List all tenants (superadmin only)
+- `POST /api/tenants`: Create new tenant (superadmin only)
+- `PATCH /api/tenants/:id`: Update tenant (superadmin only)
+
+**DNS Configuration Required:**
+- Wildcard SSL certificate for `*.nexxo.com.mx`
+- Nginx configured to route all subdomains to the application
 
 ### Key Features
 

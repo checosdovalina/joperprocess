@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { tenantMiddleware } from "./tenant";
 
 const app = express();
 
@@ -45,6 +46,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Tenant detection middleware - resolves tenant from subdomain
+app.use(tenantMiddleware);
 
 (async () => {
   const server = await registerRoutes(app);

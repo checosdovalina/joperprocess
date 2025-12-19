@@ -1,13 +1,13 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser, UserRole, users } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, or, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 declare global {
@@ -57,9 +57,24 @@ export function setupAuth(app: Express) {
   app.use(passport.session());
 
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
+    new LocalStrategy({ passReqToCallback: true }, async (req: Request, username, password, done) => {
       try {
-        const user = await storage.getUserByUsername(username);
+        const tenantId = req.tenant?.id || null;
+        
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(
+            and(
+              eq(users.username, username),
+              or(
+                eq(users.tenantId, tenantId || ""),
+                eq(users.isSuperAdmin, true)
+              )
+            )
+          )
+          .limit(1);
+        
         if (!user) {
           return done(null, false, { message: "Usuario no encontrado" });
         }
@@ -146,6 +161,9 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ error: "El usuario ya existe" });
       }
 
+      // Get tenant context - users must belong to a tenant (except superadmin)
+      const tenantId = req.tenant?.id || null;
+      
       // Create user with hashed password (using validated data)
       const user = await storage.createUser({
         username: userData.username,
@@ -154,6 +172,7 @@ export function setupAuth(app: Express) {
         email: userData.email,
         role: userData.role,
         active: userData.active ?? true,
+        tenantId: tenantId,
       });
 
       // RACE CONDITION PROTECTION:

@@ -9,6 +9,7 @@ import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import { useAuth } from "./hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { TenantProvider } from "./hooks/use-tenant";
 import CustomersPage from "@/pages/customers-page";
 import CheckinsPage from "@/pages/checkins-page";
 import CheckinDetailPage from "@/pages/checkin-detail-page";
@@ -28,6 +29,7 @@ import PublicQuotationApproval from "@/pages/public-quotation-approval";
 import PublicIncidentPortal from "@/pages/public-incident-portal";
 import PublicSupportPage from "@/pages/public-support-page";
 import PublicTicketPage from "@/pages/public-ticket-page";
+import TenantsPage from "@/pages/tenants-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -70,6 +72,7 @@ function Router() {
       <ProtectedRoute path="/products" component={ProductsPage} />
       <ProtectedRoute path="/incidents/:id" component={IncidentDetailPage} />
       <ProtectedRoute path="/incidents" component={IncidentsPage} />
+      <ProtectedRoute path="/tenants" component={TenantsPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -109,23 +112,25 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          {isPublicRoute ? (
-            <Switch>
-              <Route path="/" component={SmartLandingPage} />
-              <Route path="/auth" component={AuthPage} />
-              <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
-              <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
-              <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
-              <Route path="/soporte" component={PublicSupportPage} />
-            </Switch>
-          ) : (
-            <MainLayout />
-          )}
-          <Toaster />
-        </TooltipProvider>
-      </AuthProvider>
+      <TenantProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            {isPublicRoute ? (
+              <Switch>
+                <Route path="/" component={SmartLandingPage} />
+                <Route path="/auth" component={AuthPage} />
+                <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
+                <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
+                <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
+                <Route path="/soporte" component={PublicSupportPage} />
+              </Switch>
+            ) : (
+              <MainLayout />
+            )}
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </TenantProvider>
     </QueryClientProvider>
   );
 }

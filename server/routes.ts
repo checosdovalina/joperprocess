@@ -10,6 +10,7 @@ import { sendCheckoutEmail } from "./email-service";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import OpenAI from "openai";
+import { tenants, insertTenantSchema } from "@shared/schema";
 import { 
   insertCustomerSchema,
   updateCustomerSchema,
@@ -54,6 +55,105 @@ import { eq, and, sql, gte, lt } from "drizzle-orm";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
+
+  // ==================== TENANT ENDPOINTS ====================
+  
+  // Get current tenant configuration (for branding)
+  app.get("/api/tenant-config", async (req, res) => {
+    if (!req.tenant) {
+      return res.status(404).json({ message: "No tenant context" });
+    }
+    
+    res.json({
+      id: req.tenant.id,
+      name: req.tenant.name,
+      subdomain: req.tenant.subdomain,
+      logoUrl: req.tenant.logoUrl,
+      primaryColor: req.tenant.primaryColor,
+      secondaryColor: req.tenant.secondaryColor,
+    });
+  });
+
+  // Get all tenants (superadmin only)
+  app.get("/api/tenants", isAuthenticated, async (req, res) => {
+    try {
+      if (!req.user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Only super admins can access tenants" });
+      }
+      
+      const allTenants = await db.select().from(tenants);
+      res.json(allTenants);
+    } catch (error) {
+      console.error("Error fetching tenants:", error);
+      res.status(500).json({ error: "Error fetching tenants" });
+    }
+  });
+
+  // Create new tenant (superadmin only)
+  app.post("/api/tenants", isAuthenticated, async (req, res) => {
+    try {
+      if (!req.user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Only super admins can create tenants" });
+      }
+      
+      const validationResult = insertTenantSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid data",
+          details: validationResult.error.errors,
+        });
+      }
+      
+      const [newTenant] = await db.insert(tenants).values(validationResult.data).returning();
+      res.status(201).json(newTenant);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "Subdomain already exists" });
+      }
+      console.error("Error creating tenant:", error);
+      res.status(500).json({ error: "Error creating tenant" });
+    }
+  });
+
+  // Update tenant (superadmin only)
+  app.patch("/api/tenants/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!req.user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Only super admins can update tenants" });
+      }
+      
+      const { id } = req.params;
+      const updateSchema = insertTenantSchema.partial();
+      const validationResult = updateSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid data",
+          details: validationResult.error.errors,
+        });
+      }
+      
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({ ...validationResult.data, updatedAt: new Date() })
+        .where(eq(tenants.id, id))
+        .returning();
+      
+      if (!updatedTenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      
+      res.json(updatedTenant);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "Subdomain already exists" });
+      }
+      console.error("Error updating tenant:", error);
+      res.status(500).json({ error: "Error updating tenant" });
+    }
+  });
+
+  // ==================== END TENANT ENDPOINTS ====================
 
   // Dashboard stats
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {

@@ -3,6 +3,40 @@ import { pgTable, text, varchar, decimal, timestamp, boolean, integer, jsonb } f
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// ==================== MULTI-TENANCY ====================
+
+// Tenants (Empresas) table - stores company configuration
+export const tenants = pgTable("tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  subdomain: text("subdomain").notNull().unique(), // e.g., "joper" for joper.nexxo.com.mx
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color").default("#4DA3FF"), // Nexxo blue default
+  secondaryColor: text("secondary_color").default("#1F3C88"),
+  active: boolean("active").notNull().default(true),
+  // Contact info
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  // Billing/subscription info (for future)
+  plan: text("plan").default("basic"), // basic, professional, enterprise
+  maxUsers: integer("max_users").default(10),
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTenantSchema = createInsertSchema(tenants).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type Tenant = typeof tenants.$inferSelect;
+
+// ==================== END MULTI-TENANCY ====================
+
 // Enum for user roles
 export const UserRole = {
   ADMIN: "admin",
@@ -145,18 +179,21 @@ export type CommentVisibilityType = typeof CommentVisibility[keyof typeof Commen
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  username: text("username").notNull(),
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
   email: text("email").notNull(),
   role: text("role").notNull(),
   active: boolean("active").notNull().default(true),
+  isSuperAdmin: boolean("is_super_admin").notNull().default(false), // For platform-level admins
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Customers table
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: text("name").notNull(),
   rfc: text("rfc"),
   email: text("email"),
@@ -446,6 +483,7 @@ export const payments = pgTable("payments", {
 // Product Categories table
 export const productCategories = pgTable("product_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: text("name").notNull(),
   description: text("description"),
   parentId: varchar("parent_id"),
@@ -456,7 +494,8 @@ export const productCategories = pgTable("product_categories", {
 // Products table
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  code: text("code").notNull().unique(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  code: text("code").notNull(),
   name: text("name").notNull(),
   description: text("description"),
   categoryId: varchar("category_id").references(() => productCategories.id),
