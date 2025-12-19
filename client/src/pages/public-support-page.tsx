@@ -39,6 +39,11 @@ import {
   FileText,
   ExternalLink,
   Copy,
+  Upload,
+  X,
+  File,
+  Image,
+  Video,
 } from "lucide-react";
 import { IncidentType, IncidentUrgency } from "@shared/schema";
 
@@ -74,6 +79,14 @@ type LookupFormData = z.infer<typeof lookupSchema>;
 type CustomerSearchResult = {
   id: string;
   name: string;
+};
+
+type UploadedFile = {
+  entityId: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
 };
 
 const typeLabels: Record<string, { label: string; icon: typeof AlertTriangle; description: string }> = {
@@ -120,6 +133,8 @@ export default function PublicSupportPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
   const [createdTicket, setCreatedTicket] = useState<{ ticketNumber: string; accessToken: string } | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const form = useForm<IncidentFormData>({
     resolver: zodResolver(incidentFormSchema),
@@ -164,12 +179,87 @@ export default function PublicSupportPage() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    
+    for (const file of Array.from(files)) {
+      try {
+        const urlResponse = await fetch("/api/public/incidents/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, mimeType: file.type }),
+        });
+
+        if (!urlResponse.ok) {
+          const error = await urlResponse.json();
+          throw new Error(error.error || "Error al obtener URL de subida");
+        }
+
+        const { uploadURL, entityId } = await urlResponse.json();
+
+        const uploadResponse = await fetch(uploadURL, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type },
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Error al subir el archivo");
+        }
+
+        setUploadedFiles(prev => [...prev, {
+          entityId,
+          filename: entityId.split('/').pop() || file.name,
+          originalName: file.name,
+          mimeType: file.type,
+          size: file.size,
+        }]);
+
+        toast({
+          title: "Archivo subido",
+          description: file.name,
+        });
+      } catch (error) {
+        toast({
+          title: "Error al subir archivo",
+          description: error instanceof Error ? error.message : "Error desconocido",
+          variant: "destructive",
+        });
+      }
+    }
+
+    setIsUploading(false);
+    event.target.value = "";
+  };
+
+  const removeFile = (entityId: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.entityId !== entityId));
+  };
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) return Image;
+    if (mimeType.startsWith('video/')) return Video;
+    return File;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: IncidentFormData) => {
       const response = await fetch("/api/public/incidents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          attachments: uploadedFiles,
+        }),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -182,6 +272,7 @@ export default function PublicSupportPage() {
         ticketNumber: data.ticketNumber,
         accessToken: data.accessToken,
       });
+      setUploadedFiles([]);
       toast({
         title: "Ticket creado exitosamente",
         description: `Su número de ticket es: ${data.ticketNumber}`,
@@ -656,6 +747,72 @@ export default function PublicSupportPage() {
                         </FormItem>
                       )}
                     />
+
+                    <div className="space-y-3">
+                      <Label>Evidencia (Opcional)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Puede adjuntar fotos, videos o documentos que ayuden a describir el problema
+                      </p>
+                      
+                      <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                        <input
+                          type="file"
+                          id="file-upload"
+                          className="hidden"
+                          multiple
+                          accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
+                          onChange={handleFileUpload}
+                          disabled={isUploading}
+                          data-testid="input-file-upload"
+                        />
+                        <label
+                          htmlFor="file-upload"
+                          className="cursor-pointer flex flex-col items-center gap-2"
+                        >
+                          {isUploading ? (
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          ) : (
+                            <Upload className="h-8 w-8 text-muted-foreground" />
+                          )}
+                          <span className="text-sm text-muted-foreground">
+                            {isUploading ? "Subiendo..." : "Haga clic para seleccionar archivos"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Imágenes, videos, PDF, Word, Excel
+                          </span>
+                        </label>
+                      </div>
+
+                      {uploadedFiles.length > 0 && (
+                        <div className="space-y-2">
+                          {uploadedFiles.map((file) => {
+                            const FileIcon = getFileIcon(file.mimeType);
+                            return (
+                              <div
+                                key={file.entityId}
+                                className="flex items-center gap-3 p-3 bg-muted rounded-lg"
+                                data-testid={`file-item-${file.entityId}`}
+                              >
+                                <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{file.originalName}</p>
+                                  <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeFile(file.entityId)}
+                                  data-testid={`button-remove-file-${file.entityId}`}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="border-t pt-6">

@@ -3603,8 +3603,27 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       // Save attachments if any were uploaded
       if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        const allowedMimeTypes = [
+          'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+          'video/mp4', 'video/webm', 'video/quicktime',
+          'application/pdf',
+          'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+        const maxFileSize = 50 * 1024 * 1024; // 50MB
+
         for (const att of attachments) {
           if (att.entityId && att.filename && att.originalName && att.mimeType && att.size) {
+            // Validate MIME type
+            if (!allowedMimeTypes.includes(att.mimeType)) {
+              console.warn("Invalid MIME type skipped:", att.mimeType);
+              continue;
+            }
+            // Validate file size
+            if (att.size > maxFileSize) {
+              console.warn("File too large skipped:", att.size);
+              continue;
+            }
             try {
               await objectStorageService.getObjectEntityFile(att.entityId);
               await db.insert(incidentAttachments).values({
