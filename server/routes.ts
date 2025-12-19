@@ -3546,7 +3546,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Create incident from public portal (no auth required)
   app.post("/api/public/incidents", async (req, res) => {
     try {
-      const { customerId, type, urgency, subject, description, contactName, contactEmail, contactPhone, warrantySerialNumber } = req.body;
+      const { customerId, type, urgency, subject, description, contactName, contactEmail, contactPhone, warrantySerialNumber, attachments } = req.body;
 
       // Validate required fields
       if (!customerId || !type || !subject || !description || !contactName || !contactEmail) {
@@ -3600,6 +3600,28 @@ Proporciona tu análisis en el siguiente formato JSON:
         `Incidente creado desde portal de clientes con número ${ticketNumber}`,
         true
       );
+
+      // Save attachments if any were uploaded
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        for (const att of attachments) {
+          if (att.entityId && att.filename && att.originalName && att.mimeType && att.size) {
+            try {
+              await objectStorageService.getObjectEntityFile(att.entityId);
+              await db.insert(incidentAttachments).values({
+                incidentId: newIncident.id,
+                filename: att.filename,
+                originalName: att.originalName,
+                mimeType: att.mimeType,
+                size: att.size,
+                storagePath: att.entityId,
+                isFromCustomer: true,
+              });
+            } catch (error) {
+              console.error("Error saving attachment:", att.entityId, error);
+            }
+          }
+        }
+      }
 
       // Return the ticket info and access URL
       res.status(201).json({
@@ -3746,6 +3768,120 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error adding customer comment:", error);
       res.status(500).json({ error: "Error al agregar comentario" });
+    }
+  });
+
+  // Get upload URL for incident attachment (public - with token)
+  app.post("/api/public/incidents/:token/attachments/upload-url", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { filename, mimeType } = req.body;
+
+      if (!filename || !mimeType) {
+        return res.status(400).json({ error: "Se requiere nombre de archivo y tipo MIME" });
+      }
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.accessToken, token),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      if (incident.accessTokenExpires && new Date(incident.accessTokenExpires) < new Date()) {
+        return res.status(403).json({ error: "El enlace ha expirado" });
+      }
+
+      const { uploadURL, entityId } = await objectStorageService.getObjectEntityUploadURL();
+      
+      res.json({ uploadURL, entityId, incidentId: incident.id });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Error al obtener URL de subida" });
+    }
+  });
+
+  // Confirm attachment upload (public - with token)
+  app.post("/api/public/incidents/:token/attachments", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { entityId, filename, originalName, mimeType, size } = req.body;
+
+      if (!entityId || !filename || !originalName || !mimeType || !size) {
+        return res.status(400).json({ error: "Faltan datos del archivo" });
+      }
+
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.accessToken, token),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
+
+      // Verify file exists in storage
+      try {
+        await objectStorageService.getObjectEntityFile(entityId);
+      } catch (error) {
+        return res.status(400).json({ error: "El archivo no se encontró en el almacenamiento" });
+      }
+
+      const [attachment] = await db.insert(incidentAttachments).values({
+        incidentId: incident.id,
+        filename,
+        originalName,
+        mimeType,
+        size,
+        storagePath: entityId,
+        isFromCustomer: true,
+      }).returning();
+
+      await logIncidentActivity(
+        incident.id,
+        'attachment_added',
+        null,
+        undefined,
+        undefined,
+        `Cliente adjuntó archivo: ${originalName}`,
+        true
+      );
+
+      res.status(201).json(attachment);
+    } catch (error) {
+      console.error("Error saving attachment:", error);
+      res.status(500).json({ error: "Error al guardar el archivo" });
+    }
+  });
+
+  // Get upload URL for new incident (public - no token yet)
+  app.post("/api/public/incidents/upload-url", async (req, res) => {
+    try {
+      const { filename, mimeType } = req.body;
+
+      if (!filename || !mimeType) {
+        return res.status(400).json({ error: "Se requiere nombre de archivo y tipo MIME" });
+      }
+
+      // Validate file type
+      const allowedTypes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'video/mp4', 'video/webm', 'video/quicktime',
+        'application/pdf',
+        'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ];
+
+      if (!allowedTypes.includes(mimeType)) {
+        return res.status(400).json({ error: "Tipo de archivo no permitido" });
+      }
+
+      const { uploadURL, entityId } = await objectStorageService.getObjectEntityUploadURL();
+      
+      res.json({ uploadURL, entityId });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Error al obtener URL de subida" });
     }
   });
 
