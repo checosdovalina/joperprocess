@@ -3737,9 +3737,13 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/public/incidents/:token/comments", async (req, res) => {
     try {
       const { token } = req.params;
-      const { content } = req.body;
+      const { content, attachments } = req.body;
 
-      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      // Allow empty content if there are attachments
+      const hasContent = content && typeof content === 'string' && content.trim().length > 0;
+      const hasAttachments = attachments && Array.isArray(attachments) && attachments.length > 0;
+
+      if (!hasContent && !hasAttachments) {
         return res.status(400).json({ error: "El comentario no puede estar vacío" });
       }
 
@@ -3761,10 +3765,43 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       const [comment] = await db.insert(incidentComments).values({
         incidentId: incident.id,
-        content: content.trim(),
+        content: hasContent ? content.trim() : "[Evidencia adjunta]",
         visibility: CommentVisibility.CUSTOMER,
         isFromCustomer: true,
       }).returning();
+
+      // Save attachments if provided
+      if (hasAttachments) {
+        const allowedMimeTypes = [
+          'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+          'video/mp4', 'video/webm', 'video/quicktime',
+          'application/pdf',
+          'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+        const maxFileSize = 50 * 1024 * 1024; // 50MB
+
+        for (const att of attachments) {
+          if (att.entityId && att.filename && att.originalName && att.mimeType && att.size) {
+            if (!allowedMimeTypes.includes(att.mimeType)) continue;
+            if (att.size > maxFileSize) continue;
+            try {
+              await objectStorageService.getObjectEntityFile(att.entityId);
+              await db.insert(incidentAttachments).values({
+                incidentId: incident.id,
+                filename: att.filename,
+                originalName: att.originalName,
+                mimeType: att.mimeType,
+                size: att.size,
+                storagePath: att.entityId,
+                isFromCustomer: true,
+              });
+            } catch (error) {
+              console.error("Error saving comment attachment:", att.entityId, error);
+            }
+          }
+        }
+      }
 
       await logIncidentActivity(
         incident.id,
@@ -3772,7 +3809,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         null,
         undefined,
         undefined,
-        'Comentario agregado por el cliente',
+        hasAttachments ? 'Comentario con evidencia agregado por el cliente' : 'Comentario agregado por el cliente',
         true
       );
 

@@ -27,8 +27,22 @@ import {
   Wrench,
   FileText,
   XCircle,
+  Upload,
+  Paperclip,
+  Image,
+  Video,
+  File,
+  X,
 } from "lucide-react";
 import { IncidentType, IncidentStatus, IncidentUrgency } from "@shared/schema";
+
+type UploadedFile = {
+  entityId: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+};
 
 type Comment = {
   id: string;
@@ -142,12 +156,26 @@ function getUrgencyBadge(urgency: string) {
   );
 }
 
+function getFileIcon(mimeType: string) {
+  if (mimeType.startsWith("image/")) return Image;
+  if (mimeType.startsWith("video/")) return Video;
+  return File;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
 export default function PublicTicketPage() {
   const [, params] = useRoute("/soporte/ticket/:token");
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newComment, setNewComment] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const token = params?.token;
 
@@ -164,12 +192,83 @@ export default function PublicTicketPage() {
     enabled: !!token,
   });
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+
+    for (const file of Array.from(files)) {
+      try {
+        const uploadUrlResponse = await fetch("/api/public/incidents/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            mimeType: file.type,
+            size: file.size,
+          }),
+        });
+
+        if (!uploadUrlResponse.ok) {
+          const error = await uploadUrlResponse.json();
+          throw new Error(error.error || "Error al preparar subida");
+        }
+
+        const { uploadUrl, entityId, filename } = await uploadUrlResponse.json();
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Error al subir archivo");
+        }
+
+        await fetch("/api/public/incidents/confirm-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entityId }),
+        });
+
+        setUploadedFiles((prev) => [
+          ...prev,
+          {
+            entityId,
+            filename,
+            originalName: file.name,
+            mimeType: file.type,
+            size: file.size,
+          },
+        ]);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Error al subir archivo",
+          variant: "destructive",
+        });
+      }
+    }
+
+    setIsUploading(false);
+    event.target.value = "";
+  };
+
+  const removeFile = (entityId: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.entityId !== entityId));
+  };
+
   const addCommentMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (data: { content: string; attachments: UploadedFile[] }) => {
       const response = await fetch(`/api/public/incidents/${token}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content: data.content,
+          attachments: data.attachments,
+        }),
       });
       if (!response.ok) {
         const err = await response.json();
@@ -179,6 +278,7 @@ export default function PublicTicketPage() {
     },
     onSuccess: () => {
       setNewComment("");
+      setUploadedFiles([]);
       queryClient.invalidateQueries({ queryKey: ["/api/public/incidents", token] });
       toast({
         title: "Comentario agregado",
@@ -222,8 +322,11 @@ export default function PublicTicketPage() {
   });
 
   const handleSubmitComment = () => {
-    if (newComment.trim()) {
-      addCommentMutation.mutate(newComment.trim());
+    if (newComment.trim() || uploadedFiles.length > 0) {
+      addCommentMutation.mutate({
+        content: newComment.trim(),
+        attachments: uploadedFiles,
+      });
     }
   };
 
@@ -442,7 +545,7 @@ export default function PublicTicketPage() {
             {!isClosed && (
               <>
                 <Separator className="my-4" />
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Textarea
                     placeholder="Escriba su comentario..."
                     value={newComment}
@@ -450,10 +553,76 @@ export default function PublicTicketPage() {
                     rows={3}
                     data-testid="input-new-comment"
                   />
-                  <div className="flex justify-end">
+
+                  {uploadedFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {uploadedFiles.map((file) => {
+                        const FileIcon = getFileIcon(file.mimeType);
+                        return (
+                          <div
+                            key={file.entityId}
+                            className="flex items-center gap-3 p-2 bg-muted rounded-lg"
+                            data-testid={`file-item-${file.entityId}`}
+                          >
+                            <FileIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm truncate">{file.originalName}</p>
+                              <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeFile(file.entityId)}
+                              data-testid={`button-remove-file-${file.entityId}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <input
+                        type="file"
+                        id="comment-file-upload"
+                        className="hidden"
+                        multiple
+                        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
+                        onChange={handleFileUpload}
+                        disabled={isUploading}
+                        data-testid="input-comment-file-upload"
+                      />
+                      <label htmlFor="comment-file-upload">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isUploading}
+                          asChild
+                        >
+                          <span className="cursor-pointer">
+                            {isUploading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Subiendo...
+                              </>
+                            ) : (
+                              <>
+                                <Paperclip className="h-4 w-4 mr-2" />
+                                Adjuntar Evidencia
+                              </>
+                            )}
+                          </span>
+                        </Button>
+                      </label>
+                    </div>
                     <Button
                       onClick={handleSubmitComment}
-                      disabled={!newComment.trim() || addCommentMutation.isPending}
+                      disabled={(!newComment.trim() && uploadedFiles.length === 0) || addCommentMutation.isPending || isUploading}
                       data-testid="button-send-comment"
                     >
                       {addCommentMutation.isPending ? (
