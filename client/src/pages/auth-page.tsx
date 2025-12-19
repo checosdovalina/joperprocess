@@ -82,7 +82,7 @@ export default function AuthPage() {
           <div className="flex items-center gap-3 mb-8">
             <img src={nexxoLogo} alt="Nexxo" className="h-12 w-12" />
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">NEXXO</h1>
+              <h1 className="text-2xl font-bold text-primary">NEXXO</h1>
               <p className="text-sm text-muted-foreground">Sistema Comercial</p>
             </div>
           </div>
@@ -262,7 +262,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <div className="hidden md:flex items-center justify-center p-8 bg-gradient-to-br from-blue-600 to-purple-600 text-white">
+      <div className="hidden md:flex items-center justify-center p-8 bg-primary text-primary-foreground">
         <div className="max-w-lg space-y-6">
           <div className="flex items-center gap-4 mb-4">
             <img src={nexxoLogo} alt="Nexxo" className="h-16 w-16" />

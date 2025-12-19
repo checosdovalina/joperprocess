@@ -64,7 +64,7 @@ export default function LandingPage() {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <img src={nexxoLogo} alt="Nexxo" className="h-10 w-10" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+            <span className="text-2xl font-bold text-primary">
               NEXXO
             </span>
           </div>
@@ -75,7 +75,7 @@ export default function LandingPage() {
               </Button>
             </Link>
             <Link href="/auth?tab=register">
-              <Button data-testid="link-register">
+              <Button className="bg-primary hover:bg-primary/90" data-testid="link-register">
                 Comenzar
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -85,17 +85,17 @@ export default function LandingPage() {
       </header>
 
       <section className="relative overflow-hidden py-20 md:py-32">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-purple-600/10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5" />
         <div className="container mx-auto px-4 relative">
           <div className="max-w-4xl mx-auto text-center space-y-8">
-            <div className="inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-4 py-2 rounded-full text-sm font-medium">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium">
               <Zap className="h-4 w-4" />
               Sistema Comercial de Nueva Generación
             </div>
             
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
               Gestiona todo tu proceso comercial en{" "}
-              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="text-primary">
                 un solo lugar
               </span>
             </h1>
@@ -172,7 +172,7 @@ export default function LandingPage() {
               </ul>
             </div>
             <div className="relative">
-              <div className="aspect-square rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 p-1">
+              <div className="aspect-square rounded-2xl bg-primary p-1">
                 <div className="h-full w-full rounded-xl bg-background flex items-center justify-center">
                   <img src={nexxoLogo} alt="Nexxo" className="w-48 h-48 opacity-80" />
                 </div>

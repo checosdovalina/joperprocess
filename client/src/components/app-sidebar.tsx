@@ -151,7 +151,7 @@ export function AppSidebar() {
         <div className="flex items-center gap-3">
           <img src={nexxoLogo} alt="Nexxo" className="h-10 w-10" />
           <div>
-            <h2 className="font-semibold text-base bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">NEXXO</h2>
+            <h2 className="font-semibold text-base text-primary">NEXXO</h2>
             <p className="text-xs text-muted-foreground">Sistema Comercial</p>
           </div>
         </div>
