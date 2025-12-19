@@ -3849,7 +3849,8 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(403).json({ error: "El enlace ha expirado" });
       }
 
-      const { uploadURL, entityId } = await objectStorageService.getObjectEntityUploadURL();
+      const objectStorage = new ObjectStorageService();
+      const { uploadURL, entityId } = await objectStorage.getObjectEntityUploadURL();
       
       res.json({ uploadURL, entityId, incidentId: incident.id });
     } catch (error) {
@@ -3877,8 +3878,9 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       // Verify file exists in storage
+      const objectStorage = new ObjectStorageService();
       try {
-        await objectStorageService.getObjectEntityFile(entityId);
+        await objectStorage.getObjectEntityFile(entityId);
       } catch (error) {
         return res.status(400).json({ error: "El archivo no se encontró en el almacenamiento" });
       }
