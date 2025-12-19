@@ -51,6 +51,15 @@ const incidentFormSchema = z.object({
   contactName: z.string().min(2, "Ingrese su nombre"),
   contactEmail: z.string().email("Ingrese un correo válido"),
   contactPhone: z.string().optional(),
+  warrantySerialNumber: z.string().optional(),
+}).refine((data) => {
+  if (data.type === IncidentType.GARANTIA && (!data.warrantySerialNumber || data.warrantySerialNumber.trim().length < 3)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Ingrese el número de serie del producto (mínimo 3 caracteres)",
+  path: ["warrantySerialNumber"],
 });
 
 type IncidentFormData = z.infer<typeof incidentFormSchema>;
@@ -123,6 +132,7 @@ export default function PublicSupportPage() {
       contactName: "",
       contactEmail: "",
       contactPhone: "",
+      warrantySerialNumber: "",
     },
   });
 
@@ -561,6 +571,29 @@ export default function PublicSupportPage() {
                         </FormItem>
                       )}
                     />
+
+                    {form.watch("type") === IncidentType.GARANTIA && (
+                      <FormField
+                        control={form.control}
+                        name="warrantySerialNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Número de Serie del Producto</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Ej: SN-2024-001234"
+                                {...field}
+                                data-testid="input-warranty-serial"
+                              />
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground">
+                              El número de serie se encuentra en la placa del producto o en su factura
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={form.control}

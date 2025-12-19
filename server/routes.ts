@@ -3546,12 +3546,19 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Create incident from public portal (no auth required)
   app.post("/api/public/incidents", async (req, res) => {
     try {
-      const { customerId, type, urgency, subject, description, contactName, contactEmail, contactPhone } = req.body;
+      const { customerId, type, urgency, subject, description, contactName, contactEmail, contactPhone, warrantySerialNumber } = req.body;
 
       // Validate required fields
       if (!customerId || !type || !subject || !description || !contactName || !contactEmail) {
         return res.status(400).json({ 
           error: "Faltan campos requeridos: empresa, tipo, asunto, descripción, nombre de contacto y correo" 
+        });
+      }
+
+      // Validate serial number for warranty incidents
+      if (type === IncidentType.GARANTIA && (!warrantySerialNumber || warrantySerialNumber.trim().length < 3)) {
+        return res.status(400).json({
+          error: "Para incidentes de garantía se requiere el número de serie del producto"
         });
       }
 
@@ -3577,6 +3584,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         contactName,
         contactEmail,
         contactPhone: contactPhone || null,
+        warrantySerialNumber: type === IncidentType.GARANTIA ? warrantySerialNumber : null,
         ticketNumber,
         accessToken,
         accessTokenExpires,

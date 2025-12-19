@@ -507,6 +507,7 @@ export const incidents = pgTable("incidents", {
   assignedTo: varchar("assigned_to").references(() => users.id),
   assignedArea: text("assigned_area"),
   reworkCause: text("rework_cause"),
+  warrantySerialNumber: text("warranty_serial_number"),
   warrantyValidated: boolean("warranty_validated"),
   warrantyValid: boolean("warranty_valid"),
   resolution: text("resolution"),
