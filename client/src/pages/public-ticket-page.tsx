@@ -194,13 +194,13 @@ export default function PublicTicketPage() {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !token) return;
 
     setIsUploading(true);
 
     for (const file of Array.from(files)) {
       try {
-        const uploadUrlResponse = await fetch("/api/public/incidents/upload-url", {
+        const uploadUrlResponse = await fetch(`/api/public/incidents/${token}/attachments/upload-url`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -215,9 +215,9 @@ export default function PublicTicketPage() {
           throw new Error(error.error || "Error al preparar subida");
         }
 
-        const { uploadUrl, entityId, filename } = await uploadUrlResponse.json();
+        const { uploadURL, entityId } = await uploadUrlResponse.json();
 
-        const uploadResponse = await fetch(uploadUrl, {
+        const uploadResponse = await fetch(uploadURL, {
           method: "PUT",
           headers: { "Content-Type": file.type },
           body: file,
@@ -232,6 +232,9 @@ export default function PublicTicketPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ entityId }),
         });
+
+        const ext = file.name.split('.').pop() || '';
+        const filename = `${entityId}.${ext}`;
 
         setUploadedFiles((prev) => [
           ...prev,
