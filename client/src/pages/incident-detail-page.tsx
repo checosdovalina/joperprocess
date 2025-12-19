@@ -87,8 +87,8 @@ type IncidentActivity = {
 };
 
 type IncidentAttachment = {
-  id: number;
-  incidentId: number;
+  id: string;
+  incidentId: string;
   filename: string;
   originalName: string;
   mimeType: string;

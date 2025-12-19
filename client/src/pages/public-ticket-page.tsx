@@ -46,8 +46,8 @@ type UploadedFile = {
 };
 
 type Attachment = {
-  id: number;
-  incidentId: number;
+  id: string;
+  incidentId: string;
   filename: string;
   originalName: string;
   mimeType: string;

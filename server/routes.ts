@@ -3964,7 +3964,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       const attachment = await db.query.incidentAttachments.findFirst({
         where: and(
-          eq(incidentAttachments.id, parseInt(attachmentId)),
+          eq(incidentAttachments.id, attachmentId),
           eq(incidentAttachments.incidentId, incident.id)
         ),
       });
