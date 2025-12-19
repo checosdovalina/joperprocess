@@ -3510,7 +3510,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   // ========== PUBLIC INCIDENTS (Customer Portal) ==========
 
-  // Search customers for public portal (limited info)
+  // Search customers for public portal (minimal info for security)
   app.get("/api/public/customers/search", async (req, res) => {
     try {
       const { q } = req.query;
@@ -3525,16 +3525,16 @@ Proporciona tu análisis en el siguiente formato JSON:
         columns: {
           id: true,
           name: true,
-          rfc: true,
-          email: true,
         },
       });
 
-      // Filter by name or RFC
+      // Filter by name only (don't expose RFC for search to protect PII)
       const filtered = allCustomers.filter(c => 
-        c.name.toLowerCase().includes(searchTerm) ||
-        (c.rfc && c.rfc.toLowerCase().includes(searchTerm))
-      ).slice(0, 10); // Limit to 10 results
+        c.name.toLowerCase().includes(searchTerm)
+      ).slice(0, 10).map(c => ({
+        id: c.id,
+        name: c.name,
+      })); // Only return id and name
 
       res.json(filtered);
     } catch (error) {

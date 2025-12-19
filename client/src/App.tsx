@@ -23,6 +23,8 @@ import IncidentsPage from "@/pages/incidents-page";
 import IncidentDetailPage from "@/pages/incident-detail-page";
 import PublicQuotationApproval from "@/pages/public-quotation-approval";
 import PublicIncidentPortal from "@/pages/public-incident-portal";
+import PublicSupportPage from "@/pages/public-support-page";
+import PublicTicketPage from "@/pages/public-ticket-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -79,7 +81,9 @@ function MainLayout() {
 export default function App() {
   const [isQuotationApproval] = useRoute("/aprobar-cotizacion/:token");
   const [isIncidentPortal] = useRoute("/public/incidents/:token");
-  const isPublicRoute = isQuotationApproval || isIncidentPortal;
+  const [isSupportPage] = useRoute("/soporte");
+  const [isTicketPage] = useRoute("/soporte/ticket/:token");
+  const isPublicRoute = isQuotationApproval || isIncidentPortal || isSupportPage || isTicketPage;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -89,6 +93,8 @@ export default function App() {
             <Switch>
               <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
               <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
+              <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
+              <Route path="/soporte" component={PublicSupportPage} />
             </Switch>
           ) : (
             <MainLayout />

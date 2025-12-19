@@ -65,8 +65,6 @@ type LookupFormData = z.infer<typeof lookupSchema>;
 type CustomerSearchResult = {
   id: string;
   name: string;
-  rfc: string | null;
-  email: string | null;
 };
 
 const typeLabels: Record<string, { label: string; icon: typeof AlertTriangle; description: string }> = {
@@ -483,7 +481,7 @@ export default function PublicSupportPage() {
                         )}
                       </div>
                       
-                      {searchResults.length > 0 && (
+                      {customerSearch.length >= 3 && searchResults.length > 0 && (
                         <div className="mt-2 border rounded-md divide-y max-h-48 overflow-auto">
                           {searchResults.map((customer) => (
                             <button
@@ -494,26 +492,23 @@ export default function PublicSupportPage() {
                               data-testid={`customer-option-${customer.id}`}
                             >
                               <Building2 className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="font-medium">{customer.name}</p>
-                                {customer.rfc && (
-                                  <p className="text-xs text-muted-foreground">RFC: {customer.rfc}</p>
-                                )}
-                              </div>
+                              <p className="font-medium">{customer.name}</p>
                             </button>
                           ))}
+                        </div>
+                      )}
+
+                      {customerSearch.length >= 3 && !isSearching && searchResults.length === 0 && !selectedCustomer && (
+                        <div className="mt-2 p-3 border rounded-md text-center text-muted-foreground">
+                          <p className="text-sm">No se encontraron empresas con ese nombre</p>
+                          <p className="text-xs">Verifique el nombre e intente de nuevo</p>
                         </div>
                       )}
 
                       {selectedCustomer && (
                         <div className="mt-2 p-3 bg-muted rounded-md flex items-center gap-2">
                           <Building2 className="h-4 w-4 text-primary" />
-                          <div className="flex-1">
-                            <p className="font-medium">{selectedCustomer.name}</p>
-                            {selectedCustomer.rfc && (
-                              <p className="text-xs text-muted-foreground">RFC: {selectedCustomer.rfc}</p>
-                            )}
-                          </div>
+                          <p className="font-medium flex-1">{selectedCustomer.name}</p>
                           <Button
                             type="button"
                             variant="ghost"
