@@ -1269,12 +1269,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: quotation.user,
       });
 
-      const objectStorageService = new ObjectStorageService();
-      const pdfPath = await objectStorageService.uploadQuotationPdfToStorage(
-        pdfStream,
-        quotation.folio,
-        userId
-      );
+      let pdfPath: string;
+      
+      if (useLocalStorage()) {
+        // Save PDF locally using the local storage service
+        pdfPath = await localStorageService.uploadQuotationPdfToStorage(
+          pdfStream,
+          quotation.folio,
+          userId
+        );
+      } else {
+        const objectStorageService = new ObjectStorageService();
+        pdfPath = await objectStorageService.uploadQuotationPdfToStorage(
+          pdfStream,
+          quotation.folio,
+          userId
+        );
+      }
 
       // Update quotation with PDF path and approval token
       const scopedStorage = createTenantScopedStorage(req);
@@ -1406,12 +1417,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           user: quotation.user,
         });
 
-        const objectStorageService = new ObjectStorageService();
-        const pdfPath = await objectStorageService.uploadQuotationPdfToStorage(
-          pdfStream,
-          quotation.folio,
-          adminId
-        );
+        let pdfPath: string;
+        
+        if (useLocalStorage()) {
+          pdfPath = await localStorageService.uploadQuotationPdfToStorage(
+            pdfStream,
+            quotation.folio,
+            adminId
+          );
+        } else {
+          const objectStorageService = new ObjectStorageService();
+          pdfPath = await objectStorageService.uploadQuotationPdfToStorage(
+            pdfStream,
+            quotation.folio,
+            adminId
+          );
+        }
 
         // Update PDF path and approval token
         await scopedStorage.updateQuotation(id, { pdfPath, approvalToken });
