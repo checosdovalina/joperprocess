@@ -1058,11 +1058,22 @@ export const insertProductCategorySchema = createInsertSchema(productCategories)
   createdAt: true,
 });
 
+// Helper to transform empty strings to null for optional numeric fields
+const emptyToNull = z.preprocess((val) => (val === "" ? null : val), z.string().nullable().optional());
+// Helper to transform empty strings to "0" for required numeric fields with defaults
+const emptyToZero = z.preprocess((val) => (val === "" ? "0" : val), z.string());
+
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   tenantId: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  cost: emptyToNull,
+  stock: emptyToZero,
+  minStock: emptyToNull,
+  maxDiscount: emptyToNull,
+  taxRate: emptyToZero,
 });
 
 export const updateProductSchema = createInsertSchema(products).omit({
