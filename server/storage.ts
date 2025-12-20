@@ -548,8 +548,15 @@ function getTenantContext(req: Request): TenantContext {
   const user = req.user;
   const tenant = req.tenant;
   
-  // SuperAdmin on main domain can access all data
+  // SuperAdmin on main domain
   if (user?.isSuperAdmin && (!tenant || !tenant.subdomain)) {
+    // Check if SuperAdmin has selected a specific tenant via header
+    const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
+    if (selectedTenantId) {
+      // SuperAdmin working in context of a specific tenant
+      return { tenantId: selectedTenantId, allowGlobal: false };
+    }
+    // SuperAdmin without selection - global access
     return { tenantId: null, allowGlobal: true };
   }
   
