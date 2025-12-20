@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import { Checkin, Customer, User } from "@shared/schema";
 import { ObjectStorageService } from "./objectStorage";
+import { localStorageService } from "./localStorage";
 import sharp from "sharp";
 import pLimit from "p-limit";
 import { Readable } from "stream";
@@ -17,6 +18,11 @@ const MAX_PHOTO_WIDTH = 1280;
 const PHOTO_CONCURRENCY = 3;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 500;
+
+function useLocalStorage(): boolean {
+  return process.env.USE_LOCAL_STORAGE === "true" || 
+         (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
+}
 
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
@@ -44,11 +50,40 @@ async function retryWithBackoff<T>(
 
 async function downloadAndResizePhoto(
   photoEntityId: string,
-  objectStorageService: ObjectStorageService
+  objectStorageService: ObjectStorageService | null
 ): Promise<Buffer | null> {
   try {
+    // For local storage, read from filesystem
+    if (useLocalStorage()) {
+      // Try to find the file with various extensions
+      const extensions = ['', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      let photoBuffer: Buffer | null = null;
+      
+      for (const ext of extensions) {
+        const filePath = `photos/${photoEntityId}${ext}`;
+        photoBuffer = await localStorageService.getFile(filePath);
+        if (photoBuffer) break;
+      }
+      
+      if (!photoBuffer) {
+        console.error(`Local photo not found: ${photoEntityId}`);
+        return null;
+      }
+      
+      const resizedPhoto = await sharp(photoBuffer)
+        .resize(MAX_PHOTO_WIDTH, undefined, {
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      
+      return resizedPhoto;
+    }
+    
+    // For GCS storage
     return await retryWithBackoff(async () => {
-      const photoFile = await objectStorageService.getObjectEntityFile(
+      const photoFile = await objectStorageService!.getObjectEntityFile(
         photoEntityId
       );
       const [photoBuffer] = await photoFile.download();
@@ -154,7 +189,8 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
         doc.fontSize(12).font("Helvetica-Bold").text("Fotografías");
         doc.moveDown(0.5);
 
-        const objectStorageService = new ObjectStorageService();
+        // Only create ObjectStorageService when using GCS
+        const objectStorageService = useLocalStorage() ? null : new ObjectStorageService();
         const photosToProcess = checkin.photos.slice(0, MAX_PHOTOS_PER_PDF);
 
         const limit = pLimit(PHOTO_CONCURRENCY);

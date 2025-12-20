@@ -2818,6 +2818,42 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
     const userId = req.user!.id;
     const objectPath = req.params.objectPath;
+    
+    // For local storage, serve files directly from filesystem
+    if (useLocalStorage()) {
+      try {
+        // Local files are stored with pattern: photos/local-xxx.ext
+        // The objectPath could be the entityId like "local-1234-abc.png"
+        let filePath = objectPath;
+        
+        // If it doesn't include a directory prefix, assume it's a photo
+        if (!filePath.includes('/')) {
+          filePath = `photos/${objectPath}`;
+        }
+        
+        // Try with common extensions if no extension provided
+        const extensions = ['', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        let served = false;
+        
+        for (const ext of extensions) {
+          const tryPath = filePath + ext;
+          if (await localStorageService.streamFile(tryPath, res)) {
+            served = true;
+            break;
+          }
+        }
+        
+        if (!served) {
+          return res.sendStatus(404);
+        }
+        return;
+      } catch (error) {
+        console.error("Error serving local file:", error);
+        return res.sendStatus(500);
+      }
+    }
+    
+    // For GCS storage
     const objectStorageService = new ObjectStorageService();
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(
