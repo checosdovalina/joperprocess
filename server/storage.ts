@@ -717,14 +717,31 @@ export class TenantScopedStorage {
   }
 
   // Orders
-  async getAllOrders(): Promise<Order[]> {
+  async getAllOrders() {
     if (this.ctx.allowGlobal) {
-      return this.base.getAllOrders();
+      return await db.query.orders.findMany({
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+            },
+          },
+        },
+        orderBy: (o, { desc }) => [desc(o.createdAt)],
+      });
     }
     if (!this.ctx.tenantId) return [];
-    return await db.select().from(orders)
-      .where(eq(orders.tenantId, this.ctx.tenantId))
-      .orderBy(desc(orders.createdAt));
+    return await db.query.orders.findMany({
+      where: eq(orders.tenantId, this.ctx.tenantId),
+      with: {
+        quotation: {
+          with: {
+            customer: true,
+          },
+        },
+      },
+      orderBy: (o, { desc }) => [desc(o.createdAt)],
+    });
   }
 
   async createOrder(data: InsertOrder): Promise<Order> {
