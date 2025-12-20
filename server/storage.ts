@@ -985,14 +985,27 @@ export class TenantScopedStorage {
   }
 
   // Scheduled Visits
-  async getAllScheduledVisits(): Promise<ScheduledVisit[]> {
+  async getAllScheduledVisits() {
     if (this.ctx.allowGlobal) {
-      return await db.select().from(scheduledVisits).orderBy(desc(scheduledVisits.scheduledDate));
+      return await db.query.scheduledVisits.findMany({
+        with: {
+          customer: true,
+          user: true,
+          customerLocation: true,
+        },
+        orderBy: (sv, { desc }) => [desc(sv.scheduledDate)],
+      });
     }
     if (!this.ctx.tenantId) return [];
-    return await db.select().from(scheduledVisits)
-      .where(eq(scheduledVisits.tenantId, this.ctx.tenantId))
-      .orderBy(desc(scheduledVisits.scheduledDate));
+    return await db.query.scheduledVisits.findMany({
+      where: eq(scheduledVisits.tenantId, this.ctx.tenantId),
+      with: {
+        customer: true,
+        user: true,
+        customerLocation: true,
+      },
+      orderBy: (sv, { desc }) => [desc(sv.scheduledDate)],
+    });
   }
 }
 
