@@ -3042,21 +3042,24 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       // Set ACL (after issuance marked, before photos update)
-      const objectStorageService = new ObjectStorageService();
-      try {
-        const objectFile = await objectStorageService.getObjectEntityFile(entityId);
-        await setObjectAclPolicy(objectFile, {
-          owner: userId,
-          visibility: "private",
-        });
-      } catch (aclError) {
-        // ACL failed - reset used flag and abort
-        await db.update(pendingUploads)
-          .set({ used: false })
-          .where(eq(pendingUploads.entityId, entityId));
-        
-        console.error("ACL update failed, reset pending upload:", aclError);
-        return res.status(500).json({ error: "Failed to set photo permissions" });
+      // Skip ACL for local storage - files are already saved with proper permissions
+      if (!useLocalStorage()) {
+        const objectStorageService = new ObjectStorageService();
+        try {
+          const objectFile = await objectStorageService.getObjectEntityFile(entityId);
+          await setObjectAclPolicy(objectFile, {
+            owner: userId,
+            visibility: "private",
+          });
+        } catch (aclError) {
+          // ACL failed - reset used flag and abort
+          await db.update(pendingUploads)
+            .set({ used: false })
+            .where(eq(pendingUploads.entityId, entityId));
+          
+          console.error("ACL update failed, reset pending upload:", aclError);
+          return res.status(500).json({ error: "Failed to set photo permissions" });
+        }
       }
 
       // Transaction 2: update photos (only if ACL succeeded)
