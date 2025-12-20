@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage, createTenantScopedStorage } from "./storage";
 import { setupAuth, isAuthenticated, hasRole } from "./auth";
 import { db } from "./db";
 import { z } from "zod";
@@ -50,7 +50,37 @@ import {
 } from "@shared/schema";
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities } from "@shared/schema";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt } from "drizzle-orm";
+import { eq, and, sql, gte, lt, isNull, or } from "drizzle-orm";
+import type { Request } from "express";
+
+// Helper to get effective tenantId for data filtering
+// Returns null only if superadmin on main domain (can see all data)
+// Returns tenantId for all other users (data isolation)
+function getEffectiveTenantId(req: Request): string | null {
+  const user = req.user;
+  const tenant = req.tenant;
+  
+  // SuperAdmin on main domain can access all data
+  if (user?.isSuperAdmin && (!tenant || !tenant.subdomain)) {
+    return null; // No tenant filtering
+  }
+  
+  // Return user's tenantId for data isolation
+  return user?.tenantId || null;
+}
+
+// Helper to require tenantId - throws if not available
+function requireTenantId(req: Request): string {
+  const tenantId = getEffectiveTenantId(req);
+  if (tenantId === null && !req.user?.isSuperAdmin) {
+    throw new Error("Tenant context required");
+  }
+  // For non-superadmin users, tenantId must be present
+  if (!req.user?.tenantId && !req.user?.isSuperAdmin) {
+    throw new Error("User has no tenant assignment");
+  }
+  return req.user?.tenantId || "";
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
@@ -195,7 +225,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Users endpoints (Admin only)
   app.get("/api/users", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
-      const allUsers = await storage.getAllUsers();
+      const tenantId = getEffectiveTenantId(req);
+      let allUsers;
+      
+      if (tenantId) {
+        // Filter by tenant
+        allUsers = await db.select().from(users)
+          .where(eq(users.tenantId, tenantId))
+          .orderBy(users.createdAt);
+      } else {
+        // SuperAdmin on main domain - see all
+        allUsers = await storage.getAllUsers();
+      }
+      
       res.json(allUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -238,7 +280,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customers endpoints
   app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
-      const allCustomers = await storage.getAllCustomers();
+      const scopedStorage = createTenantScopedStorage(req);
+      const allCustomers = await scopedStorage.getAllCustomers();
       res.json(allCustomers);
     } catch (error) {
       console.error("Error fetching customers:", error);
@@ -248,8 +291,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/customers", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertCustomerSchema.parse(req.body);
-      const customer = await storage.createCustomer(validated);
+      const customer = await scopedStorage.createCustomer(validated);
       res.status(201).json(customer);
     } catch (error) {
       console.error("Error creating customer:", error);
@@ -259,6 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
       const validated = updateCustomerSchema.parse(req.body);
       
@@ -271,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
       
-      const customer = await storage.updateCustomer(id, updateData);
+      const customer = await scopedStorage.updateCustomer(id, updateData);
       if (!customer) {
         return res.status(404).json({ error: "Customer not found" });
       }
@@ -284,8 +329,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/customers/:id", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const customer = await storage.getCustomer(id);
+      const customer = await scopedStorage.getCustomer(id);
       if (!customer) {
         return res.status(404).json({ error: "Customer not found" });
       }
@@ -299,16 +345,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer summary for check-in (facturas vencidas, pedidos pendientes, historial)
   app.get("/api/customers/:id/summary", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
       
       // Verify customer exists
-      const customer = await storage.getCustomer(id);
+      const customer = await scopedStorage.getCustomer(id);
       if (!customer) {
         return res.status(404).json({ error: "Customer not found" });
       }
 
       // Get pending/overdue invoices (accounts receivable)
-      const pendingInvoices = await storage.getPendingInvoicesByCustomer(id);
+      const pendingInvoices = await scopedStorage.getPendingInvoicesByCustomer(id);
       
       const overdueInvoices = pendingInvoices.filter(inv => 
         inv.dueDate && new Date(inv.dueDate) < new Date()
@@ -375,7 +422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Get customer locations
-      const locations = await storage.getCustomerLocationsByCustomerId(id);
+      const locations = await scopedStorage.getCustomerLocationsByCustomerId(id);
 
       // Calculate credit usage based on UNPAID INVOICES (pending_payment status)
       // Use balanceDue (outstanding balance) instead of total to account for partial payments
@@ -436,13 +483,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Check-ins endpoints
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
-      const allCheckins = await db.query.checkins.findMany({
-        with: {
-          customer: true,
-          user: true,
-        },
-        orderBy: (checkins, { desc }) => [desc(checkins.checkinAt)],
-      });
+      const scopedStorage = createTenantScopedStorage(req);
+      const allCheckins = await scopedStorage.getAllCheckins();
       res.json(allCheckins);
     } catch (error) {
       console.error("Error fetching checkins:", error);
@@ -474,6 +516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/checkins", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertCheckinSchema.parse({
         ...req.body,
         userId: req.user!.id,
@@ -481,7 +524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Validate that customerLocationId belongs to the specified customerId
       if (validated.customerLocationId) {
-        const location = await storage.getCustomerLocation(validated.customerLocationId);
+        const location = await scopedStorage.getCustomerLocation(validated.customerLocationId);
         if (!location) {
           return res.status(400).json({ error: "Customer location not found" });
         }
@@ -490,7 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const checkin = await storage.createCheckin(validated);
+      const checkin = await scopedStorage.createCheckin(validated);
       res.status(201).json(checkin);
     } catch (error) {
       console.error("Error creating checkin:", error);
@@ -554,13 +597,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Scheduled visits endpoints
   app.get("/api/scheduled-visits", isAuthenticated, async (req, res) => {
     try {
-      const allVisits = await db.query.scheduledVisits.findMany({
-        with: {
-          customer: true,
-          user: true,
-        },
-        orderBy: (scheduledVisits, { asc }) => [asc(scheduledVisits.scheduledDate)],
-      });
+      const scopedStorage = createTenantScopedStorage(req);
+      const allVisits = await scopedStorage.getAllScheduledVisits();
       res.json(allVisits);
     } catch (error) {
       console.error("Error fetching scheduled visits:", error);
@@ -627,7 +665,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // customerLocationId is optional - only validate if provided
       if (validated.customerLocationId) {
-        const location = await storage.getCustomerLocation(validated.customerLocationId);
+        const scopedStorage = createTenantScopedStorage(req);
+        const location = await scopedStorage.getCustomerLocation(validated.customerLocationId);
         if (!location) {
           return res.status(400).json({ error: "Customer location not found" });
         }
@@ -749,7 +788,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         photos: [],
       };
 
-      const checkin = await storage.createCheckin(checkinData);
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.createCheckin(checkinData);
 
       // Update scheduled visit to completed
       await db
@@ -771,7 +811,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Product Categories endpoints
   app.get("/api/product-categories", isAuthenticated, async (req, res) => {
     try {
-      const categories = await storage.getAllProductCategories();
+      const tenantId = getEffectiveTenantId(req);
+      let categories;
+      
+      if (tenantId) {
+        categories = await db.select().from(productCategories)
+          .where(eq(productCategories.tenantId, tenantId))
+          .orderBy(productCategories.name);
+      } else {
+        categories = await storage.getAllProductCategories();
+      }
+      
       res.json(categories);
     } catch (error) {
       console.error("Error fetching product categories:", error);
@@ -781,8 +831,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/product-categories", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const tenantId = req.user?.tenantId;
+      if (!tenantId && !req.user?.isSuperAdmin) {
+        return res.status(403).json({ error: "No tenant context" });
+      }
+      
       const validated = insertProductCategorySchema.parse(req.body);
-      const category = await storage.createProductCategory(validated);
+      const categoryData = { ...validated, tenantId: tenantId || validated.tenantId };
+      const category = await scopedStorage.createProductCategory(categoryData);
       res.status(201).json(category);
     } catch (error) {
       console.error("Error creating product category:", error);
@@ -792,8 +849,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/product-categories/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const category = await storage.updateProductCategory(id, req.body);
+      const category = await scopedStorage.updateProductCategory(id, req.body);
       if (!category) {
         return res.status(404).json({ error: "Category not found" });
       }
@@ -807,18 +865,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Products endpoints
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { q } = req.query;
       let productsData;
       
       if (q && typeof q === 'string') {
-        productsData = await storage.searchProducts(q);
+        productsData = await scopedStorage.searchProducts(q);
       } else {
-        productsData = await db.query.products.findMany({
-          with: {
-            category: true,
-          },
-          orderBy: (products, { asc }) => [asc(products.name)],
-        });
+        productsData = await scopedStorage.getAllProducts();
       }
       
       res.json(productsData);
@@ -852,23 +906,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertProductSchema.parse(req.body);
       
       // Check if code already exists
-      const existing = await storage.getProductByCode(validated.code);
+      const existing = await scopedStorage.getProductByCode(validated.code);
       if (existing) {
         return res.status(400).json({ error: "El código del producto ya existe" });
       }
 
       // Validate category exists if provided
       if (validated.categoryId) {
-        const category = await storage.getProductCategory(validated.categoryId);
+        const category = await scopedStorage.getProductCategory(validated.categoryId);
         if (!category) {
           return res.status(400).json({ error: "La categoría seleccionada no existe. Por favor, crea la categoría primero." });
         }
       }
       
-      const product = await storage.createProduct(validated);
+      const product = await scopedStorage.createProduct(validated);
       res.status(201).json(product);
     } catch (error) {
       console.error("Error creating product:", error);
@@ -878,18 +933,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/products/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
       const validated = updateProductSchema.parse(req.body);
       
       // Check if code already exists for another product
       if (validated.code) {
-        const existing = await storage.getProductByCode(validated.code);
+        const existing = await scopedStorage.getProductByCode(validated.code);
         if (existing && existing.id !== id) {
           return res.status(400).json({ error: "Product code already exists" });
         }
       }
       
-      const product = await storage.updateProduct(id, validated);
+      const product = await scopedStorage.updateProduct(id, validated);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
@@ -904,8 +960,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer Product Prices endpoints
   app.get("/api/customers/:customerId/product-prices", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { customerId } = req.params;
-      const prices = await storage.getCustomerProductPrices(customerId);
+      const prices = await scopedStorage.getCustomerProductPrices(customerId);
       res.json(prices);
     } catch (error) {
       console.error("Error fetching customer product prices:", error);
@@ -915,8 +972,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/customer-product-prices", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertCustomerProductPriceSchema.parse(req.body);
-      const price = await storage.createCustomerProductPrice(validated);
+      const price = await scopedStorage.createCustomerProductPrice(validated);
       res.status(201).json(price);
     } catch (error) {
       console.error("Error creating customer product price:", error);
@@ -927,14 +985,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Quotations endpoints
   app.get("/api/quotations", isAuthenticated, async (req, res) => {
     try {
-      const allQuotations = await db.query.quotations.findMany({
-        with: {
-          customer: true,
-          user: true,
-          items: true,
-        },
-        orderBy: (quotations, { desc }) => [desc(quotations.createdAt)],
-      });
+      const scopedStorage = createTenantScopedStorage(req);
+      const allQuotations = await scopedStorage.getAllQuotations();
       res.json(allQuotations);
     } catch (error) {
       console.error("Error fetching quotations:", error);
@@ -944,6 +996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/quotations", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { items, ...quotationData } = req.body;
       
       // Convert validUntil from string to Date if present
@@ -957,7 +1010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: QuotationStatus.DRAFT,
       });
 
-      const quotation = await storage.createQuotation(validated);
+      const quotation = await scopedStorage.createQuotation(validated);
 
       // Create quotation items if provided
       if (items && Array.isArray(items)) {
@@ -966,7 +1019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...item,
             quotationId: quotation.id,
           });
-          await storage.createQuotationItem(validatedItem);
+          await scopedStorage.createQuotationItem(validatedItem);
         }
       }
 
@@ -1050,7 +1103,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update quotation data
-      const updatedQuotation = await storage.updateQuotation(id, quotationData);
+      const scopedStorage = createTenantScopedStorage(req);
+      const updatedQuotation = await scopedStorage.updateQuotation(id, quotationData);
 
       // Update items if provided
       if (items && Array.isArray(items)) {
@@ -1063,7 +1117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...item,
             quotationId: id,
           });
-          await storage.createQuotationItem(validatedItem);
+          await scopedStorage.createQuotationItem(validatedItem);
         }
       }
 
@@ -1177,7 +1231,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Update quotation with PDF path and approval token
-      await storage.updateQuotation(id, { pdfPath, approvalToken });
+      const scopedStorage = createTenantScopedStorage(req);
+      await scopedStorage.updateQuotation(id, { pdfPath, approvalToken });
 
       // Collect recipients - only send to customer to comply with MailerSend free tier limits
       const recipients: string[] = [];
@@ -1225,7 +1280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update quotation status to pending customer approval
-      await storage.updateQuotation(id, { 
+      await scopedStorage.updateQuotation(id, { 
         status: QuotationStatus.PENDING_APPROVAL,
         sentAt: new Date(),
         sentMethod: emailSent ? "email" : "manual",
@@ -1279,7 +1334,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update quotation with shipping approval - change to SENT status so customer can approve
       // After customer approves, it will go to credit authorization
-      await storage.updateQuotation(id, {
+      const scopedStorage = createTenantScopedStorage(req);
+      await scopedStorage.updateQuotation(id, {
         shippingApprovalStatus: "approved",
         shippingApprovedBy: adminId,
         shippingApprovedAt: new Date(),
@@ -1312,7 +1368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         // Update PDF path and approval token
-        await storage.updateQuotation(id, { pdfPath, approvalToken });
+        await scopedStorage.updateQuotation(id, { pdfPath, approvalToken });
 
         // Send email to customer and salesperson with approval link
         const recipients: string[] = [];
@@ -1383,7 +1439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update quotation with shipping rejection
-      await storage.updateQuotation(id, {
+      const scopedStorage = createTenantScopedStorage(req);
+      await scopedStorage.updateQuotation(id, {
         shippingApprovalStatus: "rejected",
         shippingRejectedBy: adminId,
         shippingRejectedAt: new Date(),
@@ -1447,12 +1504,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/credit-authorizations", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertCreditAuthorizationSchema.parse({
         ...req.body,
         userId: req.user!.id,
         status: CreditAuthStatus.PENDING,
       });
-      const auth = await storage.createCreditAuthorization(validated);
+      const auth = await scopedStorage.createCreditAuthorization(validated);
       res.status(201).json(auth);
     } catch (error) {
       console.error("Error creating credit authorization:", error);
@@ -1485,7 +1543,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.rejectionNotes = rejectionNotes;
       }
 
-      const updatedAuth = await storage.updateCreditAuthorization(id, updateData);
+      const scopedStorage = createTenantScopedStorage(req);
+      const updatedAuth = await scopedStorage.updateCreditAuthorization(id, updateData);
       if (!updatedAuth) {
         return res.status(404).json({ error: "Credit authorization not found" });
       }
@@ -1493,13 +1552,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If approved, create order and update quotation status to converted
       if (updatedAuth.status === CreditAuthStatus.APPROVED) {
         // Create order from quotation
-        const order = await storage.createOrder({
+        const order = await scopedStorage.createOrder({
           quotationId: updatedAuth.quotationId,
           status: OrderStatus.PENDING,
         });
 
         // Update quotation status to converted and link to order
-        await storage.updateQuotation(updatedAuth.quotationId, {
+        await scopedStorage.updateQuotation(updatedAuth.quotationId, {
           status: QuotationStatus.CONVERTED,
           authorizedBy: req.user!.id,
           authorizedAt: new Date(),
@@ -2047,16 +2106,8 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Orders endpoints
   app.get("/api/orders", isAuthenticated, async (req, res) => {
     try {
-      const allOrders = await db.query.orders.findMany({
-        with: {
-          quotation: {
-            with: {
-              customer: true,
-            },
-          },
-        },
-        orderBy: (orders, { desc }) => [desc(orders.createdAt)],
-      });
+      const scopedStorage = createTenantScopedStorage(req);
+      const allOrders = await scopedStorage.getAllOrders();
       res.json(allOrders);
     } catch (error) {
       console.error("Error fetching orders:", error);
@@ -2066,14 +2117,15 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.post("/api/orders", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertOrderSchema.parse({
         ...req.body,
         status: OrderStatus.PENDING,
       });
-      const order = await storage.createOrder(validated);
+      const order = await scopedStorage.createOrder(validated);
 
       // Update quotation status to converted
-      await storage.updateQuotation(validated.quotationId, {
+      await scopedStorage.updateQuotation(validated.quotationId, {
         status: QuotationStatus.CONVERTED,
       });
 
@@ -2086,8 +2138,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.patch("/api/orders/:id", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const updatedOrder = await storage.updateOrder(id, {
+      const updatedOrder = await scopedStorage.updateOrder(id, {
         ...req.body,
         lastUpdatedBy: req.user!.id,
         updatedAt: new Date(),
@@ -2127,7 +2180,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       // Get all releases for this order
-      const releases = await storage.getOrderReleases(id);
+      const scopedStorage = createTenantScopedStorage(req);
+      const releases = await scopedStorage.getOrderReleases(id);
 
       res.json({ ...order, releases });
     } catch (error) {
@@ -2139,8 +2193,9 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Get order releases
   app.get("/api/orders/:id/releases", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const releases = await storage.getOrderReleases(id);
+      const releases = await scopedStorage.getOrderReleases(id);
       res.json(releases);
     } catch (error) {
       console.error("Error fetching order releases:", error);
@@ -2205,6 +2260,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
 
       // Now safe to create invoice and shipment
+      const scopedStorage = createTenantScopedStorage(req);
       let invoiceId: string | undefined;
       let shipmentId: string | undefined;
 
@@ -2215,7 +2271,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         const tax = subtotal * 0.16;
         const total = subtotal + tax;
 
-        const invoice = await storage.createInvoice({
+        const invoice = await scopedStorage.createInvoice({
           orderId: id,
           customerId: order.quotation.customerId,
           serie: "A",
@@ -2231,7 +2287,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       // Create shipment if requested
       if (createShipment && shipmentData) {
-        const shipment = await storage.createShipment({
+        const shipment = await scopedStorage.createShipment({
           orderId: id,
           transporter: shipmentData.transporter || "Por definir",
           transportType: shipmentData.transportType || "propio",
@@ -2243,7 +2299,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       // Create the release with validated data
-      const release = await storage.createOrderRelease({
+      const release = await scopedStorage.createOrderRelease({
         quotationItemId: releaseData.quotationItemId,
         quantityReleased: String(releaseData.quantityReleased),
         orderId: id,
@@ -2256,7 +2312,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       // Check if all items are fully released to update order status
       const quotationItemsResult = order.quotation.items;
 
-      const allReleases = await storage.getOrderReleases(id);
+      const allReleases = await scopedStorage.getOrderReleases(id);
 
       // Calculate total released per item
       const releasedByItem: Record<string, number> = {};
@@ -2277,9 +2333,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       // Update order status based on release state
       if (allFullyReleased) {
-        await storage.updateOrder(id, { status: OrderStatus.SHIPPED });
+        await scopedStorage.updateOrder(id, { status: OrderStatus.SHIPPED });
       } else if (someReleased) {
-        await storage.updateOrder(id, { status: OrderStatus.PARTIALLY_RELEASED });
+        await scopedStorage.updateOrder(id, { status: OrderStatus.PARTIALLY_RELEASED });
       }
 
       res.status(201).json({ release, invoiceId, shipmentId });
@@ -2292,20 +2348,8 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Shipments endpoints
   app.get("/api/shipments", isAuthenticated, async (req, res) => {
     try {
-      const allShipments = await db.query.shipments.findMany({
-        with: {
-          order: {
-            with: {
-              quotation: {
-                with: {
-                  customer: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: (shipments, { desc }) => [desc(shipments.createdAt)],
-      });
+      const scopedStorage = createTenantScopedStorage(req);
+      const allShipments = await scopedStorage.getAllShipments();
       res.json(allShipments);
     } catch (error) {
       console.error("Error fetching shipments:", error);
@@ -2315,8 +2359,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.post("/api/shipments", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertShipmentSchema.parse(req.body);
-      const shipment = await storage.createShipment(validated);
+      const shipment = await scopedStorage.createShipment(validated);
       res.status(201).json(shipment);
     } catch (error) {
       console.error("Error creating shipment:", error);
@@ -2326,8 +2371,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.patch("/api/shipments/:id", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const updatedShipment = await storage.updateShipment(id, req.body);
+      const updatedShipment = await scopedStorage.updateShipment(id, req.body);
       if (!updatedShipment) {
         return res.status(404).json({ error: "Shipment not found" });
       }
@@ -2437,13 +2483,8 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Invoices endpoints
   app.get("/api/invoices", isAuthenticated, async (req, res) => {
     try {
-      const allInvoices = await db.query.invoices.findMany({
-        with: {
-          customer: true,
-          order: true,
-        },
-        orderBy: (invoices, { desc }) => [desc(invoices.issuedAt)],
-      });
+      const scopedStorage = createTenantScopedStorage(req);
+      const allInvoices = await scopedStorage.getAllInvoices();
       res.json(allInvoices);
     } catch (error) {
       console.error("Error fetching invoices:", error);
@@ -2453,8 +2494,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.post("/api/invoices", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertInvoiceSchema.parse(req.body);
-      const invoice = await storage.createInvoice(validated);
+      const invoice = await scopedStorage.createInvoice(validated);
       res.status(201).json(invoice);
     } catch (error) {
       console.error("Error creating invoice:", error);
@@ -2464,8 +2506,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.patch("/api/invoices/:id", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const updatedInvoice = await storage.updateInvoice(id, req.body);
+      const updatedInvoice = await scopedStorage.updateInvoice(id, req.body);
       if (!updatedInvoice) {
         return res.status(404).json({ error: "Invoice not found" });
       }
@@ -2615,6 +2658,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.post("/api/accounts-receivable", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.FACTURACION), async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertInvoiceSchema.parse(req.body);
       
       // Set default values for new receivable
@@ -2624,7 +2668,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         balanceDue: validated.balanceDue || validated.total, // Initialize balance to total
       };
       
-      const invoice = await storage.createInvoice(invoiceData);
+      const invoice = await scopedStorage.createInvoice(invoiceData);
       res.status(201).json(invoice);
     } catch (error) {
       console.error("Error creating account receivable:", error);
@@ -2634,8 +2678,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.patch("/api/accounts-receivable/:id", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.FACTURACION, UserRole.CREDITO_COBRANZA), async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const updatedInvoice = await storage.updateInvoice(id, req.body);
+      const updatedInvoice = await scopedStorage.updateInvoice(id, req.body);
       if (!updatedInvoice) {
         return res.status(404).json({ error: "Invoice not found" });
       }
@@ -2649,14 +2694,8 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Payments endpoints
   app.get("/api/payments", isAuthenticated, async (req, res) => {
     try {
-      const allPayments = await db.query.payments.findMany({
-        with: {
-          invoice: true,
-          customer: true,
-          registeredBy: true,
-        },
-        orderBy: (payments, { desc }) => [desc(payments.createdAt)],
-      });
+      const scopedStorage = createTenantScopedStorage(req);
+      const allPayments = await scopedStorage.getAllPayments();
       res.json(allPayments);
     } catch (error) {
       console.error("Error fetching payments:", error);
@@ -2666,6 +2705,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.post("/api/payments", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
       const validated = insertPaymentSchema.parse({
         ...req.body,
         registeredBy: req.user!.id,
@@ -2673,13 +2713,13 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
 
       // Get the invoice to update balance
-      const invoice = await storage.getInvoice(validated.invoiceId);
+      const invoice = await scopedStorage.getInvoice(validated.invoiceId);
       if (!invoice) {
         return res.status(404).json({ error: "Factura no encontrada" });
       }
 
       // Create the payment
-      const payment = await storage.createPayment(validated);
+      const payment = await scopedStorage.createPayment(validated);
 
       // Calculate new balance
       const paymentAmount = parseFloat(validated.amount);
@@ -2695,7 +2735,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       // Update invoice balance and status
-      await storage.updateInvoice(invoice.id, {
+      await scopedStorage.updateInvoice(invoice.id, {
         balanceDue: newBalance.toFixed(2),
         status: newStatus,
       });
@@ -2769,7 +2809,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       const userId = req.user!.id;
 
       // Verify checkin exists and user owns it
-      const checkin = await storage.getCheckin(checkinId);
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.getCheckin(checkinId);
       if (!checkin) {
         return res.status(404).json({ error: "Check-in not found" });
       }
@@ -2956,7 +2997,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
       const { checkoutNotes } = schema.parse(req.body);
 
-      const checkin = await storage.getCheckin(checkinId);
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.getCheckin(checkinId);
       if (!checkin) {
         return res.status(404).json({ error: "Check-in not found" });
       }
@@ -2970,7 +3012,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Check-in already checked out" });
       }
 
-      const customer = await storage.getCustomer(checkin.customerId);
+      const customer = await scopedStorage.getCustomer(checkin.customerId);
       if (!customer) {
         return res.status(404).json({ error: "Customer not found" });
       }
@@ -2997,7 +3039,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       );
 
       console.log(`Updating check-in with checkout time and PDF path...`);
-      const updatedCheckin = await storage.updateCheckin(checkinId, {
+      const updatedCheckin = await scopedStorage.updateCheckin(checkinId, {
         checkoutAt: new Date(),
         checkoutNotes,
         minutePdfPath: pdfPath,
@@ -3065,7 +3107,8 @@ Proporciona tu análisis en el siguiente formato JSON:
     const userId = req.user!.id;
 
     try {
-      const checkin = await storage.getCheckin(checkinId);
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.getCheckin(checkinId);
       if (!checkin) {
         return res.status(404).json({ error: "Check-in not found" });
       }
@@ -3351,16 +3394,9 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents", isAuthenticated, async (req, res) => {
     try {
       const { status, type, urgency, customerId, assignedTo, search, fromDate, toDate } = req.query;
-
-      let allIncidents = await db.query.incidents.findMany({
-        with: {
-          customer: true,
-          assignee: true,
-          creator: true,
-          product: true,
-        },
-        orderBy: (incidents, { desc }) => [desc(incidents.createdAt)],
-      });
+      
+      const scopedStorage = createTenantScopedStorage(req);
+      let allIncidents = await scopedStorage.getAllIncidents();
 
       // Apply filters
       if (status && typeof status === 'string') {
@@ -3715,8 +3751,10 @@ Proporciona tu análisis en el siguiente formato JSON:
         });
       }
 
-      // Verify customer exists
-      const customer = await storage.getCustomer(customerId);
+      // Verify customer exists (public route - use direct query)
+      const customer = await db.query.customers.findFirst({
+        where: eq(customers.id, customerId),
+      });
       if (!customer) {
         return res.status(404).json({ error: "Empresa no encontrada" });
       }

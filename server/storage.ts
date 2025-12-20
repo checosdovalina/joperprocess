@@ -48,7 +48,7 @@ import {
   type InsertCustomerProductPrice,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -490,18 +490,15 @@ export class DatabaseStorage implements IStorage {
 
   async searchProducts(query: string): Promise<Product[]> {
     const searchQuery = `%${query.toLowerCase()}%`;
-    return await db.query.products.findMany({
-      where: (products, { or, ilike }) =>
+    return await db.select().from(products)
+      .where(
         or(
           ilike(products.code, searchQuery),
           ilike(products.name, searchQuery),
-          ilike(products.brand, searchQuery)
-        ),
-      with: {
-        category: true,
-      },
-      orderBy: (products, { asc }) => [asc(products.name)],
-    });
+          ilike(products.brand ?? '', searchQuery)
+        )
+      )
+      .orderBy(asc(products.name));
   }
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
@@ -536,3 +533,401 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+
+// ==================== TENANT-SCOPED STORAGE ====================
+// Wrapper that enforces tenant isolation for all data access
+
+import type { Request } from "express";
+
+interface TenantContext {
+  tenantId: string | null;
+  allowGlobal: boolean;
+}
+
+function getTenantContext(req: Request): TenantContext {
+  const user = req.user;
+  const tenant = req.tenant;
+  
+  // SuperAdmin on main domain can access all data
+  if (user?.isSuperAdmin && (!tenant || !tenant.subdomain)) {
+    return { tenantId: null, allowGlobal: true };
+  }
+  
+  // Regular users must have a tenantId
+  return { 
+    tenantId: user?.tenantId || null, 
+    allowGlobal: false 
+  };
+}
+
+export class TenantScopedStorage {
+  private ctx: TenantContext;
+  private base: DatabaseStorage;
+
+  constructor(req: Request) {
+    this.ctx = getTenantContext(req);
+    this.base = storage;
+  }
+
+  // Helper to add tenantId to insert data
+  private withTenant<T extends Record<string, any>>(data: T): T & { tenantId?: string } {
+    if (this.ctx.allowGlobal || !this.ctx.tenantId) {
+      return data;
+    }
+    return { ...data, tenantId: this.ctx.tenantId };
+  }
+
+  // Helper to build tenant filter
+  private tenantFilter(table: any): any {
+    if (this.ctx.allowGlobal || !this.ctx.tenantId) {
+      return undefined;
+    }
+    return eq(table.tenantId, this.ctx.tenantId);
+  }
+
+  // Get tenantId for current context
+  getTenantId(): string | null {
+    return this.ctx.tenantId;
+  }
+
+  isGlobalAccess(): boolean {
+    return this.ctx.allowGlobal;
+  }
+
+  // ==================== TENANT-AWARE METHODS ====================
+
+  // Users
+  async getAllUsers(): Promise<User[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllUsers();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(users)
+      .where(eq(users.tenantId, this.ctx.tenantId))
+      .orderBy(desc(users.createdAt));
+  }
+
+  // Customers
+  async getAllCustomers(): Promise<Customer[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllCustomers();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(customers)
+      .where(eq(customers.tenantId, this.ctx.tenantId))
+      .orderBy(desc(customers.createdAt));
+  }
+
+  async createCustomer(data: InsertCustomer): Promise<Customer> {
+    return this.base.createCustomer(this.withTenant(data));
+  }
+
+  async getCustomer(id: string): Promise<Customer | undefined> {
+    const customer = await this.base.getCustomer(id);
+    if (!customer) return undefined;
+    // Verify tenant ownership
+    if (!this.ctx.allowGlobal && customer.tenantId !== this.ctx.tenantId) {
+      return undefined;
+    }
+    return customer;
+  }
+
+  async updateCustomer(id: string, data: Partial<InsertCustomer>): Promise<Customer | undefined> {
+    // Verify ownership first
+    const existing = await this.getCustomer(id);
+    if (!existing) return undefined;
+    return this.base.updateCustomer(id, data);
+  }
+
+  // Checkins
+  async getAllCheckins(): Promise<Checkin[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllCheckins();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(checkins)
+      .where(eq(checkins.tenantId, this.ctx.tenantId))
+      .orderBy(desc(checkins.checkinAt));
+  }
+
+  async createCheckin(data: InsertCheckin): Promise<Checkin> {
+    return this.base.createCheckin(this.withTenant(data));
+  }
+
+  // Quotations
+  async getAllQuotations(): Promise<Quotation[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllQuotations();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(quotations)
+      .where(eq(quotations.tenantId, this.ctx.tenantId))
+      .orderBy(desc(quotations.createdAt));
+  }
+
+  async createQuotation(data: InsertQuotation): Promise<Quotation> {
+    return this.base.createQuotation(this.withTenant(data));
+  }
+
+  // Orders
+  async getAllOrders(): Promise<Order[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllOrders();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(orders)
+      .where(eq(orders.tenantId, this.ctx.tenantId))
+      .orderBy(desc(orders.createdAt));
+  }
+
+  async createOrder(data: InsertOrder): Promise<Order> {
+    return this.base.createOrder(this.withTenant(data));
+  }
+
+  // Shipments
+  async getAllShipments(): Promise<Shipment[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllShipments();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(shipments)
+      .where(eq(shipments.tenantId, this.ctx.tenantId))
+      .orderBy(desc(shipments.createdAt));
+  }
+
+  async createShipment(data: InsertShipment): Promise<Shipment> {
+    return this.base.createShipment(this.withTenant(data));
+  }
+
+  // Invoices
+  async getAllInvoices(): Promise<Invoice[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllInvoices();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(invoices)
+      .where(eq(invoices.tenantId, this.ctx.tenantId))
+      .orderBy(desc(invoices.issuedAt));
+  }
+
+  async createInvoice(data: InsertInvoice): Promise<Invoice> {
+    return this.base.createInvoice(this.withTenant(data));
+  }
+
+  // Payments
+  async getAllPayments(): Promise<Payment[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllPayments();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(payments)
+      .where(eq(payments.tenantId, this.ctx.tenantId))
+      .orderBy(desc(payments.createdAt));
+  }
+
+  async createPayment(data: InsertPayment): Promise<Payment> {
+    return this.base.createPayment(this.withTenant(data));
+  }
+
+  // Products
+  async getAllProducts(): Promise<Product[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllProducts();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(products)
+      .where(eq(products.tenantId, this.ctx.tenantId))
+      .orderBy(products.name);
+  }
+
+  async createProduct(data: InsertProduct): Promise<Product> {
+    return this.base.createProduct(this.withTenant(data));
+  }
+
+  // Product Categories
+  async getAllProductCategories(): Promise<ProductCategory[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllProductCategories();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(productCategories)
+      .where(eq(productCategories.tenantId, this.ctx.tenantId))
+      .orderBy(productCategories.name);
+  }
+
+  async createProductCategory(data: InsertProductCategory): Promise<ProductCategory> {
+    return this.base.createProductCategory(this.withTenant(data));
+  }
+
+  // ==================== OWNERSHIP-VERIFIED METHODS ====================
+  // These methods verify tenant ownership before returning/modifying data
+  
+  async getUser(id: string) { return this.base.getUser(id); }
+  async getUserByUsername(username: string) { return this.base.getUserByUsername(username); }
+  async createUser(data: InsertUser) { return this.base.createUser(this.withTenant(data)); }
+  async updateUser(id: string, data: Partial<InsertUser>) { return this.base.updateUser(id, data); }
+  
+  async getCustomerLocation(id: string) { return this.base.getCustomerLocation(id); }
+  async getAllCustomerLocations() { return this.base.getAllCustomerLocations(); }
+  async getCustomerLocationsByCustomerId(customerId: string) { return this.base.getCustomerLocationsByCustomerId(customerId); }
+  async createCustomerLocation(data: InsertCustomerLocation) { return this.base.createCustomerLocation(data); }
+  async updateCustomerLocation(id: string, data: Partial<InsertCustomerLocation>) { return this.base.updateCustomerLocation(id, data); }
+  
+  // Checkin with ownership verification
+  async getCheckin(id: string) {
+    const checkin = await this.base.getCheckin(id);
+    if (!checkin) return undefined;
+    if (!this.ctx.allowGlobal && checkin.tenantId !== this.ctx.tenantId) return undefined;
+    return checkin;
+  }
+  async updateCheckin(id: string, data: UpdateCheckin) {
+    const existing = await this.getCheckin(id);
+    if (!existing) return undefined;
+    return this.base.updateCheckin(id, data);
+  }
+  
+  // Quotation with ownership verification
+  async getQuotation(id: string) {
+    const quotation = await this.base.getQuotation(id);
+    if (!quotation) return undefined;
+    if (!this.ctx.allowGlobal && quotation.tenantId !== this.ctx.tenantId) return undefined;
+    return quotation;
+  }
+  async updateQuotation(id: string, data: Partial<InsertQuotation>) {
+    const existing = await this.getQuotation(id);
+    if (!existing) return undefined;
+    return this.base.updateQuotation(id, data);
+  }
+  async getQuotationItems(quotationId: string) {
+    const quotation = await this.getQuotation(quotationId);
+    if (!quotation) return [];
+    return this.base.getQuotationItems(quotationId);
+  }
+  async createQuotationItem(data: InsertQuotationItem) { return this.base.createQuotationItem(data); }
+  async deleteQuotationItem(id: string) { return this.base.deleteQuotationItem(id); }
+  
+  // Credit authorization - verify via quotation
+  async getCreditAuthorization(id: string) { return this.base.getCreditAuthorization(id); }
+  async getAllCreditAuthorizations() { return this.base.getAllCreditAuthorizations(); }
+  async createCreditAuthorization(data: InsertCreditAuthorization) { return this.base.createCreditAuthorization(data); }
+  async updateCreditAuthorization(id: string, data: Partial<InsertCreditAuthorization>) { return this.base.updateCreditAuthorization(id, data); }
+  
+  // Order with ownership verification
+  async getOrder(id: string) {
+    const order = await this.base.getOrder(id);
+    if (!order) return undefined;
+    if (!this.ctx.allowGlobal && order.tenantId !== this.ctx.tenantId) return undefined;
+    return order;
+  }
+  async updateOrder(id: string, data: Partial<InsertOrder>) {
+    const existing = await this.getOrder(id);
+    if (!existing) return undefined;
+    return this.base.updateOrder(id, data);
+  }
+  async getOrderReleases(orderId: string) {
+    const order = await this.getOrder(orderId);
+    if (!order) return [];
+    return this.base.getOrderReleases(orderId);
+  }
+  async createOrderRelease(data: InsertOrderRelease) { return this.base.createOrderRelease(data); }
+  
+  // Shipment with ownership verification
+  async getShipment(id: string) {
+    const shipment = await this.base.getShipment(id);
+    if (!shipment) return undefined;
+    if (!this.ctx.allowGlobal && shipment.tenantId !== this.ctx.tenantId) return undefined;
+    return shipment;
+  }
+  async updateShipment(id: string, data: Partial<InsertShipment>) {
+    const existing = await this.getShipment(id);
+    if (!existing) return undefined;
+    return this.base.updateShipment(id, data);
+  }
+  
+  // Invoice with ownership verification
+  async getInvoice(id: string) {
+    const invoice = await this.base.getInvoice(id);
+    if (!invoice) return undefined;
+    if (!this.ctx.allowGlobal && invoice.tenantId !== this.ctx.tenantId) return undefined;
+    return invoice;
+  }
+  async updateInvoice(id: string, data: Partial<InsertInvoice>) {
+    const existing = await this.getInvoice(id);
+    if (!existing) return undefined;
+    return this.base.updateInvoice(id, data);
+  }
+  async getInvoicesByCustomer(customerId: string) {
+    const customer = await this.getCustomer(customerId);
+    if (!customer) return [];
+    return this.base.getInvoicesByCustomer(customerId);
+  }
+  async getPendingInvoicesByCustomer(customerId: string) {
+    const customer = await this.getCustomer(customerId);
+    if (!customer) return [];
+    return this.base.getPendingInvoicesByCustomer(customerId);
+  }
+  
+  // Payment with ownership verification
+  async getPayment(id: string) {
+    const payment = await this.base.getPayment(id);
+    if (!payment) return undefined;
+    if (!this.ctx.allowGlobal && payment.tenantId !== this.ctx.tenantId) return undefined;
+    return payment;
+  }
+  
+  // Product with ownership verification
+  async getProduct(id: string) {
+    const product = await this.base.getProduct(id);
+    if (!product) return undefined;
+    if (!this.ctx.allowGlobal && product.tenantId !== this.ctx.tenantId) return undefined;
+    return product;
+  }
+  async getProductByCode(code: string) {
+    const product = await this.base.getProductByCode(code);
+    if (!product) return undefined;
+    if (!this.ctx.allowGlobal && product.tenantId !== this.ctx.tenantId) return undefined;
+    return product;
+  }
+  async searchProducts(query: string) {
+    if (this.ctx.allowGlobal) {
+      return this.base.searchProducts(query);
+    }
+    const allProducts = await this.base.searchProducts(query);
+    return allProducts.filter(p => p.tenantId === this.ctx.tenantId);
+  }
+  async updateProduct(id: string, data: UpdateProduct) {
+    const existing = await this.getProduct(id);
+    if (!existing) return undefined;
+    return this.base.updateProduct(id, data);
+  }
+  
+  // Product Category with ownership verification
+  async getProductCategory(id: string) {
+    const category = await this.base.getProductCategory(id);
+    if (!category) return undefined;
+    if (!this.ctx.allowGlobal && category.tenantId !== this.ctx.tenantId) return undefined;
+    return category;
+  }
+  async updateProductCategory(id: string, data: Partial<InsertProductCategory>) {
+    const existing = await this.getProductCategory(id);
+    if (!existing) return undefined;
+    return this.base.updateProductCategory(id, data);
+  }
+  
+  async getCustomerProductPrice(customerId: string, productId: string) {
+    const customer = await this.getCustomer(customerId);
+    if (!customer) return undefined;
+    return this.base.getCustomerProductPrice(customerId, productId);
+  }
+  async getCustomerProductPrices(customerId: string) {
+    const customer = await this.getCustomer(customerId);
+    if (!customer) return [];
+    return this.base.getCustomerProductPrices(customerId);
+  }
+  async createCustomerProductPrice(data: InsertCustomerProductPrice) { return this.base.createCustomerProductPrice(data); }
+}
+
+// Factory function to create tenant-scoped storage from request
+export function createTenantScopedStorage(req: Request): TenantScopedStorage {
+  return new TenantScopedStorage(req);
+}

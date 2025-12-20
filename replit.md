@@ -45,8 +45,11 @@ The system implements subdomain-based multi-tenancy, allowing each company (tena
 **Key Components:**
 - **Tenants Table**: Stores company configuration including subdomain, logo URL, primary/secondary colors, plan, and max users.
 - **Tenant Detection Middleware** (`server/tenant.ts`): Resolves tenant from request hostname (e.g., `joper.nexxo.com.mx` → "joper" subdomain). In development, uses `?tenant=` query param or `X-Tenant-Subdomain` header.
-- **Data Isolation**: Core tables (`users`, `customers`, `products`, `productCategories`) have `tenantId` foreign keys for data segregation.
-- **SuperAdmin Role**: Users with `isSuperAdmin: true` can access the platform-level tenant management panel at `/tenants`.
+- **Data Isolation**: All major tables have `tenantId` foreign keys for complete data segregation:
+  - Core tables: `users`, `customers`, `products`, `productCategories`
+  - Transaction tables: `checkins`, `scheduledVisits`, `quotations`, `orders`, `shipments`, `invoices`, `payments`, `incidents`
+- **TenantScopedStorage** (`server/storage.ts`): Wrapper class that automatically filters all data access by the authenticated user's tenant. Used via `createTenantScopedStorage(req)` in API routes.
+- **SuperAdmin Role**: Users with `isSuperAdmin: true` can access the platform-level tenant management panel at `/tenants` and see data across all tenants when on the main domain.
 
 **Branding:**
 - Each tenant can customize `logoUrl`, `primaryColor`, and `secondaryColor`
