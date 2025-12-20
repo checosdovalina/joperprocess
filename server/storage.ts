@@ -89,7 +89,7 @@ export interface IStorage {
 
   // Quotations
   getQuotation(id: string): Promise<Quotation | undefined>;
-  getAllQuotations(): Promise<Quotation[]>;
+  getAllQuotations(): Promise<(Quotation & { customer?: { id: string; name: string; rfc?: string | null; email?: string | null } })[]>;
   createQuotation(quotation: InsertQuotation): Promise<Quotation>;
   updateQuotation(id: string, data: Partial<InsertQuotation>): Promise<Quotation | undefined>;
 
@@ -258,8 +258,24 @@ export class DatabaseStorage implements IStorage {
     return quotation || undefined;
   }
 
-  async getAllQuotations(): Promise<Quotation[]> {
-    return await db.select().from(quotations).orderBy(desc(quotations.createdAt));
+  async getAllQuotations(): Promise<(Quotation & { customer?: { id: string; name: string; rfc?: string | null; email?: string | null } })[]> {
+    const results = await db.select({
+      quotation: quotations,
+      customer: {
+        id: customers.id,
+        name: customers.name,
+        rfc: customers.rfc,
+        email: customers.email,
+      }
+    })
+    .from(quotations)
+    .leftJoin(customers, eq(quotations.customerId, customers.id))
+    .orderBy(desc(quotations.createdAt));
+    
+    return results.map(r => ({
+      ...r.quotation,
+      customer: r.customer || undefined
+    }));
   }
 
   async createQuotation(insertQuotation: InsertQuotation): Promise<Quotation> {
@@ -669,14 +685,29 @@ export class TenantScopedStorage {
   }
 
   // Quotations
-  async getAllQuotations(): Promise<Quotation[]> {
+  async getAllQuotations(): Promise<(Quotation & { customer?: { id: string; name: string; rfc?: string | null; email?: string | null } })[]> {
     if (this.ctx.allowGlobal) {
       return this.base.getAllQuotations();
     }
     if (!this.ctx.tenantId) return [];
-    return await db.select().from(quotations)
-      .where(eq(quotations.tenantId, this.ctx.tenantId))
-      .orderBy(desc(quotations.createdAt));
+    const results = await db.select({
+      quotation: quotations,
+      customer: {
+        id: customers.id,
+        name: customers.name,
+        rfc: customers.rfc,
+        email: customers.email,
+      }
+    })
+    .from(quotations)
+    .leftJoin(customers, eq(quotations.customerId, customers.id))
+    .where(eq(quotations.tenantId, this.ctx.tenantId))
+    .orderBy(desc(quotations.createdAt));
+    
+    return results.map(r => ({
+      ...r.quotation,
+      customer: r.customer || undefined
+    }));
   }
 
   async createQuotation(data: InsertQuotation): Promise<Quotation> {
