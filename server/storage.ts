@@ -548,8 +548,13 @@ function getTenantContext(req: Request): TenantContext {
   const user = req.user;
   const tenant = req.tenant;
   
-  // SuperAdmin on main domain
-  if (user?.isSuperAdmin && (!tenant || !tenant.subdomain)) {
+  // If on a subdomain, always use that tenant (ignore header)
+  if (tenant?.id) {
+    return { tenantId: tenant.id, allowGlobal: false };
+  }
+  
+  // SuperAdmin on main domain (no subdomain)
+  if (user?.isSuperAdmin) {
     // Check if SuperAdmin has selected a specific tenant via header
     const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
     if (selectedTenantId) {
@@ -560,7 +565,7 @@ function getTenantContext(req: Request): TenantContext {
     return { tenantId: null, allowGlobal: true };
   }
   
-  // Regular users must have a tenantId
+  // Regular users use their assigned tenantId
   return { 
     tenantId: user?.tenantId || null, 
     allowGlobal: false 
