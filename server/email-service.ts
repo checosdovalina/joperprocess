@@ -1,9 +1,16 @@
 import { MailerSend, EmailParams, Sender, Recipient, Attachment } from 'mailersend';
 import { ObjectStorageService } from './objectStorage';
+import { localStorageService } from './localStorage';
 
 const mailerSend = new MailerSend({
   apiKey: process.env.MAILERSEND_API_KEY || '',
 });
+
+// Helper to determine if we should use local storage (production without GCS)
+function useLocalStorage(): boolean {
+  return process.env.USE_LOCAL_STORAGE === "true" || 
+         (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
+}
 
 interface SendCheckoutEmailParams {
   to: string[];
@@ -27,10 +34,20 @@ export async function sendCheckoutEmail({
       throw new Error('No recipients provided for email');
     }
 
-    // Download PDF from Google Cloud Storage
-    console.log(`📥 Downloading PDF from GCS: ${pdfPath}`);
-    const objectStorageService = new ObjectStorageService();
-    const pdfBuffer = await objectStorageService.downloadObjectAsBuffer(pdfPath);
+    // Download PDF from storage
+    let pdfBuffer: Buffer;
+    if (useLocalStorage()) {
+      console.log(`📥 Reading PDF from local storage: ${pdfPath}`);
+      const buffer = await localStorageService.getFile(pdfPath);
+      if (!buffer) {
+        throw new Error(`PDF file not found: ${pdfPath}`);
+      }
+      pdfBuffer = buffer;
+    } else {
+      console.log(`📥 Downloading PDF from GCS: ${pdfPath}`);
+      const objectStorageService = new ObjectStorageService();
+      pdfBuffer = await objectStorageService.downloadObjectAsBuffer(pdfPath);
+    }
     
     // Format email subject
     const subject = `Minuta de Visita - ${checkinData.customerName}`;
