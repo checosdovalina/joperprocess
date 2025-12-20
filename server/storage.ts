@@ -749,14 +749,39 @@ export class TenantScopedStorage {
   }
 
   // Shipments
-  async getAllShipments(): Promise<Shipment[]> {
+  async getAllShipments() {
     if (this.ctx.allowGlobal) {
-      return this.base.getAllShipments();
+      return await db.query.shipments.findMany({
+        with: {
+          order: {
+            with: {
+              quotation: {
+                with: {
+                  customer: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: (s, { desc }) => [desc(s.createdAt)],
+      });
     }
     if (!this.ctx.tenantId) return [];
-    return await db.select().from(shipments)
-      .where(eq(shipments.tenantId, this.ctx.tenantId))
-      .orderBy(desc(shipments.createdAt));
+    return await db.query.shipments.findMany({
+      where: eq(shipments.tenantId, this.ctx.tenantId),
+      with: {
+        order: {
+          with: {
+            quotation: {
+              with: {
+                customer: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: (s, { desc }) => [desc(s.createdAt)],
+    });
   }
 
   async createShipment(data: InsertShipment): Promise<Shipment> {
