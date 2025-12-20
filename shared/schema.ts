@@ -1102,6 +1102,12 @@ export const insertIncidentSchema = createInsertSchema(incidents).omit({
   updatedAt: true,
   accessToken: true,
   accessTokenExpires: true,
+}).extend({
+  productInstanceId: emptyToNull,
+  orderId: emptyToNull,
+  shipmentId: emptyToNull,
+  invoiceId: emptyToNull,
+  assignedToId: emptyToNull,
 });
 
 export const updateIncidentSchema = createInsertSchema(incidents).omit({
