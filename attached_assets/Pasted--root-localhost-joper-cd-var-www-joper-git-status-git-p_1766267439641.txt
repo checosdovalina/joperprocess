@@ -1,0 +1,50 @@
+[root@localhost joper]# cd /var/www/joper
+git status
+git pull origin main
+npm run build
+pm2 restart joper-app
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.env
+	ecosystem.config.cjs
+	start.sh
+	storage/
+
+nothing added to commit but untracked files present (use "git add" to track)
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+vite v5.4.20 building for production...
+transforming (4) src/App.tsx
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+✓ 2914 modules transformed.
+../dist/public/index.html                                       0.91 kB │ gzip:   0.50 kB
+../dist/public/assets/nexxo_tech_company_logo-PtiaNbSL.png    762.60 kB
+../dist/public/assets/index-DTKfYPuJ.css                      150.60 kB │ gzip:  23.80 kB
+../dist/public/assets/index-FpyPBWUT.js                     1,142.46 kB │ gzip: 318.81 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.65s
+
+  dist/index.js  281.5kb
+
+⚡ Done in 18ms
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [joper-app](ids: [ 0 ])
+[PM2] [joper-app](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ joper-app          │ fork     │ 35   │ online    │ 0%       │ 5.3mb    │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+[root@localhost joper]# 
