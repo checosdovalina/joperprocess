@@ -65,6 +65,7 @@ export function CheckinPhotoUploader({
     uppyInstance.use(XHRUpload, {
       method: "PUT",
       formData: false,
+      withCredentials: true,
       endpoint: (file) => {
         // Guard against array (bundle mode)
         if (Array.isArray(file)) {
@@ -76,13 +77,26 @@ export function CheckinPhotoUploader({
         if (!uploadURL) {
           throw new Error("Upload URL not found in file meta");
         }
+        // For relative URLs (local storage), prepend origin
+        if (uploadURL.startsWith('/')) {
+          return window.location.origin + uploadURL;
+        }
         return uploadURL;
       },
-      // No custom headers - let GCS signed URL handle content-type
-      headers: {},
-      // GCS doesn't return JSON, so we need to tell Uppy to accept the response
+      // Headers for local uploads need credentials
+      headers: (file) => {
+        const uploadURL = file.meta?.uploadURL as string;
+        // Only set headers for local uploads
+        if (uploadURL?.startsWith('/')) {
+          return {
+            'Content-Type': file.type || 'image/jpeg',
+          };
+        }
+        return {};
+      },
+      // Handle both GCS and local responses
       getResponseData: () => {
-        // Return a valid response object - GCS upload succeeded if we get here
+        // Return a valid response object - upload succeeded if we get here
         return { url: "uploaded" };
       },
     });

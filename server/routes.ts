@@ -2860,6 +2860,29 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(403).json({ error: "Not authorized" });
       }
 
+      // For local storage, return a special response indicating direct upload
+      if (useLocalStorage()) {
+        const entityId = `local-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        
+        // Create pending upload entry
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        const validatedUpload = insertPendingUploadSchema.parse({
+          entityId,
+          userId,
+          checkinId,
+          used: false,
+          expiresAt,
+        });
+        await db.insert(pendingUploads).values(validatedUpload);
+        
+        // Return uploadURL pointing to our direct upload endpoint
+        return res.json({ 
+          uploadURL: `/api/objects/upload-direct/${entityId}`,
+          entityId,
+          useDirectUpload: true
+        });
+      }
+
       const objectStorageService = new ObjectStorageService();
       const { uploadURL, entityId } = await objectStorageService.getObjectEntityUploadURL();
 
@@ -2878,6 +2901,52 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Error getting upload URL" });
+    }
+  });
+  
+  // Direct upload endpoint for local storage
+  app.put("/api/objects/upload-direct/:entityId", isAuthenticated, async (req, res) => {
+    try {
+      const { entityId } = req.params;
+      const userId = req.user!.id;
+      
+      // Verify pending upload exists
+      const pendingUpload = await db.query.pendingUploads.findFirst({
+        where: and(
+          eq(pendingUploads.entityId, entityId),
+          eq(pendingUploads.userId, userId),
+          eq(pendingUploads.used, false)
+        ),
+      });
+      
+      if (!pendingUpload) {
+        return res.status(404).json({ error: "Upload not found or expired" });
+      }
+      
+      // Get the raw body as buffer
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      
+      if (buffer.length === 0) {
+        return res.status(400).json({ error: "No file data received" });
+      }
+      
+      // Determine content type
+      const contentType = req.headers['content-type'] || 'image/jpeg';
+      const ext = contentType.includes('png') ? 'png' : contentType.includes('gif') ? 'gif' : 'jpg';
+      const filename = `${entityId}.${ext}`;
+      
+      // Save to local storage
+      const storagePath = await localStorageService.uploadPhotoToStorage(buffer, filename, contentType);
+      
+      console.log(`✅ Photo uploaded to local storage: ${storagePath}`);
+      res.status(200).json({ success: true, path: storagePath });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ error: "Error uploading file" });
     }
   });
 
