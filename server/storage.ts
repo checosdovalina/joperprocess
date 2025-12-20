@@ -548,6 +548,8 @@ function getTenantContext(req: Request): TenantContext {
   const user = req.user;
   const tenant = req.tenant;
   
+  console.log("[TenantContext]", req.method, req.path, "| tenant.id:", tenant?.id, "| user.tenantId:", user?.tenantId);
+  
   // If on a subdomain, always use that tenant (ignore header)
   if (tenant?.id) {
     return { tenantId: tenant.id, allowGlobal: false };
