@@ -3358,12 +3358,14 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   // ========== INCIDENTS MODULE ==========
 
-  // Helper function to generate ticket number
-  async function generateTicketNumber(): Promise<string> {
+  // Helper function to generate ticket number (scoped by tenant)
+  async function generateTicketNumber(tenantId: string): Promise<string> {
     const year = new Date().getFullYear();
+    // Generate ticket numbers scoped by tenant and year for proper isolation
     const result = await db.execute(sql`
       SELECT COUNT(*) as count FROM ${incidents} 
-      WHERE EXTRACT(YEAR FROM created_at) = ${year}
+      WHERE tenant_id = ${tenantId} 
+      AND EXTRACT(YEAR FROM created_at) = ${year}
     `);
     const count = Number(result.rows[0].count) + 1;
     return `INC-${year}-${String(count).padStart(5, '0')}`;
@@ -3442,9 +3444,12 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      const tenantId = req.user!.tenantId;
 
       const incident = await db.query.incidents.findFirst({
-        where: eq(incidents.id, id),
+        where: tenantId 
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
         with: {
           customer: true,
           assignee: true,
@@ -3484,7 +3489,38 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/incidents", isAuthenticated, async (req, res) => {
     try {
       const user = req.user!;
-      const ticketNumber = await generateTicketNumber();
+      const userTenantId = user.tenantId;
+      const customerId = req.body.customerId;
+      
+      if (!customerId) {
+        return res.status(400).json({ error: "Se requiere un cliente para crear el incidente" });
+      }
+      
+      // Verify customer exists and belongs to user's tenant (or get tenant from customer for superadmin)
+      const customer = await db.query.customers.findFirst({
+        where: eq(customers.id, customerId),
+      });
+      
+      if (!customer) {
+        return res.status(404).json({ error: "Cliente no encontrado" });
+      }
+      
+      // Validate tenant isolation
+      let tenantId: string;
+      if (userTenantId) {
+        // Regular tenant user - customer must belong to their tenant
+        if (customer.tenantId !== userTenantId) {
+          return res.status(403).json({ error: "No tiene permiso para crear incidentes para este cliente" });
+        }
+        tenantId = userTenantId;
+      } else if (user.isSuperAdmin) {
+        // SuperAdmin - use customer's tenant
+        tenantId = customer.tenantId;
+      } else {
+        return res.status(400).json({ error: "No se pudo determinar el tenant para el incidente" });
+      }
+      
+      const ticketNumber = await generateTicketNumber(tenantId);
       const accessToken = randomBytes(32).toString('hex');
       const accessTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
@@ -3495,6 +3531,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       const [newIncident] = await db.insert(incidents).values({
         ...validated,
+        tenantId,
         ticketNumber,
         accessToken,
         accessTokenExpires,
@@ -3521,10 +3558,13 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const { id } = req.params;
       const user = req.user!;
+      const tenantId = user.tenantId;
       const updates = req.body;
 
       const existing = await db.query.incidents.findFirst({
-        where: eq(incidents.id, id),
+        where: tenantId 
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
       });
 
       if (!existing) {
@@ -3583,9 +3623,12 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const { id } = req.params;
       const user = req.user!;
+      const tenantId = user.tenantId;
 
       const incident = await db.query.incidents.findFirst({
-        where: eq(incidents.id, id),
+        where: tenantId 
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
       });
 
       if (!incident) {
@@ -3627,6 +3670,18 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:id/comments", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      const tenantId = req.user!.tenantId;
+
+      // First verify incident belongs to tenant
+      const incident = await db.query.incidents.findFirst({
+        where: tenantId 
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
 
       const comments = await db.query.incidentComments.findMany({
         where: eq(incidentComments.incidentId, id),
@@ -3645,6 +3700,18 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:id/activities", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      const tenantId = req.user!.tenantId;
+
+      // First verify incident belongs to tenant
+      const incident = await db.query.incidents.findFirst({
+        where: tenantId 
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
+      });
+
+      if (!incident) {
+        return res.status(404).json({ error: "Incidente no encontrado" });
+      }
 
       const activities = await db.query.incidentActivities.findMany({
         where: eq(incidentActivities.incidentId, id),
@@ -3663,9 +3730,12 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:incidentId/attachments/:attachmentId/download", isAuthenticated, async (req, res) => {
     try {
       const { incidentId, attachmentId } = req.params;
+      const tenantId = req.user!.tenantId;
 
       const incident = await db.query.incidents.findFirst({
-        where: eq(incidents.id, incidentId),
+        where: tenantId 
+          ? and(eq(incidents.id, incidentId), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, incidentId),
       });
 
       if (!incident) {
@@ -3759,14 +3829,18 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Empresa no encontrada" });
       }
 
+      // Get tenantId from customer for proper isolation
+      const tenantId = customer.tenantId;
+
       // Generate ticket number and access token
-      const ticketNumber = await generateTicketNumber();
+      const ticketNumber = await generateTicketNumber(tenantId);
       const accessToken = randomBytes(32).toString('hex');
       const accessTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
       // Create the incident
       const [newIncident] = await db.insert(incidents).values({
         customerId,
+        tenantId,
         type: type as typeof IncidentType[keyof typeof IncidentType],
         urgency: urgency || IncidentUrgency.MEDIA,
         status: IncidentStatus.NUEVO,
