@@ -22,7 +22,7 @@ declare global {
 }
 
 const BASE_DOMAIN = "nexxo.com.mx";
-const DEV_DOMAINS = ["localhost", "127.0.0.1", "0.0.0.0"];
+const DEV_DOMAINS = ["localhost", "127.0.0.1", "0.0.0.0", ".replit.dev", ".replit.app"];
 
 export async function tenantMiddleware(req: Request, res: Response, next: NextFunction) {
   const hostname = req.hostname || req.headers.host?.split(":")[0] || "";
