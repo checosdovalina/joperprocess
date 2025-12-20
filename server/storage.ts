@@ -3,6 +3,7 @@ import {
   customers,
   customerLocations,
   checkins,
+  scheduledVisits,
   quotations,
   quotationItems,
   creditAuthorizations,
@@ -16,6 +17,7 @@ import {
   customerProductPrices,
   incidents,
   type User,
+  type ScheduledVisit,
   type InsertUser,
   type Customer,
   type InsertCustomer,
@@ -980,6 +982,17 @@ export class TenantScopedStorage {
     return await db.select().from(incidents)
       .where(eq(incidents.tenantId, this.ctx.tenantId))
       .orderBy(desc(incidents.createdAt));
+  }
+
+  // Scheduled Visits
+  async getAllScheduledVisits(): Promise<ScheduledVisit[]> {
+    if (this.ctx.allowGlobal) {
+      return await db.select().from(scheduledVisits).orderBy(desc(scheduledVisits.scheduledDate));
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(scheduledVisits)
+      .where(eq(scheduledVisits.tenantId, this.ctx.tenantId))
+      .orderBy(desc(scheduledVisits.scheduledDate));
   }
 }
 

@@ -1,5 +1,6 @@
 import { MailerSend, EmailParams, Sender, Recipient, Attachment } from "mailersend";
 import { ObjectStorageService } from "./objectStorage";
+import { localStorageService } from "./localStorage";
 
 interface SendQuotationEmailParams {
   to: string[];
@@ -14,6 +15,11 @@ interface SendQuotationEmailParams {
   };
   pdfPath: string;
   approvalUrl?: string;
+}
+
+function useLocalStorage(): boolean {
+  return process.env.USE_LOCAL_STORAGE === "true" || 
+         (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
 }
 
 const mailerSend = new MailerSend({
@@ -31,9 +37,20 @@ export async function sendQuotationEmail({
       throw new Error("No recipients provided for email");
     }
 
-    console.log(`📥 Downloading quotation PDF from GCS: ${pdfPath}`);
-    const objectStorageService = new ObjectStorageService();
-    const pdfBuffer = await objectStorageService.downloadObjectAsBuffer(pdfPath);
+    let pdfBuffer: Buffer;
+    
+    if (useLocalStorage()) {
+      console.log(`📥 Reading quotation PDF from local storage: ${pdfPath}`);
+      const buffer = await localStorageService.getFile(pdfPath);
+      if (!buffer) {
+        throw new Error(`PDF not found in local storage: ${pdfPath}`);
+      }
+      pdfBuffer = buffer;
+    } else {
+      console.log(`📥 Downloading quotation PDF from GCS: ${pdfPath}`);
+      const objectStorageService = new ObjectStorageService();
+      pdfBuffer = await objectStorageService.downloadObjectAsBuffer(pdfPath);
+    }
 
     const subject = `Cotización ${quotationData.folio} - GRUPO JOPER`;
 
