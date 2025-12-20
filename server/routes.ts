@@ -292,7 +292,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const scopedStorage = createTenantScopedStorage(req);
-      const validated = insertCustomerSchema.parse(req.body);
+      const user = req.user!;
+      
+      // tenantId comes from the authenticated user, not from the request body
+      const tenantId = user.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ error: "Usuario no tiene tenant asignado" });
+      }
+      
+      // Validate without tenantId (added server-side)
+      const bodyWithTenant = { ...req.body, tenantId };
+      const validated = insertCustomerSchema.parse(bodyWithTenant);
       const customer = await scopedStorage.createCustomer(validated);
       res.status(201).json(customer);
     } catch (error) {
