@@ -45,10 +45,11 @@ The system implements subdomain-based multi-tenancy, allowing each company (tena
 **Key Components:**
 - **Tenants Table**: Stores company configuration including subdomain, logo URL, primary/secondary colors, plan, and max users.
 - **Tenant Detection Middleware** (`server/tenant.ts`): Resolves tenant from request hostname (e.g., `joper.nexxo.com.mx` → "joper" subdomain). In development, uses `?tenant=` query param or `X-Tenant-Subdomain` header.
-- **Data Isolation**: All major tables have `tenantId` foreign keys for complete data segregation:
-  - Core tables: `users`, `customers`, `products`, `productCategories`
-  - Transaction tables: `checkins`, `scheduledVisits`, `quotations`, `orders`, `shipments`, `invoices`, `payments`, `incidents`
-- **TenantScopedStorage** (`server/storage.ts`): Wrapper class that automatically filters all data access by the authenticated user's tenant. Used via `createTenantScopedStorage(req)` in API routes.
+- **Data Isolation**: All major tables have `tenantId` foreign keys with NOT NULL constraints for complete data segregation:
+  - Core tables: `users` (optional), `customers` (required), `products` (required), `productCategories` (required)
+  - Transaction tables: `checkins`, `scheduledVisits`, `quotations`, `orders`, `shipments`, `invoices`, `payments`, `incidents` (all required)
+  - **Database-level enforcement**: All tenant-scoped tables have `tenantId NOT NULL` constraints, preventing orphaned data
+- **TenantScopedStorage** (`server/storage.ts`): Wrapper class that automatically filters all data access by the authenticated user's tenant. Used via `createTenantScopedStorage(req)` in API routes. All ~45 route operations use scoped storage; only 4 platform-level operations (user management, superadmin product category fallback) use global storage.
 - **SuperAdmin Role**: Users with `isSuperAdmin: true` can access the platform-level tenant management panel at `/tenants` and see data across all tenants when on the main domain.
 
 **Branding:**
