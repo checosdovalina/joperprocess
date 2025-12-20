@@ -14,6 +14,7 @@ import {
   products,
   productCategories,
   customerProductPrices,
+  incidents,
   type User,
   type InsertUser,
   type Customer,
@@ -46,6 +47,7 @@ import {
   type InsertProductCategory,
   type CustomerProductPrice,
   type InsertCustomerProductPrice,
+  type Incident,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike, asc } from "drizzle-orm";
@@ -548,8 +550,6 @@ function getTenantContext(req: Request): TenantContext {
   const user = req.user;
   const tenant = req.tenant;
   
-  console.log("[TenantContext]", req.method, req.path, "| tenant.id:", tenant?.id, "| user.tenantId:", user?.tenantId);
-  
   // If on a subdomain, always use that tenant (ignore header)
   if (tenant?.id) {
     return { tenantId: tenant.id, allowGlobal: false };
@@ -939,6 +939,17 @@ export class TenantScopedStorage {
     return this.base.getCustomerProductPrices(customerId);
   }
   async createCustomerProductPrice(data: InsertCustomerProductPrice) { return this.base.createCustomerProductPrice(data); }
+  
+  // Incidents
+  async getAllIncidents(): Promise<Incident[]> {
+    if (this.ctx.allowGlobal) {
+      return await db.select().from(incidents).orderBy(desc(incidents.createdAt));
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(incidents)
+      .where(eq(incidents.tenantId, this.ctx.tenantId))
+      .orderBy(desc(incidents.createdAt));
+  }
 }
 
 // Factory function to create tenant-scoped storage from request
