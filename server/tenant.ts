@@ -25,7 +25,9 @@ const BASE_DOMAIN = "nexxo.com.mx";
 const DEV_DOMAINS = ["localhost", "127.0.0.1", "0.0.0.0", ".replit.dev", ".replit.app"];
 
 export async function tenantMiddleware(req: Request, res: Response, next: NextFunction) {
-  const hostname = req.hostname || req.headers.host?.split(":")[0] || "";
+  // Support X-Forwarded-Host from reverse proxy (Nginx)
+  const forwardedHost = req.headers['x-forwarded-host'] as string | undefined;
+  const hostname = forwardedHost?.split(":")[0] || req.hostname || req.headers.host?.split(":")[0] || "";
   
   let subdomain: string | null = null;
   
