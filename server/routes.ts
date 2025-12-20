@@ -74,11 +74,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Get all tenants (superadmin only)
+  // Get all tenants (superadmin only, main domain only)
   app.get("/api/tenants", isAuthenticated, async (req, res) => {
     try {
       if (!req.user?.isSuperAdmin) {
         return res.status(403).json({ error: "Only super admins can access tenants" });
+      }
+      
+      // Only allow from main domain (no tenant subdomain)
+      if (req.tenant && req.tenant.subdomain) {
+        return res.status(403).json({ error: "Tenant management only available on main domain" });
       }
       
       const allTenants = await db.select().from(tenants);
@@ -89,11 +94,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create new tenant (superadmin only)
+  // Create new tenant (superadmin only, main domain only)
   app.post("/api/tenants", isAuthenticated, async (req, res) => {
     try {
       if (!req.user?.isSuperAdmin) {
         return res.status(403).json({ error: "Only super admins can create tenants" });
+      }
+      
+      // Only allow from main domain (no tenant subdomain)
+      if (req.tenant && req.tenant.subdomain) {
+        return res.status(403).json({ error: "Tenant management only available on main domain" });
       }
       
       const validationResult = insertTenantSchema.safeParse(req.body);
@@ -115,11 +125,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update tenant (superadmin only)
+  // Update tenant (superadmin only, main domain only)
   app.patch("/api/tenants/:id", isAuthenticated, async (req, res) => {
     try {
       if (!req.user?.isSuperAdmin) {
         return res.status(403).json({ error: "Only super admins can update tenants" });
+      }
+      
+      // Only allow from main domain (no tenant subdomain)
+      if (req.tenant && req.tenant.subdomain) {
+        return res.status(403).json({ error: "Tenant management only available on main domain" });
       }
       
       const { id } = req.params;

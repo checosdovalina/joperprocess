@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useTenant } from "@/hooks/use-tenant";
 import { UserRole } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -36,8 +37,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
+  const { tenant } = useTenant();
 
   if (!user) return null;
+  
+  const isOnMainDomain = !tenant || !tenant.subdomain;
 
   const menuItems = [
     {
@@ -181,7 +185,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {user.isSuperAdmin && (
+        {user.isSuperAdmin && isOnMainDomain && (
           <SidebarGroup>
             <SidebarGroupLabel>Plataforma</SidebarGroupLabel>
             <SidebarGroupContent>
