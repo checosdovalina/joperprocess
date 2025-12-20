@@ -5,6 +5,13 @@ import { setupAuth, isAuthenticated, hasRole } from "./auth";
 import { db } from "./db";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { localStorageService, LocalStorageService } from "./localStorage";
+
+// Helper to determine if we should use local storage (production without GCS)
+function useLocalStorage(): boolean {
+  return process.env.USE_LOCAL_STORAGE === "true" || 
+         (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
+}
 import { ObjectPermission, setObjectAclPolicy, getObjectAclPolicy } from "./objectAcl";
 import { sendCheckoutEmail } from "./email-service";
 import { format } from "date-fns";
@@ -3066,12 +3073,22 @@ Proporciona tu análisis en el siguiente formato JSON:
         checkoutNotes 
       });
 
-      const objectStorageService = new ObjectStorageService();
-      const pdfPath = await objectStorageService.uploadPdfStreamToStorage(
-        pdfStream,
-        checkinId,
-        userId
-      );
+      let pdfPath: string;
+      if (useLocalStorage()) {
+        console.log("Using local storage for PDF...");
+        pdfPath = await localStorageService.uploadPdfStreamToStorage(
+          pdfStream,
+          checkinId,
+          userId
+        );
+      } else {
+        const objectStorageService = new ObjectStorageService();
+        pdfPath = await objectStorageService.uploadPdfStreamToStorage(
+          pdfStream,
+          checkinId,
+          userId
+        );
+      }
 
       console.log(`Updating check-in with checkout time and PDF path...`);
       const updatedCheckin = await scopedStorage.updateCheckin(checkinId, {
@@ -3163,14 +3180,21 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Invalid PDF path" });
       }
 
-      // Stream PDF from object storage
-      const objectStorageService = new ObjectStorageService();
-      await objectStorageService.downloadObjectByPath(checkin.minutePdfPath, res, {
-        isPublic: false,
-        contentType: "application/pdf",
-        disposition: "attachment",
-        filename: `minuta-${checkinId}.pdf`,
-      });
+      // Stream PDF from storage
+      if (useLocalStorage()) {
+        const success = await localStorageService.streamFile(checkin.minutePdfPath, res);
+        if (!success) {
+          return res.status(404).json({ error: "PDF file not found" });
+        }
+      } else {
+        const objectStorageService = new ObjectStorageService();
+        await objectStorageService.downloadObjectByPath(checkin.minutePdfPath, res, {
+          isPublic: false,
+          contentType: "application/pdf",
+          disposition: "attachment",
+          filename: `minuta-${checkinId}.pdf`,
+        });
+      }
     } catch (error) {
       console.error(`Error downloading PDF for check-in ${checkinId}:`, error);
       if (!res.headersSent) {
