@@ -294,13 +294,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scopedStorage = createTenantScopedStorage(req);
       const user = req.user!;
       
-      // tenantId comes from the authenticated user, not from the request body
-      const tenantId = user.tenantId;
-      if (!tenantId) {
-        return res.status(400).json({ error: "Usuario no tiene tenant asignado" });
+      // tenantId comes from the authenticated user, or from subdomain context for superadmin
+      let tenantId = user.tenantId;
+      if (!tenantId && user.isSuperAdmin && req.tenant) {
+        // SuperAdmin accessing via subdomain - use that tenant
+        tenantId = req.tenant.id;
       }
       
-      // Validate without tenantId (added server-side)
+      if (!tenantId) {
+        return res.status(400).json({ error: "No se puede determinar el tenant. Acceda a través de un subdominio específico." });
+      }
+      
+      // Validate with tenantId added server-side
       const bodyWithTenant = { ...req.body, tenantId };
       const validated = insertCustomerSchema.parse(bodyWithTenant);
       const customer = await scopedStorage.createCustomer(validated);
