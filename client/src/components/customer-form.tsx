@@ -19,7 +19,7 @@ import { EntityFormDialog } from "@/components/entity-form-dialog";
 interface CustomerFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: InsertCustomer) => void;
+  onSubmit: (data: Omit<InsertCustomer, 'tenantId'>) => void;
   isPending: boolean;
   customer?: Customer;
   onCancel?: () => void;
@@ -41,8 +41,8 @@ const defaultFormValues = {
   contactName: "",
 };
 
-// Extend schema with client-side decimal validation
-const customerFormSchema = insertCustomerSchema.extend({
+// Extend schema with client-side decimal validation, omitting tenantId (added by backend)
+const customerFormSchema = insertCustomerSchema.omit({ tenantId: true }).extend({
   creditLimit: z.string()
     .min(1, { message: "El límite de crédito es requerido" })
     .refine(
@@ -90,7 +90,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
 
   const handleSubmit = (data: CustomerFormData) => {
     // Transform data to ensure correct types - schema already validated creditLimit
-    const transformedData: InsertCustomer = {
+    // tenantId is added by the backend
+    const transformedData: Omit<InsertCustomer, 'tenantId'> = {
       ...data,
       creditLimit: data.creditLimit,  // Already validated and transformed by schema
       creditDays: data.creditDays,
