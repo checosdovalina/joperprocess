@@ -226,7 +226,7 @@ export const customerLocations = pgTable("customer_locations", {
 // Check-ins table
 export const checkins = pgTable("checkins", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   customerLocationId: varchar("customer_location_id").references(() => customerLocations.id),
@@ -245,7 +245,7 @@ export const checkins = pgTable("checkins", {
 // Scheduled visits table (for pre-checkin planning)
 export const scheduledVisits = pgTable("scheduled_visits", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   customerLocationId: varchar("customer_location_id").references(() => customerLocations.id),
@@ -277,7 +277,7 @@ export const pendingUploads = pgTable("pending_uploads", {
 // Quotations table
 export const quotations = pgTable("quotations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   folio: text("folio").notNull().unique(),
@@ -380,7 +380,7 @@ export const creditAuthorizationComments = pgTable("credit_authorization_comment
 // Orders table
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   quotationId: varchar("quotation_id").notNull().references(() => quotations.id),
   status: text("status").notNull().default(OrderStatus.PENDING),
   productionProgress: integer("production_progress").notNull().default(0),
@@ -408,7 +408,7 @@ export const orderReleases = pgTable("order_releases", {
 // Shipments table
 export const shipments = pgTable("shipments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   orderId: varchar("order_id").notNull().references(() => orders.id),
   transporter: text("transporter").notNull(),
   transportType: text("transport_type").notNull(), // 'propio' or 'paqueteria'
@@ -450,7 +450,7 @@ export const InvoiceStatus = {
 // Invoices table
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   orderId: varchar("order_id").references(() => orders.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   cfdiUuid: text("cfdi_uuid"),
@@ -476,7 +476,7 @@ export const invoices = pgTable("invoices", {
 // Payments table
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   invoiceId: varchar("invoice_id").notNull().references(() => invoices.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
@@ -535,7 +535,7 @@ export const customerProductPrices = pgTable("customer_product_prices", {
 // Incidents (Tickets) table
 export const incidents = pgTable("incidents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   ticketNumber: text("ticket_number").notNull().unique(),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   type: text("type").notNull().default(IncidentType.ADMINISTRATIVO),
