@@ -929,6 +929,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
 });
 
@@ -944,6 +945,7 @@ export const insertCustomerLocationSchema = createInsertSchema(customerLocations
 
 export const insertCheckinSchema = createInsertSchema(checkins).omit({
   id: true,
+  tenantId: true,
   checkinAt: true,
 }).extend({
   userId: z.string().optional(), // Allow backend to set it
@@ -956,6 +958,7 @@ export const updateCheckinSchema = createInsertSchema(checkins).omit({
 
 export const insertScheduledVisitSchema = createInsertSchema(scheduledVisits).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
@@ -991,6 +994,7 @@ export const insertPendingUploadSchema = createInsertSchema(pendingUploads).omit
 
 export const insertQuotationSchema = createInsertSchema(quotations).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
   folio: true,
 });
@@ -1011,6 +1015,7 @@ export const insertCreditAuthorizationCommentSchema = createInsertSchema(creditA
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -1022,6 +1027,7 @@ export const insertOrderReleaseSchema = createInsertSchema(orderReleases).omit({
 
 export const insertShipmentSchema = createInsertSchema(shipments).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
 });
 
@@ -1032,6 +1038,7 @@ export const insertShipmentProductInstanceSchema = createInsertSchema(shipmentPr
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
+  tenantId: true,
   issuedAt: true,
   createdAt: true,
 }).extend({
@@ -1041,16 +1048,19 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
 });
 
 export const insertProductCategorySchema = createInsertSchema(productCategories).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
+  tenantId: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -1075,6 +1085,7 @@ export const updateQuotationSchema = createInsertSchema(quotations).omit({
 
 export const insertIncidentSchema = createInsertSchema(incidents).omit({
   id: true,
+  tenantId: true,
   ticketNumber: true,
   createdAt: true,
   updatedAt: true,
