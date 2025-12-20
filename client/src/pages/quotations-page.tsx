@@ -388,8 +388,8 @@ export default function QuotationsPage() {
                         <div className="font-mono font-medium">{quotation.folio}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{quotation.customer.name}</div>
-                        <div className="text-xs text-muted-foreground">{quotation.customer.rfc}</div>
+                        <div className="font-medium">{quotation.customer?.name || "Sin cliente"}</div>
+                        <div className="text-xs text-muted-foreground">{quotation.customer?.rfc || "-"}</div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
@@ -580,11 +580,11 @@ export default function QuotationsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Cliente</h4>
-                    <p className="font-medium">{selectedQuotation.customer.name}</p>
-                    {selectedQuotation.customer.rfc && (
+                    <p className="font-medium">{selectedQuotation.customer?.name || "Sin cliente"}</p>
+                    {selectedQuotation.customer?.rfc && (
                       <p className="text-sm text-muted-foreground">{selectedQuotation.customer.rfc}</p>
                     )}
-                    {selectedQuotation.customer.email && (
+                    {selectedQuotation.customer?.email && (
                       <p className="text-sm text-muted-foreground">{selectedQuotation.customer.email}</p>
                     )}
                   </div>
@@ -761,7 +761,7 @@ export default function QuotationsPage() {
               <div className="space-y-3">
                 <p>
                   Se enviará la cotización <strong>{selectedQuotation?.folio}</strong> al cliente{" "}
-                  <strong>{selectedQuotation?.customer.name}</strong>.
+                  <strong>{selectedQuotation?.customer?.name || "Sin cliente"}</strong>.
                 </p>
                 <p className="text-sm">
                   El correo incluirá el PDF de la cotización y se enviará a:
