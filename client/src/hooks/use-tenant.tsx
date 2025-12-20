@@ -14,6 +14,8 @@ interface TenantContextType {
   tenant: TenantConfig | null;
   isLoading: boolean;
   error: Error | null;
+  selectedTenantId: string | null;
+  setSelectedTenantId: (id: string | null) => void;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -62,11 +64,28 @@ function applyTenantColors(tenant: TenantConfig) {
 }
 
 export function TenantProvider({ children }: { children: ReactNode }) {
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(() => {
+    // Restore from localStorage on mount
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedTenantId');
+    }
+    return null;
+  });
+
   const { data: tenant, isLoading, error } = useQuery<TenantConfig>({
     queryKey: ["/api/tenant-config"],
     retry: false,
     staleTime: 1000 * 60 * 5,
   });
+
+  // Persist selectedTenantId to localStorage
+  useEffect(() => {
+    if (selectedTenantId) {
+      localStorage.setItem('selectedTenantId', selectedTenantId);
+    } else {
+      localStorage.removeItem('selectedTenantId');
+    }
+  }, [selectedTenantId]);
 
   useEffect(() => {
     if (tenant) {
@@ -79,7 +98,13 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, [tenant]);
 
   return (
-    <TenantContext.Provider value={{ tenant: tenant ?? null, isLoading, error: error as Error | null }}>
+    <TenantContext.Provider value={{ 
+      tenant: tenant ?? null, 
+      isLoading, 
+      error: error as Error | null,
+      selectedTenantId,
+      setSelectedTenantId
+    }}>
       {children}
     </TenantContext.Provider>
   );

@@ -294,15 +294,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scopedStorage = createTenantScopedStorage(req);
       const user = req.user!;
       
-      // tenantId comes from the authenticated user, or from subdomain context for superadmin
+      // tenantId priority: user's tenant > selected tenant header (superadmin only) > subdomain context
       let tenantId = user.tenantId;
-      if (!tenantId && user.isSuperAdmin && req.tenant) {
-        // SuperAdmin accessing via subdomain - use that tenant
-        tenantId = req.tenant.id;
+      if (!tenantId && user.isSuperAdmin) {
+        // SuperAdmin - check selected tenant header or subdomain context
+        const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
+        if (selectedTenantId) {
+          // Validate that the selected tenant exists
+          const tenant = await db.query.tenants.findFirst({
+            where: eq(tenants.id, selectedTenantId),
+          });
+          if (!tenant) {
+            return res.status(400).json({ error: "El tenant seleccionado no existe." });
+          }
+          tenantId = selectedTenantId;
+        } else if (req.tenant) {
+          tenantId = req.tenant.id;
+        }
       }
       
       if (!tenantId) {
-        return res.status(400).json({ error: "No se puede determinar el tenant. Acceda a través de un subdominio específico." });
+        return res.status(400).json({ error: "Seleccione una empresa antes de crear clientes." });
       }
       
       // Validate with tenantId added server-side

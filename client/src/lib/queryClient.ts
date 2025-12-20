@@ -7,6 +7,25 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+function getSelectedTenantId(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('selectedTenantId');
+  }
+  return null;
+}
+
+function buildHeaders(includeContentType: boolean = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  if (includeContentType) {
+    headers["Content-Type"] = "application/json";
+  }
+  const selectedTenantId = getSelectedTenantId();
+  if (selectedTenantId) {
+    headers["X-Selected-Tenant-Id"] = selectedTenantId;
+  }
+  return headers;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -14,7 +33,7 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: buildHeaders(!!data),
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -31,6 +50,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
+      headers: buildHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

@@ -13,6 +13,7 @@ import {
   LogOut,
   AlertTriangle,
   Globe,
+  ChevronDown,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -29,19 +30,42 @@ import {
 } from "@/components/ui/sidebar";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useTenant } from "@/hooks/use-tenant";
+import { useTenant, TenantConfig } from "@/hooks/use-tenant";
 import { UserRole } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+interface Tenant {
+  id: string;
+  name: string;
+  subdomain: string;
+}
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, selectedTenantId, setSelectedTenantId } = useTenant();
+
+  // Fetch tenants for SuperAdmin selector
+  const { data: tenants = [] } = useQuery<Tenant[]>({
+    queryKey: ["/api/tenants"],
+    enabled: !!user?.isSuperAdmin,
+  });
 
   if (!user) return null;
   
   const isOnMainDomain = !tenant || !tenant.subdomain;
+  
+  // Get selected tenant name for display
+  const selectedTenant = tenants.find(t => t.id === selectedTenantId);
 
   const menuItems = [
     {
@@ -188,7 +212,25 @@ export function AppSidebar() {
         {user.isSuperAdmin && isOnMainDomain && (
           <SidebarGroup>
             <SidebarGroupLabel>Plataforma</SidebarGroupLabel>
-            <SidebarGroupContent>
+            <SidebarGroupContent className="space-y-2">
+              <div className="px-2">
+                <label className="text-xs text-muted-foreground mb-1 block">Trabajando en:</label>
+                <Select
+                  value={selectedTenantId || ""}
+                  onValueChange={(value) => setSelectedTenantId(value || null)}
+                >
+                  <SelectTrigger className="w-full" data-testid="select-tenant">
+                    <SelectValue placeholder="Seleccionar empresa..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((t) => (
+                      <SelectItem key={t.id} value={t.id} data-testid={`select-tenant-${t.subdomain}`}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -198,7 +240,7 @@ export function AppSidebar() {
                   >
                     <a href="/tenants">
                       <Globe className="h-4 w-4" />
-                      <span>Empresas</span>
+                      <span>Gestionar Empresas</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
