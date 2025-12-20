@@ -337,7 +337,7 @@ export default function CheckinsPage() {
               {todayVisits.map((visit) => (
                 <Card key={visit.id} className="hover-elevate" data-testid={`card-scheduled-visit-${visit.id}`}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">{visit.customer.name}</CardTitle>
+                    <CardTitle className="text-base">{visit.customer?.name || "Sin cliente"}</CardTitle>
                     <CardDescription className="text-xs">
                       {format(new Date(visit.scheduledDate), "PPP", { locale: es })}
                     </CardDescription>
@@ -422,8 +422,8 @@ export default function CheckinsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{checkin.customer.name}</div>
-                        <div className="text-xs text-muted-foreground">{checkin.customer.city}</div>
+                        <div className="font-medium">{checkin.customer?.name || "Sin cliente"}</div>
+                        <div className="text-xs text-muted-foreground">{checkin.customer?.city || "-"}</div>
                       </TableCell>
                       <TableCell>
                         {checkin.latitude && checkin.longitude ? (
