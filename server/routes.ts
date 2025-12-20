@@ -685,14 +685,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/scheduled-visits", isAuthenticated, async (req, res) => {
     try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const tenantId = scopedStorage.getTenantId();
+      
+      if (!tenantId) {
+        return res.status(400).json({ error: "Tenant context required" });
+      }
+      
       const validated = insertScheduledVisitSchema.parse({
         ...req.body,
         userId: req.user!.id, // Set userId from authenticated user
+        tenantId, // Add tenant from context
       });
 
       // customerLocationId is optional - only validate if provided
       if (validated.customerLocationId) {
-        const scopedStorage = createTenantScopedStorage(req);
         const location = await scopedStorage.getCustomerLocation(validated.customerLocationId);
         if (!location) {
           return res.status(400).json({ error: "Customer location not found" });
