@@ -699,10 +699,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Tenant context required" });
       }
       
+      // Validate without tenantId (it's omitted from schema)
       const validated = insertScheduledVisitSchema.parse({
         ...req.body,
         userId: req.user!.id, // Set userId from authenticated user
-        tenantId, // Add tenant from context
       });
 
       // customerLocationId is optional - only validate if provided
@@ -716,7 +716,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const [visit] = await db.insert(scheduledVisits).values(validated).returning();
+      // Insert with tenantId added separately
+      const [visit] = await db.insert(scheduledVisits).values({
+        ...validated,
+        tenantId,
+      }).returning();
       res.status(201).json(visit);
     } catch (error) {
       console.error("Error creating scheduled visit:", error);
