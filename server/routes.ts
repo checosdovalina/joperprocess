@@ -866,13 +866,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/product-categories", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const scopedStorage = createTenantScopedStorage(req);
-      const tenantId = req.user?.tenantId;
-      if (!tenantId && !req.user?.isSuperAdmin) {
-        return res.status(403).json({ error: "No tenant context" });
+      const tenantId = scopedStorage.getTenantId();
+      
+      if (!tenantId) {
+        return res.status(400).json({ error: "Tenant context required" });
       }
       
       const validated = insertProductCategorySchema.parse(req.body);
-      const categoryData = { ...validated, tenantId: tenantId || validated.tenantId };
+      const categoryData = { ...validated, tenantId };
       const category = await scopedStorage.createProductCategory(categoryData);
       res.status(201).json(category);
     } catch (error) {
