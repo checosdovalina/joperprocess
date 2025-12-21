@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Globe,
   ChevronDown,
+  Settings,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -144,6 +145,12 @@ export function AppSidebar() {
       title: "Usuarios",
       url: "/users",
       icon: Users,
+      roles: [UserRole.ADMIN],
+    },
+    {
+      title: "Configuración Empresa",
+      url: "/company-settings",
+      icon: Settings,
       roles: [UserRole.ADMIN],
     },
   ];
