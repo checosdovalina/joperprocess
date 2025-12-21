@@ -198,13 +198,25 @@ export default function PublicSupportPage() {
           throw new Error(error.error || "Error al obtener URL de subida");
         }
 
-        const { uploadURL, entityId } = await urlResponse.json();
+        const { uploadURL, entityId, useDirectUpload } = await urlResponse.json();
 
-        const uploadResponse = await fetch(uploadURL, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        });
+        let uploadResponse;
+        if (useDirectUpload) {
+          uploadResponse = await fetch(uploadURL, {
+            method: "POST",
+            body: file,
+            headers: { 
+              "Content-Type": file.type,
+              "X-Entity-Id": entityId,
+            },
+          });
+        } else {
+          uploadResponse = await fetch(uploadURL, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": file.type },
+          });
+        }
 
         if (!uploadResponse.ok) {
           throw new Error("Error al subir el archivo");

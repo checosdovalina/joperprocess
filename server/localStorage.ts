@@ -19,6 +19,7 @@ export class LocalStorageService {
       path.join(this.baseDir, "minutes"),
       path.join(this.baseDir, "quotations"),
       path.join(this.baseDir, "photos"),
+      path.join(this.baseDir, "incidents"),
     ];
     for (const dir of dirs) {
       if (!fs.existsSync(dir)) {
@@ -70,6 +71,18 @@ export class LocalStorageService {
     contentType: string
   ): Promise<string> {
     const relativePath = `photos/${filename}`;
+    const fullPath = path.join(this.baseDir, relativePath);
+
+    await fs.promises.writeFile(fullPath, buffer);
+    return relativePath;
+  }
+
+  async uploadIncidentAttachment(
+    buffer: Buffer,
+    entityId: string,
+    contentType: string
+  ): Promise<string> {
+    const relativePath = `incidents/${entityId}`;
     const fullPath = path.join(this.baseDir, relativePath);
 
     await fs.promises.writeFile(fullPath, buffer);

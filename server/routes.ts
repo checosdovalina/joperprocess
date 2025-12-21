@@ -4307,6 +4307,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(403).json({ error: "El enlace ha expirado" });
       }
 
+      // Use local storage for production
+      if (useLocalStorage()) {
+        const ext = filename.split('.').pop() || 'bin';
+        const entityId = `incident-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const uploadURL = `${baseUrl}/api/public/incidents/upload-direct`;
+        
+        res.json({ uploadURL, entityId, incidentId: incident.id, useDirectUpload: true });
+        return;
+      }
+
       const objectStorage = new ObjectStorageService();
       const { uploadURL, entityId } = await objectStorage.getObjectEntityUploadURL();
       
@@ -4336,11 +4347,18 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       // Verify file exists in storage
-      const objectStorage = new ObjectStorageService();
-      try {
-        await objectStorage.getObjectEntityFile(entityId);
-      } catch (error) {
-        return res.status(400).json({ error: "El archivo no se encontró en el almacenamiento" });
+      if (useLocalStorage()) {
+        const fileBuffer = await localStorageService.getFile(`incidents/${entityId}`);
+        if (!fileBuffer) {
+          return res.status(400).json({ error: "El archivo no se encontró en el almacenamiento" });
+        }
+      } else {
+        const objectStorage = new ObjectStorageService();
+        try {
+          await objectStorage.getObjectEntityFile(entityId);
+        } catch (error) {
+          return res.status(400).json({ error: "El archivo no se encontró en el almacenamiento" });
+        }
       }
 
       const [attachment] = await db.insert(incidentAttachments).values({
@@ -4392,6 +4410,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Tipo de archivo no permitido" });
       }
 
+      // Use local storage for production
+      if (useLocalStorage()) {
+        const ext = filename.split('.').pop() || 'bin';
+        const entityId = `incident-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const uploadURL = `${baseUrl}/api/public/incidents/upload-direct`;
+        
+        res.json({ uploadURL, entityId, useDirectUpload: true });
+        return;
+      }
+
       const objectStorage = new ObjectStorageService();
       const { uploadURL, entityId } = await objectStorage.getObjectEntityUploadURL();
       
@@ -4399,6 +4428,35 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Error al obtener URL de subida" });
+    }
+  });
+
+  // Direct upload endpoint for incident attachments (local storage)
+  app.post("/api/public/incidents/upload-direct", async (req, res) => {
+    try {
+      const entityId = req.headers['x-entity-id'] as string;
+      const contentType = req.headers['content-type'] || 'application/octet-stream';
+      
+      if (!entityId) {
+        return res.status(400).json({ error: "Se requiere X-Entity-Id header" });
+      }
+
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', async () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+          const storagePath = await localStorageService.uploadIncidentAttachment(buffer, entityId, contentType);
+          console.log(`✅ Incident attachment uploaded to local storage: ${storagePath}`);
+          res.status(200).json({ success: true, path: storagePath });
+        } catch (error) {
+          console.error("Error saving incident attachment:", error);
+          res.status(500).json({ error: "Error al guardar archivo" });
+        }
+      });
+    } catch (error) {
+      console.error("Error uploading incident attachment:", error);
+      res.status(500).json({ error: "Error al subir archivo" });
     }
   });
 
@@ -4430,14 +4488,20 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Archivo no encontrado" });
       }
 
-      const objectStorage = new ObjectStorageService();
-      const objectFile = await objectStorage.getObjectEntityFile(attachment.storagePath);
-      
       const encodedFilename = encodeURIComponent(attachment.originalName);
       res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
       res.setHeader('Content-Type', attachment.mimeType);
-      
-      objectStorage.downloadObject(objectFile, res);
+
+      if (useLocalStorage()) {
+        const success = await localStorageService.streamFile(`incidents/${attachment.storagePath}`, res);
+        if (!success) {
+          return res.status(404).json({ error: "Archivo no encontrado" });
+        }
+      } else {
+        const objectStorage = new ObjectStorageService();
+        const objectFile = await objectStorage.getObjectEntityFile(attachment.storagePath);
+        objectStorage.downloadObject(objectFile, res);
+      }
     } catch (error) {
       console.error("Error downloading attachment:", error);
       res.status(500).json({ error: "Error al descargar el archivo" });
