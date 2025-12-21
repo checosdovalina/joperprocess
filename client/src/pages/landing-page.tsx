@@ -11,11 +11,19 @@ import {
   Zap, 
   Globe,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  Building2
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
+import { useTenant } from "@/hooks/use-tenant";
 
 export default function LandingPage() {
+  const { tenant, isLoading: tenantLoading } = useTenant();
+  
+  const isSubdomain = tenant && tenant.subdomain && tenant.subdomain !== "main";
+  const displayName = isSubdomain ? tenant.name : "NEXXO";
+  const displayLogo = isSubdomain && tenant.logoUrl ? tenant.logoUrl : nexxoLogo;
+  const tagline = isSubdomain ? `Bienvenido a ${tenant.name}` : "Sistema Comercial de Nueva Generación";
   const features = [
     {
       icon: Users,
@@ -63,9 +71,13 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <img src={nexxoLogo} alt="Nexxo" className="h-10 w-10" />
+            {displayLogo ? (
+              <img src={displayLogo} alt={displayName} className="h-10 w-10 object-contain" />
+            ) : (
+              <Building2 className="h-10 w-10 text-primary" />
+            )}
             <span className="text-2xl font-bold text-primary">
-              NEXXO
+              {displayName}
             </span>
           </div>
           <nav className="flex items-center gap-4">
@@ -90,20 +102,29 @@ export default function LandingPage() {
           <div className="max-w-4xl mx-auto text-center space-y-8">
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium">
               <Zap className="h-4 w-4" />
-              Sistema Comercial de Nueva Generación
+              {tagline}
             </div>
             
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-              Gestiona todo tu proceso comercial en{" "}
-              <span className="text-primary">
-                un solo lugar
-              </span>
+              {isSubdomain ? (
+                <>
+                  Portal de{" "}
+                  <span className="text-primary">{tenant?.name}</span>
+                </>
+              ) : (
+                <>
+                  Gestiona todo tu proceso comercial en{" "}
+                  <span className="text-primary">un solo lugar</span>
+                </>
+              )}
             </h1>
             
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Nexxo es la plataforma integral que conecta ventas, crédito, producción, 
-              embarques y facturación. Diseñada para empresas que buscan 
-              eficiencia y control total.
+              {isSubdomain ? (
+                `Accede a tu cuenta para gestionar ventas, crédito, producción, embarques y facturación.`
+              ) : (
+                `Nexxo es la plataforma integral que conecta ventas, crédito, producción, embarques y facturación. Diseñada para empresas que buscan eficiencia y control total.`
+              )}
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
