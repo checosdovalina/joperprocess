@@ -22,7 +22,8 @@ export default function LandingPage() {
   
   const isSubdomain = tenant && tenant.subdomain && tenant.subdomain !== "main";
   const displayName = isSubdomain ? tenant.name : "NEXXO";
-  const displayLogo = isSubdomain && tenant.logoUrl ? tenant.logoUrl : nexxoLogo;
+  const hasCustomLogo = isSubdomain && tenant?.logoUrl && tenant.logoUrl.trim() !== "";
+  const displayLogo = hasCustomLogo ? tenant.logoUrl : (isSubdomain ? null : nexxoLogo);
   const tagline = isSubdomain ? `Bienvenido a ${tenant.name}` : "Sistema Comercial de Nueva Generación";
   const features = [
     {
