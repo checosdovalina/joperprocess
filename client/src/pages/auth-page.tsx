@@ -150,6 +150,15 @@ export default function AuthPage() {
                         "Iniciar Sesión"
                       )}
                     </Button>
+                    <div className="text-center mt-4">
+                      <Link 
+                        href="/forgot-password" 
+                        className="text-sm text-primary hover:underline"
+                        data-testid="link-forgot-password"
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </Link>
+                    </div>
                   </form>
                 </CardContent>
               </Card>

@@ -31,6 +31,8 @@ import PublicIncidentPortal from "@/pages/public-incident-portal";
 import PublicSupportPage from "@/pages/public-support-page";
 import PublicTicketPage from "@/pages/public-ticket-page";
 import TenantsPage from "@/pages/tenants-page";
+import ForgotPasswordPage from "@/pages/forgot-password-page";
+import ResetPasswordPage from "@/pages/reset-password-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -106,11 +108,13 @@ function MainLayout() {
 export default function App() {
   const [isLandingPage] = useRoute("/");
   const [isAuthPage] = useRoute("/auth");
+  const [isForgotPassword] = useRoute("/forgot-password");
+  const [isResetPassword] = useRoute("/reset-password");
   const [isQuotationApproval] = useRoute("/aprobar-cotizacion/:token");
   const [isIncidentPortal] = useRoute("/public/incidents/:token");
   const [isSupportPage] = useRoute("/soporte");
   const [isTicketPage] = useRoute("/soporte/ticket/:token");
-  const isPublicRoute = isLandingPage || isAuthPage || isQuotationApproval || isIncidentPortal || isSupportPage || isTicketPage;
+  const isPublicRoute = isLandingPage || isAuthPage || isForgotPassword || isResetPassword || isQuotationApproval || isIncidentPortal || isSupportPage || isTicketPage;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -121,6 +125,8 @@ export default function App() {
               <Switch>
                 <Route path="/" component={SmartLandingPage} />
                 <Route path="/auth" component={AuthPage} />
+                <Route path="/forgot-password" component={ForgotPasswordPage} />
+                <Route path="/reset-password" component={ResetPasswordPage} />
                 <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
                 <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
                 <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
