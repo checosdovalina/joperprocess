@@ -207,6 +207,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== END TENANT ENDPOINTS ====================
 
+  // ==================== COMPANY SETTINGS ENDPOINTS ====================
+  
+  // Get current tenant company settings (for tenant admins)
+  app.get("/api/company-settings", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ error: "No tenant context" });
+      }
+      
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, tenantId),
+      });
+      
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      
+      res.json(tenant);
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+      res.status(500).json({ error: "Error fetching company settings" });
+    }
+  });
+  
+  // Update current tenant company settings (for tenant admins)
+  app.patch("/api/company-settings", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ error: "No tenant context" });
+      }
+      
+      const allowedFields = [
+        'name', 'legalName', 'rfc', 'website', 'email', 'phone', 
+        'address', 'city', 'state', 'zipCode', 'country',
+        'primaryColor', 'secondaryColor'
+      ];
+      
+      const updateData: Record<string, any> = {};
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field];
+        }
+      }
+      
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+      
+      updateData.updatedAt = new Date();
+      
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set(updateData)
+        .where(eq(tenants.id, tenantId))
+        .returning();
+      
+      if (!updatedTenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      
+      res.json(updatedTenant);
+    } catch (error) {
+      console.error("Error updating company settings:", error);
+      res.status(500).json({ error: "Error updating company settings" });
+    }
+  });
+  
+  // Upload company logo (for tenant admins)
+  app.post("/api/company-settings/logo", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ error: "No tenant context" });
+      }
+      
+      const contentType = req.headers['content-type'] || 'image/png';
+      if (!contentType.startsWith('image/')) {
+        return res.status(400).json({ error: "Solo se permiten imágenes" });
+      }
+      
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', async () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+          
+          if (buffer.length > 5 * 1024 * 1024) {
+            return res.status(400).json({ error: "La imagen no puede superar 5MB" });
+          }
+          
+          const ext = contentType.split('/')[1] || 'png';
+          const logoPath = await localStorageService.uploadLogo(buffer, tenantId, ext);
+          
+          const [updatedTenant] = await db
+            .update(tenants)
+            .set({ logoUrl: logoPath, updatedAt: new Date() })
+            .where(eq(tenants.id, tenantId))
+            .returning();
+          
+          console.log(`✅ Logo uploaded for tenant ${tenantId}: ${logoPath}`);
+          res.json({ logoUrl: logoPath, tenant: updatedTenant });
+        } catch (error) {
+          console.error("Error saving logo:", error);
+          res.status(500).json({ error: "Error al guardar el logo" });
+        }
+      });
+    } catch (error) {
+      console.error("Error uploading logo:", error);
+      res.status(500).json({ error: "Error al subir el logo" });
+    }
+  });
+  
+  // Serve logo files
+  app.get("/api/logos/:filename", async (req, res) => {
+    try {
+      const { filename } = req.params;
+      const success = await localStorageService.streamFile(`logos/${filename}`, res);
+      if (!success) {
+        return res.status(404).json({ error: "Logo not found" });
+      }
+    } catch (error) {
+      console.error("Error serving logo:", error);
+      res.status(500).json({ error: "Error serving logo" });
+    }
+  });
+  
+  // ==================== END COMPANY SETTINGS ENDPOINTS ====================
+
   // Dashboard stats
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
