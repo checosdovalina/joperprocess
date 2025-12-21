@@ -1,9 +1,13 @@
 import express, { type Request, Response, NextFunction } from "express";
+import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { tenantMiddleware } from "./tenant";
 
 const app = express();
+
+// Serve static files from public folder (tenant logos, etc.)
+app.use('/static', express.static(path.join(process.cwd(), 'public')));
 
 declare module 'http' {
   interface IncomingMessage {
