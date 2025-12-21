@@ -5,10 +5,11 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser, UserRole, users } from "@shared/schema";
+import { User as SelectUser, UserRole, users, passwordResetTokens, tenants } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, isNull } from "drizzle-orm";
+import { eq, and, or, isNull, gt } from "drizzle-orm";
 import { z } from "zod";
+import { sendPasswordResetEmail } from "./email-service";
 
 declare global {
   namespace Express {
@@ -228,6 +229,169 @@ export function setupAuth(app: Express) {
       res.json({ allowed: allUsers.length === 0 });
     } catch (error) {
       res.status(500).json({ allowed: false });
+    }
+  });
+
+  // Request password reset - public endpoint
+  app.post("/api/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "El correo es requerido" });
+      }
+
+      // Find user by email (check tenant context if available)
+      const tenantId = req.tenant?.id || null;
+      
+      let user;
+      if (tenantId) {
+        // Search within tenant
+        [user] = await db
+          .select()
+          .from(users)
+          .where(and(eq(users.email, email), eq(users.tenantId, tenantId)))
+          .limit(1);
+      } else {
+        // Search across all users (for main domain)
+        [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, email))
+          .limit(1);
+      }
+
+      // Always return success to prevent email enumeration
+      if (!user) {
+        console.log(`Password reset requested for non-existent email: ${email}`);
+        return res.json({ message: "Si el correo existe, recibirás un enlace de recuperación" });
+      }
+
+      // Generate secure token
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      // Store token in database
+      await db.insert(passwordResetTokens).values({
+        userId: user.id,
+        token,
+        expiresAt,
+      });
+
+      // Build reset link
+      const host = req.get("host") || "nexxo.com.mx";
+      const protocol = req.secure || process.env.NODE_ENV === "production" ? "https" : "http";
+      const resetLink = `${protocol}://${host}/reset-password?token=${token}`;
+
+      // Get tenant name for email
+      let tenantName = "Nexxo";
+      if (user.tenantId) {
+        const [tenant] = await db
+          .select()
+          .from(tenants)
+          .where(eq(tenants.id, user.tenantId))
+          .limit(1);
+        if (tenant) {
+          tenantName = tenant.name;
+        }
+      }
+
+      // Send email
+      await sendPasswordResetEmail({
+        to: user.email,
+        userName: user.fullName,
+        resetLink,
+        tenantName,
+      });
+
+      res.json({ message: "Si el correo existe, recibirás un enlace de recuperación" });
+    } catch (error) {
+      console.error("Error in forgot-password:", error);
+      res.status(500).json({ error: "Error al procesar la solicitud" });
+    }
+  });
+
+  // Reset password with token - public endpoint
+  app.post("/api/reset-password", async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      
+      if (!token || !newPassword) {
+        return res.status(400).json({ error: "Token y nueva contraseña son requeridos" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+      }
+
+      // Find valid token
+      const [resetToken] = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.token, token),
+            eq(passwordResetTokens.used, false),
+            gt(passwordResetTokens.expiresAt, new Date())
+          )
+        )
+        .limit(1);
+
+      if (!resetToken) {
+        return res.status(400).json({ error: "El enlace ha expirado o no es válido" });
+      }
+
+      // Hash new password
+      const hashedPassword = await hashPassword(newPassword);
+
+      // Update user password
+      await db
+        .update(users)
+        .set({ password: hashedPassword })
+        .where(eq(users.id, resetToken.userId));
+
+      // Mark token as used
+      await db
+        .update(passwordResetTokens)
+        .set({ used: true })
+        .where(eq(passwordResetTokens.id, resetToken.id));
+
+      res.json({ message: "Contraseña actualizada exitosamente" });
+    } catch (error) {
+      console.error("Error in reset-password:", error);
+      res.status(500).json({ error: "Error al restablecer la contraseña" });
+    }
+  });
+
+  // Verify reset token - public endpoint
+  app.get("/api/verify-reset-token", async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ valid: false, error: "Token requerido" });
+      }
+
+      const [resetToken] = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.token, token),
+            eq(passwordResetTokens.used, false),
+            gt(passwordResetTokens.expiresAt, new Date())
+          )
+        )
+        .limit(1);
+
+      if (!resetToken) {
+        return res.json({ valid: false, error: "El enlace ha expirado o no es válido" });
+      }
+
+      res.json({ valid: true });
+    } catch (error) {
+      console.error("Error verifying reset token:", error);
+      res.status(500).json({ valid: false, error: "Error al verificar el token" });
     }
   });
 }
