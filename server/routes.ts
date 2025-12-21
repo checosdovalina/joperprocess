@@ -72,6 +72,11 @@ function getEffectiveTenantId(req: Request): string | null {
     return null; // No tenant filtering
   }
   
+  // If on a specific subdomain, use the tenant from the subdomain
+  if (tenant?.id) {
+    return tenant.id;
+  }
+  
   // Return user's tenantId for data isolation
   return user?.tenantId || null;
 }
