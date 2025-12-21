@@ -305,16 +305,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           const ext = contentType.split('/')[1] || 'png';
-          const logoPath = await localStorageService.uploadLogo(buffer, tenantId, ext);
+          const storagePath = await localStorageService.uploadLogo(buffer, tenantId, ext);
+          // Convert storage path (logos/filename) to API URL (/api/logos/filename)
+          const filename = storagePath.replace('logos/', '');
+          const logoUrl = `/api/logos/${filename}`;
           
           const [updatedTenant] = await db
             .update(tenants)
-            .set({ logoUrl: logoPath, updatedAt: new Date() })
+            .set({ logoUrl: logoUrl, updatedAt: new Date() })
             .where(eq(tenants.id, tenantId))
             .returning();
           
-          console.log(`✅ Logo uploaded for tenant ${tenantId}: ${logoPath}`);
-          res.json({ logoUrl: logoPath, tenant: updatedTenant });
+          console.log(`✅ Logo uploaded for tenant ${tenantId}: ${logoUrl}`);
+          res.json({ logoUrl: logoUrl, tenant: updatedTenant });
         } catch (error) {
           console.error("Error saving logo:", error);
           res.status(500).json({ error: "Error al guardar el logo" });
