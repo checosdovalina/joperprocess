@@ -1,12 +1,46 @@
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
-import type { Quotation, QuotationItem, Customer, User } from "@shared/schema";
+import type { Quotation, QuotationItem, Customer, User, Tenant } from "@shared/schema";
+import { localStorageService } from "./localStorage";
+import path from "path";
+import fs from "fs";
+
+interface TenantBranding {
+  name: string;
+  legalName?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  rfc?: string | null;
+}
 
 interface QuotationPDFData {
   quotation: Quotation;
   items: QuotationItem[];
   customer: Customer;
   user: User;
+  tenant?: TenantBranding | null;
+}
+
+async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
+  if (!logoUrl) return null;
+  
+  try {
+    if (logoUrl.startsWith('logos/')) {
+      const buffer = await localStorageService.getFile(logoUrl);
+      return buffer;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading logo:', error);
+    return null;
+  }
 }
 
 const PAYMENT_TERMS_LABELS: Record<string, string> = {
@@ -46,25 +80,76 @@ function formatDate(date: Date | string | null): string {
   });
 }
 
-export function generateQuotationPDFStream(data: QuotationPDFData): Readable {
+export async function generateQuotationPDFStream(data: QuotationPDFData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 50 });
-  const { quotation, items, customer, user } = data;
+  const { quotation, items, customer, user, tenant } = data;
+
+  // Load logo if available
+  const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
+  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const primaryColor = tenant?.primaryColor || "#1a365d";
 
   try {
-    // Header with company name
-    doc
-      .fontSize(24)
-      .font("Helvetica-Bold")
-      .fillColor("#1a365d")
-      .text("GRUPO JOPER", { align: "center" })
-      .moveDown(0.3);
+    // Header with company logo or name
+    const headerStartY = doc.y;
+    
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, 50, headerStartY, { 
+          width: 120,
+          height: 60,
+          fit: [120, 60] as [number, number]
+        });
+        doc.y = headerStartY;
+        doc
+          .fontSize(18)
+          .font("Helvetica-Bold")
+          .fillColor(primaryColor)
+          .text(companyName.toUpperCase(), 180, headerStartY + 10, { 
+            width: 380,
+            align: "right" 
+          });
+        doc.y = headerStartY + 70;
+      } catch (logoError) {
+        console.error('Error rendering logo in PDF:', logoError);
+        doc
+          .fontSize(24)
+          .font("Helvetica-Bold")
+          .fillColor(primaryColor)
+          .text(companyName.toUpperCase(), { align: "center" })
+          .moveDown(0.3);
+      }
+    } else {
+      doc
+        .fontSize(24)
+        .font("Helvetica-Bold")
+        .fillColor(primaryColor)
+        .text(companyName.toUpperCase(), { align: "center" })
+        .moveDown(0.3);
+    }
 
-    doc
-      .fontSize(12)
-      .font("Helvetica")
-      .fillColor("#4a5568")
-      .text("Sistema Comercial", { align: "center" })
-      .moveDown(1);
+    // Company subtitle or address
+    if (tenant?.address || tenant?.phone || tenant?.email) {
+      doc
+        .fontSize(9)
+        .font("Helvetica")
+        .fillColor("#4a5568");
+      
+      if (tenant.address) {
+        let addressLine = tenant.address;
+        if (tenant.city || tenant.state) {
+          addressLine += ` | ${[tenant.city, tenant.state, tenant.zipCode].filter(Boolean).join(", ")}`;
+        }
+        doc.text(addressLine, { align: "center" });
+      }
+      if (tenant.phone || tenant.email) {
+        doc.text([tenant.phone, tenant.email].filter(Boolean).join(" | "), { align: "center" });
+      }
+      if (tenant.website) {
+        doc.text(tenant.website, { align: "center" });
+      }
+    }
+    doc.moveDown(1);
 
     // Quotation title and folio
     doc

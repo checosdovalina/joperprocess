@@ -1341,12 +1341,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderBy: (items, { asc }) => [asc(items.position)],
       });
 
+      // Get tenant branding for PDF
+      const tenant = quotation.tenantId 
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
+        : null;
+
       const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
-      const pdfStream = generateQuotationPDFStream({
+      const pdfStream = await generateQuotationPDFStream({
         quotation,
         items,
         customer: quotation.customer,
         user: quotation.user,
+        tenant,
       });
 
       res.setHeader("Content-Type", "application/pdf");
@@ -1390,13 +1396,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const crypto = await import("crypto");
       const approvalToken = crypto.randomBytes(32).toString("hex");
 
+      // Get tenant branding for PDF
+      const tenant = quotation.tenantId 
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
+        : null;
+
       // Generate PDF and upload to storage
       const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
-      const pdfStream = generateQuotationPDFStream({
+      const pdfStream = await generateQuotationPDFStream({
         quotation,
         items,
         customer: quotation.customer,
         user: quotation.user,
+        tenant,
       });
 
       let pdfPath: string;
@@ -1538,13 +1550,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const crypto = await import("crypto");
         const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
+
+        // Get tenant branding for PDF
+        const tenant = quotation.tenantId 
+          ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
+          : null;
         
         const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
-        const pdfStream = generateQuotationPDFStream({
+        const pdfStream = await generateQuotationPDFStream({
           quotation: { ...quotation, shippingApprovalStatus: "approved" },
           items,
           customer: quotation.customer,
           user: quotation.user,
+          tenant,
         });
 
         let pdfPath: string;
@@ -3327,13 +3345,19 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Get tenant branding for PDF
+      const tenant = checkin.tenantId 
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, checkin.tenantId) })
+        : null;
+
       console.log(`Generating and uploading PDF for check-in ${checkinId}...`);
       const { generateMinutePDFStream } = await import("./pdf-generator");
       const pdfStream = await generateMinutePDFStream({ 
         checkin, 
         customer, 
         user, 
-        checkoutNotes 
+        checkoutNotes,
+        tenant,
       });
 
       let pdfPath: string;

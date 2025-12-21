@@ -6,11 +6,27 @@ import sharp from "sharp";
 import pLimit from "p-limit";
 import { Readable } from "stream";
 
+interface TenantBranding {
+  name: string;
+  legalName?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  rfc?: string | null;
+}
+
 interface MinuteData {
   checkin: Checkin;
   customer: Customer;
   user: User;
   checkoutNotes?: string;
+  tenant?: TenantBranding | null;
 }
 
 const MAX_PHOTOS_PER_PDF = 6;
@@ -104,22 +120,75 @@ async function downloadAndResizePhoto(
   }
 }
 
+async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
+  if (!logoUrl) return null;
+  
+  try {
+    if (logoUrl.startsWith('logos/')) {
+      const buffer = await localStorageService.getFile(logoUrl);
+      return buffer;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading logo:', error);
+    return null;
+  }
+}
+
 export async function generateMinutePDFStream(data: MinuteData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 50 });
-  const { checkin, customer, user } = data;
+  const { checkin, customer, user, tenant } = data;
+
+  // Load logo if available
+  const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
+  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const primaryColor = tenant?.primaryColor || "#1a365d";
 
   // Start async content generation
   (async () => {
     try {
-      // Header
-      doc
-        .fontSize(20)
-        .font("Helvetica-Bold")
-        .text("GRUPO JOPER", { align: "center" })
-        .moveDown(0.5);
+      // Header with company logo or name
+      const headerStartY = doc.y;
+      
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, 50, headerStartY, { 
+            width: 100,
+            height: 50,
+            fit: [100, 50] as [number, number]
+          });
+          doc.y = headerStartY;
+          doc
+            .fontSize(16)
+            .font("Helvetica-Bold")
+            .fillColor(primaryColor)
+            .text(companyName.toUpperCase(), 160, headerStartY + 10, { 
+              width: 400,
+              align: "right" 
+            });
+          doc.y = headerStartY + 60;
+        } catch (logoError) {
+          console.error('Error rendering logo in minute PDF:', logoError);
+          doc
+            .fontSize(20)
+            .font("Helvetica-Bold")
+            .fillColor(primaryColor)
+            .text(companyName.toUpperCase(), { align: "center" })
+            .moveDown(0.5);
+        }
+      } else {
+        doc
+          .fontSize(20)
+          .font("Helvetica-Bold")
+          .fillColor(primaryColor)
+          .text(companyName.toUpperCase(), { align: "center" })
+          .moveDown(0.5);
+      }
 
       doc
         .fontSize(16)
+        .font("Helvetica-Bold")
+        .fillColor("#2d3748")
         .text("Minuta de Visita a Cliente", { align: "center" })
         .moveDown(1.5);
 
