@@ -23,10 +23,18 @@ export const tenants = pgTable("tenants", {
   primaryColor: text("primary_color").default("#4DA3FF"), // Nexxo blue default
   secondaryColor: text("secondary_color").default("#1F3C88"),
   active: boolean("active").notNull().default(true),
+  // Company legal info
+  legalName: text("legal_name"), // Razón social
+  rfc: text("rfc"), // RFC fiscal
+  website: text("website"),
   // Contact info
   email: text("email"),
   phone: text("phone"),
   address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  country: text("country").default("México"),
   // Billing/subscription info (for future)
   plan: text("plan").default("basic"), // basic, professional, enterprise
   maxUsers: integer("max_users").default(10),
