@@ -15,6 +15,7 @@ import {
   Globe,
   ChevronDown,
   Settings,
+  Database,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -151,6 +152,12 @@ export function AppSidebar() {
       title: "Configuración Empresa",
       url: "/company-settings",
       icon: Settings,
+      roles: [UserRole.ADMIN],
+    },
+    {
+      title: "Integración Microsip",
+      url: "/microsip",
+      icon: Database,
       roles: [UserRole.ADMIN],
     },
   ];

@@ -242,6 +242,10 @@ export const customers = pgTable("customers", {
   creditDays: integer("credit_days").notNull().default(30),
   blocked: boolean("blocked").notNull().default(false),
   contactName: text("contact_name"),
+  // Microsip integration fields
+  microsipId: integer("microsip_id"), // CLIENTE_ID from Microsip CLIENTES table
+  microsipCode: text("microsip_code"), // CLAVE from Microsip CLIENTES table
+  microsipSyncedAt: timestamp("microsip_synced_at"), // Last sync timestamp
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -505,6 +509,9 @@ export const invoices = pgTable("invoices", {
   dueDate: timestamp("due_date"),
   paidAt: timestamp("paid_at"),
   notes: text("notes"),
+  // Microsip integration fields
+  microsipDoctoId: bigint("microsip_docto_id", { mode: "number" }), // DOCTO_VE_ID from Microsip DOCTOS_VE
+  microsipSyncedAt: timestamp("microsip_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -512,13 +519,16 @@ export const invoices = pgTable("invoices", {
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
-  invoiceId: varchar("invoice_id").notNull().references(() => invoices.id),
+  invoiceId: varchar("invoice_id").references(() => invoices.id), // Made optional for Microsip synced payments
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
   paymentDate: timestamp("payment_date").notNull(),
   reference: text("reference"),
   notes: text("notes"),
-  registeredBy: varchar("registered_by").notNull().references(() => users.id),
+  registeredBy: varchar("registered_by").references(() => users.id), // Made optional for Microsip synced payments
+  // Microsip integration fields
+  microsipDoctoCoId: bigint("microsip_docto_co_id", { mode: "number" }), // DOCTO_CO_ID from Microsip DOCTOS_CO
+  microsipSyncedAt: timestamp("microsip_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -530,6 +540,9 @@ export const productCategories = pgTable("product_categories", {
   description: text("description"),
   parentId: varchar("parent_id"),
   active: boolean("active").notNull().default(true),
+  // Microsip integration fields
+  microsipLineaId: integer("microsip_linea_id"), // LINEA_ARTICULO_ID from Microsip LINEAS_ARTICULOS
+  microsipSyncedAt: timestamp("microsip_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -551,6 +564,9 @@ export const products = pgTable("products", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default("16"),
   imageUrl: text("image_url"),
   active: boolean("active").notNull().default(true),
+  // Microsip integration fields
+  microsipArticuloId: integer("microsip_articulo_id"), // ARTICULO_ID from Microsip ARTICULOS
+  microsipSyncedAt: timestamp("microsip_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1159,6 +1175,79 @@ export const insertIncidentActivitySchema = createInsertSchema(incidentActivitie
   id: true,
   createdAt: true,
 });
+
+// ==================== MICROSIP INTEGRATION ====================
+
+// Microsip sync configuration per tenant
+export const microsipConfigs = pgTable("microsip_configs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id).unique(),
+  // Firebird connection settings
+  host: text("host").notNull(), // Firebird server IP or hostname
+  port: integer("port").notNull().default(3050), // Default Firebird port
+  database: text("database").notNull(), // Path to .fdb file on the server
+  username: text("username").notNull(),
+  password: text("password").notNull(), // Encrypted in production
+  // Sync settings
+  enabled: boolean("enabled").notNull().default(false),
+  syncCustomers: boolean("sync_customers").notNull().default(true),
+  syncProducts: boolean("sync_products").notNull().default(true),
+  syncCategories: boolean("sync_categories").notNull().default(true),
+  syncInvoices: boolean("sync_invoices").notNull().default(true),
+  syncPayments: boolean("sync_payments").notNull().default(true),
+  // Sync intervals in minutes
+  masterDataInterval: integer("master_data_interval").notNull().default(120), // 2 hours for customers, products
+  transactionalInterval: integer("transactional_interval").notNull().default(60), // 1 hour for invoices, payments
+  // Last sync timestamps
+  lastCustomerSync: timestamp("last_customer_sync"),
+  lastProductSync: timestamp("last_product_sync"),
+  lastCategorySync: timestamp("last_category_sync"),
+  lastInvoiceSync: timestamp("last_invoice_sync"),
+  lastPaymentSync: timestamp("last_payment_sync"),
+  // Status
+  lastSyncStatus: text("last_sync_status"), // 'success', 'error', 'running'
+  lastSyncError: text("last_sync_error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Sync logs for debugging and monitoring
+export const microsipSyncLogs = pgTable("microsip_sync_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  syncType: text("sync_type").notNull(), // 'customers', 'products', 'categories', 'invoices', 'payments', 'full'
+  status: text("status").notNull(), // 'started', 'success', 'error'
+  recordsProcessed: integer("records_processed").default(0),
+  recordsCreated: integer("records_created").default(0),
+  recordsUpdated: integer("records_updated").default(0),
+  recordsSkipped: integer("records_skipped").default(0),
+  errorMessage: text("error_message"),
+  errorDetails: text("error_details"),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertMicrosipConfigSchema = createInsertSchema(microsipConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastCustomerSync: true,
+  lastProductSync: true,
+  lastCategorySync: true,
+  lastInvoiceSync: true,
+  lastPaymentSync: true,
+  lastSyncStatus: true,
+  lastSyncError: true,
+});
+
+export const updateMicrosipConfigSchema = insertMicrosipConfigSchema.partial();
+
+export type InsertMicrosipConfig = z.infer<typeof insertMicrosipConfigSchema>;
+export type UpdateMicrosipConfig = z.infer<typeof updateMicrosipConfigSchema>;
+export type MicrosipConfig = typeof microsipConfigs.$inferSelect;
+export type MicrosipSyncLog = typeof microsipSyncLogs.$inferSelect;
+
+// ==================== END MICROSIP INTEGRATION ====================
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;

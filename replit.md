@@ -83,3 +83,35 @@ The system implements subdomain-based multi-tenancy, allowing each company (tena
 - **Date Handling**: `date-fns` library for date manipulation and formatting.
 - **Build Tools**: Vite (frontend) and esbuild (backend) for optimized production builds.
 - **Image Processing**: Sharp for resizing and optimizing images during PDF generation.
+
+### Microsip ERP Integration
+
+The system includes integration with Microsip ERP (Firebird database) for synchronizing master data and transactions:
+
+**Configuration:**
+- Each tenant can configure their own Microsip connection in the admin panel (`/microsip`)
+- Connection parameters: host, port, database path, username, password
+- Configurable sync intervals for master data (customers, products, categories) and transactional data (invoices, payments)
+- Individual entity sync can be enabled/disabled per tenant
+
+**Sync Behavior:**
+- **Automatic sync**: When enabled, runs on configured intervals (default: 120 min for master data, 60 min for transactions)
+- **Manual sync**: Can be triggered anytime via admin UI, regardless of auto-sync setting
+- **Entity tracking**: Uses `microsipId` fields on customers, products, categories, invoices, and payments tables
+- **Sync logs**: Full history of sync operations with status, timing, and record counts
+
+**Key Files:**
+- `server/microsip-sync.ts`: Sync service with Firebird connectivity
+- `shared/schema.ts`: `microsipConfigs` and `microsipSyncLogs` tables
+- `client/src/pages/microsip-settings-page.tsx`: Admin configuration UI
+
+**Security Note:**
+- Firebird credentials are currently stored in the database (plaintext). Future enhancement should implement encryption or secrets manager integration.
+
+**API Endpoints:**
+- `GET /api/microsip/config`: Get tenant's Microsip configuration
+- `POST /api/microsip/config`: Create/update Microsip configuration
+- `PATCH /api/microsip/toggle`: Enable/disable automatic sync
+- `POST /api/microsip/sync`: Trigger manual sync for specific entity type
+- `POST /api/microsip/test`: Test Firebird connection
+- `GET /api/microsip/logs`: Get sync history

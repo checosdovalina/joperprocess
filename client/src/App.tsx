@@ -25,6 +25,7 @@ import UsersPage from "@/pages/users-page";
 import ProductsPage from "@/pages/products-page";
 import IncidentsPage from "@/pages/incidents-page";
 import CompanySettingsPage from "@/pages/company-settings-page";
+import MicrosipSettingsPage from "@/pages/microsip-settings-page";
 import IncidentDetailPage from "@/pages/incident-detail-page";
 import PublicQuotationApproval from "@/pages/public-quotation-approval";
 import PublicIncidentPortal from "@/pages/public-incident-portal";
@@ -76,6 +77,7 @@ function Router() {
       <ProtectedRoute path="/incidents/:id" component={IncidentDetailPage} />
       <ProtectedRoute path="/incidents" component={IncidentsPage} />
       <ProtectedRoute path="/company-settings" component={CompanySettingsPage} />
+      <ProtectedRoute path="/microsip" component={MicrosipSettingsPage} />
       <ProtectedRoute path="/tenants" component={TenantsPage} />
       <Route component={NotFound} />
     </Switch>

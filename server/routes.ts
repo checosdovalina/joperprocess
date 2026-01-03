@@ -55,7 +55,8 @@ import {
   insertIncidentCommentSchema,
   insertIncidentAttachmentSchema,
 } from "@shared/schema";
-import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
+import { createMicrosipSyncService, runScheduledSync } from "./microsip-sync";
 import { randomBytes } from "crypto";
 import { eq, and, sql, gte, lt, isNull, or } from "drizzle-orm";
 import type { Request } from "express";
@@ -4713,6 +4714,181 @@ Proporciona tu análisis en el siguiente formato JSON:
       res.status(500).json({ error: "Error al confirmar el cierre" });
     }
   });
+
+  // ==================== MICROSIP INTEGRATION ENDPOINTS ====================
+
+  // Get Microsip configuration for current tenant
+  app.get("/api/microsip/config", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      
+      const [config] = await db
+        .select()
+        .from(microsipConfigs)
+        .where(eq(microsipConfigs.tenantId, tenantId));
+
+      if (!config) {
+        return res.json({ configured: false });
+      }
+
+      // Don't expose password in response
+      const { password, ...safeConfig } = config;
+      res.json({ configured: true, ...safeConfig, password: password ? "********" : null });
+    } catch (error) {
+      console.error("Error getting Microsip config:", error);
+      res.status(500).json({ error: "Error al obtener configuración de Microsip" });
+    }
+  });
+
+  // Create or update Microsip configuration
+  app.post("/api/microsip/config", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      
+      const validated = insertMicrosipConfigSchema.parse({
+        ...req.body,
+        tenantId,
+      });
+
+      // Check if config already exists
+      const [existing] = await db
+        .select()
+        .from(microsipConfigs)
+        .where(eq(microsipConfigs.tenantId, tenantId));
+
+      if (existing) {
+        // Update existing config
+        const updateData: any = { ...validated, updatedAt: new Date() };
+        // If password is masked, don't update it
+        if (validated.password === "********") {
+          delete updateData.password;
+        }
+        
+        const [updated] = await db
+          .update(microsipConfigs)
+          .set(updateData)
+          .where(eq(microsipConfigs.id, existing.id))
+          .returning();
+
+        const { password, ...safeConfig } = updated;
+        res.json({ ...safeConfig, password: "********" });
+      } else {
+        // Create new config
+        const [created] = await db
+          .insert(microsipConfigs)
+          .values(validated)
+          .returning();
+
+        const { password, ...safeConfig } = created;
+        res.json({ ...safeConfig, password: "********" });
+      }
+    } catch (error) {
+      console.error("Error saving Microsip config:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: error.errors });
+      }
+      res.status(500).json({ error: "Error al guardar configuración de Microsip" });
+    }
+  });
+
+  // Test Microsip connection
+  app.post("/api/microsip/test-connection", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      
+      const service = await createMicrosipSyncService(tenantId);
+      const result = await service.testConnection();
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error testing Microsip connection:", error);
+      res.status(500).json({ success: false, message: `Error: ${(error as Error).message}` });
+    }
+  });
+
+  // Trigger manual sync
+  app.post("/api/microsip/sync", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const { type } = req.body; // 'all', 'customers', 'products', 'categories', 'invoices', 'payments'
+      
+      const service = await createMicrosipSyncService(tenantId);
+      
+      let result;
+      switch (type) {
+        case 'customers':
+          result = { customers: await service.syncCustomers() };
+          break;
+        case 'products':
+          result = { products: await service.syncProducts() };
+          break;
+        case 'categories':
+          result = { categories: await service.syncCategories() };
+          break;
+        case 'invoices':
+          result = { invoices: await service.syncInvoices() };
+          break;
+        case 'payments':
+          result = { payments: await service.syncPayments() };
+          break;
+        case 'all':
+        default:
+          result = await service.syncAll();
+          break;
+      }
+      
+      res.json({ success: true, result });
+    } catch (error) {
+      console.error("Error during Microsip sync:", error);
+      res.status(500).json({ success: false, error: (error as Error).message });
+    }
+  });
+
+  // Get sync logs
+  app.get("/api/microsip/logs", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      
+      const logs = await db
+        .select()
+        .from(microsipSyncLogs)
+        .where(eq(microsipSyncLogs.tenantId, tenantId))
+        .orderBy(sql`${microsipSyncLogs.startedAt} DESC`)
+        .limit(limit);
+      
+      res.json(logs);
+    } catch (error) {
+      console.error("Error getting Microsip logs:", error);
+      res.status(500).json({ error: "Error al obtener logs de sincronización" });
+    }
+  });
+
+  // Enable/disable sync
+  app.patch("/api/microsip/toggle", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const { enabled } = req.body;
+      
+      const [updated] = await db
+        .update(microsipConfigs)
+        .set({ enabled: !!enabled, updatedAt: new Date() })
+        .where(eq(microsipConfigs.tenantId, tenantId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Configuración no encontrada" });
+      }
+
+      const { password, ...safeConfig } = updated;
+      res.json({ ...safeConfig, password: "********" });
+    } catch (error) {
+      console.error("Error toggling Microsip sync:", error);
+      res.status(500).json({ error: "Error al cambiar estado de sincronización" });
+    }
+  });
+
+  // ==================== END MICROSIP INTEGRATION ====================
 
   const httpServer = createServer(app);
 
