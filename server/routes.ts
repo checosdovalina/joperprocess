@@ -85,14 +85,32 @@ function getEffectiveTenantId(req: Request): string | null {
 // Helper to require tenantId - throws if not available
 function requireTenantId(req: Request): string {
   const tenantId = getEffectiveTenantId(req);
-  if (tenantId === null && !req.user?.isSuperAdmin) {
-    throw new Error("Tenant context required");
+  
+  // If we have a tenant from subdomain or user, use it
+  if (tenantId) {
+    return tenantId;
   }
-  // For non-superadmin users, tenantId must be present
-  if (!req.user?.tenantId && !req.user?.isSuperAdmin) {
+  
+  // For SuperAdmin, check if they have a tenantId or are on a subdomain
+  if (req.user?.isSuperAdmin) {
+    // Check subdomain first
+    if (req.tenant?.id) {
+      return req.tenant.id;
+    }
+    // Then user's tenantId
+    if (req.user.tenantId) {
+      return req.user.tenantId;
+    }
+    // SuperAdmin on main domain without specific tenant - throw error for tenant-specific operations
+    throw new Error("SuperAdmin must access via subdomain for tenant-specific operations");
+  }
+  
+  // Non-superadmin users must have a tenantId
+  if (!req.user?.tenantId) {
     throw new Error("User has no tenant assignment");
   }
-  return req.user?.tenantId || "";
+  
+  return req.user.tenantId;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
