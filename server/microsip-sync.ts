@@ -31,9 +31,7 @@ interface MicrosipCustomer {
   NUM_INTERIOR?: string;
   CODIGO_POSTAL?: string;
   COLONIA?: string;
-  CIUDAD?: string;
-  ESTADO?: string;
-  PAIS?: string;
+  POBLACION?: string;
   TELEFONO1?: string;
   EMAIL?: string;
 }
@@ -216,14 +214,13 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query with LEFT JOIN to DIRS_CLIENTES for address and RFC
-      // Using actual Microsip schema: CONTACTO1 (not CONTACTO), COND_PAGO_ID for credit terms
+      // Using minimal fields - DIRS_CLIENTES may not have CIUDAD/ESTADO/PAIS columns
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
           C.LIMITE_CREDITO, C.COND_PAGO_ID,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
-          D.CODIGO_POSTAL, D.COLONIA, D.CIUDAD, D.ESTADO, D.PAIS,
-          D.TELEFONO1, D.EMAIL
+          D.CODIGO_POSTAL, D.COLONIA, D.POBLACION, D.TELEFONO1, D.EMAIL
         FROM CLIENTES C
         LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
         WHERE C.ESTATUS = 'A'
@@ -257,9 +254,9 @@ class MicrosipSyncService {
             phone: msCustomer.TELEFONO1?.trim() || null,
             email: msCustomer.EMAIL?.trim() || null,
             address: addressParts.join(', ') || null,
-            city: msCustomer.CIUDAD?.trim() || null,
-            state: msCustomer.ESTADO?.trim() || null,
-            country: msCustomer.PAIS?.trim() || 'México',
+            city: msCustomer.POBLACION?.trim() || null,
+            state: null,
+            country: 'México',
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
             creditDays: msCustomer.COND_PAGO_ID || 30,
