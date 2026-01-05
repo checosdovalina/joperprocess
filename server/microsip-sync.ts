@@ -218,7 +218,7 @@ class MicrosipSyncService {
       // Query with LEFT JOIN to DIRS_CLIENTES for address and RFC
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
-          C.CLIENTE_ID, C.CLAVE, C.NOMBRE, C.ESTATUS, C.CONTACTO,
+          C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO,
           C.LIMITE_CREDITO, C.DIAS_CREDITO, C.EMAIL, C.TELEFONO1,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
           D.CODIGO_POSTAL, D.COLONIA, D.CIUDAD, D.ESTADO, D.PAIS
@@ -264,7 +264,7 @@ class MicrosipSyncService {
             blocked: msCustomer.ESTATUS !== 'A',
             contactName: msCustomer.CONTACTO?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
-            microsipCode: msCustomer.CLAVE?.trim(),
+            microsipCode: String(msCustomer.CLIENTE_ID),
             microsipSyncedAt: new Date(),
           };
 
