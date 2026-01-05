@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
+import { CustomerCombobox } from "@/components/customer-combobox";
 import {
   Popover,
   PopoverContent,
@@ -234,21 +235,13 @@ export default function ScheduledVisitsPage() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="customer" data-testid="label-customer">Cliente</Label>
-                <Select
-                  value={formData.customerId}
+                <CustomerCombobox
+                  customers={customers || []}
+                  value={formData.customerId || ""}
                   onValueChange={(value) => setFormData({ ...formData, customerId: value })}
-                >
-                  <SelectTrigger data-testid="select-customer">
-                    <SelectValue placeholder="Selecciona un cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers?.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id} data-testid={`option-customer-${customer.id}`}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Buscar cliente..."
+                  data-testid="select-customer"
+                />
               </div>
 
               <div>
