@@ -128,7 +128,14 @@ class MicrosipSyncService {
   private connect(): Promise<FirebirdConnection> {
     return new Promise((resolve, reject) => {
       const options = this.getFirebirdOptions();
+      
+      // Add connection timeout of 15 seconds
+      const timeout = setTimeout(() => {
+        reject(new Error(`Timeout: No se pudo conectar a ${options.host}:${options.port} en 15 segundos. Verifique que el servidor sea accesible desde Internet.`));
+      }, 15000);
+      
       Firebird.attach(options, (err: Error | null, db: FirebirdConnection) => {
+        clearTimeout(timeout);
         if (err) {
           console.error('[Microsip] Connection error:', err.message);
           reject(err);
