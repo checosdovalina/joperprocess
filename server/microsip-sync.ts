@@ -23,6 +23,8 @@ interface MicrosipCustomer {
   NOMBRE: string;
   RFC: string;
   CALLE: string;
+  NUM_EXTERIOR: string;
+  NUM_INTERIOR: string;
   COLONIA: string;
   CIUDAD: string;
   ESTADO: string;
@@ -213,12 +215,16 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
+      // Query with LEFT JOIN to DIRS_CLIENTES for address and RFC
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
-          CLIENTE_ID, CLAVE, NOMBRE, RFC, CALLE, COLONIA, CIUDAD, ESTADO, PAIS,
-          CODIGO_POSTAL, TELEFONO1, EMAIL, LIMITE_CREDITO, DIAS_CREDITO, ESTATUS, CONTACTO
-        FROM CLIENTES
-        WHERE ESTATUS = 'A'
+          C.CLIENTE_ID, C.CLAVE, C.NOMBRE, C.ESTATUS, C.CONTACTO,
+          C.LIMITE_CREDITO, C.DIAS_CREDITO, C.EMAIL, C.TELEFONO1,
+          D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
+          D.CODIGO_POSTAL, D.COLONIA, D.CIUDAD, D.ESTADO, D.PAIS
+        FROM CLIENTES C
+        LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
+        WHERE C.ESTATUS = 'A'
       `);
 
       console.log(`[Microsip] Found ${microsipCustomers.length} customers to sync`);
@@ -235,12 +241,20 @@ class MicrosipSyncService {
               eq(customers.microsipId, msCustomer.CLIENTE_ID)
             ));
 
+          // Build address from components
+          const addressParts = [
+            msCustomer.CALLE?.trim(),
+            msCustomer.NUM_EXTERIOR ? `#${msCustomer.NUM_EXTERIOR.trim()}` : null,
+            msCustomer.NUM_INTERIOR ? `Int. ${msCustomer.NUM_INTERIOR.trim()}` : null,
+            msCustomer.COLONIA?.trim(),
+          ].filter(Boolean);
+          
           const customerData = {
             name: msCustomer.NOMBRE?.trim() || 'Sin nombre',
             rfc: msCustomer.RFC?.trim() || null,
             phone: msCustomer.TELEFONO1?.trim() || null,
             email: msCustomer.EMAIL?.trim() || null,
-            address: [msCustomer.CALLE, msCustomer.COLONIA].filter(Boolean).join(', ').trim() || null,
+            address: addressParts.join(', ') || null,
             city: msCustomer.CIUDAD?.trim() || null,
             state: msCustomer.ESTADO?.trim() || null,
             country: msCustomer.PAIS?.trim() || 'México',
@@ -528,10 +542,12 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
+      // Query invoices using correct field names per Microsip documentation
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
           DOCTO_VE_ID, CLAVE, FOLIO, CLIENTE_ID, FECHA, FECHA_VENCIMIENTO,
-          IMPORTE_NETO, IMPUESTO, TOTAL, SALDO, ESTATUS, UUID, FORMA_COBRO, CONDICION_PAGO
+          IMPORTE_NETO, TOTAL_IMPUESTOS AS IMPUESTO, IMPORTE_COBRO AS TOTAL, 
+          SALDO, ESTATUS, UUID, COND_PAGO_ID, MONEDA_ID, FLETES, TOTAL_ANTICIPOS
         FROM DOCTOS_VE
         WHERE CONCEPTO_VE_ID IN (SELECT CONCEPTO_VE_ID FROM CONCEPTOS_VE WHERE NATURALEZA_CONCEPTO = 'F')
           AND CANCELADO = 'N'
