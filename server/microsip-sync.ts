@@ -22,8 +22,8 @@ interface MicrosipCustomer {
   NOMBRE: string;
   ESTATUS: string;
   CONTACTO1?: string;
-  COND_PAGO_ID?: number;
   LIMITE_CREDITO?: number;
+  DIAS_CREDITO?: number; // From CONDICIONES_PAGO.DIAS_PPAG
   // From DIRS_CLIENTES join
   RFC?: string;
   CALLE?: string;
@@ -34,6 +34,7 @@ interface MicrosipCustomer {
   POBLACION?: string;
   TELEFONO1?: string;
   EMAIL?: string;
+  CONTACTO?: string; // From DIRS_CLIENTES
 }
 
 interface MicrosipProduct {
@@ -213,16 +214,18 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query with LEFT JOIN to DIRS_CLIENTES for address and RFC
-      // Using minimal fields - DIRS_CLIENTES may not have CIUDAD/ESTADO/PAIS columns
+      // Query with JOINs to DIRS_CLIENTES and CONDICIONES_PAGO
+      // CIUDAD_ID, ESTADO_ID, PAIS_ID are foreign keys in DIRS_CLIENTES
+      // Credit days come from CONDICIONES_PAGO.DIAS_PPAG
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
-          C.LIMITE_CREDITO, C.COND_PAGO_ID,
+          C.LIMITE_CREDITO, CP.DIAS_PPAG AS DIAS_CREDITO,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
-          D.CODIGO_POSTAL, D.COLONIA, D.POBLACION, D.TELEFONO1, D.EMAIL
+          D.CODIGO_POSTAL, D.COLONIA, D.POBLACION, D.TELEFONO1, D.EMAIL, D.CONTACTO
         FROM CLIENTES C
-        LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
+        LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID AND D.ES_DIR_PPAL = 'S'
+        LEFT JOIN CONDICIONES_PAGO CP ON CP.COND_PAGO_ID = C.COND_PAGO_ID
         WHERE C.ESTATUS = 'A'
       `);
 
@@ -259,9 +262,9 @@ class MicrosipSyncService {
             country: 'México',
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
-            creditDays: msCustomer.COND_PAGO_ID || 30,
+            creditDays: msCustomer.DIAS_CREDITO || 30,
             blocked: msCustomer.ESTATUS !== 'A',
-            contactName: msCustomer.CONTACTO1?.trim() || null,
+            contactName: msCustomer.CONTACTO?.trim() || msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
             microsipCode: String(msCustomer.CLIENTE_ID),
             microsipSyncedAt: new Date(),
