@@ -216,10 +216,11 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query with LEFT JOIN to DIRS_CLIENTES for address and RFC
+      // Only select fields that exist in standard Microsip schema
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
-          C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO,
-          C.LIMITE_CREDITO, C.DIAS_CREDITO, C.EMAIL, C.TELEFONO1,
+          C.CLIENTE_ID, C.NOMBRE, C.ESTATUS,
+          C.LIMITE_CREDITO, C.DIAS_CREDITO,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
           D.CODIGO_POSTAL, D.COLONIA, D.CIUDAD, D.ESTADO, D.PAIS
         FROM CLIENTES C
@@ -252,8 +253,8 @@ class MicrosipSyncService {
           const customerData = {
             name: msCustomer.NOMBRE?.trim() || 'Sin nombre',
             rfc: msCustomer.RFC?.trim() || null,
-            phone: msCustomer.TELEFONO1?.trim() || null,
-            email: msCustomer.EMAIL?.trim() || null,
+            phone: null, // Not available in basic Microsip schema
+            email: null, // Not available in basic Microsip schema
             address: addressParts.join(', ') || null,
             city: msCustomer.CIUDAD?.trim() || null,
             state: msCustomer.ESTADO?.trim() || null,
@@ -262,7 +263,7 @@ class MicrosipSyncService {
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
             creditDays: msCustomer.DIAS_CREDITO || 30,
             blocked: msCustomer.ESTATUS !== 'A',
-            contactName: msCustomer.CONTACTO?.trim() || null,
+            contactName: null, // Not available in basic Microsip schema
             microsipId: msCustomer.CLIENTE_ID,
             microsipCode: String(msCustomer.CLIENTE_ID),
             microsipSyncedAt: new Date(),
