@@ -215,23 +215,32 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query with JOINs to DIRS_CLIENTES and CONDICIONES_PAGO
-      // CIUDAD_ID, ESTADO_ID, PAIS_ID are foreign keys in DIRS_CLIENTES
+      // Use FIRST 1 for dirs to get any available address per customer
       // Credit days come from CONDICIONES_PAGO.DIAS_PPAG
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
           C.LIMITE_CREDITO, CP.DIAS_PPAG AS DIAS_CREDITO,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
-          D.CODIGO_POSTAL, D.COLONIA, D.POBLACION, D.TELEFONO1, D.EMAIL, D.CONTACTO
+          D.CODIGO_POSTAL, D.COLONIA, UPPER(D.POBLACION) AS POBLACION, 
+          D.TELEFONO1, D.EMAIL, D.CONTACTO
         FROM CLIENTES C
-        LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID AND D.ES_DIR_PPAL = 'S'
+        LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
         LEFT JOIN CONDICIONES_PAGO CP ON CP.COND_PAGO_ID = C.COND_PAGO_ID
         WHERE C.ESTATUS = 'A'
       `);
 
-      console.log(`[Microsip] Found ${microsipCustomers.length} customers to sync`);
+      // Group by CLIENTE_ID to avoid duplicates when customer has multiple addresses
+      const uniqueCustomers = new Map<number, MicrosipCustomer>();
+      for (const customer of microsipCustomers) {
+        if (!uniqueCustomers.has(customer.CLIENTE_ID)) {
+          uniqueCustomers.set(customer.CLIENTE_ID, customer);
+        }
+      }
+      
+      console.log(`[Microsip] Found ${uniqueCustomers.size} unique customers to sync`);
 
-      for (const msCustomer of microsipCustomers) {
+      for (const msCustomer of uniqueCustomers.values()) {
         stats.processed++;
         
         try {
