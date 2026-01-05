@@ -824,13 +824,38 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      const result = await this.query<{ COUNT: number }>(fbDb, 'SELECT COUNT(*) AS COUNT FROM CLIENTES');
-      const count = result[0]?.COUNT || 0;
-      
-      return { 
-        success: true, 
-        message: `Conexión exitosa. Se encontraron ${count} clientes en Microsip.` 
-      };
+      // First try a simple query to verify connection
+      try {
+        const result = await this.query<{ COUNT: number }>(fbDb, 'SELECT COUNT(*) AS COUNT FROM CLIENTES');
+        const count = result[0]?.COUNT || 0;
+        
+        return { 
+          success: true, 
+          message: `Conexión exitosa. Se encontraron ${count} clientes en Microsip.` 
+        };
+      } catch (queryErr) {
+        // Connection works but table doesn't exist - try to list tables
+        const queryError = queryErr as Error;
+        
+        // Try alternative query to confirm connection is working
+        try {
+          const tables = await this.query<{ RDB$RELATION_NAME: string }>(
+            fbDb, 
+            `SELECT FIRST 10 RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG = 0`
+          );
+          const tableNames = tables.map(t => t.RDB$RELATION_NAME?.trim()).filter(Boolean).join(', ');
+          
+          return { 
+            success: true, 
+            message: `Conexión exitosa a la base de datos. Tablas encontradas: ${tableNames || 'ninguna'}. Nota: La tabla CLIENTES no existe, verifique la estructura de su base de datos.` 
+          };
+        } catch {
+          return { 
+            success: true, 
+            message: `Conexión exitosa, pero error al consultar tablas: ${queryError.message}` 
+          };
+        }
+      }
     } catch (err) {
       const error = err as Error;
       return { 
