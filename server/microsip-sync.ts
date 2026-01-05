@@ -19,23 +19,23 @@ interface FirebirdConnection {
 
 interface MicrosipCustomer {
   CLIENTE_ID: number;
-  CLAVE: string;
   NOMBRE: string;
-  RFC: string;
-  CALLE: string;
-  NUM_EXTERIOR: string;
-  NUM_INTERIOR: string;
-  COLONIA: string;
-  CIUDAD: string;
-  ESTADO: string;
-  PAIS: string;
-  CODIGO_POSTAL: string;
-  TELEFONO1: string;
-  EMAIL: string;
-  LIMITE_CREDITO: number;
-  DIAS_CREDITO: number;
   ESTATUS: string;
-  CONTACTO: string;
+  CONTACTO1?: string;
+  COND_PAGO_ID?: number;
+  LIMITE_CREDITO?: number;
+  // From DIRS_CLIENTES join
+  RFC?: string;
+  CALLE?: string;
+  NUM_EXTERIOR?: string;
+  NUM_INTERIOR?: string;
+  CODIGO_POSTAL?: string;
+  COLONIA?: string;
+  CIUDAD?: string;
+  ESTADO?: string;
+  PAIS?: string;
+  TELEFONO1?: string;
+  EMAIL?: string;
 }
 
 interface MicrosipProduct {
@@ -216,13 +216,14 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query with LEFT JOIN to DIRS_CLIENTES for address and RFC
-      // Only select fields that exist in standard Microsip schema
+      // Using actual Microsip schema: CONTACTO1 (not CONTACTO), COND_PAGO_ID for credit terms
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
-          C.CLIENTE_ID, C.NOMBRE, C.ESTATUS,
-          C.LIMITE_CREDITO, C.DIAS_CREDITO,
+          C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
+          C.LIMITE_CREDITO, C.COND_PAGO_ID,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
-          D.CODIGO_POSTAL, D.COLONIA, D.CIUDAD, D.ESTADO, D.PAIS
+          D.CODIGO_POSTAL, D.COLONIA, D.CIUDAD, D.ESTADO, D.PAIS,
+          D.TELEFONO1, D.EMAIL
         FROM CLIENTES C
         LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
         WHERE C.ESTATUS = 'A'
@@ -253,17 +254,17 @@ class MicrosipSyncService {
           const customerData = {
             name: msCustomer.NOMBRE?.trim() || 'Sin nombre',
             rfc: msCustomer.RFC?.trim() || null,
-            phone: null, // Not available in basic Microsip schema
-            email: null, // Not available in basic Microsip schema
+            phone: msCustomer.TELEFONO1?.trim() || null,
+            email: msCustomer.EMAIL?.trim() || null,
             address: addressParts.join(', ') || null,
             city: msCustomer.CIUDAD?.trim() || null,
             state: msCustomer.ESTADO?.trim() || null,
             country: msCustomer.PAIS?.trim() || 'México',
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
-            creditDays: msCustomer.DIAS_CREDITO || 30,
+            creditDays: msCustomer.COND_PAGO_ID || 30,
             blocked: msCustomer.ESTATUS !== 'A',
-            contactName: null, // Not available in basic Microsip schema
+            contactName: msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
             microsipCode: String(msCustomer.CLIENTE_ID),
             microsipSyncedAt: new Date(),
