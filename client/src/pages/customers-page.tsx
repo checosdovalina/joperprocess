@@ -23,13 +23,21 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Plus, Pencil, Search, X } from "lucide-react";
+import { Users, UserCheck, UserX, Plus, Pencil, Search, X, Mail, Phone, MapPin, Building, CreditCard, Calendar } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CustomerForm } from "@/components/customer-form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 
 export default function CustomersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
+  const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked">("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
@@ -265,7 +273,12 @@ export default function CustomersPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredCustomers.map((customer) => (
-                    <TableRow key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
+                    <TableRow 
+                      key={customer.id} 
+                      className="hover-elevate cursor-pointer" 
+                      data-testid={`row-customer-${customer.id}`}
+                      onDoubleClick={() => setViewingCustomer(customer)}
+                    >
                       <TableCell>
                         <div className="font-medium" data-testid={`text-customer-name-${customer.id}`}>
                           {customer.name}
@@ -366,6 +379,132 @@ export default function CustomersPage() {
         isPending={createCustomerMutation.isPending || updateCustomerMutation.isPending}
         customer={editingCustomer}
       />
+
+      {/* Customer Detail Modal */}
+      <Dialog open={!!viewingCustomer} onOpenChange={() => setViewingCustomer(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl">{viewingCustomer?.name}</DialogTitle>
+            <div className="flex items-center gap-2 pt-2">
+              {viewingCustomer?.blocked ? (
+                <Badge variant="destructive">Bloqueado</Badge>
+              ) : (
+                <Badge className="bg-green-100 text-green-800">Activo</Badge>
+              )}
+              {viewingCustomer?.microsipCode && (
+                <Badge variant="outline">Microsip: {viewingCustomer.microsipCode}</Badge>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-4">
+            {/* Contact Info */}
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Información de Contacto</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {viewingCustomer?.contactName && (
+                  <div className="flex items-start gap-3">
+                    <Building className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Contacto</p>
+                      <p className="text-sm text-muted-foreground">{viewingCustomer.contactName}</p>
+                    </div>
+                  </div>
+                )}
+                {viewingCustomer?.email && (
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Email</p>
+                      <p className="text-sm text-muted-foreground">{viewingCustomer.email}</p>
+                    </div>
+                  </div>
+                )}
+                {viewingCustomer?.phone && (
+                  <div className="flex items-start gap-3">
+                    <Phone className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Teléfono</p>
+                      <p className="text-sm text-muted-foreground">{viewingCustomer.phone}</p>
+                    </div>
+                  </div>
+                )}
+                {viewingCustomer?.rfc && (
+                  <div className="flex items-start gap-3">
+                    <CreditCard className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">RFC</p>
+                      <p className="text-sm text-muted-foreground font-mono">{viewingCustomer.rfc}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Address */}
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Dirección</h4>
+              <div className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div className="text-sm">
+                  {viewingCustomer?.address && <p>{viewingCustomer.address}</p>}
+                  <p>
+                    {[viewingCustomer?.city, viewingCustomer?.state, viewingCustomer?.zipCode]
+                      .filter(Boolean)
+                      .join(", ") || "Sin dirección"}
+                  </p>
+                  {viewingCustomer?.country && <p className="text-muted-foreground">{viewingCustomer.country}</p>}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Credit Info */}
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Información de Crédito</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-start gap-3">
+                  <CreditCard className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Límite de Crédito</p>
+                    <p className="text-lg font-semibold">
+                      ${parseFloat(viewingCustomer?.creditLimit || "0").toLocaleString("es-MX", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Días de Crédito</p>
+                    <p className="text-lg font-semibold">{viewingCustomer?.creditDays || 0} días</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setViewingCustomer(null)}>
+                Cerrar
+              </Button>
+              <Button onClick={() => {
+                if (viewingCustomer) {
+                  handleEditCustomer(viewingCustomer);
+                  setViewingCustomer(null);
+                }
+              }}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
