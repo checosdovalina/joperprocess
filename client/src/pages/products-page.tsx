@@ -12,7 +12,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Package, Search, Pencil, FolderOpen, Loader2 } from "lucide-react";
+import { Plus, Package, Search, Pencil, FolderOpen, Loader2, Filter, X } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
 import { ProductForm } from "@/components/product-form";
@@ -36,6 +43,8 @@ export default function ProductsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithCategory | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [categoryName, setCategoryName] = useState("");
@@ -43,11 +52,34 @@ export default function ProductsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === UserRole.ADMIN;
 
+  const hasActiveFilters = categoryFilter !== "all" || statusFilter !== "all";
+
+  const clearFilters = () => {
+    setCategoryFilter("all");
+    setStatusFilter("all");
+  };
+
   const { data: products, isLoading } = useEntityQuery<ProductWithCategory[]>(
     searchQuery ? `/api/products?q=${encodeURIComponent(searchQuery)}` : "/api/products"
   );
 
   const { data: categories, isLoading: categoriesLoading } = useEntityQuery<ProductCategory[]>("/api/product-categories");
+
+  // Apply filters to products
+  const filteredProducts = products?.filter(product => {
+    // Category filter
+    if (categoryFilter === "none") {
+      if (product.categoryId) return false;
+    } else if (categoryFilter !== "all") {
+      if (product.categoryId !== categoryFilter) return false;
+    }
+    
+    // Status filter
+    if (statusFilter === "active" && !product.active) return false;
+    if (statusFilter === "inactive" && product.active) return false;
+    
+    return true;
+  });
 
   const createMutation = useEntityMutation<Product, InsertProduct>({
     endpoint: "/api/products",
@@ -173,28 +205,71 @@ export default function ProductsPage() {
         <TabsContent value="products">
           <Card>
             <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <CardTitle>Catálogo de Productos</CardTitle>
-                  <CardDescription>
-                    {products?.length || 0} productos registrados
-                  </CardDescription>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar por código, nombre o marca..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                      data-testid="input-search-products"
-                    />
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <CardTitle>Catálogo de Productos</CardTitle>
+                    <CardDescription>
+                      {filteredProducts?.length || 0} de {products?.length || 0} productos
+                    </CardDescription>
                   </div>
-                  {isAdmin && (
-                    <Button onClick={() => { setEditingProduct(null); setDialogOpen(true); }} data-testid="button-add-product">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Nuevo Producto
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                        data-testid="input-search-products"
+                      />
+                    </div>
+                    {isAdmin && (
+                      <Button onClick={() => { setEditingProduct(null); setDialogOpen(true); }} data-testid="button-add-product">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Nuevo Producto
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-[180px]" data-testid="select-category-filter">
+                      <SelectValue placeholder="Categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas las categorías</SelectItem>
+                      <SelectItem value="none">Sin categoría</SelectItem>
+                      {categories?.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+                      <SelectValue placeholder="Estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="active">Activos</SelectItem>
+                      <SelectItem value="inactive">Inactivos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  {hasActiveFilters && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={clearFilters}
+                      data-testid="button-clear-filters"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Limpiar filtros
                     </Button>
                   )}
                 </div>
@@ -207,7 +282,7 @@ export default function ProductsPage() {
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
-              ) : products && products.length > 0 ? (
+              ) : filteredProducts && filteredProducts.length > 0 ? (
                 <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -223,7 +298,7 @@ export default function ProductsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {products.map((product) => (
+                      {filteredProducts.map((product) => (
                         <TableRow key={product.id} className="hover-elevate" data-testid={`row-product-${product.id}`}>
                           <TableCell>
                             <div className="font-mono font-medium text-sm">{product.code}</div>
