@@ -539,7 +539,7 @@ export default function QuotationsPage() {
         onOpenChange={setCreateDialogOpen}
         onSubmit={createQuotationMutation.mutate}
         isPending={createQuotationMutation.isPending}
-        customers={customers?.map(c => ({ id: c.id, name: c.name })) || []}
+        customers={customers || []}
         userId={user?.id}
       />
 
@@ -553,7 +553,7 @@ export default function QuotationsPage() {
           }}
           onSubmit={(data) => updateQuotationMutation.mutate(data)}
           isPending={updateQuotationMutation.isPending}
-          customers={customers?.map(c => ({ id: c.id, name: c.name })) || []}
+          customers={customers || []}
           userId={user?.id}
           initialData={selectedQuotation}
           isEditing
