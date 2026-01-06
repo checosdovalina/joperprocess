@@ -39,14 +39,14 @@ interface MicrosipCustomer {
 
 interface MicrosipProduct {
   ARTICULO_ID: number;
-  CLAVE: string;
+  CLAVE?: string;
   NOMBRE: string;
-  DESCRIPCION: string;
+  DESCRIPCION?: string;
   LINEA_ARTICULO_ID: number;
-  UNIDAD_VENTA: string;
-  PRECIO_1: number;
-  COSTO_ULTIMA_COMPRA: number;
-  EXISTENCIA: number;
+  UNIDAD_VENTA?: string;
+  PRECIO_1?: number;
+  COSTO_ULTIMA_COMPRA?: number;
+  EXISTENCIA?: number;
   ESTATUS: string;
 }
 
@@ -437,8 +437,8 @@ class MicrosipSyncService {
       
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
-          ARTICULO_ID, CLAVE, NOMBRE, DESCRIPCION, LINEA_ARTICULO_ID,
-          UNIDAD_VENTA, PRECIO_1, COSTO_ULTIMA_COMPRA, EXISTENCIA, ESTATUS
+          ARTICULO_ID, NOMBRE, LINEA_ARTICULO_ID,
+          UNIDAD_VENTA, PRECIO_1, ESTATUS
         FROM ARTICULOS
         WHERE ESTATUS = 'A'
       `);
@@ -474,14 +474,14 @@ class MicrosipSyncService {
             : null;
 
           const productData = {
-            code: msProduct.CLAVE?.trim() || String(msProduct.ARTICULO_ID),
+            code: String(msProduct.ARTICULO_ID),
             name: msProduct.NOMBRE?.trim() || 'Sin nombre',
-            description: msProduct.DESCRIPCION?.trim() || null,
+            description: null,
             categoryId,
             unitOfMeasure: msProduct.UNIDAD_VENTA?.trim() || 'PZA',
             listPrice: String(msProduct.PRECIO_1 || 0),
-            cost: msProduct.COSTO_ULTIMA_COMPRA ? String(msProduct.COSTO_ULTIMA_COMPRA) : null,
-            stock: String(msProduct.EXISTENCIA || 0),
+            cost: null,
+            stock: "0",
             active: msProduct.ESTATUS === 'A',
             microsipArticuloId: msProduct.ARTICULO_ID,
             microsipSyncedAt: new Date(),
