@@ -53,7 +53,7 @@ interface MicrosipProduct {
 interface MicrosipCategory {
   LINEA_ARTICULO_ID: number;
   NOMBRE: string;
-  DESCRIPCION: string;
+  DESCRIPCION?: string;
 }
 
 interface MicrosipInvoice {
@@ -240,7 +240,7 @@ class MicrosipSyncService {
       
       console.log(`[Microsip] Found ${uniqueCustomers.size} unique customers to sync`);
 
-      for (const msCustomer of uniqueCustomers.values()) {
+      for (const msCustomer of Array.from(uniqueCustomers.values())) {
         stats.processed++;
         
         try {
@@ -345,7 +345,7 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       const microsipCategories = await this.query<MicrosipCategory>(fbDb, `
-        SELECT LINEA_ARTICULO_ID, NOMBRE, DESCRIPCION
+        SELECT LINEA_ARTICULO_ID, NOMBRE
         FROM LINEAS_ARTICULOS
       `);
 
@@ -365,7 +365,7 @@ class MicrosipSyncService {
 
           const categoryData = {
             name: msCategory.NOMBRE?.trim() || 'Sin categoría',
-            description: msCategory.DESCRIPCION?.trim() || null,
+            description: null,
             microsipLineaId: msCategory.LINEA_ARTICULO_ID,
             microsipSyncedAt: new Date(),
           };
