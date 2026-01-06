@@ -692,13 +692,12 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query payments - simplified for compatibility
+      // Query payments - minimal columns for compatibility
       const microsipPayments = await this.query<MicrosipPayment>(fbDb, `
         SELECT 
-          DOCTO_CO_ID, CLIENTE_ID, FECHA, IMPORTE, REFERENCIA, DESCRIPCION
+          DOCTO_CO_ID, CLIENTE_ID, FECHA, IMPORTE
         FROM DOCTOS_CO
-        WHERE TIPO_DOCTO = 'C'
-          AND FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
+        WHERE FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
       `);
 
       console.log(`[Microsip] Found ${microsipPayments.length} payments to sync`);
@@ -754,8 +753,8 @@ class MicrosipSyncService {
             invoiceId,
             amount: String(msPayment.IMPORTE || 0),
             paymentDate: msPayment.FECHA || new Date(),
-            reference: msPayment.REFERENCIA?.trim() || null,
-            notes: msPayment.DESCRIPCION?.trim() || null,
+            reference: null,
+            notes: null,
             microsipDoctoCoId: msPayment.DOCTO_CO_ID,
             microsipSyncedAt: new Date(),
           };
