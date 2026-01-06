@@ -558,7 +558,7 @@ class MicrosipSyncService {
         SELECT 
           DOCTO_VE_ID, FOLIO, CLIENTE_ID, FECHA,
           IMPORTE_NETO, TOTAL_IMPUESTOS AS IMPUESTO, IMPORTE_COBRO AS TOTAL, 
-          SALDO, ESTATUS
+          ESTATUS
         FROM DOCTOS_VE
         WHERE TIPO_DOCTO = 'F'
           AND ESTATUS <> 'C'
@@ -599,17 +599,12 @@ class MicrosipSyncService {
             ));
 
           let status: string = InvoiceStatus.PENDING_PAYMENT;
-          const saldo = msInvoice.SALDO || 0;
           const total = msInvoice.TOTAL || 0;
-          
-          if (saldo <= 0) {
-            status = InvoiceStatus.PAID;
-          } else if (saldo < total) {
-            status = InvoiceStatus.PARTIALLY_PAID;
-          }
           
           if (msInvoice.ESTATUS === 'C') {
             status = InvoiceStatus.CANCELLED;
+          } else if (msInvoice.ESTATUS === 'A') {
+            status = InvoiceStatus.PENDING_PAYMENT;
           }
 
           const invoiceData = {
@@ -620,13 +615,13 @@ class MicrosipSyncService {
             subtotal: String(msInvoice.IMPORTE_NETO || 0),
             tax: String(msInvoice.IMPUESTO || 0),
             total: String(msInvoice.TOTAL || 0),
-            balanceDue: String(saldo),
+            balanceDue: String(total),
             status,
             paymentMethod: null,
             paymentForm: null,
             issuedAt: msInvoice.FECHA || new Date(),
             dueDate: null,
-            paidAt: saldo <= 0 ? new Date() : null,
+            paidAt: null,
             microsipDoctoId: msInvoice.DOCTO_VE_ID,
             microsipSyncedAt: new Date(),
           };
