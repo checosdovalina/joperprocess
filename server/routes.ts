@@ -1068,14 +1068,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Products endpoints
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
-      const scopedStorage = createTenantScopedStorage(req);
+      const tenantId = requireTenantId(req);
       const { q } = req.query;
-      let productsData;
       
+      // Use query with relations to include category
+      let productsData = await db.query.products.findMany({
+        where: eq(products.tenantId, tenantId),
+        with: {
+          category: true,
+        },
+        orderBy: (products, { asc }) => [asc(products.name)],
+      });
+      
+      // Filter by search query if provided
       if (q && typeof q === 'string') {
-        productsData = await scopedStorage.searchProducts(q);
-      } else {
-        productsData = await scopedStorage.getAllProducts();
+        const searchLower = q.toLowerCase();
+        productsData = productsData.filter(p => 
+          p.code.toLowerCase().includes(searchLower) ||
+          p.name.toLowerCase().includes(searchLower) ||
+          (p.brand?.toLowerCase().includes(searchLower))
+        );
       }
       
       res.json(productsData);
