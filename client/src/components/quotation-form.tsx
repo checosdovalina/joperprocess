@@ -768,7 +768,7 @@ export function QuotationForm({
                                     </Button>
                                   </PopoverTrigger>
                                   <PopoverContent className="w-[300px] p-0" align="start">
-                                    <Command>
+                                    <Command shouldFilter={false}>
                                       <CommandInput 
                                         placeholder="Buscar por código o nombre..." 
                                         value={searchQuery}
