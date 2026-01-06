@@ -214,18 +214,16 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query with JOINs to DIRS_CLIENTES and PLAZOS_COND_PAGO
-      // Credit days come from PLAZOS_COND_PAGO.DIAS_PLAZO
+      // Query with JOIN to DIRS_CLIENTES only (credit days not available from Microsip)
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
-          C.LIMITE_CREDITO, PCP.DIAS_PLAZO AS DIAS_CREDITO,
+          C.LIMITE_CREDITO,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
           D.CODIGO_POSTAL, D.COLONIA, UPPER(D.POBLACION) AS POBLACION, 
           D.TELEFONO1, D.EMAIL, D.CONTACTO
         FROM CLIENTES C
         LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
-        LEFT JOIN PLAZOS_COND_PAGO PCP ON PCP.COND_PAGO_ID = C.COND_PAGO_ID
         WHERE C.ESTATUS = 'A'
       `);
 
@@ -270,7 +268,7 @@ class MicrosipSyncService {
             country: 'México',
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
-            creditDays: msCustomer.DIAS_CREDITO || 30,
+            creditDays: 30, // Default, not available from Microsip
             blocked: msCustomer.ESTATUS !== 'A',
             contactName: msCustomer.CONTACTO?.trim() || msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
@@ -552,18 +550,16 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query invoices - filter by TIPO_DOCTO = 'F' for invoices only
-      // Using IMPORTE_COBRO as total, PLAZOS_COND_PAGO for credit days
+      // Using IMPORTE_COBRO as total
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
-          DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
-          DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS AS IMPUESTO, 
-          DV.IMPORTE_COBRO, DV.ESTATUS,
-          PCP.DIAS_PLAZO
-        FROM DOCTOS_VE DV
-        LEFT JOIN PLAZOS_COND_PAGO PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
-        WHERE DV.TIPO_DOCTO = 'F'
-          AND DV.ESTATUS <> 'C'
-          AND DV.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
+          DOCTO_VE_ID, FOLIO, CLIENTE_ID, FECHA,
+          IMPORTE_NETO, TOTAL_IMPUESTOS AS IMPUESTO, 
+          IMPORTE_COBRO, ESTATUS
+        FROM DOCTOS_VE
+        WHERE TIPO_DOCTO = 'F'
+          AND ESTATUS <> 'C'
+          AND FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
       `);
 
       console.log(`[Microsip] Found ${microsipInvoices.length} invoices to sync`);
@@ -611,14 +607,7 @@ class MicrosipSyncService {
             status = InvoiceStatus.PENDING_PAYMENT;
           }
 
-          // Calculate due date from invoice date + credit days
           const invoiceDate = msInvoice.FECHA || new Date();
-          const creditDays = (msInvoice as any).DIAS_PLAZO || 0;
-          let dueDate: Date | null = null;
-          if (creditDays > 0) {
-            dueDate = new Date(invoiceDate);
-            dueDate.setDate(dueDate.getDate() + creditDays);
-          }
 
           const invoiceData = {
             customerId,
@@ -633,7 +622,7 @@ class MicrosipSyncService {
             paymentMethod: null,
             paymentForm: null,
             issuedAt: invoiceDate,
-            dueDate,
+            dueDate: null,
             paidAt: null,
             microsipDoctoId: msInvoice.DOCTO_VE_ID,
             microsipSyncedAt: new Date(),
