@@ -214,16 +214,17 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query with JOIN to DIRS_CLIENTES only (credit days not available from Microsip)
+      // Query with JOINs to DIRS_CLIENTES and CONDICIONES_PAGO for credit days
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
-          C.LIMITE_CREDITO,
+          C.LIMITE_CREDITO, CP.DIAS_PPAG AS DIAS_CREDITO,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
           D.CODIGO_POSTAL, D.COLONIA, UPPER(D.POBLACION) AS POBLACION, 
           D.TELEFONO1, D.EMAIL, D.CONTACTO
         FROM CLIENTES C
         LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
+        LEFT JOIN CONDICIONES_PAGO CP ON CP.COND_PAGO_ID = C.COND_PAGO_ID
         WHERE C.ESTATUS = 'A'
       `);
 
@@ -268,7 +269,7 @@ class MicrosipSyncService {
             country: 'México',
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
-            creditDays: 30, // Default, not available from Microsip
+            creditDays: msCustomer.DIAS_CREDITO || 0,
             blocked: msCustomer.ESTATUS !== 'A',
             contactName: msCustomer.CONTACTO?.trim() || msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
