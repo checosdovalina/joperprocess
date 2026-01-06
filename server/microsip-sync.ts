@@ -613,12 +613,10 @@ class MicrosipSyncService {
           const invoiceDate = msInvoice.FECHA || new Date();
           
           // Calculate due date from invoice date + credit days
+          // If creditDays is 0 (cash payment), due date is same as invoice date
           const creditDays = (msInvoice as any).DIAS_PPAG || 0;
-          let dueDate: Date | null = null;
-          if (creditDays > 0) {
-            dueDate = new Date(invoiceDate);
-            dueDate.setDate(dueDate.getDate() + creditDays);
-          }
+          const dueDate = new Date(invoiceDate);
+          dueDate.setDate(dueDate.getDate() + creditDays);
 
           const invoiceData = {
             customerId,
