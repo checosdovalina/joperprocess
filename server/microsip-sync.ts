@@ -692,15 +692,13 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
+      // Query payments - simplified for compatibility
       const microsipPayments = await this.query<MicrosipPayment>(fbDb, `
         SELECT 
-          dc.DOCTO_CO_ID, dc.CLIENTE_ID, dc.FECHA, dc.IMPORTE, dc.REFERENCIA, dc.DESCRIPCION,
-          da.DOCTO_VE_ID
-        FROM DOCTOS_CO dc
-        LEFT JOIN DOCTOS_CO_APLIC da ON dc.DOCTO_CO_ID = da.DOCTO_CO_ID
-        WHERE dc.CONCEPTO_CO_ID IN (SELECT CONCEPTO_CO_ID FROM CONCEPTOS_CO WHERE NATURALEZA_CONCEPTO = 'P')
-          AND dc.CANCELADO = 'N'
-          AND dc.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
+          DOCTO_CO_ID, CLIENTE_ID, FECHA, IMPORTE, REFERENCIA, DESCRIPCION
+        FROM DOCTOS_CO
+        WHERE TIPO_DOCTO = 'C'
+          AND FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
       `);
 
       console.log(`[Microsip] Found ${microsipPayments.length} payments to sync`);
@@ -748,9 +746,8 @@ class MicrosipSyncService {
               eq(payments.microsipDoctoCoId, msPayment.DOCTO_CO_ID)
             ));
 
-          const invoiceId = msPayment.DOCTO_VE_ID 
-            ? invoiceMap.get(msPayment.DOCTO_VE_ID) || null
-            : null;
+          // Without DOCTOS_CO_APLIC table, we can't link payments to specific invoices
+          const invoiceId = null;
 
           const paymentData = {
             customerId,
