@@ -45,6 +45,7 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortOrder, setSortOrder] = useState<string>("name-asc");
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [categoryName, setCategoryName] = useState("");
@@ -65,7 +66,7 @@ export default function ProductsPage() {
 
   const { data: categories, isLoading: categoriesLoading } = useEntityQuery<ProductCategory[]>("/api/product-categories");
 
-  // Apply filters to products
+  // Apply filters and sorting to products
   const filteredProducts = products?.filter(product => {
     // Category filter
     if (categoryFilter === "none") {
@@ -79,6 +80,23 @@ export default function ProductsPage() {
     if (statusFilter === "inactive" && product.active) return false;
     
     return true;
+  }).sort((a, b) => {
+    switch (sortOrder) {
+      case "name-asc":
+        return a.name.localeCompare(b.name, 'es');
+      case "name-desc":
+        return b.name.localeCompare(a.name, 'es');
+      case "code-asc":
+        return a.code.localeCompare(b.code, 'es');
+      case "code-desc":
+        return b.code.localeCompare(a.code, 'es');
+      case "price-asc":
+        return parseFloat(a.listPrice) - parseFloat(b.listPrice);
+      case "price-desc":
+        return parseFloat(b.listPrice) - parseFloat(a.listPrice);
+      default:
+        return 0;
+    }
   });
 
   const createMutation = useEntityMutation<Product, InsertProduct>({
@@ -258,6 +276,20 @@ export default function ProductsPage() {
                       <SelectItem value="all">Todos</SelectItem>
                       <SelectItem value="active">Activos</SelectItem>
                       <SelectItem value="inactive">Inactivos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={sortOrder} onValueChange={setSortOrder}>
+                    <SelectTrigger className="w-[160px]" data-testid="select-sort-order">
+                      <SelectValue placeholder="Ordenar por" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name-asc">Nombre A-Z</SelectItem>
+                      <SelectItem value="name-desc">Nombre Z-A</SelectItem>
+                      <SelectItem value="code-asc">Código A-Z</SelectItem>
+                      <SelectItem value="code-desc">Código Z-A</SelectItem>
+                      <SelectItem value="price-asc">Precio menor</SelectItem>
+                      <SelectItem value="price-desc">Precio mayor</SelectItem>
                     </SelectContent>
                   </Select>
                   
