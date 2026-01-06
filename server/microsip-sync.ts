@@ -550,16 +550,18 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query invoices - filter by TIPO_DOCTO = 'F' for invoices only
-      // Using IMPORTE_COBRO as total
+      // Using IMPORTE_COBRO as total, CONDICIONES_PAGO.DIAS_PPAG for credit days
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
-          DOCTO_VE_ID, FOLIO, CLIENTE_ID, FECHA,
-          IMPORTE_NETO, TOTAL_IMPUESTOS AS IMPUESTO, 
-          IMPORTE_COBRO, ESTATUS
-        FROM DOCTOS_VE
-        WHERE TIPO_DOCTO = 'F'
-          AND ESTATUS <> 'C'
-          AND FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
+          DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
+          DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS AS IMPUESTO, 
+          DV.IMPORTE_COBRO, DV.ESTATUS,
+          CP.DIAS_PPAG
+        FROM DOCTOS_VE DV
+        LEFT JOIN CONDICIONES_PAGO CP ON CP.COND_PAGO_ID = DV.COND_PAGO_ID
+        WHERE DV.TIPO_DOCTO = 'F'
+          AND DV.ESTATUS <> 'C'
+          AND DV.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
       `);
 
       console.log(`[Microsip] Found ${microsipInvoices.length} invoices to sync`);
@@ -608,6 +610,14 @@ class MicrosipSyncService {
           }
 
           const invoiceDate = msInvoice.FECHA || new Date();
+          
+          // Calculate due date from invoice date + credit days
+          const creditDays = (msInvoice as any).DIAS_PPAG || 0;
+          let dueDate: Date | null = null;
+          if (creditDays > 0) {
+            dueDate = new Date(invoiceDate);
+            dueDate.setDate(dueDate.getDate() + creditDays);
+          }
 
           const invoiceData = {
             customerId,
@@ -622,7 +632,7 @@ class MicrosipSyncService {
             paymentMethod: null,
             paymentForm: null,
             issuedAt: invoiceDate,
-            dueDate: null,
+            dueDate,
             paidAt: null,
             microsipDoctoId: msInvoice.DOCTO_VE_ID,
             microsipSyncedAt: new Date(),
