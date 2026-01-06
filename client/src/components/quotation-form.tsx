@@ -56,6 +56,8 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { CustomerCombobox } from "@/components/customer-combobox";
+import { Customer } from "@shared/schema";
 
 type ProductWithCategory = Product & { category?: ProductCategory | null };
 
@@ -65,7 +67,7 @@ interface QuotationFormProps {
   onSubmit: (data: InsertQuotation & { items: InsertQuotationItem[] }) => void;
   isPending: boolean;
   onCancel?: () => void;
-  customers?: Array<{ id: string; name: string }>;
+  customers?: Customer[];
   userId?: string;
   initialData?: any;
   isEditing?: boolean;
@@ -504,24 +506,15 @@ export function QuotationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Cliente *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-customer">
-                              <SelectValue placeholder="Seleccionar cliente" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {customers.map((customer) => (
-                              <SelectItem 
-                                key={customer.id} 
-                                value={customer.id}
-                                data-testid={`option-customer-${customer.id}`}
-                              >
-                                {customer.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <CustomerCombobox
+                            customers={customers}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Buscar cliente..."
+                            data-testid="select-customer"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -785,15 +778,22 @@ export function QuotationForm({
                                       <CommandList>
                                         <CommandEmpty>No se encontraron productos</CommandEmpty>
                                         <CommandGroup>
-                                          {products?.slice(0, 10).map((product) => (
+                                          {products?.slice(0, 20).map((product) => (
                                             <CommandItem
                                               key={product.id}
                                               onSelect={() => addProduct(index, product)}
                                               data-testid={`option-product-${product.id}`}
                                             >
-                                              <div className="flex flex-col">
-                                                <span className="font-medium">{product.code}</span>
-                                                <span className="text-sm text-muted-foreground">{product.name}</span>
+                                              <div className="flex flex-col w-full">
+                                                <div className="flex items-center justify-between">
+                                                  <span className="font-mono text-xs font-medium">{product.code}</span>
+                                                  {product.category && (
+                                                    <Badge variant="outline" className="text-xs ml-2">
+                                                      {product.category.name}
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                                <span className="text-sm">{product.name}</span>
                                                 <span className="text-xs text-muted-foreground">
                                                   {formatCurrency(product.listPrice)} | Max desc: {product.maxDiscount}%
                                                 </span>
