@@ -437,8 +437,7 @@ class MicrosipSyncService {
       
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
-          ARTICULO_ID, NOMBRE, LINEA_ARTICULO_ID,
-          UNIDAD_VENTA, PRECIO_1, ESTATUS
+          ARTICULO_ID, NOMBRE, LINEA_ARTICULO_ID, ESTATUS
         FROM ARTICULOS
         WHERE ESTATUS = 'A'
       `);
@@ -478,8 +477,8 @@ class MicrosipSyncService {
             name: msProduct.NOMBRE?.trim() || 'Sin nombre',
             description: null,
             categoryId,
-            unitOfMeasure: msProduct.UNIDAD_VENTA?.trim() || 'PZA',
-            listPrice: String(msProduct.PRECIO_1 || 0),
+            unitOfMeasure: 'PZA',
+            listPrice: "0",
             cost: null,
             stock: "0",
             active: msProduct.ESTATUS === 'A',
