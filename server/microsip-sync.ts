@@ -214,19 +214,18 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query with JOINs to DIRS_CLIENTES and CONDICIONES_PAGO
-      // Use FIRST 1 for dirs to get any available address per customer
-      // Credit days come from CONDICIONES_PAGO.DIAS_PPAG
+      // Query with JOINs to DIRS_CLIENTES and PLAZOS_COND_PAGO
+      // Credit days come from PLAZOS_COND_PAGO.DIAS_PLAZO
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
-          C.LIMITE_CREDITO, CP.DIAS_PPAG AS DIAS_CREDITO,
+          C.LIMITE_CREDITO, PCP.DIAS_PLAZO AS DIAS_CREDITO,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
           D.CODIGO_POSTAL, D.COLONIA, UPPER(D.POBLACION) AS POBLACION, 
           D.TELEFONO1, D.EMAIL, D.CONTACTO
         FROM CLIENTES C
         LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
-        LEFT JOIN CONDICIONES_PAGO CP ON CP.COND_PAGO_ID = C.COND_PAGO_ID
+        LEFT JOIN PLAZOS_COND_PAGO PCP ON PCP.COND_PAGO_ID = C.COND_PAGO_ID
         WHERE C.ESTATUS = 'A'
       `);
 
