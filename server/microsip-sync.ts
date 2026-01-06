@@ -553,10 +553,10 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query invoices - filter by TIPO_DOCTO = 'F' for invoices only
-      // Use only essential columns that should exist in all Microsip versions
+      // Use minimal columns for maximum compatibility
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
-          DOCTO_VE_ID, FOLIO, CLIENTE_ID, FECHA, FECHA_VENCIMIENTO,
+          DOCTO_VE_ID, FOLIO, CLIENTE_ID, FECHA,
           IMPORTE_NETO, TOTAL_IMPUESTOS AS IMPUESTO, IMPORTE_COBRO AS TOTAL, 
           SALDO, ESTATUS
         FROM DOCTOS_VE
@@ -625,7 +625,7 @@ class MicrosipSyncService {
             paymentMethod: null,
             paymentForm: null,
             issuedAt: msInvoice.FECHA || new Date(),
-            dueDate: msInvoice.FECHA_VENCIMIENTO || null,
+            dueDate: null,
             paidAt: saldo <= 0 ? new Date() : null,
             microsipDoctoId: msInvoice.DOCTO_VE_ID,
             microsipSyncedAt: new Date(),
