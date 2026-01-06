@@ -237,6 +237,14 @@ class MicrosipSyncService {
       }
       
       console.log(`[Microsip] Found ${uniqueCustomers.size} unique customers to sync`);
+      
+      // Log credit days sample for debugging
+      const sampleCustomers = Array.from(uniqueCustomers.values()).slice(0, 5);
+      console.log(`[Microsip] Sample credit days:`, sampleCustomers.map(c => ({ 
+        id: c.CLIENTE_ID, 
+        name: c.NOMBRE?.substring(0, 20), 
+        creditDays: c.DIAS_CREDITO 
+      })));
 
       for (const msCustomer of Array.from(uniqueCustomers.values())) {
         stats.processed++;
