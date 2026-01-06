@@ -553,12 +553,11 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query invoices - filter by TIPO_DOCTO = 'F' for invoices only
-      // Use minimal columns for maximum compatibility
+      // Total = IMPORTE_NETO + TOTAL_IMPUESTOS (calculated in code)
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
           DOCTO_VE_ID, FOLIO, CLIENTE_ID, FECHA,
-          IMPORTE_NETO, TOTAL_IMPUESTOS AS IMPUESTO, IMPORTE_COBRO AS TOTAL, 
-          ESTATUS
+          IMPORTE_NETO, TOTAL_IMPUESTOS AS IMPUESTO, ESTATUS
         FROM DOCTOS_VE
         WHERE TIPO_DOCTO = 'F'
           AND ESTATUS <> 'C'
@@ -599,7 +598,9 @@ class MicrosipSyncService {
             ));
 
           let status: string = InvoiceStatus.PENDING_PAYMENT;
-          const total = msInvoice.TOTAL || 0;
+          const subtotal = msInvoice.IMPORTE_NETO || 0;
+          const tax = msInvoice.IMPUESTO || 0;
+          const total = subtotal + tax;
           
           if (msInvoice.ESTATUS === 'C') {
             status = InvoiceStatus.CANCELLED;
@@ -612,9 +613,9 @@ class MicrosipSyncService {
             cfdiUuid: null,
             serie: 'F',
             folio: msInvoice.FOLIO?.trim() || String(msInvoice.DOCTO_VE_ID),
-            subtotal: String(msInvoice.IMPORTE_NETO || 0),
-            tax: String(msInvoice.IMPUESTO || 0),
-            total: String(msInvoice.TOTAL || 0),
+            subtotal: String(subtotal),
+            tax: String(tax),
+            total: String(total),
             balanceDue: String(total),
             status,
             paymentMethod: null,
