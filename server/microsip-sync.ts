@@ -443,9 +443,11 @@ class MicrosipSyncService {
       
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
-          ARTICULO_ID, NOMBRE, LINEA_ARTICULO_ID, ESTATUS
-        FROM ARTICULOS
-        WHERE ESTATUS = 'A'
+          A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS,
+          P.PRECIO AS PRECIO_1
+        FROM ARTICULOS A
+        LEFT JOIN PRECIOS_ARTICULOS P ON A.ARTICULO_ID = P.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 1
+        WHERE A.ESTATUS = 'A'
       `);
 
       console.log(`[Microsip] Found ${microsipProducts.length} products to sync`);
@@ -478,13 +480,17 @@ class MicrosipSyncService {
             ? categoryMap.get(msProduct.LINEA_ARTICULO_ID) || null
             : null;
 
+          const listPrice = msProduct.PRECIO_1 
+            ? String(Number(msProduct.PRECIO_1).toFixed(2)) 
+            : "0";
+
           const productData = {
             code: String(msProduct.ARTICULO_ID),
             name: msProduct.NOMBRE?.trim() || 'Sin nombre',
             description: null,
             categoryId,
             unitOfMeasure: 'PZA',
-            listPrice: "0",
+            listPrice,
             cost: null,
             stock: "0",
             active: msProduct.ESTATUS === 'A',
