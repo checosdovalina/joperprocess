@@ -23,7 +23,7 @@ interface MicrosipCustomer {
   ESTATUS: string;
   CONTACTO1?: string;
   LIMITE_CREDITO?: number;
-  DIAS_CREDITO?: number; // From CONDICIONES_PAGO.DIAS_PPAG
+  DIAS_CREDITO?: number; // From PLAZOS_COND_PAG.DIAS_PLAZO
   // From DIRS_CLIENTES join
   RFC?: string;
   CALLE?: string;
@@ -214,17 +214,17 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query with JOINs to DIRS_CLIENTES and CONDICIONES_PAGO for credit days
+      // Query with JOINs to DIRS_CLIENTES and PLAZOS_COND_PAG for credit days
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
-          C.LIMITE_CREDITO, CP.DIAS_PPAG AS DIAS_CREDITO,
+          C.LIMITE_CREDITO, PCP.DIAS_PLAZO AS DIAS_CREDITO,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
           D.CODIGO_POSTAL, D.COLONIA, UPPER(D.POBLACION) AS POBLACION, 
           D.TELEFONO1, D.EMAIL, D.CONTACTO
         FROM CLIENTES C
         LEFT JOIN DIRS_CLIENTES D ON D.CLIENTE_ID = C.CLIENTE_ID
-        LEFT JOIN CONDICIONES_PAGO CP ON CP.COND_PAGO_ID = C.COND_PAGO_ID
+        LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = C.COND_PAGO_ID
         WHERE C.ESTATUS = 'A'
       `);
 
@@ -559,15 +559,15 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query invoices - filter by TIPO_DOCTO = 'F' for invoices only
-      // Using IMPORTE_COBRO as total, CONDICIONES_PAGO.DIAS_PPAG for credit days
+      // Using IMPORTE_COBRO as total, PLAZOS_COND_PAG.DIAS_PLAZO for credit days
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
           DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
           DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS AS IMPUESTO, 
           DV.IMPORTE_COBRO, DV.ESTATUS,
-          CP.DIAS_PPAG
+          PCP.DIAS_PLAZO AS DIAS_PPAG
         FROM DOCTOS_VE DV
-        LEFT JOIN CONDICIONES_PAGO CP ON CP.COND_PAGO_ID = DV.COND_PAGO_ID
+        LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
         WHERE DV.TIPO_DOCTO = 'F'
           AND DV.ESTATUS <> 'C'
           AND DV.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
