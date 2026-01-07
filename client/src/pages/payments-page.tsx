@@ -146,12 +146,12 @@ export default function PaymentsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{payment.customer.name}</div>
-                        <div className="text-xs text-muted-foreground">{payment.customer.rfc}</div>
+                        <div className="font-medium">{payment.customer?.name || "Cliente no vinculado"}</div>
+                        <div className="text-xs text-muted-foreground">{payment.customer?.rfc || "-"}</div>
                       </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm">
-                          {payment.invoice.serie}-{payment.invoice.folio}
+                          {payment.invoice ? `${payment.invoice.serie}-${payment.invoice.folio}` : "Sin factura"}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

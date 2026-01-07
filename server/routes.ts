@@ -2957,8 +2957,21 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Payments endpoints
   app.get("/api/payments", isAuthenticated, async (req, res) => {
     try {
-      const scopedStorage = createTenantScopedStorage(req);
-      const allPayments = await scopedStorage.getAllPayments();
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ error: "Tenant not found" });
+      }
+      
+      // Fetch payments with customer and invoice relations
+      const allPayments = await db.query.payments.findMany({
+        where: eq(payments.tenantId, tenantId),
+        with: {
+          customer: true,
+          invoice: true,
+        },
+        orderBy: (payments, { desc }) => [desc(payments.paymentDate)],
+      });
+      
       res.json(allPayments);
     } catch (error) {
       console.error("Error fetching payments:", error);
