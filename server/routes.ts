@@ -2858,12 +2858,18 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/accounts-receivable", isAuthenticated, async (req, res) => {
     try {
       const { customerId, status } = req.query;
+      const tenantId = req.user?.tenantId;
+      
+      if (!tenantId) {
+        return res.status(400).json({ error: "Tenant not found" });
+      }
       
       let receivables;
       if (customerId) {
         // Fetch with customer data joined
         receivables = await db.query.invoices.findMany({
           where: and(
+            eq(invoices.tenantId, tenantId),
             eq(invoices.customerId, customerId as string),
             status === "pending" ? eq(invoices.status, "pending_payment") : undefined
           ),
@@ -2874,7 +2880,10 @@ Proporciona tu análisis en el siguiente formato JSON:
         });
       } else {
         receivables = await db.query.invoices.findMany({
-          where: status ? eq(invoices.status, status as string) : undefined,
+          where: and(
+            eq(invoices.tenantId, tenantId),
+            status ? eq(invoices.status, status as string) : undefined
+          ),
           with: {
             customer: true,
           },
