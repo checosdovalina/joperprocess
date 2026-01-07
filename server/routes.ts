@@ -2858,7 +2858,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/accounts-receivable", isAuthenticated, async (req, res) => {
     try {
       const { customerId, status } = req.query;
-      const tenantId = req.user?.tenantId;
+      const tenantId = getEffectiveTenantId(req);
       
       if (!tenantId) {
         return res.status(400).json({ error: "Tenant not found" });
