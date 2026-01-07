@@ -574,6 +574,14 @@ class MicrosipSyncService {
       `);
 
       console.log(`[Microsip] Found ${microsipInvoices.length} invoices to sync`);
+      
+      // Log sample credit days for debugging
+      const sampleInv = microsipInvoices.slice(0, 5);
+      console.log(`[Microsip] Sample invoice credit days:`, sampleInv.map(i => ({
+        folio: i.FOLIO,
+        fecha: i.FECHA,
+        diasPpag: (i as any).DIAS_PPAG
+      })));
 
       const customerMap = new Map<number, string>();
       const tenantCustomers = await db
