@@ -718,12 +718,13 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query payments - minimal columns for compatibility
+      // Query payments from DOCTOS_CC (Documentos de Cuentas por Cobrar)
       const microsipPayments = await this.query<MicrosipPayment>(fbDb, `
         SELECT 
-          DOCTO_CO_ID, CLIENTE_ID, FECHA, IMPORTE
-        FROM DOCTOS_CO
+          DOCTO_CC_ID AS DOCTO_CO_ID, CLIENTE_ID, FECHA, IMPORTE_COBRO AS IMPORTE
+        FROM DOCTOS_CC
         WHERE FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
+          AND CANCELADO = 'N'
       `);
 
       console.log(`[Microsip] Found ${microsipPayments.length} payments to sync`);
