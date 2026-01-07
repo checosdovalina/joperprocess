@@ -480,8 +480,10 @@ class MicrosipSyncService {
             ? categoryMap.get(msProduct.LINEA_ARTICULO_ID) || null
             : null;
 
-          const listPrice = msProduct.PRECIO_1 
-            ? String(Number(msProduct.PRECIO_1).toFixed(2)) 
+          // Firebird driver ignores aliases - use actual column name PRECIO
+          const rawPrice = (msProduct as any).PRECIO ?? msProduct.PRECIO_1;
+          const listPrice = rawPrice 
+            ? String(Number(rawPrice).toFixed(2)) 
             : "0";
 
           const productData = {
