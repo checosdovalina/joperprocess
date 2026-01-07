@@ -235,12 +235,12 @@ export default function PaymentsPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Cliente</p>
-                <p className="font-medium">{selectedPayment.customer.name}</p>
-                <p className="text-sm text-muted-foreground">{selectedPayment.customer.rfc}</p>
+                <p className="font-medium">{selectedPayment.customer?.name || "Cliente no vinculado"}</p>
+                <p className="text-sm text-muted-foreground">{selectedPayment.customer?.rfc || "-"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Factura</p>
-                <p className="font-mono">{selectedPayment.invoice.serie}-{selectedPayment.invoice.folio}</p>
+                <p className="font-mono">{selectedPayment.invoice ? `${selectedPayment.invoice.serie}-${selectedPayment.invoice.folio}` : "Sin factura vinculada"}</p>
               </div>
               {selectedPayment.reference && (
                 <div>
