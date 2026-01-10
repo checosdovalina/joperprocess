@@ -452,10 +452,14 @@ class MicrosipSyncService {
 
       console.log(`[Microsip] Found ${microsipProducts.length} products to sync`);
       
-      // Debug: log first product to see column names
+      // Debug: log products with prices
+      const productsWithPrices = microsipProducts.filter(p => p.PRECIO_1 !== null);
+      console.log(`[Microsip] Products with prices: ${productsWithPrices.length}`);
+      if (productsWithPrices.length > 0) {
+        console.log(`[Microsip] Sample with price:`, JSON.stringify(productsWithPrices[0]));
+      }
       if (microsipProducts.length > 0) {
         console.log(`[Microsip] First product columns:`, Object.keys(microsipProducts[0]));
-        console.log(`[Microsip] First product data:`, JSON.stringify(microsipProducts[0]));
       }
 
       const categoryMap = new Map<number, string>();
