@@ -525,14 +525,20 @@ class MicrosipSyncService {
 
       console.log(`[Microsip] Found ${microsipProducts.length} products to sync`);
       
-      // Debug: log products with prices
-      const productsWithPrices = microsipProducts.filter(p => p.PRECIO_1 !== null);
-      console.log(`[Microsip] Products with prices: ${productsWithPrices.length}`);
+      // Debug: log products with prices - check both possible column names
+      const productsWithPrices = microsipProducts.filter(p => {
+        const price = (p as any).PRECIO ?? p.PRECIO_1;
+        return price !== null && price !== undefined && price > 0;
+      });
+      console.log(`[Microsip] Products with prices (PRECIO or PRECIO_1): ${productsWithPrices.length}`);
       if (productsWithPrices.length > 0) {
-        console.log(`[Microsip] Sample with price:`, JSON.stringify(productsWithPrices[0]));
+        const sample = productsWithPrices[0];
+        console.log(`[Microsip] Sample with price - PRECIO: ${(sample as any).PRECIO}, PRECIO_1: ${sample.PRECIO_1}`);
+        console.log(`[Microsip] Sample data:`, JSON.stringify(sample));
       }
       if (microsipProducts.length > 0) {
         console.log(`[Microsip] First product columns:`, Object.keys(microsipProducts[0]));
+        console.log(`[Microsip] First product all data:`, JSON.stringify(microsipProducts[0]));
       }
 
       const categoryMap = new Map<number, string>();
