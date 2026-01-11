@@ -257,6 +257,12 @@ class MicrosipSyncService {
       
       const columns = results.length > 0 ? Object.keys(results[0]) : [];
       
+      // Debug: log first row
+      if (results.length > 0) {
+        console.log(`[Microsip Query] Columns: ${JSON.stringify(columns)}`);
+        console.log(`[Microsip Query] First row: ${JSON.stringify(results[0])}`);
+      }
+      
       return {
         columns,
         rows: results,
