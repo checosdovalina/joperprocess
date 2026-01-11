@@ -207,27 +207,45 @@ class MicrosipSyncService {
       throw new Error('Configuración de Microsip no encontrada');
     }
 
+    // Length validation
+    if (sql.length > 2000) {
+      throw new Error('La consulta es demasiado larga (máximo 2000 caracteres)');
+    }
+
+    // Remove all comments (block and line) before validation
+    let cleanSql = sql
+      .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+      .replace(/--.*$/gm, '')           // Remove line comments  
+      .trim();
+
     // Validate SELECT-only query (security)
-    const normalizedSql = sql.trim().toUpperCase();
+    const normalizedSql = cleanSql.toUpperCase();
     if (!normalizedSql.startsWith('SELECT')) {
       throw new Error('Solo se permiten consultas SELECT');
     }
     
-    // Block dangerous keywords
-    const dangerousKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'EXEC', 'EXECUTE', 'GRANT', 'REVOKE'];
+    // Block dangerous keywords in the cleaned SQL
+    const dangerousKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'EXEC', 'EXECUTE', 'GRANT', 'REVOKE', 'PROCEDURE', 'FUNCTION', 'TRIGGER', 'SET', 'COMMIT', 'ROLLBACK', 'SAVEPOINT'];
     for (const keyword of dangerousKeywords) {
-      if (normalizedSql.includes(keyword)) {
+      // Use word boundary check to avoid false positives
+      const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+      if (regex.test(cleanSql)) {
         throw new Error(`Palabra clave no permitida: ${keyword}`);
       }
     }
 
     // Block semicolons to prevent multi-statement attacks
-    if (sql.includes(';')) {
+    if (cleanSql.includes(';')) {
       throw new Error('No se permiten múltiples sentencias');
     }
 
+    // Block any remaining comment syntax in original SQL
+    if (sql.includes('/*') || sql.includes('*/') || sql.includes('--')) {
+      throw new Error('No se permiten comentarios SQL');
+    }
+
     // Add FIRST 100 if not present to limit results
-    let safeSql = sql.trim();
+    let safeSql = cleanSql;
     if (!normalizedSql.includes('FIRST') && !normalizedSql.includes('ROWS')) {
       safeSql = safeSql.replace(/^SELECT/i, 'SELECT FIRST 100');
     }

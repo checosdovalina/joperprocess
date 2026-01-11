@@ -4859,14 +4859,22 @@ Proporciona tu análisis en el siguiente formato JSON:
   });
 
   // Execute read-only SQL query on Microsip (for debugging)
+  const microsipQuerySchema = z.object({
+    sql: z.string().min(1).max(2000).trim(),
+  });
+  
   app.post("/api/microsip/query", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const tenantId = requireTenantId(req);
-      const { sql } = req.body;
       
-      if (!sql || typeof sql !== 'string') {
-        return res.status(400).json({ error: 'Se requiere una consulta SQL' });
+      const validated = microsipQuerySchema.safeParse(req.body);
+      if (!validated.success) {
+        return res.status(400).json({ error: 'Consulta SQL inválida', details: validated.error.errors });
       }
+      
+      const { sql } = validated.data;
+      
+      console.log(`[Microsip Query] Tenant: ${tenantId}, Query: ${sql.substring(0, 100)}...`);
       
       const service = await createMicrosipSyncService(tenantId);
       const result = await service.executeReadOnlyQuery(sql);
