@@ -182,6 +182,31 @@ export default function MicrosipSettingsPage() {
     },
   });
 
+  // SQL Query state
+  const [sqlQuery, setSqlQuery] = useState("SELECT FIRST 10 ARTICULO_ID, PRECIO_EMPRESA_ID, PRECIO FROM PRECIOS_ARTICULOS ORDER BY ARTICULO_ID");
+  const [queryResult, setQueryResult] = useState<{ columns: string[]; rows: any[]; rowCount: number } | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+
+  const sqlQueryMutation = useMutation({
+    mutationFn: async (sql: string) => {
+      const response = await apiRequest("POST", "/api/microsip/query", { sql });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.error) {
+        setQueryError(data.error);
+        setQueryResult(null);
+      } else {
+        setQueryResult(data);
+        setQueryError(null);
+      }
+    },
+    onError: (error: Error) => {
+      setQueryError(error.message);
+      setQueryResult(null);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     saveMutation.mutate(formData);
@@ -662,6 +687,94 @@ export default function MicrosipSettingsPage() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TestTube className="h-5 w-5" />
+                Intérprete SQL (Solo Lectura)
+              </CardTitle>
+              <CardDescription>
+                Ejecuta consultas SELECT en Microsip para depuración
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="sql-query">Consulta SQL</Label>
+                <textarea
+                  id="sql-query"
+                  data-testid="input-sql-query"
+                  className="w-full min-h-[100px] p-3 rounded-md border bg-background font-mono text-sm resize-y"
+                  value={sqlQuery}
+                  onChange={(e) => setSqlQuery(e.target.value)}
+                  placeholder="SELECT FIRST 10 * FROM ARTICULOS"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  data-testid="button-run-query"
+                  onClick={() => sqlQueryMutation.mutate(sqlQuery)}
+                  disabled={sqlQueryMutation.isPending || !sqlQuery.trim()}
+                >
+                  {sqlQueryMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Ejecutar
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Solo consultas SELECT - máximo 100 filas
+                </span>
+              </div>
+
+              {queryError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <p className="text-sm text-destructive">{queryError}</p>
+                </div>
+              )}
+
+              {queryResult && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    {queryResult.rowCount} filas encontradas
+                  </p>
+                  <ScrollArea className="h-[400px] border rounded-lg">
+                    <div className="overflow-auto">
+                      <table className="w-full text-sm" data-testid="table-sql-results">
+                        <thead className="sticky top-0 bg-muted">
+                          <tr>
+                            {queryResult.columns.map((col) => (
+                              <th key={col} className="px-3 py-2 text-left font-medium border-b whitespace-nowrap">
+                                {col}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {queryResult.rows.map((row, i) => (
+                            <tr key={i} className="border-b hover:bg-muted/50">
+                              {queryResult.columns.map((col) => (
+                                <td key={col} className="px-3 py-2 whitespace-nowrap font-mono">
+                                  {row[col] === null ? (
+                                    <span className="text-muted-foreground italic">null</span>
+                                  ) : typeof row[col] === 'object' ? (
+                                    JSON.stringify(row[col])
+                                  ) : (
+                                    String(row[col])
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

@@ -4858,6 +4858,26 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Execute read-only SQL query on Microsip (for debugging)
+  app.post("/api/microsip/query", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const { sql } = req.body;
+      
+      if (!sql || typeof sql !== 'string') {
+        return res.status(400).json({ error: 'Se requiere una consulta SQL' });
+      }
+      
+      const service = await createMicrosipSyncService(tenantId);
+      const result = await service.executeReadOnlyQuery(sql);
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error executing Microsip query:", error);
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
   // Trigger manual sync
   app.post("/api/microsip/sync", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {

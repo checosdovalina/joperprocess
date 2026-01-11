@@ -202,6 +202,55 @@ class MicrosipSyncService {
       .where(eq(microsipSyncLogs.id, logId));
   }
 
+  async executeReadOnlyQuery(sql: string): Promise<{ columns: string[]; rows: any[]; rowCount: number }> {
+    if (!await this.loadConfig(false)) {
+      throw new Error('Configuración de Microsip no encontrada');
+    }
+
+    // Validate SELECT-only query (security)
+    const normalizedSql = sql.trim().toUpperCase();
+    if (!normalizedSql.startsWith('SELECT')) {
+      throw new Error('Solo se permiten consultas SELECT');
+    }
+    
+    // Block dangerous keywords
+    const dangerousKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'EXEC', 'EXECUTE', 'GRANT', 'REVOKE'];
+    for (const keyword of dangerousKeywords) {
+      if (normalizedSql.includes(keyword)) {
+        throw new Error(`Palabra clave no permitida: ${keyword}`);
+      }
+    }
+
+    // Block semicolons to prevent multi-statement attacks
+    if (sql.includes(';')) {
+      throw new Error('No se permiten múltiples sentencias');
+    }
+
+    // Add FIRST 100 if not present to limit results
+    let safeSql = sql.trim();
+    if (!normalizedSql.includes('FIRST') && !normalizedSql.includes('ROWS')) {
+      safeSql = safeSql.replace(/^SELECT/i, 'SELECT FIRST 100');
+    }
+
+    let fbDb: FirebirdConnection | null = null;
+    try {
+      fbDb = await this.connect();
+      const results = await this.query<any>(fbDb, safeSql);
+      
+      const columns = results.length > 0 ? Object.keys(results[0]) : [];
+      
+      return {
+        columns,
+        rows: results,
+        rowCount: results.length,
+      };
+    } finally {
+      if (fbDb) {
+        fbDb.detach();
+      }
+    }
+  }
+
   async syncCustomers(): Promise<{ created: number; updated: number; skipped: number }> {
     if (!await this.loadConfig(false) || !this.config?.syncCustomers) {
       return { created: 0, updated: 0, skipped: 0 };
