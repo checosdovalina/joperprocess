@@ -1069,19 +1069,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const tenantId = requireTenantId(req);
-      const { q, showAll } = req.query;
+      const { q } = req.query;
       
-      // Use query with relations to include category
-      // By default, only show active products with price > 0 (from list 42)
-      // Use ?showAll=true to see all products including inactive ones
+      // Show only active products (from list 42)
+      // Order by: products with price first, then products without price
       let productsData = await db.query.products.findMany({
-        where: showAll === 'true' 
-          ? eq(products.tenantId, tenantId)
-          : and(
-              eq(products.tenantId, tenantId),
-              eq(products.active, true),
-              gt(products.listPrice, "0")
-            ),
+        where: and(
+          eq(products.tenantId, tenantId),
+          eq(products.active, true)
+        ),
         with: {
           category: true,
         },

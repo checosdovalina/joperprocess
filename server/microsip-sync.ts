@@ -514,7 +514,7 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Only sync products that have a price in list 42
+      // Sync all products that are in price list 42 (with or without price)
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
           A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS,
