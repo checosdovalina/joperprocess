@@ -1072,12 +1072,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { q } = req.query;
       
       // Use query with relations to include category
+      // Order by price DESC so products with prices appear first
       let productsData = await db.query.products.findMany({
         where: eq(products.tenantId, tenantId),
         with: {
           category: true,
         },
-        orderBy: (products, { asc }) => [asc(products.name)],
+        orderBy: (products, { desc, asc }) => [desc(products.listPrice), asc(products.name)],
       });
       
       // Filter by search query if provided

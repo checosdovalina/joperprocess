@@ -514,12 +514,13 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
+      // Only sync products that have a price in list 42
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
           A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS,
           P.PRECIO AS PRECIO_1
         FROM ARTICULOS A
-        LEFT JOIN PRECIOS_ARTICULOS P ON A.ARTICULO_ID = P.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 42
+        INNER JOIN PRECIOS_ARTICULOS P ON A.ARTICULO_ID = P.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 42
         WHERE A.ESTATUS = 'A'
       `);
 
