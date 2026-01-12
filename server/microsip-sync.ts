@@ -609,6 +609,26 @@ class MicrosipSyncService {
         }
       }
 
+      // Deactivate products that are NOT in the list 42 (keep for historical FK references)
+      const syncedMicrosipIds = microsipProducts.map(p => p.ARTICULO_ID);
+      if (syncedMicrosipIds.length > 0) {
+        // Get all products for this tenant that have a microsipArticuloId
+        const allTenantProducts = await db
+          .select({ id: products.id, microsipArticuloId: products.microsipArticuloId })
+          .from(products)
+          .where(eq(products.tenantId, this.tenantId));
+        
+        // Deactivate products not in the synced list
+        for (const product of allTenantProducts) {
+          if (product.microsipArticuloId && !syncedMicrosipIds.includes(product.microsipArticuloId)) {
+            await db.update(products)
+              .set({ active: false, updatedAt: new Date() })
+              .where(eq(products.id, product.id));
+          }
+        }
+        console.log(`[Microsip] Deactivated products not in list 42`);
+      }
+
       await db.update(microsipConfigs)
         .set({ 
           lastProductSync: new Date(),

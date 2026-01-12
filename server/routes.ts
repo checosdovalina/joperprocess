@@ -58,7 +58,7 @@ import {
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService, runScheduledSync } from "./microsip-sync";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt, isNull, or } from "drizzle-orm";
+import { eq, and, sql, gte, lt, gt, isNull, or } from "drizzle-orm";
 import type { Request } from "express";
 
 // Helper to get effective tenantId for data filtering
@@ -1069,12 +1069,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const tenantId = requireTenantId(req);
-      const { q } = req.query;
+      const { q, showAll } = req.query;
       
       // Use query with relations to include category
-      // Order by price DESC so products with prices appear first
+      // By default, only show active products with price > 0 (from list 42)
+      // Use ?showAll=true to see all products including inactive ones
       let productsData = await db.query.products.findMany({
-        where: eq(products.tenantId, tenantId),
+        where: showAll === 'true' 
+          ? eq(products.tenantId, tenantId)
+          : and(
+              eq(products.tenantId, tenantId),
+              eq(products.active, true),
+              gt(products.listPrice, "0")
+            ),
         with: {
           category: true,
         },
