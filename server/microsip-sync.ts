@@ -835,13 +835,24 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Query payments from DOCTOS_CC (Documentos de Cuentas por Cobrar)
+      // Query payments with invoice relationship
+      // P = Payment (Recibo), I = IMPORTES_DOCTOS_CC links payment to invoice
+      // C = Cargo (invoice in DOCTOS_CC from sales)
       const microsipPayments = await this.query<MicrosipPayment>(fbDb, `
         SELECT 
-          DOCTO_CC_ID AS DOCTO_CO_ID, CLIENTE_ID, FECHA, IMPORTE_COBRO AS IMPORTE
-        FROM DOCTOS_CC
-        WHERE FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
-          AND CANCELADO = 'N'
+          P.DOCTO_CC_ID AS DOCTO_CO_ID, 
+          P.CLIENTE_ID, 
+          P.FECHA, 
+          P.FOLIO AS FOLIO_PAGO,
+          I.IMPORTE,
+          C.DOCTO_CC_ID AS DOCTO_CC_FACTURA_ID,
+          C.FOLIO AS FOLIO_FACTURA
+        FROM DOCTOS_CC P
+        JOIN IMPORTES_DOCTOS_CC I ON P.DOCTO_CC_ID = I.DOCTO_CC_ID
+        JOIN DOCTOS_CC C ON I.DOCTO_CC_ACR_ID = C.DOCTO_CC_ID
+        WHERE P.NATURALEZA_CONCEPTO = 'R'
+          AND P.CANCELADO = 'N'
+          AND P.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
       `);
 
       console.log(`[Microsip] Found ${microsipPayments.length} payments to sync`);
@@ -858,6 +869,7 @@ class MicrosipSyncService {
         }
       }
 
+      // Map invoices by their DOCTO_CC_ID (cargo in cuentas por cobrar)
       const invoiceMap = new Map<number, string>();
       const tenantInvoices = await db
         .select()
@@ -889,16 +901,18 @@ class MicrosipSyncService {
               eq(payments.microsipDoctoCoId, msPayment.DOCTO_CO_ID)
             ));
 
-          // Without DOCTOS_CO_APLIC table, we can't link payments to specific invoices
-          const invoiceId = null;
+          // Link payment to invoice using DOCTO_CC_FACTURA_ID
+          const invoiceId = (msPayment as any).DOCTO_CC_FACTURA_ID 
+            ? invoiceMap.get((msPayment as any).DOCTO_CC_FACTURA_ID) || null
+            : null;
 
           const paymentData = {
             customerId,
             invoiceId,
             amount: String(msPayment.IMPORTE || 0),
             paymentDate: msPayment.FECHA || new Date(),
-            reference: null,
-            notes: null,
+            reference: (msPayment as any).FOLIO_PAGO || null,
+            notes: (msPayment as any).FOLIO_FACTURA ? `Factura: ${(msPayment as any).FOLIO_FACTURA}` : null,
             microsipDoctoCoId: msPayment.DOCTO_CO_ID,
             microsipSyncedAt: new Date(),
           };
