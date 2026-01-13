@@ -1,0 +1,109 @@
+[root@localhost joper]# pm2 status
+┌────┬───────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name          │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ joper-app     │ default     │ 1.0.0   │ fork    │ 1393300  │ 2m     │ 51   │ online    │ 0%       │ 129.5mb  │ root     │ disabled │
+│ 6  │ ots-energy    │ default     │ N/A     │ fork    │ 1387841  │ 2h     │ 3    │ online    │ 0%       │ 58.7mb   │ root     │ disabled │
+└────┴───────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+[root@localhost joper]# pm2 logs joper-app --err --lines 100
+[TAILING] Tailing last 100 lines for [joper-app] process (change the value with --lines option)
+/root/.pm2/logs/joper-app-error.log last 100 lines:
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/index.js:280:10)
+0|joper-ap | Error getting upload URL: Error: PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' tool and set PRIVATE_OBJECT_DIR env var.
+0|joper-ap |     at ObjectStorageService.getPrivateObjectDir (file:///var/www/joper/dist/index.js:159:17)
+0|joper-ap |     at ObjectStorageService.getObjectEntityUploadURL (file:///var/www/joper/dist/index.js:281:39)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:7146:59
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at Route.dispatch (/var/www/joper/node_modules/express/lib/router/route.js:119:3)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at /var/www/joper/node_modules/express/lib/router/index.js:284:15
+0|joper-ap |     at Function.process_params (/var/www/joper/node_modules/express/lib/router/index.js:346:12)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/index.js:280:10)
+0|joper-ap | Error getting Microsip config: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8626:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap | Error getting Microsip logs: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8733:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap | Error saving Microsip config: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8640:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap | Error saving Microsip config: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8640:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap | Error getting Microsip config: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8626:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap | Error getting Microsip logs: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8733:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap | Error saving Microsip config: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8640:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap | Error saving Microsip config: Error: SuperAdmin must access via subdomain for tenant-specific operations
+0|joper-ap |     at requireTenantId (file:///var/www/joper/dist/index.js:4958:11)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:8640:24
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at file:///var/www/joper/dist/index.js:4207:5
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/lib/router/layer.js:95:5)
+0|joper-ap |     at next (/var/www/joper/node_modules/express/lib/router/route.js:149:13)
+0|joper-ap |     at isAuthenticated (file:///var/www/joper/dist/index.js:4195:12)
+0|joper-ap |     at Layer.handle [as handle_request] (/var/www/joper/node_modules/express/li
