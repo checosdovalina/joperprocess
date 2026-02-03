@@ -1338,7 +1338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validated = insertQuotationSchema.parse({
         ...quotationData,
         userId: req.user!.id,
-        status: QuotationStatus.DRAFT,
+        status: quotationData.requiresApproval ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
       });
 
       const quotation = await scopedStorage.createQuotation(validated);
