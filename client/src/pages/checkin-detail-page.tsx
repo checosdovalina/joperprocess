@@ -79,6 +79,7 @@ export default function CheckinDetailPage() {
   const { toast } = useToast();
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [checkoutNotes, setCheckoutNotes] = useState("");
+  const [internalNotes, setInternalNotes] = useState("");
 
   const { data: checkin, isLoading: checkinLoading } = useQuery<Checkin & { customer: Customer }>({
     queryKey: [`/api/checkins/${id}`],
@@ -94,6 +95,7 @@ export default function CheckinDetailPage() {
     mutationFn: async () => {
       return await apiRequest("POST", `/api/checkins/${id}/checkout`, {
         checkoutNotes: checkoutNotes || undefined,
+        internalNotes: internalNotes || undefined,
       });
     },
     onSuccess: () => {
@@ -537,7 +539,7 @@ export default function CheckinDetailPage() {
       </Card>
 
       <Dialog open={checkoutDialogOpen} onOpenChange={setCheckoutDialogOpen}>
-        <DialogContent data-testid="dialog-checkout">
+        <DialogContent data-testid="dialog-checkout" className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Finalizar Visita</DialogTitle>
             <DialogDescription>
@@ -546,9 +548,14 @@ export default function CheckinDetailPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Leyenda de advertencia en rojo */}
+            <div className="bg-red-600 text-white p-3 rounded-md text-sm font-medium">
+              Esta información se enviará al cliente, directivos y personas agregadas en administración.
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="checkout-notes">
-                Acuerdos y Comentarios
+                Acuerdos y Comentarios (para el cliente)
               </Label>
               <Textarea
                 id="checkout-notes"
@@ -556,10 +563,27 @@ export default function CheckinDetailPage() {
                 placeholder="Describe los acuerdos alcanzados, próximos pasos, o cualquier comentario relevante..."
                 value={checkoutNotes}
                 onChange={(e) => setCheckoutNotes(e.target.value)}
-                className="min-h-[120px]"
+                className="min-h-[100px]"
               />
               <p className="text-xs text-muted-foreground">
-                Opcional. Esta información aparecerá en la minuta PDF.
+                Esta información aparecerá en la minuta PDF que se envía al cliente.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="internal-notes">
+                Notas Internas de Reunión
+              </Label>
+              <Textarea
+                id="internal-notes"
+                data-testid="textarea-internal-notes"
+                placeholder="Notas privadas que NO se envían al cliente..."
+                value={internalNotes}
+                onChange={(e) => setInternalNotes(e.target.value)}
+                className="min-h-[80px] border-dashed"
+              />
+              <p className="text-xs text-muted-foreground">
+                Estas notas son internas y NO se incluyen en la minuta que se envía al cliente.
               </p>
             </div>
           </div>

@@ -3491,11 +3491,12 @@ Proporciona tu análisis en el siguiente formato JSON:
     const userId = req.user!.id;
 
     try {
-      // Parse optional checkoutNotes from body
+      // Parse optional checkoutNotes and internalNotes from body
       const schema = z.object({
         checkoutNotes: z.string().optional(),
+        internalNotes: z.string().optional(),
       });
-      const { checkoutNotes } = schema.parse(req.body);
+      const { checkoutNotes, internalNotes } = schema.parse(req.body);
 
       const scopedStorage = createTenantScopedStorage(req);
       const checkin = await scopedStorage.getCheckin(checkinId);
@@ -3558,6 +3559,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       const updatedCheckin = await scopedStorage.updateCheckin(checkinId, {
         checkoutAt: new Date(),
         checkoutNotes,
+        internalNotes,
         minutePdfPath: pdfPath,
       });
 

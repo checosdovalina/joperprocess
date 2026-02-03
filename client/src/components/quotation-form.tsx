@@ -91,6 +91,7 @@ interface QuotationLineItem {
   exceedsMaxDiscount: boolean;
   maxDiscount: string;
   position: number;
+  currency: string;
 }
 
 const PAYMENT_TERMS = [
@@ -125,6 +126,9 @@ const quotationFormSchema = z.object({
   notes: z.string().optional(),
   conditions: z.string().optional(),
   shippingHandledByJoper: z.boolean().default(false),
+  shippingMethod: z.string().default("truck"), // truck (camión), parcel (paquetería)
+  requiresPallet: z.boolean().default(false),
+  shippingNotes: z.string().optional(), // Notas de envío (no van en la cotización)
   shippingCost: z.string().default("0"),
   shippingCostStatus: z.string().default("confirmed"),
 });
@@ -149,6 +153,7 @@ const createEmptyLineItem = (position: number): QuotationLineItem => ({
   exceedsMaxDiscount: false,
   maxDiscount: "0",
   position,
+  currency: "MXN",
 });
 
 export function QuotationForm({ 
@@ -183,6 +188,9 @@ export function QuotationForm({
       notes: "",
       conditions: "",
       shippingHandledByJoper: false,
+      shippingMethod: "truck",
+      requiresPallet: false,
+      shippingNotes: "",
       shippingCost: "0",
       shippingCostStatus: "confirmed",
     },
@@ -200,6 +208,9 @@ export function QuotationForm({
         notes: initialData.notes || "",
         conditions: initialData.conditions || "",
         shippingHandledByJoper: initialData.shippingHandledByJoper || false,
+        shippingMethod: initialData.shippingMethod || "truck",
+        requiresPallet: initialData.requiresPallet || false,
+        shippingNotes: initialData.shippingNotes || "",
         shippingCost: initialData.shippingCost || "0",
         shippingCostStatus: initialData.shippingCostStatus || "confirmed",
       });
@@ -223,6 +234,7 @@ export function QuotationForm({
           exceedsMaxDiscount: false,
           maxDiscount: "0",
           position: item.position ?? index,
+          currency: item.currency || "MXN",
         }));
         setLineItems(items);
       }
@@ -244,6 +256,9 @@ export function QuotationForm({
           notes: "",
           conditions: "",
           shippingHandledByJoper: false,
+          shippingMethod: "truck",
+          requiresPallet: false,
+          shippingNotes: "",
           shippingCost: "0",
           shippingCostStatus: "confirmed",
         });
@@ -303,24 +318,38 @@ export function QuotationForm({
   }, [calculateLineItem]);
 
   const addProduct = useCallback((index: number, product: ProductWithCategory) => {
+    const DEFAULT_DISCOUNT = 47;
+    const listPrice = parseFloat(product.listPrice);
+    const maxDiscount = parseFloat(product.maxDiscount || "0");
+    const discountPercent = Math.min(DEFAULT_DISCOUNT, maxDiscount > 0 ? maxDiscount : DEFAULT_DISCOUNT);
+    const discountAmount = listPrice * (discountPercent / 100);
+    const unitPrice = listPrice - discountAmount;
+    const quantity = 1;
+    const subtotal = unitPrice * quantity;
+    const taxRate = parseFloat(product.taxRate);
+    const taxAmount = subtotal * (taxRate / 100);
+    const total = subtotal + taxAmount;
+    const exceedsMaxDiscount = maxDiscount > 0 && discountPercent > maxDiscount;
+
     const newItem: QuotationLineItem = {
       productId: product.id,
       productCode: product.code,
       productName: product.name,
       description: product.description || "",
       unitOfMeasure: product.unitOfMeasure,
-      quantity: "1",
+      quantity: quantity.toString(),
       listPrice: product.listPrice,
-      unitPrice: product.listPrice,
-      discountPercent: "0",
-      discountAmount: "0",
-      subtotal: product.listPrice,
+      unitPrice: unitPrice.toFixed(2),
+      discountPercent: discountPercent.toString(),
+      discountAmount: discountAmount.toFixed(2),
+      subtotal: subtotal.toFixed(2),
       taxRate: product.taxRate,
-      taxAmount: (parseFloat(product.listPrice) * (parseFloat(product.taxRate) / 100)).toFixed(2),
-      total: (parseFloat(product.listPrice) * (1 + parseFloat(product.taxRate) / 100)).toFixed(2),
-      exceedsMaxDiscount: false,
+      taxAmount: taxAmount.toFixed(2),
+      total: total.toFixed(2),
+      exceedsMaxDiscount,
       maxDiscount: product.maxDiscount || "0",
       position: index,
+      currency: "MXN",
     };
 
     setLineItems(prev => {
@@ -355,12 +384,28 @@ export function QuotationForm({
     const totalSavings = lineItems.reduce((sum, item) => 
       sum + (parseFloat(item.quantity) * parseFloat(item.discountAmount)), 0) + globalDiscountAmount;
 
+    const mxnItems = lineItems.filter(item => item.currency === "MXN" && item.productName);
+    const usdItems = lineItems.filter(item => item.currency === "USD" && item.productName);
+    
+    const mxnSubtotal = mxnItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
+    const mxnTax = mxnItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
+    const mxnTotal = (mxnSubtotal + mxnTax) * (1 - globalDiscountPercent / 100);
+    
+    const usdSubtotal = usdItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
+    const usdTax = usdItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
+    const usdTotal = (usdSubtotal + usdTax) * (1 - globalDiscountPercent / 100);
+    
+    const hasMixedCurrencies = mxnItems.length > 0 && usdItems.length > 0;
+
     return {
       subtotal: subtotalBeforeDiscount.toFixed(2),
       globalDiscountAmount: globalDiscountAmount.toFixed(2),
       tax: adjustedTax.toFixed(2),
       total: total.toFixed(2),
       totalSavings: totalSavings.toFixed(2),
+      mxnTotal: mxnTotal.toFixed(2),
+      usdTotal: usdTotal.toFixed(2),
+      hasMixedCurrencies,
     };
   }, [lineItems, form]);
 
@@ -422,6 +467,7 @@ export function QuotationForm({
         total: item.total,
         exceedsMaxDiscount: item.exceedsMaxDiscount,
         position: item.position,
+        currency: item.currency,
       }));
 
     // Determine if requires approval (either for discounts or free shipping by Joper)
@@ -456,6 +502,9 @@ export function QuotationForm({
       requiresApproval: requiresAnyApproval,
       approvalReason,
       shippingHandledByJoper: data.shippingHandledByJoper,
+      shippingMethod: data.shippingMethod,
+      requiresPallet: data.requiresPallet,
+      shippingNotes: data.shippingNotes || null,
       shippingCost: data.shippingCost,
       shippingCostStatus: data.shippingCostStatus,
       shippingApprovalStatus: data.shippingHandledByJoper ? "pending" : "not_required",
@@ -654,6 +703,74 @@ export function QuotationForm({
                       )}
                     />
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="shippingMethod"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Método de Envío</FormLabel>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                            >
+                              <FormControl>
+                                <SelectTrigger data-testid="select-shipping-method">
+                                  <SelectValue placeholder="Seleccionar método" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="truck">Camión</SelectItem>
+                                <SelectItem value="parcel">Paquetería</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="requiresPallet"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-3 space-y-0 md:mt-8">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid="checkbox-requires-pallet"
+                              />
+                            </FormControl>
+                            <FormLabel className="cursor-pointer text-sm font-normal">
+                              Requiere pallet
+                            </FormLabel>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="shippingNotes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Notas de Envío (uso interno)</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="Notas internas sobre el envío (no se muestran en la cotización)"
+                              className="resize-none min-h-[60px]"
+                              data-testid="textarea-shipping-notes"
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Estas notas no aparecen en la cotización enviada al cliente
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                     {!form.watch("shippingHandledByJoper") && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
@@ -733,6 +850,7 @@ export function QuotationForm({
                             <TableHead className="w-[80px] text-center">Desc %</TableHead>
                             <TableHead className="w-[100px] text-right">P. Unitario</TableHead>
                             <TableHead className="w-[100px] text-right">Subtotal</TableHead>
+                            <TableHead className="w-[80px] text-center">Moneda</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                           </TableRow>
                         </TableHeader>
@@ -857,6 +975,20 @@ export function QuotationForm({
                               </TableCell>
                               <TableCell className="text-right font-mono text-sm font-medium">
                                 {formatCurrency(item.subtotal)}
+                              </TableCell>
+                              <TableCell>
+                                <Select
+                                  value={item.currency}
+                                  onValueChange={(value) => updateLineItem(index, { currency: value })}
+                                >
+                                  <SelectTrigger className="w-[70px] h-8" data-testid={`select-currency-${index}`}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="MXN">MXN</SelectItem>
+                                    <SelectItem value="USD">USD</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </TableCell>
                               <TableCell>
                                 <Button
@@ -1002,6 +1134,20 @@ export function QuotationForm({
                         <div className="flex justify-between text-sm text-green-600">
                           <span>Ahorro Total:</span>
                           <span className="font-mono">{formatCurrency(totals.totalSavings)}</span>
+                        </div>
+                      )}
+
+                      {totals.hasMixedCurrencies && (
+                        <div className="mt-3 p-3 bg-muted/50 rounded-lg space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">Totales por Moneda:</p>
+                          <div className="flex justify-between text-sm">
+                            <span>Total MXN:</span>
+                            <span className="font-mono font-medium">${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span>Total USD:</span>
+                            <span className="font-mono font-medium">${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                          </div>
                         </div>
                       )}
 

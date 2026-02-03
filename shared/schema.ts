@@ -279,6 +279,8 @@ export const checkins = pgTable("checkins", {
   checkoutNotes: text("checkout_notes"), // Acuerdos/comentarios del checkout
   photos: text("photos").array(),
   minutePdfPath: text("minute_pdf_path"),
+  internalNotes: text("internal_notes"), // Notas internas que NO se envían al cliente
+  salesPersonId: varchar("sales_person_id").references(() => users.id), // Vendedor asignado
 });
 
 // Scheduled visits table (for pre-checkin planning)
@@ -352,6 +354,9 @@ export const quotations = pgTable("quotations", {
   customerRejectionReason: text("customer_rejection_reason"),
   // Shipping fields
   shippingHandledByJoper: boolean("shipping_handled_by_joper").notNull().default(false),
+  shippingMethod: text("shipping_method").default("truck"), // truck (camión), parcel (paquetería)
+  requiresPallet: boolean("requires_pallet").default(false),
+  shippingNotes: text("shipping_notes"), // Notas de envío (no van en la cotización)
   shippingCost: decimal("shipping_cost", { precision: 12, scale: 2 }).default("0"),
   shippingCostStatus: text("shipping_cost_status").default("confirmed"), // confirmed, pending
   shippingApprovalStatus: text("shipping_approval_status").default("not_required"), // not_required, pending, approved, rejected
@@ -384,6 +389,7 @@ export const quotationItems = pgTable("quotation_items", {
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
   exceedsMaxDiscount: boolean("exceeds_max_discount").default(false),
   position: integer("position").notNull().default(0),
+  currency: text("currency").notNull().default("MXN"), // Moneda por partida (MXN, USD)
 });
 
 // Credit authorizations table
