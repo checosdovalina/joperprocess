@@ -951,12 +951,12 @@ export function QuotationForm({
                                   type="number"
                                   min="0"
                                   max="100"
-                                  step="0.01"
-                                  value={item.discountPercent}
+                                  step="1"
+                                  value={Math.round(parseFloat(item.discountPercent) || 0)}
                                   onChange={(e) => {
                                     updateLineItem(index, { discountPercent: e.target.value }, 'discountPercent');
                                   }}
-                                  className={`w-20 text-center ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
+                                  className={`w-16 text-center ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
                                   data-testid={`input-discount-${index}`}
                                 />
                               </TableCell>
@@ -964,8 +964,8 @@ export function QuotationForm({
                                 <Input
                                   type="number"
                                   min="0"
-                                  step="0.01"
-                                  value={item.unitPrice}
+                                  step="1"
+                                  value={Math.round(parseFloat(item.unitPrice) || 0)}
                                   onChange={(e) => {
                                     updateLineItem(index, { unitPrice: e.target.value }, 'unitPrice');
                                   }}
