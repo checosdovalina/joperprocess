@@ -367,22 +367,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
-      const result = await db.execute(sql`
-        SELECT 
-          (SELECT COUNT(*) FROM ${quotations} WHERE status IN ('draft', 'sent')) as "pendingQuotations",
-          (SELECT COUNT(*) FROM ${orders} WHERE status IN ('pending', 'in_production')) as "activeOrders",
-          (SELECT COUNT(*) FROM ${invoices} WHERE due_date < NOW()) as "overdueInvoices",
-          (SELECT COALESCE(SUM(total::numeric), 0) FROM ${invoices} WHERE EXTRACT(MONTH FROM issued_at) = EXTRACT(MONTH FROM NOW())) as "totalRevenue",
-          (SELECT COUNT(*) FROM ${checkins} WHERE DATE(checkin_at) = CURRENT_DATE) as "todayCheckins",
-          (SELECT COUNT(*) FROM ${shipments} WHERE status = 'pending') as "pendingShipments",
-          (SELECT COUNT(*) FROM ${creditAuthorizations} WHERE status = 'pending') as "pendingCreditAuth"
-      `);
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Build queries with tenant filtering
+      const pendingQuotations = tenantId 
+        ? await db.select({ count: sql<number>`count(*)` }).from(quotations).where(and(eq(quotations.tenantId, tenantId), sql`status IN ('draft', 'sent')`))
+        : await db.select({ count: sql<number>`count(*)` }).from(quotations).where(sql`status IN ('draft', 'sent')`);
+      
+      const activeOrders = tenantId
+        ? await db.select({ count: sql<number>`count(*)` }).from(orders).where(and(eq(orders.tenantId, tenantId), sql`status IN ('pending', 'in_production')`))
+        : await db.select({ count: sql<number>`count(*)` }).from(orders).where(sql`status IN ('pending', 'in_production')`);
+      
+      const overdueInvoices = tenantId
+        ? await db.select({ count: sql<number>`count(*)` }).from(invoices).where(and(eq(invoices.tenantId, tenantId), sql`due_date < NOW() AND status != 'paid'`))
+        : await db.select({ count: sql<number>`count(*)` }).from(invoices).where(sql`due_date < NOW() AND status != 'paid'`);
+      
+      const monthlyRevenue = tenantId
+        ? await db.select({ sum: sql<number>`COALESCE(SUM(total::numeric), 0)` }).from(invoices).where(and(eq(invoices.tenantId, tenantId), sql`EXTRACT(MONTH FROM issued_at) = EXTRACT(MONTH FROM NOW())`))
+        : await db.select({ sum: sql<number>`COALESCE(SUM(total::numeric), 0)` }).from(invoices).where(sql`EXTRACT(MONTH FROM issued_at) = EXTRACT(MONTH FROM NOW())`);
+      
+      const todayCheckins = tenantId
+        ? await db.select({ count: sql<number>`count(*)` }).from(checkins).where(and(eq(checkins.tenantId, tenantId), sql`DATE(checkin_at) = CURRENT_DATE`))
+        : await db.select({ count: sql<number>`count(*)` }).from(checkins).where(sql`DATE(checkin_at) = CURRENT_DATE`);
+      
+      const pendingShipments = tenantId
+        ? await db.select({ count: sql<number>`count(*)` }).from(shipments).where(and(eq(shipments.tenantId, tenantId), eq(shipments.status, 'pending')))
+        : await db.select({ count: sql<number>`count(*)` }).from(shipments).where(eq(shipments.status, 'pending'));
+      
+      const pendingCreditAuth = tenantId
+        ? await db.select({ count: sql<number>`count(*)` }).from(creditAuthorizations).where(and(eq(creditAuthorizations.tenantId, tenantId), eq(creditAuthorizations.status, 'pending')))
+        : await db.select({ count: sql<number>`count(*)` }).from(creditAuthorizations).where(eq(creditAuthorizations.status, 'pending'));
+      
+      const ordersReady = tenantId
+        ? await db.select({ count: sql<number>`count(*)` }).from(orders).where(and(eq(orders.tenantId, tenantId), sql`status IN ('ready', 'partially_released')`))
+        : await db.select({ count: sql<number>`count(*)` }).from(orders).where(sql`status IN ('ready', 'partially_released')`);
+      
+      const annualSales = tenantId
+        ? await db.select({ sum: sql<number>`COALESCE(SUM(total::numeric), 0)` }).from(invoices).where(and(eq(invoices.tenantId, tenantId), sql`EXTRACT(YEAR FROM issued_at) = EXTRACT(YEAR FROM NOW())`))
+        : await db.select({ sum: sql<number>`COALESCE(SUM(total::numeric), 0)` }).from(invoices).where(sql`EXTRACT(YEAR FROM issued_at) = EXTRACT(YEAR FROM NOW())`);
 
-      const stats = result.rows[0];
-      res.json(stats);
+      res.json({
+        pendingQuotations: pendingQuotations[0]?.count || 0,
+        activeOrders: activeOrders[0]?.count || 0,
+        overdueInvoices: overdueInvoices[0]?.count || 0,
+        totalRevenue: monthlyRevenue[0]?.sum || 0,
+        todayCheckins: todayCheckins[0]?.count || 0,
+        pendingShipments: pendingShipments[0]?.count || 0,
+        pendingCreditAuth: pendingCreditAuth[0]?.count || 0,
+        ordersReadyToDeliver: ordersReady[0]?.count || 0,
+        annualSales: annualSales[0]?.sum || 0,
+      });
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
       res.status(500).json({ error: "Error fetching dashboard statistics" });
+    }
+  });
+  
+  // Sales by category for dashboard
+  app.get("/api/dashboard/sales-by-category", isAuthenticated, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.json([]);
+      }
+      
+      // Get sales grouped by product category for the current year
+      const result = await db.execute(sql`
+        SELECT 
+          pc.id,
+          pc.name as category_name,
+          COALESCE(SUM(qi.quantity * qi.unit_price), 0) as total_sales,
+          COUNT(DISTINCT q.id) as order_count
+        FROM ${productCategories} pc
+        LEFT JOIN ${products} p ON p.category_id = pc.id AND p.tenant_id = ${tenantId}
+        LEFT JOIN ${quotationItems} qi ON qi.product_id = p.id
+        LEFT JOIN ${quotations} q ON q.id = qi.quotation_id 
+          AND q.status IN ('approved', 'converted')
+          AND EXTRACT(YEAR FROM q.created_at) = EXTRACT(YEAR FROM NOW())
+        WHERE pc.tenant_id = ${tenantId}
+        GROUP BY pc.id, pc.name
+        ORDER BY total_sales DESC
+        LIMIT 10
+      `);
+      
+      res.json(result.rows);
+    } catch (error) {
+      console.error("Error fetching sales by category:", error);
+      res.status(500).json({ error: "Error fetching sales by category" });
+    }
+  });
+  
+  // Recent customer contacts for salesperson dashboard
+  app.get("/api/dashboard/recent-contacts", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = getEffectiveTenantId(req);
+      
+      if (!tenantId) {
+        return res.json([]);
+      }
+      
+      // Get recent check-ins with customer info
+      const recentCheckins = await db
+        .select({
+          id: checkins.id,
+          customerId: checkins.customerId,
+          customerName: customers.name,
+          contactName: customers.contactName,
+          contactPhone: customers.phone,
+          contactEmail: customers.email,
+          checkinAt: checkins.checkinAt,
+          notes: checkins.notes,
+        })
+        .from(checkins)
+        .innerJoin(customers, eq(checkins.customerId, customers.id))
+        .where(
+          and(
+            eq(checkins.tenantId, tenantId),
+            eq(checkins.salesPersonId, user.id),
+            sql`${checkins.checkinAt} >= NOW() - INTERVAL '30 days'`
+          )
+        )
+        .orderBy(sql`${checkins.checkinAt} DESC`)
+        .limit(10);
+      
+      res.json(recentCheckins);
+    } catch (error) {
+      console.error("Error fetching recent contacts:", error);
+      res.status(500).json({ error: "Error fetching recent contacts" });
     }
   });
 
