@@ -104,12 +104,18 @@ export default function ProductionPage() {
 
   const quickShipMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      const res = await apiRequest("PATCH", `/api/orders/${orderId}`, { status: OrderStatus.SHIPPED });
+      // Create a shipment record for the order
+      const res = await apiRequest("POST", `/api/shipments`, { 
+        orderId,
+        transporter: "Por asignar",
+        transportType: "propio",
+      });
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Enviado a Embarque", description: "El pedido ha sido transferido al departamento de embarques" });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
     },
     onError: () => {
       toast({ title: "Error", description: "No se pudo enviar a embarque", variant: "destructive" });
@@ -168,13 +174,9 @@ export default function ProductionPage() {
   };
 
   const handleSendToShipping = () => {
-    updateOrderMutation.mutate({
-      status: OrderStatus.SHIPPED,
-    });
-    toast({ 
-      title: "Enviado a Embarque", 
-      description: "El pedido ha sido transferido al departamento de embarques" 
-    });
+    if (selectedOrderId) {
+      quickShipMutation.mutate(selectedOrderId);
+    }
   };
 
   const getStatusBadge = (status: string) => {
