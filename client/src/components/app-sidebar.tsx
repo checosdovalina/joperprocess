@@ -110,7 +110,13 @@ export function AppSidebar() {
       title: "Pedidos",
       url: "/orders",
       icon: Package,
-      roles: [UserRole.ADMIN, UserRole.FABRICA, UserRole.VENTAS_LOGISTICA],
+      roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA],
+    },
+    {
+      title: "Producción",
+      url: "/production",
+      icon: Package,
+      roles: [UserRole.ADMIN, UserRole.FABRICA],
     },
     {
       title: "Embarques",

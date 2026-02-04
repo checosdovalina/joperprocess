@@ -32,6 +32,7 @@ import PublicIncidentPortal from "@/pages/public-incident-portal";
 import PublicSupportPage from "@/pages/public-support-page";
 import PublicTicketPage from "@/pages/public-ticket-page";
 import TenantsPage from "@/pages/tenants-page";
+import ProductionPage from "@/pages/production-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -68,6 +69,7 @@ function Router() {
       <ProtectedRoute path="/quotations" component={QuotationsPage} />
       <ProtectedRoute path="/credit-auth" component={CreditAuthPage} />
       <ProtectedRoute path="/orders" component={OrdersPage} />
+      <ProtectedRoute path="/production" component={ProductionPage} />
       <ProtectedRoute path="/shipments" component={ShipmentsPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
       <ProtectedRoute path="/accounts-receivable" component={AccountsReceivablePage} />
