@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, Eye, Truck, FileText, ChevronRight } from "lucide-react";
+import { Package, Plus, Eye, Truck, FileText, ChevronRight, Mail, Factory, Calendar, Clock, AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -71,6 +71,9 @@ export default function OrdersPage() {
   const [shipmentTransportType, setShipmentTransportType] = useState<"propio" | "paqueteria">("propio");
   const [shipmentDriverName, setShipmentDriverName] = useState("");
   const [shipmentVehiclePlates, setShipmentVehiclePlates] = useState("");
+  const [editEstimatedDelivery, setEditEstimatedDelivery] = useState("");
+  const [editFactoryNotes, setEditFactoryNotes] = useState("");
+  const [isEditingProduction, setIsEditingProduction] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -141,6 +144,63 @@ export default function OrdersPage() {
     setShipmentTransporter("");
     setShipmentDriverName("");
     setShipmentVehiclePlates("");
+  };
+
+  const updateOrderMutation = useMutation({
+    mutationFn: async (data: { estimatedDelivery?: string | null; factoryNotes?: string }) => {
+      const res = await apiRequest("PATCH", `/api/orders/${selectedOrderId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Pedido actualizado", description: "La información de producción se guardó correctamente" });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedOrderId, "details"] });
+      setIsEditingProduction(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo actualizar el pedido", variant: "destructive" });
+    },
+  });
+
+  const handleSaveProductionInfo = () => {
+    updateOrderMutation.mutate({
+      estimatedDelivery: editEstimatedDelivery || null,
+      factoryNotes: editFactoryNotes,
+    });
+  };
+
+  const handleNoDeliveryTime = () => {
+    setEditEstimatedDelivery("");
+    updateOrderMutation.mutate({
+      estimatedDelivery: null,
+      factoryNotes: editFactoryNotes ? editFactoryNotes + "\n[Sin tiempo de entrega definido]" : "[Sin tiempo de entrega definido]",
+    });
+  };
+
+  const handleSendToProduction = () => {
+    if (!orderDetails) return;
+    const customer = orderDetails.quotation.customer;
+    const subject = encodeURIComponent(`Pedido ${orderDetails.quotation.folio} - ${customer.name}`);
+    const itemsList = orderDetails.quotation.items.map(item => 
+      `- ${item.product.name} (${item.product.code}): ${item.quantity} ${item.product.unit}`
+    ).join("%0A");
+    const body = encodeURIComponent(
+      `Pedido: ${orderDetails.quotation.folio}\n` +
+      `Cliente: ${customer.name}\n` +
+      `Fecha: ${format(new Date(), "PPP", { locale: es })}\n\n` +
+      `Productos:\n`
+    ) + itemsList + encodeURIComponent(`\n\nNotas: ${orderDetails.factoryNotes || "Sin notas"}`);
+    window.open(`mailto:produccion@joper.com.mx?subject=${subject}&body=${body}`, "_blank");
+  };
+
+  const startEditingProduction = () => {
+    if (orderDetails) {
+      setEditEstimatedDelivery(orderDetails.estimatedDelivery 
+        ? format(new Date(orderDetails.estimatedDelivery), "yyyy-MM-dd") 
+        : "");
+      setEditFactoryNotes(orderDetails.factoryNotes || "");
+      setIsEditingProduction(true);
+    }
   };
 
   const getStatusBadge = (status: string) => {
