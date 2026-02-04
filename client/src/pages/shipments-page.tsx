@@ -52,7 +52,14 @@ export default function ShipmentsPage() {
   const { toast } = useToast();
   const [selectedShipment, setSelectedShipment] = useState<ShipmentWithDetails | null>(null);
   const [serialDialogOpen, setSerialDialogOpen] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [newSerials, setNewSerials] = useState<{ productId: string; serialNumber: string }[]>([]);
+  const [editMode, setEditMode] = useState(false);
+  const [editTransporter, setEditTransporter] = useState("");
+  const [editTransportType, setEditTransportType] = useState("");
+  const [editTrackingNumber, setEditTrackingNumber] = useState("");
+  const [editDriverName, setEditDriverName] = useState("");
+  const [editVehiclePlates, setEditVehiclePlates] = useState("");
 
   const { data: shipments, isLoading } = useQuery<ShipmentWithDetails[]>({
     queryKey: ["/api/shipments"],
@@ -104,6 +111,21 @@ export default function ShipmentsPage() {
     },
   });
 
+  const updateShipmentMutation = useMutation({
+    mutationFn: async (data: { transporter?: string; transportType?: string; trackingNumber?: string; driverName?: string; vehiclePlates?: string; status?: string; shippedAt?: string }) => {
+      if (!selectedShipment) throw new Error("No shipment selected");
+      return apiRequest("PATCH", `/api/shipments/${selectedShipment.id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Embarque actualizado", description: "La información se guardó correctamente" });
+      queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
+      setEditMode(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo actualizar el embarque", variant: "destructive" });
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       [ShipmentStatus.PENDING]: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800" },
@@ -112,6 +134,40 @@ export default function ShipmentsPage() {
     };
     const config = statusConfig[status] || statusConfig[ShipmentStatus.PENDING];
     return <Badge className={config.className} data-testid={`status-${status}`}>{config.label}</Badge>;
+  };
+
+  const openDetailsDialog = (shipment: ShipmentWithDetails) => {
+    setSelectedShipment(shipment);
+    setEditTransporter(shipment.transporter);
+    setEditTransportType(shipment.transportType);
+    setEditTrackingNumber(shipment.trackingNumber || "");
+    setEditDriverName(shipment.driverName || "");
+    setEditVehiclePlates(shipment.vehiclePlates || "");
+    setDetailsDialogOpen(true);
+    setEditMode(false);
+  };
+
+  const handleSaveShipment = () => {
+    updateShipmentMutation.mutate({
+      transporter: editTransporter,
+      transportType: editTransportType,
+      trackingNumber: editTrackingNumber || undefined,
+      driverName: editDriverName || undefined,
+      vehiclePlates: editVehiclePlates || undefined,
+    });
+  };
+
+  const handleMarkAsInTransit = () => {
+    updateShipmentMutation.mutate({
+      status: ShipmentStatus.IN_TRANSIT,
+      shippedAt: new Date().toISOString(),
+    });
+  };
+
+  const handleMarkAsDelivered = () => {
+    updateShipmentMutation.mutate({
+      status: ShipmentStatus.DELIVERED,
+    });
   };
 
   const openSerialDialog = (shipment: ShipmentWithDetails) => {
@@ -266,6 +322,7 @@ export default function ShipmentsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => openDetailsDialog(shipment)}
                             data-testid={`button-view-shipment-${shipment.id}`}
                           >
                             Ver Detalles
@@ -413,6 +470,144 @@ export default function ShipmentsPage() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              Detalles del Embarque
+            </DialogTitle>
+            <DialogDescription>
+              {selectedShipment?.order.quotation.folio} - {selectedShipment?.order.quotation.customer.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedShipment && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                {getStatusBadge(selectedShipment.status)}
+                {!editMode && (
+                  <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+                    Editar
+                  </Button>
+                )}
+              </div>
+
+              {editMode ? (
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Transportista</Label>
+                      <Input
+                        value={editTransporter}
+                        onChange={(e) => setEditTransporter(e.target.value)}
+                        placeholder="Nombre del transportista"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tipo de Transporte</Label>
+                      <Select value={editTransportType} onValueChange={setEditTransportType}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="propio">Transporte Propio</SelectItem>
+                          <SelectItem value="paqueteria">Paquetería</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Número de Guía / Rastreo</Label>
+                      <Input
+                        value={editTrackingNumber}
+                        onChange={(e) => setEditTrackingNumber(e.target.value)}
+                        placeholder="Número de guía"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nombre del Chofer</Label>
+                      <Input
+                        value={editDriverName}
+                        onChange={(e) => setEditDriverName(e.target.value)}
+                        placeholder="Nombre del chofer"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Placas del Vehículo</Label>
+                    <Input
+                      value={editVehiclePlates}
+                      onChange={(e) => setEditVehiclePlates(e.target.value)}
+                      placeholder="Placas"
+                      className="w-1/2"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setEditMode(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleSaveShipment} disabled={updateShipmentMutation.isPending}>
+                      Guardar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Transportista</Label>
+                    <p className="font-medium">{selectedShipment.transporter}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Tipo</Label>
+                    <p className="font-medium capitalize">{selectedShipment.transportType === "propio" ? "Transporte Propio" : "Paquetería"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Número de Guía</Label>
+                    <p className="font-medium">{selectedShipment.trackingNumber || "No asignado"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Chofer</Label>
+                    <p className="font-medium">{selectedShipment.driverName || "No asignado"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Placas</Label>
+                    <p className="font-medium">{selectedShipment.vehiclePlates || "No asignadas"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Fecha de Embarque</Label>
+                    <p className="font-medium">
+                      {selectedShipment.shippedAt 
+                        ? format(new Date(selectedShipment.shippedAt), "PPP", { locale: es })
+                        : "No embarcado"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center pt-4 border-t">
+                <span className="text-sm text-muted-foreground">Acciones de estado</span>
+                <div className="flex gap-2">
+                  {selectedShipment.status === ShipmentStatus.PENDING && (
+                    <Button onClick={handleMarkAsInTransit} disabled={updateShipmentMutation.isPending}>
+                      <Truck className="h-4 w-4 mr-1" />
+                      Marcar En Tránsito
+                    </Button>
+                  )}
+                  {selectedShipment.status === ShipmentStatus.IN_TRANSIT && (
+                    <Button onClick={handleMarkAsDelivered} disabled={updateShipmentMutation.isPending} className="bg-green-600 hover:bg-green-700">
+                      Marcar Entregado
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
