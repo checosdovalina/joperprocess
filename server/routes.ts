@@ -1354,6 +1354,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // If quotation requires approval, create a credit authorization record
+      if (quotation.requiresApproval) {
+        const authData = insertCreditAuthorizationSchema.parse({
+          quotationId: quotation.id,
+          userId: req.user!.id,
+          status: CreditAuthStatus.PENDING,
+          notes: quotation.approvalReason || "Requiere autorización",
+        });
+        await scopedStorage.createCreditAuthorization(authData);
+      }
+
       res.status(201).json(quotation);
     } catch (error) {
       console.error("Error creating quotation:", error);
