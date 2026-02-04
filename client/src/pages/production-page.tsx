@@ -124,7 +124,7 @@ export default function ProductionPage() {
 
   const handleSave = () => {
     updateOrderMutation.mutate({
-      estimatedDelivery: editEstimatedDelivery || null,
+      estimatedDelivery: editEstimatedDelivery ? new Date(editEstimatedDelivery).toISOString() : null,
       factoryNotes: editFactoryNotes,
       productionProgress: editProgress,
     });
