@@ -1335,10 +1335,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         quotationData.validUntil = new Date(quotationData.validUntil);
       }
       
+      // Quotations always start as DRAFT - they go through the approval workflow:
+      // 1. If shippingHandledByJoper: Admin approves shipping first
+      // 2. Then sent to customer for approval
+      // 3. When customer approves, credit authorization is created
       const validated = insertQuotationSchema.parse({
         ...quotationData,
         userId: req.user!.id,
-        status: quotationData.requiresApproval ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
+        status: QuotationStatus.DRAFT,
       });
 
       const quotation = await scopedStorage.createQuotation(validated);
@@ -1352,17 +1356,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           await scopedStorage.createQuotationItem(validatedItem);
         }
-      }
-
-      // If quotation requires approval, create a credit authorization record
-      if (quotation.requiresApproval) {
-        const authData = insertCreditAuthorizationSchema.parse({
-          quotationId: quotation.id,
-          userId: req.user!.id,
-          status: CreditAuthStatus.PENDING,
-          notes: quotation.approvalReason || "Requiere autorización",
-        });
-        await scopedStorage.createCreditAuthorization(authData);
       }
 
       res.status(201).json(quotation);
