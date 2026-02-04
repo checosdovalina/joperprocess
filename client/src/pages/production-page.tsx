@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Factory, Eye, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package } from "lucide-react";
+import { Factory, Eye, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package, Truck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -102,6 +102,20 @@ export default function ProductionPage() {
     },
   });
 
+  const quickShipMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest("PATCH", `/api/orders/${orderId}`, { status: OrderStatus.SHIPPED });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Enviado a Embarque", description: "El pedido ha sido transferido al departamento de embarques" });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo enviar a embarque", variant: "destructive" });
+    },
+  });
+
   const handleViewDetails = (orderId: string) => {
     setSelectedOrderId(orderId);
     setDetailsDialogOpen(true);
@@ -150,6 +164,16 @@ export default function ProductionPage() {
     updateOrderMutation.mutate({
       status: OrderStatus.READY,
       productionProgress: 100,
+    });
+  };
+
+  const handleSendToShipping = () => {
+    updateOrderMutation.mutate({
+      status: OrderStatus.SHIPPED,
+    });
+    toast({ 
+      title: "Enviado a Embarque", 
+      description: "El pedido ha sido transferido al departamento de embarques" 
     });
   };
 
@@ -222,15 +246,29 @@ export default function ProductionPage() {
                 )}
               </TableCell>
               <TableCell className="text-right">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleViewDetails(order.id)}
-                  data-testid={`button-view-order-${order.id}`}
-                >
-                  <Eye className="h-4 w-4 mr-1" />
-                  Gestionar
-                </Button>
+                <div className="flex items-center justify-end gap-2">
+                  {order.status === OrderStatus.READY && (
+                    <Button 
+                      size="sm" 
+                      className="bg-purple-600 hover:bg-purple-700"
+                      onClick={() => quickShipMutation.mutate(order.id)}
+                      disabled={quickShipMutation.isPending}
+                      data-testid={`button-quick-ship-${order.id}`}
+                    >
+                      <Truck className="h-4 w-4 mr-1" />
+                      A Embarque
+                    </Button>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleViewDetails(order.id)}
+                    data-testid={`button-view-order-${order.id}`}
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Gestionar
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
@@ -557,6 +595,17 @@ export default function ProductionPage() {
                     >
                       <CheckCircle2 className="h-4 w-4 mr-1" />
                       Marcar como Listo
+                    </Button>
+                  )}
+                  {orderDetails.status === OrderStatus.READY && (
+                    <Button 
+                      onClick={handleSendToShipping}
+                      disabled={updateOrderMutation.isPending}
+                      className="bg-purple-600 hover:bg-purple-700"
+                      data-testid="button-send-to-shipping"
+                    >
+                      <Truck className="h-4 w-4 mr-1" />
+                      Enviar a Embarque
                     </Button>
                   )}
                 </div>
