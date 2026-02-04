@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Settings,
   Database,
+  Factory,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -115,7 +116,7 @@ export function AppSidebar() {
     {
       title: "Producción",
       url: "/production",
-      icon: Package,
+      icon: Factory,
       roles: [UserRole.ADMIN, UserRole.FABRICA],
     },
     {

@@ -37,6 +37,7 @@ import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
+import { UserRole } from "@shared/schema";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 
@@ -68,8 +69,8 @@ function Router() {
       <ProtectedRoute path="/scheduled-visits" component={ScheduledVisitsPage} />
       <ProtectedRoute path="/quotations" component={QuotationsPage} />
       <ProtectedRoute path="/credit-auth" component={CreditAuthPage} />
-      <ProtectedRoute path="/orders" component={OrdersPage} />
-      <ProtectedRoute path="/production" component={ProductionPage} />
+      <ProtectedRoute path="/orders" component={OrdersPage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA]} />
+      <ProtectedRoute path="/production" component={ProductionPage} allowedRoles={[UserRole.ADMIN, UserRole.FABRICA]} />
       <ProtectedRoute path="/shipments" component={ShipmentsPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
       <ProtectedRoute path="/accounts-receivable" component={AccountsReceivablePage} />
