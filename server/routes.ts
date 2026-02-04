@@ -2514,8 +2514,15 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
+      const updateData = { ...req.body };
+      
+      // Convert estimatedDelivery string to Date object if present
+      if (updateData.estimatedDelivery) {
+        updateData.estimatedDelivery = new Date(updateData.estimatedDelivery);
+      }
+      
       const updatedOrder = await scopedStorage.updateOrder(id, {
-        ...req.body,
+        ...updateData,
         lastUpdatedBy: req.user!.id,
         updatedAt: new Date(),
       });
