@@ -1256,9 +1256,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const product = await scopedStorage.createProduct(validated);
       res.status(201).json(product);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating product:", error);
-      res.status(400).json({ error: "Error al crear producto" });
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Datos inválidos: " + error.errors?.map((e: any) => e.message).join(', ') });
+      }
+      res.status(400).json({ error: error.message || "Error al crear producto" });
     }
   });
 
