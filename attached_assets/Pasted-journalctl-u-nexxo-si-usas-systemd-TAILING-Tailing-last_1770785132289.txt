@@ -1,0 +1,87 @@
+journalctl -u nexxo   # si usas systemd
+[TAILING] Tailing last 15 lines for [all] processes (change the value with --lines option)
+/root/.pm2/pm2.log last 15 lines:
+PM2        | 2026-01-14T11:06:07: PM2 log: App [ots-energy:6] exited with code [1] via signal [SIGINT]
+PM2        | 2026-01-14T11:06:07: PM2 log: App [ots-energy:6] starting in -fork mode-
+PM2        | 2026-01-14T11:06:07: PM2 log: App [ots-energy:6] online
+PM2        | 2026-01-19T01:50:28: PM2 log: App [ots-energy:6] exited with code [1] via signal [SIGINT]
+PM2        | 2026-01-19T01:50:28: PM2 log: App [ots-energy:6] starting in -fork mode-
+PM2        | 2026-01-19T01:50:28: PM2 log: App [ots-energy:6] online
+PM2        | 2026-01-19T02:18:02: PM2 log: App [ots-energy:6] exited with code [1] via signal [SIGINT]
+PM2        | 2026-01-19T02:18:02: PM2 log: App [ots-energy:6] starting in -fork mode-
+PM2        | 2026-01-19T02:18:02: PM2 log: App [ots-energy:6] online
+PM2        | 2026-02-11T04:37:14: PM2 log: Process 0 in a stopped status, starting it
+PM2        | 2026-02-11T04:37:14: PM2 log: Stopping app:joper-app id:0
+PM2        | 2026-02-11T04:37:14: PM2 log: App [joper-app:0] exited with code [0] via signal [SIGINT]
+PM2        | 2026-02-11T04:37:14: PM2 log: pid=1393300 msg=process killed
+PM2        | 2026-02-11T04:37:14: PM2 log: App [joper-app:0] starting in -fork mode-
+PM2        | 2026-02-11T04:37:14: PM2 log: App [joper-app:0] online
+
+/root/.pm2/logs/ots-energy-error.log last 15 lines:
+6|ots-ener | Instead of /public/.env, use /.env.
+6|ots-ener | Files in the public directory are served at the root path.
+6|ots-ener | Instead of /public/js/main.js, use /js/main.js.
+6|ots-ener | Files in the public directory are served at the root path.
+6|ots-ener | Instead of /public/.env, use /.env.
+6|ots-ener | Files in the public directory are served at the root path.
+6|ots-ener | Instead of /public/js/main.js, use /js/main.js.
+6|ots-ener | Files in the public directory are served at the root path.
+6|ots-ener | Instead of /public/.env, use /.env.
+6|ots-ener | Files in the public directory are served at the root path.
+6|ots-ener | Instead of /public/js/main.js, use /js/main.js.
+6|ots-ener | Files in the public directory are served at the root path.
+6|ots-ener | Instead of /public/.env, use /.env.
+6|ots-ener | Files in the public directory are served at the root path.
+6|ots-ener | Instead of /public/js/main.js, use /js/main.js.
+
+/root/.pm2/logs/ots-energy-out.log last 15 lines:
+6|ots-ener | 1:48:46 PM [express] GET /api/config.js 200 in 3ms
+6|ots-ener | 1:48:46 PM [express] GET /api/objects/codes.php.save 200 in 3ms
+6|ots-ener | 1:48:47 PM [express] GET /apis/config/config.js 200 in 3ms
+6|ots-ener | 1:48:47 PM [express] GET /apis/controllers/users.js 200 in 2ms
+6|ots-ener | 1:48:56 PM [express] GET /api/config/config.yml 200 in 2ms
+6|ots-ener | 1:48:59 PM [express] GET /api/stripe.js 200 in 3ms
+6|ots-ener | 1:48:59 PM [express] GET /api/stripe.ts 200 in 2ms
+6|ots-ener | 1:49:09 PM [express] GET /api/webhook.js 200 in 3ms
+6|ots-ener | 1:49:35 PM [express] GET /api/v1/.env 200 in 2ms
+6|ots-ener | 1:49:35 PM [express] GET /api/v2/.env 200 in 3ms
+6|ots-ener | 1:50:06 PM [express] GET /api_keys.txt 200 in 3ms
+6|ots-ener | 1:50:06 PM [express] GET /api.key 200 in 2ms
+6|ots-ener | 1:50:06 PM [express] GET /apikey.txt 200 in 3ms
+6|ots-ener | 1:50:06 PM [express] GET /api-key.txt 200 in 3ms
+6|ots-ener | 1:50:29 PM [express] GET /api/graphql 200 in 3ms
+
+/root/.pm2/logs/joper-app-error.log last 15 lines:
+0|joper-ap |     date: 'Wed, 11 Feb 2026 04:42:25 GMT',
+0|joper-ap |     server: 'cloudflare',
+0|joper-ap |     'strict-transport-security': 'max-age=31536000; includeSubDomains',
+0|joper-ap |     'transfer-encoding': 'chunked',
+0|joper-ap |     'x-apiquota-remaining': '100',
+0|joper-ap |     'x-apiquota-reset': '2026-02-12T00:00:00Z',
+0|joper-ap |     'x-ratelimit-limit': '10',
+0|joper-ap |     'x-ratelimit-remaining': '5'
+0|joper-ap |   },
+0|joper-ap |   body: {
+0|joper-ap |     message: 'You have reached trial account unique recipients limit. #MS42225',
+0|joper-ap |     errors: { to: [Array] }
+0|joper-ap |   },
+0|joper-ap |   statusCode: 422
+0|joper-ap | }
+
+/root/.pm2/logs/joper-app-out.log last 15 lines:
+0|joper-ap | 4:41:20 AM [express] GET /api/scheduled-visits/today 200 in 103ms :: [{"id":"28a28abb-2705-465c-8a8f…
+0|joper-ap | 4:41:24 AM [express] POST /api/scheduled-visits/28a28abb-2705-465c-8a8f-09a42a11ee93/convert 201 in …
+0|joper-ap | 4:41:24 AM [express] GET /api/checkins 200 in 6ms :: [{"id":"bb5fe7b9-4d9c-4ff7-ae3f-1ea998756400","…
+0|joper-ap | 4:41:24 AM [express] GET /api/scheduled-visits/today 200 in 7ms :: []
+0|joper-ap | 4:41:27 AM [express] GET /api/checkins/bb5fe7b9-4d9c-4ff7-ae3f-1ea998756400 200 in 7ms :: {"id":"bb5…
+0|joper-ap | 4:41:27 AM [express] GET /api/customers/a6d7fd86-593f-49df-8bb4-3d1333d8eaa8/summary 200 in 17ms :: …
+0|joper-ap | 4:41:55 AM [express] POST /api/objects/upload 200 in 18ms :: {"uploadURL":"/api/objects/upload-direc…
+0|joper-ap | Generating and uploading PDF for check-in bb5fe7b9-4d9c-4ff7-ae3f-1ea998756400...
+0|joper-ap | Using local storage for PDF...
+0|joper-ap | Updating check-in with checkout time and PDF path...
+0|joper-ap | Sending email notifications...
+0|joper-ap | 📥 Reading PDF from local storage: minutes/bb5fe7b9-4d9c-4ff7-ae3f-1ea998756400.pdf
+0|joper-ap | ✅ Emails sent to: checodovalina@gmail.com, angelitosfoto@gmail.com, superadmin@nexxo.com.mx, admin@tipo.com, produccion.tipo.trn@gmail.com
+0|joper-ap | 4:42:25 AM [express] POST /api/checkins/bb5fe7b9-4d9c-4ff7-ae3f-1ea998756400/checkout 200 in 1638ms …
+0|joper-ap | 4:42:25 AM [express] GET /api/checkins/bb5fe7b9-4d9c-4ff7-ae3f-1ea998756400 200 in 8ms :: {"id":"bb5…
+
