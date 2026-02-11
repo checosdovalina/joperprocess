@@ -3880,13 +3880,20 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "PDF no disponible" });
       }
 
-      const objectStorageService = new ObjectStorageService();
-      await objectStorageService.downloadObjectByPath(quotation.pdfPath, res, {
-        isPublic: false,
-        contentType: "application/pdf",
-        disposition: "inline",
-        filename: `cotizacion-${quotation.folio}.pdf`,
-      });
+      if (useLocalStorage()) {
+        const success = await localStorageService.streamFile(quotation.pdfPath, res);
+        if (!success) {
+          return res.status(404).json({ error: "PDF no encontrado en almacenamiento local" });
+        }
+      } else {
+        const objectStorageService = new ObjectStorageService();
+        await objectStorageService.downloadObjectByPath(quotation.pdfPath, res, {
+          isPublic: false,
+          contentType: "application/pdf",
+          disposition: "inline",
+          filename: `cotizacion-${quotation.folio}.pdf`,
+        });
+      }
     } catch (error) {
       console.error("Error downloading quotation PDF:", error);
       if (!res.headersSent) {
