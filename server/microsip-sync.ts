@@ -10,7 +10,7 @@ import {
   microsipSyncLogs,
   InvoiceStatus
 } from '@shared/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 
 interface FirebirdConnection {
   query: (query: string, params: any[], callback: (err: Error | null, result: any[]) => void) => void;
@@ -832,6 +832,7 @@ class MicrosipSyncService {
     const logId = await this.logSync('payments', 'started');
     let fbDb: FirebirdConnection | null = null;
     const stats = { processed: 0, created: 0, updated: 0, skipped: 0 };
+    const affectedInvoiceIds = new Set<string>();
 
     try {
       fbDb = await this.connect();
@@ -935,11 +936,60 @@ class MicrosipSyncService {
             });
             stats.created++;
           }
+
+          // Track invoice to update balance later
+          if (invoiceId) {
+            affectedInvoiceIds.add(invoiceId);
+          }
         } catch (err) {
           console.error(`[Microsip] Error syncing payment ${msPayment.DOCTO_CO_ID}:`, err);
           stats.skipped++;
         }
       }
+
+      // Update invoice balances for all affected invoices
+      for (const invoiceId of affectedInvoiceIds) {
+        try {
+          const invoice = await db.query.invoices.findFirst({
+            where: eq(invoices.id, invoiceId),
+          });
+          if (!invoice) continue;
+
+          // Sum all payments linked to this invoice
+          const [result] = await db
+            .select({ totalPaid: sql<string>`COALESCE(SUM(${payments.amount}), 0)` })
+            .from(payments)
+            .where(and(
+              eq(payments.invoiceId, invoiceId),
+              eq(payments.tenantId, this.tenantId)
+            ));
+
+          const totalPaid = parseFloat(result?.totalPaid || '0');
+          const invoiceTotal = parseFloat(invoice.total || '0');
+          const newBalance = Math.max(0, invoiceTotal - totalPaid);
+
+          let newStatus = invoice.status;
+          if (newBalance === 0) {
+            newStatus = InvoiceStatus.PAID;
+          } else if (totalPaid > 0) {
+            newStatus = InvoiceStatus.PARTIALLY_PAID;
+          } else {
+            newStatus = InvoiceStatus.PENDING_PAYMENT;
+          }
+
+          await db.update(invoices)
+            .set({
+              balanceDue: newBalance.toFixed(2),
+              status: newStatus,
+              paidAt: newBalance === 0 ? new Date() : null,
+            })
+            .where(eq(invoices.id, invoiceId));
+        } catch (err) {
+          console.error(`[Microsip] Error updating invoice balance for ${invoiceId}:`, err);
+        }
+      }
+
+      console.log(`[Microsip] Updated balances for ${affectedInvoiceIds.size} invoices`);
 
       await db.update(microsipConfigs)
         .set({ 
