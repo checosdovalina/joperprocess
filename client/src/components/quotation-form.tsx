@@ -304,6 +304,8 @@ export function QuotationForm({
     };
   }, []);
 
+  const normalizeDecimal = (value: string) => value.replace(',', '.');
+
   const updateLineItem = useCallback((index: number, updates: Partial<QuotationLineItem>, recalculateFrom?: 'discountPercent' | 'unitPrice') => {
     setLineItems(prev => {
       const newItems = [...prev];
@@ -781,10 +783,10 @@ export function QuotationForm({
                               <FormLabel>Costo de Envío</FormLabel>
                               <FormControl>
                                 <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
                                   {...field}
+                                  onChange={(e) => field.onChange(normalizeDecimal(e.target.value))}
                                   disabled={form.watch("shippingCostStatus") === "pending"}
                                   placeholder="0.00"
                                   data-testid="input-shipping-cost"
@@ -932,12 +934,11 @@ export function QuotationForm({
                               </TableCell>
                               <TableCell>
                                 <Input
-                                  type="number"
-                                  min="0.01"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={item.quantity}
                                   onChange={(e) => {
-                                    updateLineItem(index, { quantity: e.target.value }, 'discountPercent');
+                                    updateLineItem(index, { quantity: normalizeDecimal(e.target.value) }, 'discountPercent');
                                   }}
                                   className="w-20 text-center"
                                   data-testid={`input-quantity-${index}`}
@@ -948,13 +949,11 @@ export function QuotationForm({
                               </TableCell>
                               <TableCell>
                                 <Input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={item.discountPercent}
                                   onChange={(e) => {
-                                    updateLineItem(index, { discountPercent: e.target.value }, 'discountPercent');
+                                    updateLineItem(index, { discountPercent: normalizeDecimal(e.target.value) }, 'discountPercent');
                                   }}
                                   className={`w-16 text-center ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
                                   data-testid={`input-discount-${index}`}
@@ -962,12 +961,11 @@ export function QuotationForm({
                               </TableCell>
                               <TableCell>
                                 <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={item.unitPrice}
                                   onChange={(e) => {
-                                    updateLineItem(index, { unitPrice: e.target.value }, 'unitPrice');
+                                    updateLineItem(index, { unitPrice: normalizeDecimal(e.target.value) }, 'unitPrice');
                                   }}
                                   className="w-24 text-right font-mono"
                                   data-testid={`input-unit-price-${index}`}
@@ -1072,11 +1070,10 @@ export function QuotationForm({
                             name="globalDiscount"
                             render={({ field }) => (
                               <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 {...field}
+                                onChange={(e) => field.onChange(normalizeDecimal(e.target.value))}
                                 className="w-16 h-7 text-center text-sm"
                                 data-testid="input-global-discount"
                               />
@@ -1112,15 +1109,14 @@ export function QuotationForm({
                         <div className="flex items-center gap-1">
                           <span className="text-sm text-muted-foreground">$</span>
                           <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={(parseFloat(totals.total) + 
                               (form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending" 
                                 ? 0 
                                 : parseFloat(form.watch("shippingCost") || "0"))
                             ).toFixed(2)}
-                            onChange={(e) => handleTotalChange(e.target.value)}
+                            onChange={(e) => handleTotalChange(normalizeDecimal(e.target.value))}
                             className="w-28 h-8 text-right font-mono font-bold"
                             data-testid="input-total"
                           />
