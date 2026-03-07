@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Invoice, Customer, InsertInvoice } from "@shared/schema";
+import { Invoice, Customer, InvoiceStatus } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -12,7 +12,16 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileSpreadsheet, Download, Mail, Eye, Pencil, MoreHorizontal, Plus, Loader2, Send } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { FileSpreadsheet, Download, Mail, Eye, MoreHorizontal, Loader2, Send, Search, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, isPast } from "date-fns";
 import { es } from "date-fns/locale";
@@ -47,6 +56,15 @@ import { Separator } from "@/components/ui/separator";
 
 type InvoiceWithDetails = Invoice & { customer: Customer };
 
+const STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  [InvoiceStatus.DRAFT]: { label: "Borrador", className: "bg-gray-100 text-gray-800" },
+  [InvoiceStatus.PENDING_PAYMENT]: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800" },
+  [InvoiceStatus.PARTIALLY_PAID]: { label: "Pago Parcial", className: "bg-blue-100 text-blue-800" },
+  [InvoiceStatus.PAID]: { label: "Pagada", className: "bg-green-100 text-green-800" },
+  [InvoiceStatus.CANCELLED]: { label: "Cancelada", className: "bg-red-100 text-red-800" },
+  overdue: { label: "Vencida", className: "bg-red-100 text-red-800" },
+};
+
 export default function InvoicesPage() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
@@ -56,12 +74,60 @@ export default function InvoicesPage() {
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const { toast } = useToast();
 
+  // Filter state
+  const [searchFolio, setSearchFolio] = useState("");
+  const [searchCliente, setSearchCliente] = useState("");
+  const [filterFechaDesde, setFilterFechaDesde] = useState("");
+  const [filterFechaHasta, setFilterFechaHasta] = useState("");
+  const [filterEstado, setFilterEstado] = useState("all");
+
   const { data: invoices, isLoading } = useQuery<InvoiceWithDetails[]>({
     queryKey: ["/api/invoices"],
   });
 
   const isOverdue = (invoice: Invoice) => {
-    return invoice.dueDate && isPast(new Date(invoice.dueDate));
+    return (
+      invoice.status === InvoiceStatus.PENDING_PAYMENT &&
+      invoice.dueDate &&
+      isPast(new Date(invoice.dueDate))
+    );
+  };
+
+  const getStatusKey = (invoice: Invoice) =>
+    isOverdue(invoice) ? "overdue" : invoice.status;
+
+  const filteredInvoices = useMemo(() => {
+    if (!invoices) return [];
+    return invoices.filter((inv) => {
+      const folio = `${inv.serie}-${inv.folio}`.toLowerCase();
+      const cliente = inv.customer.name.toLowerCase();
+      const fechaEmision = new Date(inv.issuedAt);
+
+      if (searchFolio && !folio.includes(searchFolio.toLowerCase())) return false;
+      if (searchCliente && !cliente.includes(searchCliente.toLowerCase())) return false;
+      if (filterFechaDesde && fechaEmision < new Date(filterFechaDesde)) return false;
+      if (filterFechaHasta) {
+        const hasta = new Date(filterFechaHasta);
+        hasta.setHours(23, 59, 59);
+        if (fechaEmision > hasta) return false;
+      }
+      if (filterEstado !== "all") {
+        const key = getStatusKey(inv);
+        if (key !== filterEstado) return false;
+      }
+      return true;
+    });
+  }, [invoices, searchFolio, searchCliente, filterFechaDesde, filterFechaHasta, filterEstado]);
+
+  const hasActiveFilters =
+    searchFolio || searchCliente || filterFechaDesde || filterFechaHasta || filterEstado !== "all";
+
+  const clearFilters = () => {
+    setSearchFolio("");
+    setSearchCliente("");
+    setFilterFechaDesde("");
+    setFilterFechaHasta("");
+    setFilterEstado("all");
   };
 
   const handleViewDetails = async (invoice: InvoiceWithDetails) => {
@@ -92,7 +158,7 @@ export default function InvoicesPage() {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Error al generar PDF");
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -102,7 +168,7 @@ export default function InvoicesPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       toast({
         title: "PDF descargado",
         description: `Factura ${invoice.serie}-${invoice.folio} descargada correctamente`,
@@ -124,12 +190,10 @@ export default function InvoicesPage() {
     try {
       const response = await apiRequest("POST", `/api/invoices/${selectedInvoice.id}/send-email`, {});
       const data = await response.json();
-      
       toast({
         title: "Factura enviada",
         description: data.message,
       });
-      
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       setSendEmailDialogOpen(false);
       setSelectedInvoice(null);
@@ -159,6 +223,11 @@ export default function InvoicesPage() {
     });
   };
 
+  const totalFacturado = filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.total), 0);
+  const vencidas = filteredInvoices.filter((i) => isOverdue(i)).length;
+  const pendientes = filteredInvoices.filter((i) => i.status === InvoiceStatus.PENDING_PAYMENT && !isOverdue(i)).length;
+  const pagadas = filteredInvoices.filter((i) => i.status === InvoiceStatus.PAID).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -170,6 +239,7 @@ export default function InvoicesPage() {
         </div>
       </div>
 
+      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -177,7 +247,10 @@ export default function InvoicesPage() {
             <FileSpreadsheet className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invoices?.length || 0}</div>
+            <div className="text-2xl font-bold">{filteredInvoices.length}</div>
+            {hasActiveFilters && (
+              <p className="text-xs text-muted-foreground">de {invoices?.length || 0} total</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -186,20 +259,16 @@ export default function InvoicesPage() {
             <FileSpreadsheet className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {invoices?.filter((i) => isOverdue(i)).length || 0}
-            </div>
+            <div className="text-2xl font-bold">{vencidas}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Por Vencer</CardTitle>
+            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
             <FileSpreadsheet className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {invoices?.filter((i) => i.dueDate && !isOverdue(i)).length || 0}
-            </div>
+            <div className="text-2xl font-bold">{pendientes}</div>
           </CardContent>
         </Card>
         <Card>
@@ -209,20 +278,94 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${invoices?.reduce((sum, inv) => sum + parseFloat(inv.total), 0).toLocaleString("es-MX", {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              }) || 0}
+              ${totalFacturado.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </div>
+            <p className="text-xs text-muted-foreground">{pagadas} pagadas</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Filters */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Filtros
+            </CardTitle>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters">
+                <X className="h-4 w-4 mr-1" />
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Folio / Factura</Label>
+              <Input
+                placeholder="Ej: F-1234"
+                value={searchFolio}
+                onChange={(e) => setSearchFolio(e.target.value)}
+                data-testid="input-filter-folio"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Cliente</Label>
+              <Input
+                placeholder="Nombre del cliente"
+                value={searchCliente}
+                onChange={(e) => setSearchCliente(e.target.value)}
+                data-testid="input-filter-cliente"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Fecha desde</Label>
+              <Input
+                type="date"
+                value={filterFechaDesde}
+                onChange={(e) => setFilterFechaDesde(e.target.value)}
+                data-testid="input-filter-fecha-desde"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Fecha hasta</Label>
+              <Input
+                type="date"
+                value={filterFechaHasta}
+                onChange={(e) => setFilterFechaHasta(e.target.value)}
+                data-testid="input-filter-fecha-hasta"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Estado</Label>
+              <Select value={filterEstado} onValueChange={setFilterEstado}>
+                <SelectTrigger data-testid="select-filter-estado">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value={InvoiceStatus.PENDING_PAYMENT}>Pendiente</SelectItem>
+                  <SelectItem value="overdue">Vencida</SelectItem>
+                  <SelectItem value={InvoiceStatus.PARTIALLY_PAID}>Pago Parcial</SelectItem>
+                  <SelectItem value={InvoiceStatus.PAID}>Pagada</SelectItem>
+                  <SelectItem value={InvoiceStatus.CANCELLED}>Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Todas las Facturas</CardTitle>
+          <CardTitle>Facturas</CardTitle>
           <CardDescription>
-            {invoices?.length || 0} facturas emitidas
+            {filteredInvoices.length} factura{filteredInvoices.length !== 1 ? "s" : ""}
+            {hasActiveFilters ? " con los filtros aplicados" : " emitidas"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -232,7 +375,7 @@ export default function InvoicesPage() {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : invoices && invoices.length > 0 ? (
+          ) : filteredInvoices.length > 0 ? (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -242,109 +385,123 @@ export default function InvoicesPage() {
                     <TableHead>Fecha Emisión</TableHead>
                     <TableHead>Fecha Vencimiento</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => (
-                    <TableRow key={invoice.id} className="hover-elevate" data-testid={`row-invoice-${invoice.id}`}>
-                      <TableCell>
-                        <div className="font-mono font-medium">
-                          {invoice.serie}-{invoice.folio}
-                        </div>
-                        {invoice.cfdiUuid && (
-                          <div className="text-xs text-muted-foreground">
-                            UUID: {invoice.cfdiUuid.slice(0, 8)}...
+                  {filteredInvoices.map((invoice) => {
+                    const statusKey = getStatusKey(invoice);
+                    const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS[InvoiceStatus.PENDING_PAYMENT];
+                    return (
+                      <TableRow key={invoice.id} className="hover-elevate" data-testid={`row-invoice-${invoice.id}`}>
+                        <TableCell>
+                          <div className="font-mono font-medium">
+                            {invoice.serie}-{invoice.folio}
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{invoice.customer.name}</div>
-                        <div className="text-xs text-muted-foreground">{invoice.customer.rfc}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {format(new Date(invoice.issuedAt), "PP", { locale: es })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {invoice.dueDate ? (
+                          {invoice.cfdiUuid && (
+                            <div className="text-xs text-muted-foreground">
+                              UUID: {invoice.cfdiUuid.slice(0, 8)}...
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{invoice.customer.name}</div>
+                          <div className="text-xs text-muted-foreground">{invoice.customer.rfc}</div>
+                        </TableCell>
+                        <TableCell>
                           <div className="text-sm">
-                            {format(new Date(invoice.dueDate), "PP", { locale: es })}
+                            {format(new Date(invoice.issuedAt), "PP", { locale: es })}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No definida</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="font-medium">
-                          {formatCurrency(invoice.total)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {isOverdue(invoice) ? (
-                          <Badge variant="destructive" data-testid={`status-overdue-${invoice.id}`}>Vencida</Badge>
-                        ) : (
-                          <Badge className="bg-green-100 text-green-800" data-testid={`status-active-${invoice.id}`}>Vigente</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleViewDetails(invoice)}
-                            disabled={isLoadingDetails}
-                            title="Ver detalles"
-                            data-testid={`button-view-invoice-${invoice.id}`}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                data-testid={`button-menu-invoice-${invoice.id}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem 
-                                onClick={() => handleDownloadPDF(invoice)}
-                                data-testid={`menu-pdf-invoice-${invoice.id}`}
-                              >
-                                {isDownloading === invoice.id ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Download className="h-4 w-4 mr-2" />
-                                )}
-                                Descargar PDF
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => openSendEmailDialog(invoice)}
-                                data-testid={`menu-email-invoice-${invoice.id}`}
-                              >
-                                <Mail className="h-4 w-4 mr-2" />
-                                Enviar por correo
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          {invoice.dueDate ? (
+                            <div className={`text-sm ${isOverdue(invoice) ? "text-red-600 font-medium" : ""}`}>
+                              {format(new Date(invoice.dueDate), "PP", { locale: es })}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No definida</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="font-medium">
+                            {formatCurrency(invoice.total)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className={`text-sm font-medium ${parseFloat(invoice.balanceDue || invoice.total) > 0 && invoice.status !== InvoiceStatus.PAID ? "text-orange-600" : "text-green-600"}`}>
+                            {formatCurrency(invoice.balanceDue || invoice.total)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={statusInfo.className} data-testid={`status-invoice-${invoice.id}`}>
+                            {statusInfo.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleViewDetails(invoice)}
+                              disabled={isLoadingDetails}
+                              title="Ver detalles"
+                              data-testid={`button-view-invoice-${invoice.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  data-testid={`button-menu-invoice-${invoice.id}`}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => handleDownloadPDF(invoice)}
+                                  data-testid={`menu-pdf-invoice-${invoice.id}`}
+                                >
+                                  {isDownloading === invoice.id ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Download className="h-4 w-4 mr-2" />
+                                  )}
+                                  Descargar PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => openSendEmailDialog(invoice)}
+                                  data-testid={`menu-email-invoice-${invoice.id}`}
+                                >
+                                  <Mail className="h-4 w-4 mr-2" />
+                                  Enviar por correo
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
           ) : (
             <div className="text-center py-12">
               <FileSpreadsheet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay facturas emitidas</p>
+              <p className="text-muted-foreground">
+                {hasActiveFilters ? "No hay facturas con los filtros aplicados" : "No hay facturas emitidas"}
+              </p>
+              {hasActiveFilters && (
+                <Button variant="outline" className="mt-4" onClick={clearFilters}>
+                  Limpiar filtros
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -366,7 +523,6 @@ export default function InvoicesPage() {
           {selectedInvoice && (
             <ScrollArea className="max-h-[60vh] pr-4">
               <div className="space-y-6">
-                {/* Header Info */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Cliente</h4>
@@ -380,11 +536,11 @@ export default function InvoicesPage() {
                   </div>
                   <div className="text-right">
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Estado</h4>
-                    {isOverdue(selectedInvoice) ? (
-                      <Badge variant="destructive">Vencida</Badge>
-                    ) : (
-                      <Badge className="bg-green-100 text-green-800">Vigente</Badge>
-                    )}
+                    {(() => {
+                      const statusKey = getStatusKey(selectedInvoice);
+                      const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS[InvoiceStatus.PENDING_PAYMENT];
+                      return <Badge className={statusInfo.className}>{statusInfo.label}</Badge>;
+                    })()}
                     <p className="text-sm text-muted-foreground mt-1">
                       Emitida: {format(new Date(selectedInvoice.issuedAt), "PPP", { locale: es })}
                     </p>
@@ -398,7 +554,6 @@ export default function InvoicesPage() {
 
                 <Separator />
 
-                {/* CFDI Info */}
                 {selectedInvoice.cfdiUuid && (
                   <>
                     <div>
@@ -409,7 +564,6 @@ export default function InvoicesPage() {
                   </>
                 )}
 
-                {/* Payment Info */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Método de Pago</h4>
@@ -423,7 +577,6 @@ export default function InvoicesPage() {
 
                 <Separator />
 
-                {/* Totals */}
                 <div className="flex justify-end">
                   <div className="w-64 space-y-2">
                     <div className="flex justify-between text-sm">
@@ -439,10 +592,15 @@ export default function InvoicesPage() {
                       <span>Total:</span>
                       <span>{formatCurrency(selectedInvoice.total)}</span>
                     </div>
+                    {selectedInvoice.balanceDue !== null && selectedInvoice.balanceDue !== undefined && (
+                      <div className="flex justify-between text-sm font-medium text-orange-600">
+                        <span>Saldo pendiente:</span>
+                        <span>{formatCurrency(selectedInvoice.balanceDue)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Notes */}
                 {selectedInvoice.notes && (
                   <>
                     <Separator />
@@ -460,7 +618,7 @@ export default function InvoicesPage() {
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
               Cerrar
             </Button>
-            <Button 
+            <Button
               onClick={() => selectedInvoice && handleDownloadPDF(selectedInvoice)}
               disabled={isDownloading === selectedInvoice?.id}
             >
@@ -500,8 +658,8 @@ export default function InvoicesPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleSendEmail} 
+            <AlertDialogAction
+              onClick={handleSendEmail}
               disabled={isSending || !selectedInvoice?.customer.email}
             >
               {isSending ? (
