@@ -58,7 +58,7 @@ import {
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService, runScheduledSync } from "./microsip-sync";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt, gt, isNull, or } from "drizzle-orm";
+import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or } from "drizzle-orm";
 import type { Request } from "express";
 
 // Helper to get effective tenantId for data filtering
@@ -3093,8 +3093,13 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
       
       // Fetch payments with customer and invoice relations
+      // Only show payments that have a linked invoice and amount > 0
       const allPayments = await db.query.payments.findMany({
-        where: eq(payments.tenantId, tenantId),
+        where: and(
+          eq(payments.tenantId, tenantId),
+          isNotNull(payments.invoiceId),
+          gt(payments.amount, "0")
+        ),
         with: {
           customer: true,
           invoice: true,
