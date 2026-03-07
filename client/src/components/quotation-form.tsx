@@ -951,8 +951,8 @@ export function QuotationForm({
                                   type="number"
                                   min="0"
                                   max="100"
-                                  step="1"
-                                  value={Math.round(parseFloat(item.discountPercent) || 0)}
+                                  step="0.01"
+                                  value={item.discountPercent}
                                   onChange={(e) => {
                                     updateLineItem(index, { discountPercent: e.target.value }, 'discountPercent');
                                   }}
@@ -964,8 +964,8 @@ export function QuotationForm({
                                 <Input
                                   type="number"
                                   min="0"
-                                  step="1"
-                                  value={Math.round(parseFloat(item.unitPrice) || 0)}
+                                  step="0.01"
+                                  value={item.unitPrice}
                                   onChange={(e) => {
                                     updateLineItem(index, { unitPrice: e.target.value }, 'unitPrice');
                                   }}
