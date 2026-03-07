@@ -2,7 +2,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertQuotationSchema, InsertQuotation, QuotationStatus, Product, ProductCategory, InsertQuotationItem } from "@shared/schema";
 import { z } from "zod";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Form,
   FormControl,
@@ -171,6 +171,7 @@ export function QuotationForm({
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [initialized, setInitialized] = useState(false);
+  const saveAsDraftRef = useRef(false);
 
   const { data: products } = useEntityQuery<ProductWithCategory[]>(
     searchQuery ? `/api/products?q=${encodeURIComponent(searchQuery)}` : "/api/products"
@@ -489,7 +490,7 @@ export function QuotationForm({
     const quotationData: InsertQuotation & { items: InsertQuotationItem[] } = {
       customerId: data.customerId,
       userId: userId || "",
-      status: requiresAnyApproval ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
+      status: (!saveAsDraftRef.current && requiresAnyApproval) ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
       currency: data.currency,
       paymentTerms: data.paymentTerms || null,
       deliveryTime: data.deliveryTime || null,
@@ -501,8 +502,8 @@ export function QuotationForm({
       totalSavings: totals.totalSavings,
       notes: data.notes || null,
       conditions: data.conditions || null,
-      requiresApproval: requiresAnyApproval,
-      approvalReason,
+      requiresApproval: !saveAsDraftRef.current && requiresAnyApproval,
+      approvalReason: saveAsDraftRef.current ? null : approvalReason,
       shippingHandledByJoper: data.shippingHandledByJoper,
       shippingMethod: data.shippingMethod,
       requiresPallet: data.requiresPallet,
@@ -514,6 +515,7 @@ export function QuotationForm({
     };
 
     onSubmit(quotationData);
+    saveAsDraftRef.current = false;
   };
 
   const handleCancel = () => {
@@ -1193,14 +1195,38 @@ export function QuotationForm({
                 >
                   Cancelar
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
+                  variant="outline"
                   disabled={isPending || lineItems.filter(i => i.productName).length === 0}
-                  data-testid="button-submit"
+                  onClick={() => { saveAsDraftRef.current = true; }}
+                  data-testid="button-save-draft"
                 >
-                  {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) ? "Enviar a Autorización" : "Guardar Cotización"}
+                  {isPending && saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar Borrador
                 </Button>
+                {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) && (
+                  <Button
+                    type="submit"
+                    disabled={isPending || lineItems.filter(i => i.productName).length === 0}
+                    onClick={() => { saveAsDraftRef.current = false; }}
+                    data-testid="button-submit"
+                  >
+                    {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Enviar a Autorización
+                  </Button>
+                )}
+                {!hasExceedingDiscounts && !form.watch("shippingHandledByJoper") && (
+                  <Button
+                    type="submit"
+                    disabled={isPending || lineItems.filter(i => i.productName).length === 0}
+                    onClick={() => { saveAsDraftRef.current = false; }}
+                    data-testid="button-submit"
+                  >
+                    {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Guardar Cotización
+                  </Button>
+                )}
               </div>
             </div>
           </form>
