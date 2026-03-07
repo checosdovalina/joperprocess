@@ -938,7 +938,10 @@ export function QuotationForm({
                                   inputMode="decimal"
                                   value={item.quantity}
                                   onChange={(e) => {
-                                    updateLineItem(index, { quantity: normalizeDecimal(e.target.value) }, 'discountPercent');
+                                    updateLineItem(index, { quantity: normalizeDecimal(e.target.value) });
+                                  }}
+                                  onBlur={() => {
+                                    updateLineItem(index, {}, 'discountPercent');
                                   }}
                                   className="w-20 text-center"
                                   data-testid={`input-quantity-${index}`}
@@ -953,7 +956,10 @@ export function QuotationForm({
                                   inputMode="decimal"
                                   value={item.discountPercent}
                                   onChange={(e) => {
-                                    updateLineItem(index, { discountPercent: normalizeDecimal(e.target.value) }, 'discountPercent');
+                                    updateLineItem(index, { discountPercent: normalizeDecimal(e.target.value) });
+                                  }}
+                                  onBlur={() => {
+                                    updateLineItem(index, {}, 'discountPercent');
                                   }}
                                   className={`w-16 text-center ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
                                   data-testid={`input-discount-${index}`}
@@ -965,7 +971,10 @@ export function QuotationForm({
                                   inputMode="decimal"
                                   value={item.unitPrice}
                                   onChange={(e) => {
-                                    updateLineItem(index, { unitPrice: normalizeDecimal(e.target.value) }, 'unitPrice');
+                                    updateLineItem(index, { unitPrice: normalizeDecimal(e.target.value) });
+                                  }}
+                                  onBlur={() => {
+                                    updateLineItem(index, {}, 'unitPrice');
                                   }}
                                   className="w-24 text-right font-mono"
                                   data-testid={`input-unit-price-${index}`}
