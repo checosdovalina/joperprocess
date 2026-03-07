@@ -151,7 +151,11 @@ export default function PaymentsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm">
-                          {payment.invoice ? `${payment.invoice.serie}-${payment.invoice.folio}` : "Sin factura"}
+                          {payment.invoice
+                            ? `${payment.invoice.serie}-${payment.invoice.folio}`
+                            : payment.notes
+                              ? payment.notes
+                              : "Sin factura"}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

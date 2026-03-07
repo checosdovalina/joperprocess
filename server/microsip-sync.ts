@@ -78,9 +78,10 @@ interface MicrosipPayment {
   CLIENTE_ID: number;
   FECHA: Date;
   IMPORTE: number;
-  REFERENCIA: string;
-  DESCRIPCION: string;
-  DOCTO_VE_ID: number;
+  FOLIO_PAGO: string;
+  DOCTO_CC_FACTURA_ID: number;
+  DOCTO_VE_ID: number | null;
+  FOLIO_FACTURA: string | null;
 }
 
 class MicrosipSyncService {
@@ -836,20 +837,24 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Query payments with invoice relationship
-      // P = Payment (Recibo), I = IMPORTES_DOCTOS_CC links payment to invoice
-      // C = Cargo (invoice in DOCTOS_CC from sales)
+      // P = Recibo (pago), I = IMPORTES_DOCTOS_CC (liga pago con cargo CXC)
+      // C = Cargo en CXC (DOCTOS_CC), DES = DOCTOS_ENTRE_SIS (liga CXC con ventas)
+      // DV = Factura de ventas (DOCTOS_VE) con el folio real
       const microsipPayments = await this.query<MicrosipPayment>(fbDb, `
         SELECT 
-          P.DOCTO_CC_ID AS DOCTO_CO_ID, 
-          P.CLIENTE_ID, 
-          P.FECHA, 
+          P.DOCTO_CC_ID AS DOCTO_CO_ID,
+          P.CLIENTE_ID,
+          P.FECHA,
           P.FOLIO AS FOLIO_PAGO,
           I.IMPORTE,
           C.DOCTO_CC_ID AS DOCTO_CC_FACTURA_ID,
-          C.FOLIO AS FOLIO_FACTURA
+          DES.DOCTO_ORIG_ID AS DOCTO_VE_ID,
+          DV.FOLIO AS FOLIO_FACTURA
         FROM DOCTOS_CC P
         JOIN IMPORTES_DOCTOS_CC I ON P.DOCTO_CC_ID = I.DOCTO_CC_ID
         JOIN DOCTOS_CC C ON I.DOCTO_CC_ACR_ID = C.DOCTO_CC_ID
+        LEFT JOIN DOCTOS_ENTRE_SIS DES ON DES.DOCTO_DEST_ID = C.DOCTO_CC_ID
+        LEFT JOIN DOCTOS_VE DV ON DV.DOCTO_VE_ID = DES.DOCTO_ORIG_ID
         WHERE P.NATURALEZA_CONCEPTO = 'R'
           AND P.CANCELADO = 'N'
           AND P.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
@@ -901,9 +906,10 @@ class MicrosipSyncService {
               eq(payments.microsipDoctoCoId, msPayment.DOCTO_CO_ID)
             ));
 
-          // Link payment to invoice using DOCTO_CC_FACTURA_ID
-          const invoiceId = (msPayment as any).DOCTO_CC_FACTURA_ID 
-            ? invoiceMap.get((msPayment as any).DOCTO_CC_FACTURA_ID) || null
+          // Link payment to invoice using DOCTO_VE_ID (from DOCTOS_ENTRE_SIS → DOCTOS_VE)
+          // invoiceMap is keyed by microsipDoctoId which is DOCTO_VE_ID
+          const invoiceId = msPayment.DOCTO_VE_ID
+            ? invoiceMap.get(msPayment.DOCTO_VE_ID) || null
             : null;
 
           const paymentData = {
@@ -911,8 +917,8 @@ class MicrosipSyncService {
             invoiceId,
             amount: String(msPayment.IMPORTE || 0),
             paymentDate: msPayment.FECHA || new Date(),
-            reference: (msPayment as any).FOLIO_PAGO || null,
-            notes: (msPayment as any).FOLIO_FACTURA ? `Factura: ${(msPayment as any).FOLIO_FACTURA}` : null,
+            reference: msPayment.FOLIO_PAGO || null,
+            notes: msPayment.FOLIO_FACTURA ? `Factura: ${msPayment.FOLIO_FACTURA.trim()}` : null,
             microsipDoctoCoId: msPayment.DOCTO_CO_ID,
             microsipSyncedAt: new Date(),
           };
