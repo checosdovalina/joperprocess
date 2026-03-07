@@ -3093,11 +3093,10 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
       
       // Fetch payments with customer and invoice relations
-      // Only show payments that have a linked invoice and amount > 0
+      // Only show payments with amount > 0
       const allPayments = await db.query.payments.findMany({
         where: and(
           eq(payments.tenantId, tenantId),
-          isNotNull(payments.invoiceId),
           gt(payments.amount, "0")
         ),
         with: {
