@@ -1196,6 +1196,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderBy: (products, { desc, asc }) => [desc(products.listPrice), asc(products.name)],
       });
       
+      // Filter out products whose category is inactive
+      productsData = productsData.filter(p => !p.categoryId || p.category?.active !== false);
+
       // Filter by search query if provided
       if (q && typeof q === 'string') {
         const searchLower = q.toLowerCase();
