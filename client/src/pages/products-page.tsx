@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Package, Search, Pencil, FolderOpen, Loader2, Filter, X } from "lucide-react";
+import { Plus, Package, Search, Pencil, FolderOpen, Loader2, Filter, X, ToggleLeft, ToggleRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
+import { queryClient } from "@/lib/queryClient";
 import { ProductForm } from "@/components/product-form";
 import { useAuth } from "@/hooks/use-auth";
 import { UserRole } from "@shared/schema";
@@ -146,6 +147,24 @@ export default function ProductsPage() {
       setEditingCategory(null);
     },
   });
+
+  const [togglingCategoryId, setTogglingCategoryId] = useState<string | null>(null);
+
+  const handleToggleCategory = async (category: ProductCategory) => {
+    setTogglingCategoryId(category.id);
+    try {
+      await fetch(`/api/product-categories/${category.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ active: !category.active }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/product-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    } finally {
+      setTogglingCategoryId(null);
+    }
+  };
 
   const handleEdit = (product: ProductWithCategory) => {
     setEditingProduct(product);
@@ -431,6 +450,7 @@ export default function ProductsPage() {
                       <TableRow>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Descripción</TableHead>
+                        <TableHead>Estado</TableHead>
                         {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -438,23 +458,48 @@ export default function ProductsPage() {
                       {categories.map((category) => (
                         <TableRow key={category.id} className="hover-elevate" data-testid={`row-category-${category.id}`}>
                           <TableCell>
-                            <div className="font-medium">{category.name}</div>
+                            <div className={`font-medium ${!category.active ? "text-muted-foreground" : ""}`}>
+                              {category.name}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <span className="text-muted-foreground">
                               {category.description || "-"}
                             </span>
                           </TableCell>
+                          <TableCell>
+                            <Badge variant={category.active ? "default" : "secondary"} data-testid={`status-category-${category.id}`}>
+                              {category.active ? "Activa" : "Inactiva"}
+                            </Badge>
+                          </TableCell>
                           {isAdmin && (
                             <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditCategory(category)}
-                                data-testid={`button-edit-category-${category.id}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleToggleCategory(category)}
+                                  disabled={togglingCategoryId === category.id}
+                                  title={category.active ? "Desactivar categoría" : "Activar categoría"}
+                                  data-testid={`button-toggle-category-${category.id}`}
+                                >
+                                  {togglingCategoryId === category.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : category.active ? (
+                                    <ToggleRight className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <ToggleLeft className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditCategory(category)}
+                                  data-testid={`button-edit-category-${category.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>
