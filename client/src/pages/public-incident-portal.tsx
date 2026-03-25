@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -158,6 +158,7 @@ export default function PublicIncidentPortal() {
   const { toast } = useToast();
   const [newComment, setNewComment] = useState("");
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
 
   const { data: incident, isLoading, error, refetch } = useQuery<PublicIncident>({
     queryKey: ["/api/public/incidents", token],
@@ -169,8 +170,13 @@ export default function PublicIncidentPortal() {
       }
       return response.json();
     },
+    refetchInterval: 10000,
     enabled: !!token,
   });
+
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [incident?.comments?.length]);
 
   const addCommentMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -392,9 +398,10 @@ export default function PublicIncidentPortal() {
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
               Conversación
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Actualización automática activa" />
             </CardTitle>
             <CardDescription>
-              Historial de comunicación sobre tu incidente
+              Historial de comunicación sobre tu incidente — se actualiza automáticamente
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -429,6 +436,7 @@ export default function PublicIncidentPortal() {
                       <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
                     </div>
                   ))}
+                  <div ref={commentsEndRef} />
                 </div>
               )}
             </ScrollArea>

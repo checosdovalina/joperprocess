@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import {
@@ -230,15 +230,21 @@ export default function IncidentDetailPage() {
   const [newComment, setNewComment] = useState("");
   const [commentVisibility, setCommentVisibility] = useState<string>(CommentVisibility.INTERNAL);
   const [resolution, setResolution] = useState("");
+  const commentsEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: incident, isLoading } = useQuery<IncidentWithDetails>({
+  const { data: incident, isLoading, dataUpdatedAt } = useQuery<IncidentWithDetails>({
     queryKey: ["/api/incidents", id],
     enabled: !!id,
+    refetchInterval: 10000,
   });
 
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [incident?.comments?.length]);
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<Incident>) => {
@@ -476,6 +482,7 @@ export default function IncidentDetailPage() {
                   <TabsTrigger value="comments" className="gap-1" data-testid="tab-comments">
                     <MessageSquare className="h-4 w-4" />
                     Comentarios ({incident.comments?.length || 0})
+                    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse ml-1" title="Actualización automática activa" />
                   </TabsTrigger>
                   <TabsTrigger value="activity" className="gap-1" data-testid="tab-activity">
                     <Activity className="h-4 w-4" />
@@ -523,6 +530,7 @@ export default function IncidentDetailPage() {
                             <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
                           </div>
                         ))}
+                        <div ref={commentsEndRef} />
                       </div>
                     )}
                   </ScrollArea>

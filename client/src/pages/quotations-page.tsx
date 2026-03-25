@@ -71,8 +71,9 @@ export default function QuotationsPage() {
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
 
-  const { data: quotations, isLoading } = useEntityQuery<QuotationWithDetails[]>(
-    "/api/quotations"
+  const { data: quotations, isLoading, dataUpdatedAt } = useEntityQuery<QuotationWithDetails[]>(
+    "/api/quotations",
+    { refetchInterval: 20000 }
   );
 
   const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
@@ -393,7 +394,10 @@ export default function QuotationsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Todas las Cotizaciones</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Todas las Cotizaciones
+            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Actualización automática cada 20 segundos" />
+          </CardTitle>
           <CardDescription>
             {quotations?.length || 0} cotizaciones registradas
           </CardDescription>
