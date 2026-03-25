@@ -27,7 +27,16 @@ interface InvoicePDFData {
 async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
   if (!logoUrl) return null;
   try {
+    if (logoUrl.startsWith("/api/logos/")) {
+      const filename = logoUrl.replace("/api/logos/", "");
+      return await localStorageService.getFile(`logos/${filename}`);
+    }
     if (logoUrl.startsWith("logos/")) return await localStorageService.getFile(logoUrl);
+    if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) {
+      const resp = await fetch(logoUrl);
+      if (!resp.ok) return null;
+      return Buffer.from(await resp.arrayBuffer());
+    }
     return null;
   } catch { return null; }
 }

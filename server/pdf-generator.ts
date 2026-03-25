@@ -38,6 +38,7 @@ const RETRY_DELAY_MS = 500;
 
 function useLocalStorage(): boolean {
   return process.env.USE_LOCAL_STORAGE === "true" ||
+    process.env.NODE_ENV !== "production" ||
     (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
 }
 
@@ -92,8 +93,19 @@ async function downloadAndResizePhoto(
 async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
   if (!logoUrl) return null;
   try {
+    // /api/logos/filename → logos/filename in local storage
+    if (logoUrl.startsWith("/api/logos/")) {
+      const filename = logoUrl.replace("/api/logos/", "");
+      return await localStorageService.getFile(`logos/${filename}`);
+    }
     if (logoUrl.startsWith("logos/")) {
       return await localStorageService.getFile(logoUrl);
+    }
+    // External URL (https://...) — fetch over HTTP
+    if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) {
+      const resp = await fetch(logoUrl);
+      if (!resp.ok) return null;
+      return Buffer.from(await resp.arrayBuffer());
     }
     return null;
   } catch {
@@ -162,24 +174,32 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       const TEXT_X = PAGE_W / 2;
       const TEXT_W = PAGE_W - TEXT_X - MARGIN;
 
-      doc.fontSize(13).font("Helvetica-Bold").fillColor("#ffffff");
-      doc.text(companyName.toUpperCase(), TEXT_X, 14, { width: TEXT_W, align: "right", lineBreak: false });
+      doc.fontSize(12).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text(companyName.toUpperCase(), TEXT_X, 12, { width: TEXT_W, align: "right", lineBreak: false });
 
+      // Build info lines — split address into street and city/state for readability
       const infoLines: string[] = [];
       if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-      const cityState = [tenant?.city, tenant?.state].filter(Boolean).join(", ");
-      const addrLine = [tenant?.address, cityState, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : ""].filter(Boolean).join("  •  ");
-      if (addrLine) infoLines.push(addrLine);
+      if (tenant?.address) infoLines.push(tenant.address);
+      const cityStateParts = [
+        tenant?.city,
+        tenant?.state,
+        tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null,
+      ].filter(Boolean);
+      if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
       const contactParts = [
         tenant?.phone ? `Tel: ${tenant.phone}` : "",
         tenant?.email || "",
       ].filter(Boolean);
-      if (contactParts.length) infoLines.push(contactParts.join("   |   "));
+      if (contactParts.length) infoLines.push(contactParts.join("  |  "));
       if (tenant?.website) infoLines.push(tenant.website);
 
-      doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
+      // Start Y: leave 4px below company name (which is at 12, ~14pt ≈ 19px → ends ~31)
+      const LINE_H = 10.5;
+      const START_Y = 33;
+      doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
       infoLines.forEach((line, i) => {
-        doc.text(line, TEXT_X, 32 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
+        doc.text(line, TEXT_X, START_Y + i * LINE_H, { width: TEXT_W, align: "right", lineBreak: false });
       });
 
       // ═══════════════════════════════════════════════
