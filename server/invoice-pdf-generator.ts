@@ -79,36 +79,36 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     // ═══════════════════════════════════════════════
     // HEADER BAND
     // ═══════════════════════════════════════════════
-    const HEADER_H = 90;
+    const HEADER_H = 100;
     doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
 
-    let logoRightEdge = MARGIN;
+    // Logo: always on the LEFT side
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, MARGIN, (HEADER_H - 65) / 2, { fit: [140, 65] as [number, number] });
-        logoRightEdge = MARGIN + 140 + 12;
-      } catch { /* fallback */ }
+        doc.image(logoBuffer, MARGIN, (HEADER_H - 68) / 2, { fit: [110, 68] as [number, number] });
+      } catch { /* ignore */ }
     }
 
-    const nameX = logoBuffer ? logoRightEdge : MARGIN;
-    const nameW = PAGE_W - nameX - MARGIN;
-    doc.fontSize(14).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text(companyName.toUpperCase(), nameX, 16, { width: nameW, align: logoBuffer ? "left" : "right" });
+    // Text block: always on the RIGHT side, right-aligned, no wrapping
+    const TEXT_X = PAGE_W / 2;
+    const TEXT_W = PAGE_W - TEXT_X - MARGIN;
+
+    doc.fontSize(13).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text(companyName.toUpperCase(), TEXT_X, 14, { width: TEXT_W, align: "right", lineBreak: false });
 
     const infoLines: string[] = [];
     if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-    const addrParts = [tenant?.address, [tenant?.city, tenant?.state].filter(Boolean).join(", "), tenant?.zipCode ? `C.P. ${tenant.zipCode}` : ""].filter(Boolean);
-    if (addrParts.length) infoLines.push(addrParts.join(" | "));
+    const cityState = [tenant?.city, tenant?.state].filter(Boolean).join(", ");
+    const addrLine = [tenant?.address, cityState, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : ""].filter(Boolean).join("  •  ");
+    if (addrLine) infoLines.push(addrLine);
     const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
-    if (contactParts.length) infoLines.push(contactParts.join("  |  "));
+    if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
 
-    doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.88)");
-    let infoY = 36;
-    for (const line of infoLines) {
-      doc.text(line, nameX, infoY, { width: nameW, align: logoBuffer ? "left" : "right" });
-      infoY += 10;
-    }
+    doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
+    infoLines.forEach((line, i) => {
+      doc.text(line, TEXT_X, 32 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
+    });
 
     // ═══════════════════════════════════════════════
     // TITLE BAND

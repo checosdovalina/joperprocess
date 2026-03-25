@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType } from "@shared/schema";
 import { Link } from "wouter";
@@ -80,6 +81,7 @@ export default function CheckinDetailPage() {
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [checkoutNotes, setCheckoutNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
+  const [additionalEmail, setAdditionalEmail] = useState("");
 
   const { data: checkin, isLoading: checkinLoading } = useQuery<Checkin & { customer: Customer }>({
     queryKey: [`/api/checkins/${id}`],
@@ -93,15 +95,22 @@ export default function CheckinDetailPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
+      // Parse multiple emails from the additionalEmail field (comma or semicolon separated)
+      const extraEmails = additionalEmail
+        .split(/[,;]/)
+        .map((e) => e.trim())
+        .filter((e) => e.includes("@"));
       return await apiRequest("POST", `/api/checkins/${id}/checkout`, {
         checkoutNotes: checkoutNotes || undefined,
         internalNotes: internalNotes || undefined,
+        additionalEmails: extraEmails.length > 0 ? extraEmails : undefined,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
       setCheckoutDialogOpen(false);
+      setAdditionalEmail("");
       toast({
         title: "Visita finalizada",
         description: "La minuta PDF se ha generado correctamente",
@@ -548,9 +557,28 @@ export default function CheckinDetailPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Leyenda de advertencia en rojo */}
+            {/* Leyenda de advertencia */}
             <div className="bg-red-600 text-white p-3 rounded-md text-sm font-medium">
               Esta información se enviará al cliente, directivos y personas agregadas en administración.
+            </div>
+
+            {/* Correo adicional */}
+            <div className="space-y-2">
+              <Label htmlFor="additional-email" className="flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                Enviar minuta también a (opcional)
+              </Label>
+              <Input
+                id="additional-email"
+                data-testid="input-additional-email"
+                type="email"
+                placeholder="otro@correo.com  (puedes separar varios con coma)"
+                value={additionalEmail}
+                onChange={(e) => setAdditionalEmail(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Además del cliente y administradores, la minuta también se enviará a este correo.
+              </p>
             </div>
             
             <div className="space-y-2">

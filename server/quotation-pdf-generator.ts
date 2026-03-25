@@ -111,46 +111,41 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     // HEADER BAND — full width colored bar
     // ═══════════════════════════════════════════════
-    const HEADER_H = 90;
+    const HEADER_H = 100;
     doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
 
-    // Logo (left side, vertically centered in header)
-    let logoRightEdge = MARGIN;
+    // Logo: always on the LEFT side
     if (logoBuffer) {
       try {
-        const logoMaxW = 140;
-        const logoMaxH = 65;
-        doc.image(logoBuffer, MARGIN, (HEADER_H - logoMaxH) / 2, {
-          fit: [logoMaxW, logoMaxH] as [number, number],
+        doc.image(logoBuffer, MARGIN, (HEADER_H - 68) / 2, {
+          fit: [110, 68] as [number, number],
         });
-        logoRightEdge = MARGIN + logoMaxW + 12;
-      } catch {
-        // fallback — just use company name
-      }
+      } catch { /* ignore logo errors */ }
     }
 
-    // Company name (right side of logo, or left if no logo)
-    const nameX = logoBuffer ? logoRightEdge : MARGIN;
-    const nameW = PAGE_W - nameX - MARGIN;
+    // Text block: always on the RIGHT side, right-aligned
+    const TEXT_X = PAGE_W / 2;
+    const TEXT_W = PAGE_W - TEXT_X - MARGIN;
 
-    doc.fontSize(14).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text(companyName.toUpperCase(), nameX, 16, { width: nameW, align: logoBuffer ? "left" : "right" });
+    // Company name — single line, never wraps
+    doc.fontSize(13).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text(companyName.toUpperCase(), TEXT_X, 14, { width: TEXT_W, align: "right", lineBreak: false });
 
-    // Company contact info (right side of header)
+    // Company info lines — each on its own fixed Y, never wraps
     const infoLines: string[] = [];
     if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-    const addrParts = [tenant?.address, [tenant?.city, tenant?.state].filter(Boolean).join(", "), tenant?.zipCode ? `C.P. ${tenant.zipCode}` : ""].filter(Boolean);
-    if (addrParts.length) infoLines.push(addrParts.join(" | "));
+    const cityState = [tenant?.city, tenant?.state].filter(Boolean).join(", ");
+    const zipPart  = tenant?.zipCode ? `C.P. ${tenant.zipCode}` : "";
+    const addrLine = [tenant?.address, cityState, zipPart].filter(Boolean).join("  •  ");
+    if (addrLine) infoLines.push(addrLine);
     const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
-    if (contactParts.length) infoLines.push(contactParts.join("  |  "));
+    if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
 
-    doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.88)");
-    let infoY = 36;
-    for (const line of infoLines) {
-      doc.text(line, nameX, infoY, { width: nameW, align: logoBuffer ? "left" : "right" });
-      infoY += 10;
-    }
+    doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
+    infoLines.forEach((line, i) => {
+      doc.text(line, TEXT_X, 32 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
+    });
 
     // ═══════════════════════════════════════════════
     // DOCUMENT TITLE BAND

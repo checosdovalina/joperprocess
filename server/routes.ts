@@ -3529,12 +3529,13 @@ Proporciona tu análisis en el siguiente formato JSON:
     const userId = req.user!.id;
 
     try {
-      // Parse optional checkoutNotes and internalNotes from body
+      // Parse optional checkoutNotes, internalNotes, and additionalEmails from body
       const schema = z.object({
         checkoutNotes: z.string().optional(),
         internalNotes: z.string().optional(),
+        additionalEmails: z.array(z.string().email()).optional(),
       });
-      const { checkoutNotes, internalNotes } = schema.parse(req.body);
+      const { checkoutNotes, internalNotes, additionalEmails = [] } = schema.parse(req.body);
 
       const scopedStorage = createTenantScopedStorage(req);
       const checkin = await scopedStorage.getCheckin(checkinId);
@@ -3626,6 +3627,13 @@ Proporciona tu análisis en el siguiente formato JSON:
             recipients.push(admin.email);
           }
         });
+
+        // Add any manually specified additional emails
+        for (const email of additionalEmails) {
+          if (!recipients.includes(email)) {
+            recipients.push(email);
+          }
+        }
         
         if (recipients.length > 0) {
           await sendCheckoutEmail({
