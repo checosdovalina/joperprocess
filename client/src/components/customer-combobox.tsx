@@ -42,17 +42,22 @@ export function CustomerCombobox({
     [customers, value]
   );
 
+  const normalize = (str: string) =>
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const filteredCustomers = useMemo(() => {
     if (!search) return customers.slice(0, 50);
-    const query = search.toLowerCase();
+    const query = normalize(search);
     return customers
       .filter(
         (c) =>
-          c.name?.toLowerCase().includes(query) ||
-          c.rfc?.toLowerCase().includes(query) ||
-          c.email?.toLowerCase().includes(query) ||
-          c.phone?.toLowerCase().includes(query) ||
-          c.city?.toLowerCase().includes(query)
+          normalize(c.name || "").includes(query) ||
+          normalize(c.rfc || "").includes(query) ||
+          normalize(c.email || "").includes(query) ||
+          normalize(c.phone || "").includes(query) ||
+          normalize(c.city || "").includes(query) ||
+          normalize(c.microsipCode || "").includes(query) ||
+          normalize(c.address || "").includes(query)
       )
       .slice(0, 50);
   }, [customers, search]);
@@ -80,7 +85,7 @@ export function CustomerCombobox({
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <input
               className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Buscar por nombre, RFC, email, teléfono..."
+              placeholder="Buscar por nombre, RFC, clave, teléfono, ciudad..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid={`${testId}-search`}

@@ -54,19 +54,25 @@ export default function CustomersPage() {
   }, [customers]);
 
   // Filter customers
+  const normalize = (str: string) =>
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const filteredCustomers = useMemo(() => {
     if (!customers) return [];
     
     return customers.filter(customer => {
-      // Search filter (name, RFC, email, phone)
+      // Search filter (name, RFC, email, phone, code, address)
       if (searchQuery) {
-        const query = searchQuery.toLowerCase();
+        const query = normalize(searchQuery);
         const matchesSearch = 
-          customer.name?.toLowerCase().includes(query) ||
-          customer.rfc?.toLowerCase().includes(query) ||
-          customer.email?.toLowerCase().includes(query) ||
-          customer.phone?.toLowerCase().includes(query) ||
-          customer.contactName?.toLowerCase().includes(query);
+          normalize(customer.name || "").includes(query) ||
+          normalize(customer.rfc || "").includes(query) ||
+          normalize(customer.email || "").includes(query) ||
+          normalize(customer.phone || "").includes(query) ||
+          normalize(customer.contactName || "").includes(query) ||
+          normalize(customer.microsipCode || "").includes(query) ||
+          normalize(customer.city || "").includes(query) ||
+          normalize(customer.address || "").includes(query);
         if (!matchesSearch) return false;
       }
       
@@ -212,7 +218,7 @@ export default function CustomersPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre, RFC, email, teléfono..."
+                placeholder="Buscar por nombre, RFC, clave, teléfono, ciudad..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
