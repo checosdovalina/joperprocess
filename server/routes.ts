@@ -1557,9 +1557,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(quotationItems.quotationId, id),
       });
 
-      // Generate approval token for customer workflow
+      // Preserve existing approval token so previously sent links remain valid.
+      // Only generate a new token if the quotation doesn't have one yet.
       const crypto = await import("crypto");
-      const approvalToken = crypto.randomBytes(32).toString("hex");
+      const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
 
       // Get tenant branding for PDF
       const tenant = quotation.tenantId 
