@@ -235,10 +235,13 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
         customerRows.push(["Dirección:", addr]);
       }
 
-      doc.fontSize(8).fillColor("#333");
+      const LABEL_W = 64;
+      const VALUE_X_L = MARGIN + 6 + LABEL_W;
+      const VALUE_W_L = COL_W - LABEL_W - 10;
+      doc.fontSize(8);
       for (const [label, value] of customerRows) {
-        doc.font("Helvetica-Bold").fillColor("#555").text(label, MARGIN + 6, leftY, { continued: true, width: 60 });
-        doc.font("Helvetica").fillColor("#222").text(value, { width: COL_W - 70 });
+        doc.font("Helvetica-Bold").fillColor("#555555").text(label, MARGIN + 6, leftY, { width: LABEL_W, lineBreak: false });
+        doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_L, leftY, { width: VALUE_W_L, lineBreak: false });
         leftY += 12;
       }
 
@@ -253,9 +256,11 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
         visitRows.push(["Ubicación:", `${Number(checkin.latitude).toFixed(4)}, ${Number(checkin.longitude).toFixed(4)}`]);
       }
 
+      const VALUE_X_R = COL2_X + 6 + LABEL_W;
+      const VALUE_W_R = COL_W - LABEL_W - 10;
       for (const [label, value] of visitRows) {
-        doc.font("Helvetica-Bold").fillColor("#555").text(label, COL2_X + 6, rightY, { continued: true, width: 65 });
-        doc.font("Helvetica").fillColor("#222").text(value, { width: COL_W - 75 });
+        doc.font("Helvetica-Bold").fillColor("#555555").text(label, COL2_X + 6, rightY, { width: LABEL_W, lineBreak: false });
+        doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_R, rightY, { width: VALUE_W_R, lineBreak: false });
         rightY += 12;
       }
 
