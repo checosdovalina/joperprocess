@@ -2868,6 +2868,81 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // ─── PRODUCTION BOARD ────────────────────────────────────────────────────────
+
+  app.get("/api/board/orders", isAuthenticated, async (req, res) => {
+    try {
+      const tenantId = req.tenant?.id;
+
+      const orderRows = await db.query.orders.findMany({
+        where: tenantId ? eq(orders.tenantId, tenantId) : undefined,
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+              items: { with: { product: true } },
+            },
+          },
+        },
+        orderBy: (o, { asc, desc }) => [asc(o.estimatedDelivery), desc(o.createdAt)],
+      });
+
+      // Filter: active orders (not delivered) + delivered in last 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const filtered = orderRows.filter(o => {
+        if (o.status === "delivered") {
+          const deliveredAt = o.actualDelivery ? new Date(o.actualDelivery) : new Date(o.updatedAt);
+          return deliveredAt >= sevenDaysAgo;
+        }
+        if (o.status === "shipped") {
+          return true;
+        }
+        return true; // all active statuses
+      });
+
+      const result = filtered.map(o => {
+        const q = o.quotation as any;
+        const now = new Date();
+        const estimatedDelivery = o.estimatedDelivery ? new Date(o.estimatedDelivery) : null;
+        const daysRemaining = estimatedDelivery
+          ? Math.ceil((estimatedDelivery.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        return {
+          id: o.id,
+          folio: q?.folio || "—",
+          status: o.status,
+          productionProgress: o.productionProgress,
+          estimatedDelivery: o.estimatedDelivery,
+          actualDelivery: o.actualDelivery,
+          factoryNotes: o.factoryNotes,
+          createdAt: o.createdAt,
+          updatedAt: o.updatedAt,
+          daysRemaining,
+          customerName: q?.customer?.name || "—",
+          customerCity: q?.customer?.city || null,
+          purchaseOrder: q?.purchaseOrder || null,
+          deliveryTime: q?.deliveryTime || null,
+          shippingNotes: q?.shippingNotes || null,
+          itemCount: q?.items?.length || 0,
+          items: (q?.items || []).map((item: any) => ({
+            productCode: item.productCode,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitOfMeasure: item.unitOfMeasure,
+          })),
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching board orders:", error);
+      res.status(500).json({ error: "Error fetching board orders" });
+    }
+  });
+
   // Shipments endpoints
   app.get("/api/shipments", isAuthenticated, async (req, res) => {
     try {

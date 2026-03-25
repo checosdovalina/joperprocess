@@ -34,6 +34,7 @@ import PublicTicketPage from "@/pages/public-ticket-page";
 import TenantsPage from "@/pages/tenants-page";
 import ProductionPage from "@/pages/production-page";
 import ReportsPage from "@/pages/reports-page";
+import ProductionBoardPage from "@/pages/production-board-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -121,6 +122,7 @@ export default function App() {
   const [isIncidentPortal] = useRoute("/public/incidents/:token");
   const [isSupportPage] = useRoute("/soporte");
   const [isTicketPage] = useRoute("/soporte/ticket/:token");
+  const [isBoardRoute] = useRoute("/board");
   const isPublicRoute = isLandingPage || isAuthPage || isForgotPassword || isResetPassword || isQuotationApproval || isIncidentPortal || isSupportPage || isTicketPage;
 
   return (
@@ -139,6 +141,8 @@ export default function App() {
                 <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
                 <Route path="/soporte" component={PublicSupportPage} />
               </Switch>
+            ) : isBoardRoute ? (
+              <ProtectedRoute path="/board" component={ProductionBoardPage} />
             ) : (
               <MainLayout />
             )}
