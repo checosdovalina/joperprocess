@@ -492,7 +492,7 @@ export default function QuotationsPage() {
                                 )}
                                 Descargar PDF
                               </DropdownMenuItem>
-                              {(quotation.status === QuotationStatus.DRAFT || quotation.status === QuotationStatus.SENT) && (
+                              {quotation.status !== QuotationStatus.CONVERTED && (
                                 <>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem 
