@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType } from "@shared/schema";
 import { Link } from "wouter";
@@ -81,7 +81,22 @@ export default function CheckinDetailPage() {
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [checkoutNotes, setCheckoutNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
-  const [additionalEmail, setAdditionalEmail] = useState("");
+  const [emailList, setEmailList] = useState<string[]>([]);
+  const [emailInput, setEmailInput] = useState("");
+
+  const addCheckinEmail = () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!email) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return;
+    if (emailList.includes(email)) { setEmailInput(""); return; }
+    setEmailList(prev => [...prev, email]);
+    setEmailInput("");
+  };
+
+  const removeCheckinEmail = (email: string) => {
+    setEmailList(prev => prev.filter(e => e !== email));
+  };
 
   const { data: checkin, isLoading: checkinLoading } = useQuery<Checkin & { customer: Customer }>({
     queryKey: [`/api/checkins/${id}`],
@@ -95,22 +110,18 @@ export default function CheckinDetailPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      // Parse multiple emails from the additionalEmail field (comma or semicolon separated)
-      const extraEmails = additionalEmail
-        .split(/[,;]/)
-        .map((e) => e.trim())
-        .filter((e) => e.includes("@"));
       return await apiRequest("POST", `/api/checkins/${id}/checkout`, {
         checkoutNotes: checkoutNotes || undefined,
         internalNotes: internalNotes || undefined,
-        additionalEmails: extraEmails.length > 0 ? extraEmails : undefined,
+        additionalEmails: emailList.length > 0 ? emailList : undefined,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
       setCheckoutDialogOpen(false);
-      setAdditionalEmail("");
+      setEmailList([]);
+      setEmailInput("");
       toast({
         title: "Visita finalizada",
         description: "La minuta PDF se ha generado correctamente",
@@ -562,22 +573,59 @@ export default function CheckinDetailPage() {
               Esta información se enviará al cliente, directivos y personas agregadas en administración.
             </div>
 
-            {/* Correo adicional */}
+            {/* Correo adicional — chips igual que en cotizaciones */}
             <div className="space-y-2">
-              <Label htmlFor="additional-email" className="flex items-center gap-1.5">
+              <Label className="text-sm font-medium flex items-center gap-1.5">
                 <Mail className="h-3.5 w-3.5" />
                 Enviar minuta también a (opcional)
               </Label>
-              <Input
-                id="additional-email"
-                data-testid="input-additional-email"
-                type="email"
-                placeholder="otro@correo.com  (puedes separar varios con coma)"
-                value={additionalEmail}
-                onChange={(e) => setAdditionalEmail(e.target.value)}
-              />
+
+              {/* Chips de correos agregados */}
+              {emailList.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-3 rounded-md border bg-muted/30 min-h-[44px]">
+                  {emailList.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background border text-sm"
+                      data-testid={`chip-email-${email}`}
+                    >
+                      {email}
+                      <button
+                        type="button"
+                        onClick={() => removeCheckinEmail(email)}
+                        className="text-muted-foreground hover:text-foreground transition-colors ml-1"
+                        data-testid={`remove-email-${email}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Input + botón agregar */}
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="correo@ejemplo.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCheckinEmail(); } }}
+                  disabled={checkoutMutation.isPending}
+                  data-testid="input-add-email"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addCheckinEmail}
+                  disabled={checkoutMutation.isPending || !emailInput.trim()}
+                  data-testid="button-add-email"
+                >
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Además del cliente y administradores, la minuta también se enviará a este correo.
+                Presiona Enter o el botón para agregar. Puedes agregar múltiples correos.
               </p>
             </div>
             
