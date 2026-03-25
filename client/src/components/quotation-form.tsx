@@ -866,6 +866,7 @@ export function QuotationForm({
                             <TableRow key={index} className={item.exceedsMaxDiscount ? "bg-destructive/10" : ""}>
                               <TableCell>
                                 <Button
+                                  type="button"
                                   variant="outline"
                                   role="combobox"
                                   className="w-full justify-start text-left font-normal h-auto min-h-9 py-1"
