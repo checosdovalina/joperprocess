@@ -79,6 +79,8 @@ type LookupFormData = z.infer<typeof lookupSchema>;
 type CustomerSearchResult = {
   id: string;
   name: string;
+  rfc?: string | null;
+  city?: string | null;
 };
 
 type UploadedFile = {
@@ -595,17 +597,24 @@ export default function PublicSupportPage() {
                       </div>
                       
                       {customerSearch.length >= 3 && searchResults.length > 0 && (
-                        <div className="mt-2 border rounded-md divide-y max-h-48 overflow-auto">
+                        <div className="mt-2 border rounded-md divide-y max-h-56 overflow-auto">
                           {searchResults.map((customer) => (
                             <button
                               key={customer.id}
                               type="button"
-                              className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2"
+                              className="w-full px-3 py-2.5 text-left hover:bg-muted flex items-start gap-2"
                               onClick={() => handleSelectCustomer(customer)}
                               data-testid={`customer-option-${customer.id}`}
                             >
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
-                              <p className="font-medium">{customer.name}</p>
+                              <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm leading-snug">{customer.name}</p>
+                                {(customer.rfc || customer.city) && (
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {[customer.rfc, customer.city].filter(Boolean).join(" • ")}
+                                  </p>
+                                )}
+                              </div>
                             </button>
                           ))}
                         </div>
@@ -613,8 +622,8 @@ export default function PublicSupportPage() {
 
                       {customerSearch.length >= 3 && !isSearching && searchResults.length === 0 && !selectedCustomer && (
                         <div className="mt-2 p-3 border rounded-md text-center text-muted-foreground">
-                          <p className="text-sm">No se encontraron empresas con ese nombre</p>
-                          <p className="text-xs">Verifique el nombre e intente de nuevo</p>
+                          <p className="text-sm">No se encontraron empresas</p>
+                          <p className="text-xs">Intente buscar por nombre, RFC o clave</p>
                         </div>
                       )}
 

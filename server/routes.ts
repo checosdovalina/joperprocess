@@ -4331,28 +4331,42 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Search customers for public portal (minimal info for security)
   app.get("/api/public/customers/search", async (req, res) => {
     try {
-      const { q } = req.query;
+      const { q, tenant } = req.query;
       
       if (!q || typeof q !== 'string' || q.trim().length < 3) {
         return res.status(400).json({ error: "La búsqueda debe tener al menos 3 caracteres" });
       }
 
-      const searchTerm = q.trim().toLowerCase();
-      
+      const normalize = (str: string) =>
+        str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+      const searchTerm = normalize(q.trim());
+
+      // Resolve tenant context for this public endpoint
+      const tenantId = req.tenant?.id;
+
       const allCustomers = await db.query.customers.findMany({
         columns: {
           id: true,
           name: true,
+          rfc: true,
+          microsipCode: true,
+          city: true,
         },
+        where: tenantId ? eq(customers.tenantId, tenantId) : undefined,
       });
 
-      // Filter by name only (don't expose RFC for search to protect PII)
-      const filtered = allCustomers.filter(c => 
-        c.name.toLowerCase().includes(searchTerm)
-      ).slice(0, 10).map(c => ({
+      // Search by name, RFC, and microsip code (use for matching, return only safe fields)
+      const filtered = allCustomers.filter(c =>
+        normalize(c.name || "").includes(searchTerm) ||
+        normalize(c.rfc || "").includes(searchTerm) ||
+        normalize(c.microsipCode || "").includes(searchTerm)
+      ).slice(0, 15).map(c => ({
         id: c.id,
         name: c.name,
-      })); // Only return id and name
+        rfc: c.rfc,
+        city: c.city,
+      }));
 
       res.json(filtered);
     } catch (error) {
