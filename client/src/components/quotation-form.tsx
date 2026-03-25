@@ -2,7 +2,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertQuotationSchema, InsertQuotation, QuotationStatus, Product, ProductCategory, InsertQuotationItem } from "@shared/schema";
 import { z } from "zod";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Form,
   FormControl,
@@ -41,19 +41,6 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, Trash2, Search, AlertTriangle, Calculator, Truck } from "lucide-react";
 import { useEntityQuery } from "@/hooks/use-entity-query";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CustomerCombobox } from "@/components/customer-combobox";
@@ -170,12 +157,27 @@ export function QuotationForm({
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0)]);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [productCategoryFilter, setProductCategoryFilter] = useState("");
   const [initialized, setInitialized] = useState(false);
   const saveAsDraftRef = useRef(false);
 
-  const { data: products } = useEntityQuery<ProductWithCategory[]>(
+  const { data: products, isLoading: productsLoading } = useEntityQuery<ProductWithCategory[]>(
     searchQuery ? `/api/products?q=${encodeURIComponent(searchQuery)}` : "/api/products"
   );
+
+  const { data: categories } = useEntityQuery<ProductCategory[]>("/api/product-categories");
+
+  const normalizeStr = (str: string) =>
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  const displayedProducts = useMemo(() => {
+    if (!products) return [];
+    let list = products;
+    if (productCategoryFilter) {
+      list = list.filter(p => p.categoryId === productCategoryFilter);
+    }
+    return list.slice(0, 150);
+  }, [products, productCategoryFilter]);
 
   const form = useForm<QuotationFormData>({
     resolver: zodResolver(quotationFormSchema),
@@ -537,6 +539,7 @@ export function QuotationForm({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
@@ -862,71 +865,29 @@ export function QuotationForm({
                           {lineItems.map((item, index) => (
                             <TableRow key={index} className={item.exceedsMaxDiscount ? "bg-destructive/10" : ""}>
                               <TableCell>
-                                <Popover 
-                                  open={productSearchOpen === index} 
-                                  onOpenChange={(open) => {
-                                    setProductSearchOpen(open ? index : null);
-                                    if (!open) setSearchQuery("");
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-start text-left font-normal h-auto min-h-9 py-1"
+                                  data-testid={`button-select-product-${index}`}
+                                  onClick={() => {
+                                    setProductSearchOpen(index);
+                                    setSearchQuery("");
+                                    setProductCategoryFilter("");
                                   }}
                                 >
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      className="w-full justify-start text-left font-normal h-auto min-h-9 py-1"
-                                      data-testid={`button-select-product-${index}`}
-                                    >
-                                      {item.productName ? (
-                                        <div className="flex flex-col items-start">
-                                          <span className="font-medium text-xs">{item.productCode}</span>
-                                          <span className="text-sm truncate max-w-[160px]">{item.productName}</span>
-                                        </div>
-                                      ) : (
-                                        <span className="text-muted-foreground flex items-center gap-1">
-                                          <Search className="h-3 w-3" />
-                                          Buscar producto...
-                                        </span>
-                                      )}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-[300px] p-0" align="start">
-                                    <Command shouldFilter={false}>
-                                      <CommandInput 
-                                        placeholder="Buscar por código o nombre..." 
-                                        value={searchQuery}
-                                        onValueChange={setSearchQuery}
-                                        data-testid={`input-search-product-${index}`}
-                                      />
-                                      <CommandList>
-                                        <CommandEmpty>No se encontraron productos</CommandEmpty>
-                                        <CommandGroup>
-                                          {products?.slice(0, 20).map((product) => (
-                                            <CommandItem
-                                              key={product.id}
-                                              onSelect={() => addProduct(index, product)}
-                                              data-testid={`option-product-${product.id}`}
-                                            >
-                                              <div className="flex flex-col w-full">
-                                                <div className="flex items-center justify-between">
-                                                  <span className="font-mono text-xs font-medium">{product.code}</span>
-                                                  {product.category && (
-                                                    <Badge variant="outline" className="text-xs ml-2">
-                                                      {product.category.name}
-                                                    </Badge>
-                                                  )}
-                                                </div>
-                                                <span className="text-sm">{product.name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                  {formatCurrency(product.listPrice)} | Max desc: {product.maxDiscount}%
-                                                </span>
-                                              </div>
-                                            </CommandItem>
-                                          ))}
-                                        </CommandGroup>
-                                      </CommandList>
-                                    </Command>
-                                  </PopoverContent>
-                                </Popover>
+                                  {item.productName ? (
+                                    <div className="flex flex-col items-start">
+                                      <span className="font-medium text-xs">{item.productCode}</span>
+                                      <span className="text-sm truncate max-w-[180px]">{item.productName}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground flex items-center gap-1">
+                                      <Search className="h-3 w-3" />
+                                      Buscar producto...
+                                    </span>
+                                  )}
+                                </Button>
                                 {item.exceedsMaxDiscount && (
                                   <div className="flex items-center gap-1 mt-1 text-destructive text-xs">
                                     <AlertTriangle className="h-3 w-3" />
@@ -1233,5 +1194,125 @@ export function QuotationForm({
         </Form>
       </DialogContent>
     </Dialog>
+
+    {/* Product Search Dialog */}
+    <Dialog
+      open={productSearchOpen !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          setProductSearchOpen(null);
+          setSearchQuery("");
+          setProductCategoryFilter("");
+        }
+      }}
+    >
+      <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
+          <DialogTitle>Seleccionar Producto</DialogTitle>
+          <DialogDescription>
+            Busca por código, nombre o filtra por categoría
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Search + Category filter */}
+        <div className="px-6 pb-3 flex gap-2 flex-shrink-0">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar por código o nombre..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+              data-testid="input-product-dialog-search"
+            />
+          </div>
+          <Select value={productCategoryFilter || "all"} onValueChange={(v) => setProductCategoryFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[200px]" data-testid="select-product-category-filter">
+              <SelectValue placeholder="Todas las categorías" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las categorías</SelectItem>
+              {categories?.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+
+        {/* Results count */}
+        <div className="px-6 py-2 flex-shrink-0">
+          <span className="text-xs text-muted-foreground">
+            {productsLoading
+              ? "Buscando..."
+              : `${displayedProducts.length} producto(s)${products && products.length > 150 ? " (mostrando primeros 150)" : ""}`}
+          </span>
+        </div>
+
+        {/* Product list */}
+        <ScrollArea className="flex-1 px-6 pb-6">
+          {productsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : displayedProducts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Search className="h-8 w-8 mb-2 opacity-30" />
+              <p className="text-sm">No se encontraron productos</p>
+              {searchQuery && <p className="text-xs mt-1">Intenta con otro término de búsqueda</p>}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {displayedProducts.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  className="w-full text-left rounded-md px-3 py-2.5 hover-elevate flex items-start gap-3 transition-colors"
+                  onClick={() => {
+                    if (productSearchOpen !== null) {
+                      addProduct(productSearchOpen, product);
+                      setProductSearchOpen(null);
+                      setSearchQuery("");
+                      setProductCategoryFilter("");
+                    }
+                  }}
+                  data-testid={`option-product-${product.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-semibold text-muted-foreground shrink-0">
+                        {product.code}
+                      </span>
+                      {product.category && (
+                        <Badge variant="secondary" className="text-xs">
+                          {product.category.name}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium mt-0.5 leading-snug">{product.name}</p>
+                    {product.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{product.description}</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0 flex flex-col items-end">
+                    <span className="text-sm font-semibold">{formatCurrency(product.listPrice)}</span>
+                    {parseFloat(product.maxDiscount || "0") > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        Desc. máx: {product.maxDiscount}%
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
