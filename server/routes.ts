@@ -1534,7 +1534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quotations/:id/send-email", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const { additionalEmails = [] } = req.body;
+      const { additionalEmails = [], emails = [] } = req.body;
       const userId = req.user!.id;
       const userRole = req.user!.role;
 
@@ -1598,19 +1598,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scopedStorage = createTenantScopedStorage(req);
       await scopedStorage.updateQuotation(id, { pdfPath, approvalToken });
 
-      // Collect recipients - only send to customer to comply with MailerSend free tier limits
+      // Collect recipients from the emails array sent by the frontend
       const recipients: string[] = [];
-      
-      // Add customer email if exists (primary recipient)
-      if (quotation.customer.email) {
-        recipients.push(quotation.customer.email);
+
+      if (emails && emails.length > 0) {
+        // Use the emails explicitly selected by the user
+        for (const email of emails) {
+          if (email && typeof email === "string" && email.includes("@") && !recipients.includes(email)) {
+            recipients.push(email.trim().toLowerCase());
+          }
+        }
+      } else {
+        // Fallback: use customer email if frontend sent nothing
+        if (quotation.customer.email) {
+          recipients.push(quotation.customer.email);
+        }
       }
 
-      // Note: Additional recipients removed due to MailerSend free tier limitations
-      // For production, consider upgrading the email service plan
-
       if (recipients.length === 0) {
-        return res.status(400).json({ error: "El cliente no tiene email registrado" });
+        return res.status(400).json({ error: "Debes agregar al menos un correo destinatario" });
       }
 
       // Build approval URL

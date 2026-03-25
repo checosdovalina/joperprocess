@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -181,12 +182,31 @@ export default function QuotationsPage() {
 
   const [approvalLinkDialogOpen, setApprovalLinkDialogOpen] = useState(false);
   const [approvalLink, setApprovalLink] = useState("");
+  const [emailList, setEmailList] = useState<string[]>([]);
+  const [emailInput, setEmailInput] = useState("");
+
+  const addEmail = () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!email) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return;
+    if (emailList.includes(email)) { setEmailInput(""); return; }
+    setEmailList(prev => [...prev, email]);
+    setEmailInput("");
+  };
+
+  const removeEmail = (email: string) => {
+    setEmailList(prev => prev.filter(e => e !== email));
+  };
 
   const handleSendEmail = async () => {
     if (!selectedQuotation) return;
+    if (emailList.length === 0) return;
     setIsSending(true);
     try {
-      const response = await apiRequest("POST", `/api/quotations/${selectedQuotation.id}/send-email`, {});
+      const response = await apiRequest("POST", `/api/quotations/${selectedQuotation.id}/send-email`, {
+        emails: emailList,
+      });
       const data = await response.json();
       
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
@@ -287,6 +307,10 @@ export default function QuotationsPage() {
 
   const openSendEmailDialog = (quotation: QuotationWithDetails) => {
     setSelectedQuotation(quotation);
+    const initialEmails: string[] = [];
+    if (quotation.customer?.email) initialEmails.push(quotation.customer.email.toLowerCase());
+    setEmailList(initialEmails);
+    setEmailInput("");
     setSendEmailDialogOpen(true);
   };
 
@@ -753,36 +777,103 @@ export default function QuotationsPage() {
       </Dialog>
 
       {/* Send Email Dialog */}
-      <AlertDialog open={sendEmailDialogOpen} onOpenChange={setSendEmailDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Enviar Cotización por Correo</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p>
-                  Se enviará la cotización <strong>{selectedQuotation?.folio}</strong> al cliente{" "}
-                  <strong>{selectedQuotation?.customer?.name || "Sin cliente"}</strong>.
+      <Dialog open={sendEmailDialogOpen} onOpenChange={(open) => {
+        if (!isSending) setSendEmailDialogOpen(open);
+      }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Enviar Cotización por Correo
+            </DialogTitle>
+            <DialogDescription>
+              Cotización <strong>{selectedQuotation?.folio}</strong> —{" "}
+              {selectedQuotation?.customer?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Recipients list */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Destinatarios</Label>
+              {emailList.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  Agrega al menos un correo destinatario.
                 </p>
-                <p className="text-sm">
-                  El correo incluirá el PDF de la cotización y se enviará a:
-                </p>
-                <ul className="text-sm list-disc list-inside ml-2 space-y-1">
-                  {selectedQuotation?.customer.email && (
-                    <li>{selectedQuotation.customer.email} (cliente)</li>
-                  )}
-                  {user?.email && <li>{user.email} (vendedor)</li>}
-                </ul>
-                <div className="mt-4 p-3 bg-muted rounded-md">
-                  <p className="text-sm font-medium">
-                    Al enviar, la cotización pasará automáticamente a proceso de autorización de crédito.
-                  </p>
+              ) : (
+                <div className="flex flex-wrap gap-2 p-3 rounded-md border bg-muted/30 min-h-[48px]">
+                  {emailList.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background border text-sm"
+                      data-testid={`chip-email-${email}`}
+                    >
+                      {email}
+                      <button
+                        type="button"
+                        onClick={() => removeEmail(email)}
+                        className="text-muted-foreground hover:text-foreground transition-colors ml-1"
+                        data-testid={`remove-email-${email}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
                 </div>
+              )}
+            </div>
+
+            {/* Add email input */}
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Agregar correo</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="correo@ejemplo.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
+                  disabled={isSending}
+                  data-testid="input-add-email"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addEmail}
+                  disabled={isSending || !emailInput.trim()}
+                  data-testid="button-add-email"
+                >
+                  <UserPlus className="h-4 w-4" />
+                </Button>
               </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSendEmail} disabled={isSending}>
+              <p className="text-xs text-muted-foreground">
+                Presiona Enter o el botón para agregar. Puedes agregar múltiples correos.
+              </p>
+            </div>
+
+            {/* Info box */}
+            <div className="p-3 bg-muted rounded-md">
+              <p className="text-sm text-muted-foreground">
+                El correo incluirá el PDF de la cotización con un enlace para que el cliente la apruebe.
+                Al enviar, la cotización pasará a proceso de autorización.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSendEmailDialogOpen(false)}
+              disabled={isSending}
+              data-testid="button-cancel-send-email"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSendEmail}
+              disabled={isSending || emailList.length === 0}
+              data-testid="button-confirm-send-email"
+            >
               {isSending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -794,10 +885,10 @@ export default function QuotationsPage() {
                   Enviar y Solicitar Autorización
                 </>
               )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Approval Link Dialog - shown when email fails */}
       <Dialog open={approvalLinkDialogOpen} onOpenChange={setApprovalLinkDialogOpen}>
