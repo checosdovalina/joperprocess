@@ -67,7 +67,6 @@ export default function CustomersPage() {
         const matchesSearch = 
           normalize(customer.name || "").includes(query) ||
           normalize(customer.rfc || "").includes(query) ||
-          normalize(customer.email || "").includes(query) ||
           normalize(customer.phone || "").includes(query) ||
           normalize(customer.contactName || "").includes(query) ||
           normalize(customer.microsipCode || "").includes(query) ||
@@ -218,7 +217,7 @@ export default function CustomersPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre, RFC, clave, teléfono, ciudad..."
+                placeholder="Buscar por nombre, RFC, clave, teléfono..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"

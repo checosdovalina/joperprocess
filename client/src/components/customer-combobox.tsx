@@ -53,7 +53,6 @@ export function CustomerCombobox({
         (c) =>
           normalize(c.name || "").includes(query) ||
           normalize(c.rfc || "").includes(query) ||
-          normalize(c.email || "").includes(query) ||
           normalize(c.phone || "").includes(query) ||
           normalize(c.city || "").includes(query) ||
           normalize(c.microsipCode || "").includes(query) ||
@@ -85,7 +84,7 @@ export function CustomerCombobox({
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <input
               className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Buscar por nombre, RFC, clave, teléfono, ciudad..."
+              placeholder="Buscar por nombre, RFC, clave, teléfono..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid={`${testId}-search`}
