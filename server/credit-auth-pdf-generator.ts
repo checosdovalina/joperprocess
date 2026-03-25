@@ -1,6 +1,22 @@
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import type { CreditAuthorization, Quotation, Customer, User } from "@shared/schema";
+import { localStorageService } from "./localStorage";
+
+interface TenantBranding {
+  name: string;
+  legalName?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  rfc?: string | null;
+}
 
 interface CreditAuthPDFData {
   authorization: CreditAuthorization;
@@ -8,241 +24,285 @@ interface CreditAuthPDFData {
   customer: Customer;
   requestedBy: User;
   approvedBy?: User | null;
+  tenant?: TenantBranding | null;
+}
+
+async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
+  if (!logoUrl) return null;
+  try {
+    if (logoUrl.startsWith("logos/")) return await localStorageService.getFile(logoUrl);
+    return null;
+  } catch { return null; }
 }
 
 function formatCurrency(value: string | number | null, currency: string = "MXN"): string {
   if (value === null || value === undefined) return "$0.00";
   const num = typeof value === "string" ? parseFloat(value) : value;
-  return num.toLocaleString("es-MX", {
-    style: "currency",
-    currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatDate(date: Date | string | null): string {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateTime(date: Date | string | null): string {
+  if (!date) return "N/A";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    pending: "Pendiente",
-    approved: "Aprobada",
-    rejected: "Rechazada",
-  };
-  return labels[status] || status;
+  return { pending: "Pendiente", approved: "Aprobada", rejected: "Rechazada" }[status] || status;
 }
 
 function getStatusColor(status: string): string {
-  const colors: Record<string, string> = {
-    pending: "#d69e2e",
-    approved: "#38a169",
-    rejected: "#e53e3e",
-  };
-  return colors[status] || "#4a5568";
+  return { pending: "#d69e2e", approved: "#38a169", rejected: "#e53e3e" }[status] || "#4a5568";
 }
 
-export function generateCreditAuthPDFStream(data: CreditAuthPDFData): Readable {
-  const doc = new PDFDocument({ size: "LETTER", margin: 50 });
-  const { authorization, quotation, customer, requestedBy, approvedBy } = data;
+function lightenColor(hex: string, amount: number): string {
+  const clean = hex.replace("#", "");
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  const lr = Math.min(255, r + Math.round((255 - r) * amount));
+  const lg = Math.min(255, g + Math.round((255 - g) * amount));
+  const lb = Math.min(255, b + Math.round((255 - b) * amount));
+  return `#${lr.toString(16).padStart(2, "0")}${lg.toString(16).padStart(2, "0")}${lb.toString(16).padStart(2, "0")}`;
+}
+
+export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Promise<Readable> {
+  const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
+  const { authorization, quotation, customer, requestedBy, approvedBy, tenant } = data;
+
+  const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
+  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const primaryColor = tenant?.primaryColor || "#1a365d";
+  const lightColor = lightenColor(primaryColor, 0.92);
+  const mediumColor = lightenColor(primaryColor, 0.75);
+  const statusColor = getStatusColor(authorization.status);
+
+  const PAGE_W = 612;
+  const PAGE_H = 792;
+  const MARGIN = 40;
+  const CONTENT_W = PAGE_W - MARGIN * 2;
 
   try {
-    doc
-      .fontSize(24)
-      .font("Helvetica-Bold")
-      .fillColor("#1a365d")
-      .text("GRUPO JOPER", { align: "center" })
-      .moveDown(0.3);
+    // ═══════════════════════════════════════════════
+    // HEADER BAND
+    // ═══════════════════════════════════════════════
+    const HEADER_H = 90;
+    doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
 
-    doc
-      .fontSize(12)
-      .font("Helvetica")
-      .fillColor("#4a5568")
-      .text("Sistema Comercial", { align: "center" })
-      .moveDown(1);
-
-    doc
-      .fontSize(18)
-      .font("Helvetica-Bold")
-      .fillColor("#2d3748")
-      .text("AUTORIZACIÓN DE CRÉDITO", { align: "center" })
-      .moveDown(0.5);
-
-    const statusColor = getStatusColor(authorization.status);
-    doc
-      .fontSize(14)
-      .font("Helvetica-Bold")
-      .fillColor(statusColor)
-      .text(`Estado: ${getStatusLabel(authorization.status).toUpperCase()}`, { align: "center" })
-      .moveDown(1.5);
-
-    const leftColumnX = 50;
-    const rightColumnX = 320;
-    let currentY = doc.y;
-
-    doc
-      .fontSize(12)
-      .font("Helvetica-Bold")
-      .fillColor("#2d3748")
-      .text("DATOS DEL CLIENTE", leftColumnX, currentY);
-    doc.moveDown(0.5);
-
-    doc
-      .fontSize(10)
-      .font("Helvetica")
-      .fillColor("#4a5568");
-
-    doc.text(`Razón Social: ${customer.name}`, leftColumnX);
-    if (customer.rfc) doc.text(`RFC: ${customer.rfc}`, leftColumnX);
-    if (customer.contactName) doc.text(`Contacto: ${customer.contactName}`, leftColumnX);
-    if (customer.phone) doc.text(`Teléfono: ${customer.phone}`, leftColumnX);
-    if (customer.email) doc.text(`Email: ${customer.email}`, leftColumnX);
-
-    doc
-      .fontSize(12)
-      .font("Helvetica-Bold")
-      .fillColor("#2d3748")
-      .text("DATOS DE LA COTIZACIÓN", rightColumnX, currentY);
-    
-    currentY = doc.y + 10;
-    doc
-      .fontSize(10)
-      .font("Helvetica")
-      .fillColor("#4a5568")
-      .text(`Folio: ${quotation.folio}`, rightColumnX, currentY)
-      .text(`Total: ${formatCurrency(quotation.total, quotation.currency)}`, rightColumnX)
-      .text(`Fecha: ${formatDate(quotation.createdAt)}`, rightColumnX);
-
-    doc.moveDown(2);
-
-    doc
-      .fontSize(12)
-      .font("Helvetica-Bold")
-      .fillColor("#2d3748")
-      .text("INFORMACIÓN DE CRÉDITO", leftColumnX)
-      .moveDown(0.5);
-
-    doc
-      .fontSize(10)
-      .font("Helvetica")
-      .fillColor("#4a5568");
-
-    const creditInfoY = doc.y;
-    
-    doc.rect(leftColumnX, creditInfoY, 500, 80).stroke("#e2e8f0");
-
-    doc.text(`Crédito Disponible: ${formatCurrency(authorization.creditAvailable)}`, leftColumnX + 10, creditInfoY + 10);
-    doc.text(`Crédito Utilizado: ${formatCurrency(authorization.creditUsed)}`, leftColumnX + 10);
-    doc.text(`Saldo Vencido: ${formatCurrency(authorization.overdueBalance)}`, leftColumnX + 10);
-    doc.text(`Monto Solicitado: ${formatCurrency(quotation.total, quotation.currency)}`, leftColumnX + 10);
-
-    doc.y = creditInfoY + 90;
-
-    doc
-      .fontSize(12)
-      .font("Helvetica-Bold")
-      .fillColor("#2d3748")
-      .text("SOLICITANTE", leftColumnX)
-      .moveDown(0.3);
-
-    doc
-      .fontSize(10)
-      .font("Helvetica")
-      .fillColor("#4a5568")
-      .text(`Nombre: ${requestedBy.fullName}`, leftColumnX)
-      .text(`Fecha de Solicitud: ${formatDate(authorization.createdAt)}`, leftColumnX);
-
-    doc.moveDown(1);
-
-    if (authorization.notes) {
-      doc
-        .fontSize(12)
-        .font("Helvetica-Bold")
-        .fillColor("#2d3748")
-        .text("NOTAS", leftColumnX)
-        .moveDown(0.3);
-
-      doc
-        .fontSize(10)
-        .font("Helvetica")
-        .fillColor("#4a5568")
-        .text(authorization.notes, leftColumnX, doc.y, { width: 500 });
-
-      doc.moveDown(1);
+    let logoRightEdge = MARGIN;
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, MARGIN, (HEADER_H - 65) / 2, { fit: [140, 65] as [number, number] });
+        logoRightEdge = MARGIN + 140 + 12;
+      } catch { /* fallback */ }
     }
 
+    const nameX = logoBuffer ? logoRightEdge : MARGIN;
+    const nameW = PAGE_W - nameX - MARGIN;
+    doc.fontSize(14).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text(companyName.toUpperCase(), nameX, 16, { width: nameW, align: logoBuffer ? "left" : "right" });
+
+    const infoLines: string[] = [];
+    if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
+    const addrParts = [tenant?.address, [tenant?.city, tenant?.state].filter(Boolean).join(", "), tenant?.zipCode ? `C.P. ${tenant.zipCode}` : ""].filter(Boolean);
+    if (addrParts.length) infoLines.push(addrParts.join(" | "));
+    const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+    if (contactParts.length) infoLines.push(contactParts.join("  |  "));
+    if (tenant?.website) infoLines.push(tenant.website);
+
+    doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.88)");
+    let infoY = 36;
+    for (const line of infoLines) {
+      doc.text(line, nameX, infoY, { width: nameW, align: logoBuffer ? "left" : "right" });
+      infoY += 10;
+    }
+
+    // ═══════════════════════════════════════════════
+    // TITLE BAND
+    // ═══════════════════════════════════════════════
+    const TITLE_Y = HEADER_H;
+    const TITLE_H = 32;
+    doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
+    doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
+    doc.text("AUTORIZACIÓN DE CRÉDITO", MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.6 });
+
+    // Status badge (right side)
+    const statusBadgeW = 160;
+    const statusBadgeX = PAGE_W - MARGIN - statusBadgeW;
+    doc.rect(statusBadgeX, TITLE_Y + 5, statusBadgeW, 22).fill(statusColor);
+    doc.fontSize(9.5).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text(getStatusLabel(authorization.status).toUpperCase(), statusBadgeX, TITLE_Y + 11, { width: statusBadgeW, align: "center" });
+
+    let currentY = TITLE_Y + TITLE_H + 18;
+
+    // ═══════════════════════════════════════════════
+    // TWO COLUMN INFO BOXES
+    // ═══════════════════════════════════════════════
+    const COL_W = CONTENT_W / 2 - 8;
+    const COL2_X = MARGIN + COL_W + 16;
+    const BOX_H = 100;
+
+    doc.rect(MARGIN,  currentY, COL_W, BOX_H).fill(lightColor);
+    doc.rect(COL2_X, currentY, COL_W, BOX_H).fill(lightColor);
+    doc.rect(MARGIN,  currentY, COL_W, 16).fill(mediumColor);
+    doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
+
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
+    doc.text("DATOS DEL CLIENTE",     MARGIN + 6,  currentY + 4, { width: COL_W - 10 });
+    doc.text("DATOS DE LA COTIZACIÓN", COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+
+    let leftY = currentY + 22;
+    const customerRows: [string, string][] = [
+      ["Razón Social:", customer.name],
+      ...(customer.rfc ? [["RFC:", customer.rfc] as [string, string]] : []),
+      ...(customer.contactName ? [["Contacto:", customer.contactName] as [string, string]] : []),
+      ...(customer.phone ? [["Teléfono:", customer.phone] as [string, string]] : []),
+      ...(customer.email ? [["Email:", customer.email] as [string, string]] : []),
+    ];
+    doc.fontSize(8).fillColor("#333");
+    for (const [label, value] of customerRows) {
+      doc.font("Helvetica-Bold").fillColor("#555").text(label, MARGIN + 6, leftY, { continued: true, width: 65 });
+      doc.font("Helvetica").fillColor("#222").text(value, { width: COL_W - 75 });
+      leftY += 12;
+    }
+
+    let rightY = currentY + 22;
+    const quotRows: [string, string][] = [
+      ["Folio:", quotation.folio],
+      ["Importe:", formatCurrency(quotation.total, quotation.currency || "MXN")],
+      ["Fecha:", formatDate(quotation.createdAt)],
+      ["Solicitado por:", requestedBy.fullName],
+      ["Solicitud:", formatDate(authorization.createdAt)],
+    ];
+    for (const [label, value] of quotRows) {
+      doc.font("Helvetica-Bold").fillColor("#555").text(label, COL2_X + 6, rightY, { continued: true, width: 75 });
+      doc.font("Helvetica").fillColor("#222").text(value, { width: COL_W - 83 });
+      rightY += 12;
+    }
+
+    currentY += BOX_H + 18;
+
+    // ═══════════════════════════════════════════════
+    // CREDIT INFORMATION
+    // ═══════════════════════════════════════════════
+    doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
+    doc.text("ANÁLISIS DE CRÉDITO", MARGIN + 6, currentY + 4);
+    currentY += 16;
+
+    const creditFields: [string, string, string][] = [
+      ["Crédito Disponible", formatCurrency(authorization.creditAvailable), "#38a169"],
+      ["Crédito Utilizado",  formatCurrency(authorization.creditUsed),      "#d69e2e"],
+      ["Saldo Vencido",      formatCurrency(authorization.overdueBalance),   "#e53e3e"],
+      ["Monto Solicitado",   formatCurrency(quotation.total, quotation.currency || "MXN"), primaryColor],
+    ];
+
+    const CREDIT_COL_W = CONTENT_W / 4;
+    doc.rect(MARGIN, currentY, CONTENT_W, 50).fill(lightColor);
+
+    creditFields.forEach(([label, value, color], idx) => {
+      const cx = MARGIN + idx * CREDIT_COL_W;
+      doc.rect(cx, currentY, CREDIT_COL_W, 50).stroke(mediumColor);
+      doc.fontSize(7).font("Helvetica").fillColor("#666").text(label, cx + 4, currentY + 6, { width: CREDIT_COL_W - 8, align: "center" });
+      doc.fontSize(11).font("Helvetica-Bold").fillColor(color).text(value, cx + 4, currentY + 20, { width: CREDIT_COL_W - 8, align: "center" });
+    });
+
+    currentY += 60;
+
+    // ═══════════════════════════════════════════════
+    // NOTES
+    // ═══════════════════════════════════════════════
+    if (authorization.notes) {
+      doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
+      doc.text("NOTAS", MARGIN + 6, currentY + 4);
+      currentY += 16;
+      const textH = Math.max(36, doc.heightOfString(authorization.notes, { width: CONTENT_W - 16 }) + 16);
+      doc.rect(MARGIN, currentY, CONTENT_W, textH).fill(lightColor);
+      doc.fontSize(8.5).font("Helvetica").fillColor("#444");
+      doc.text(authorization.notes, MARGIN + 8, currentY + 8, { width: CONTENT_W - 16 });
+      currentY += textH + 14;
+    }
+
+    // ═══════════════════════════════════════════════
+    // APPROVAL SECTION
+    // ═══════════════════════════════════════════════
     if (authorization.status === "approved" && approvedBy) {
-      doc
-        .fontSize(12)
-        .font("Helvetica-Bold")
-        .fillColor("#38a169")
-        .text("APROBACIÓN", leftColumnX)
-        .moveDown(0.3);
+      doc.rect(MARGIN, currentY, CONTENT_W, 16).fill("#38a169");
+      doc.fontSize(8).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text("APROBACIÓN", MARGIN + 6, currentY + 4);
+      currentY += 16;
 
-      doc
-        .fontSize(10)
-        .font("Helvetica")
-        .fillColor("#4a5568")
-        .text(`Aprobado por: ${approvedBy.fullName}`, leftColumnX)
-        .text(`Fecha de Aprobación: ${formatDate(authorization.authorizedAt)}`, leftColumnX);
+      doc.rect(MARGIN, currentY, CONTENT_W, 50).fill("#f0fff4");
+      doc.fontSize(8).font("Helvetica").fillColor("#333");
+      doc.font("Helvetica-Bold").fillColor("#555").text("Aprobado por:", MARGIN + 8, currentY + 8, { continued: true, width: 90 });
+      doc.font("Helvetica").fillColor("#222").text(approvedBy.fullName);
+      doc.font("Helvetica-Bold").fillColor("#555").text("Fecha:", MARGIN + 8, currentY + 20, { continued: true, width: 90 });
+      doc.font("Helvetica").fillColor("#222").text(formatDate(authorization.authorizedAt));
+      currentY += 50;
 
+      // Signature
       if (authorization.approvalSignature) {
-        doc.moveDown(0.5);
-        doc
-          .fontSize(10)
-          .font("Helvetica-Bold")
-          .text("Firma Digital:", leftColumnX);
-        
+        currentY += 10;
         try {
-          const signatureData = authorization.approvalSignature;
-          if (signatureData.startsWith("data:image")) {
-            const base64Data = signatureData.split(",")[1];
-            const imageBuffer = Buffer.from(base64Data, "base64");
-            doc.image(imageBuffer, leftColumnX, doc.y + 5, { width: 200, height: 80 });
-            doc.y += 90;
+          const sigData = authorization.approvalSignature;
+          if (sigData.startsWith("data:image")) {
+            const imageBuffer = Buffer.from(sigData.split(",")[1], "base64");
+            doc.image(imageBuffer, MARGIN, currentY, { width: 200, height: 80 });
+            doc.fontSize(7).font("Helvetica").fillColor("#777").text("Firma Digital", MARGIN, currentY + 84, { width: 200, align: "center" });
+            currentY += 100;
           }
-        } catch (e) {
-          doc.text("[Firma registrada]", leftColumnX);
+        } catch {
+          doc.fontSize(8).font("Helvetica").fillColor("#777").text("[Firma registrada]", MARGIN + 8, currentY + 8);
+          currentY += 30;
         }
       }
     }
 
+    // ═══════════════════════════════════════════════
+    // REJECTION SECTION
+    // ═══════════════════════════════════════════════
     if (authorization.status === "rejected") {
-      doc
-        .fontSize(12)
-        .font("Helvetica-Bold")
-        .fillColor("#e53e3e")
-        .text("RECHAZO", leftColumnX)
-        .moveDown(0.3);
+      doc.rect(MARGIN, currentY, CONTENT_W, 16).fill("#e53e3e");
+      doc.fontSize(8).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text("MOTIVO DE RECHAZO", MARGIN + 6, currentY + 4);
+      currentY += 16;
 
-      doc
-        .fontSize(10)
-        .font("Helvetica")
-        .fillColor("#4a5568");
-
-      if (authorization.rejectionNotes) {
-        doc.text(`Motivo: ${authorization.rejectionNotes}`, leftColumnX, doc.y, { width: 500 });
-      }
+      const rejText = authorization.rejectionNotes || "Sin motivo especificado";
+      const textH = Math.max(36, doc.heightOfString(rejText, { width: CONTENT_W - 16 }) + 16);
+      doc.rect(MARGIN, currentY, CONTENT_W, textH).fill("#fff5f5");
+      doc.fontSize(8.5).font("Helvetica").fillColor("#c53030");
+      doc.text(rejText, MARGIN + 8, currentY + 8, { width: CONTENT_W - 16 });
+      currentY += textH + 14;
     }
 
-    doc.moveDown(2);
+    // ═══════════════════════════════════════════════
+    // FOOTER
+    // ═══════════════════════════════════════════════
+    const FOOTER_Y = PAGE_H - 42;
+    doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
 
-    const footerY = doc.page.height - 80;
-    doc
-      .fontSize(8)
-      .font("Helvetica")
-      .fillColor("#a0aec0")
-      .text("Este documento fue generado automáticamente por el Sistema Comercial de GRUPO JOPER.", leftColumnX, footerY, { align: "center", width: 500 })
-      .text(`Fecha de generación: ${formatDate(new Date())}`, { align: "center", width: 500 });
+    doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
+    doc.text("Documento generado automáticamente. Válido como constancia de autorización de crédito.", MARGIN, FOOTER_Y + 6, { width: 280 });
+    doc.text(`Generado el ${formatDateTime(new Date())}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+
+    const footerRight: string[] = [];
+    if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+    if (tenant?.email) footerRight.push(tenant.email);
+    if (tenant?.website) footerRight.push(tenant.website);
+
+    if (footerRight.length) {
+      doc.fontSize(7.5).font("Helvetica").fillColor("#ffffff");
+      doc.text(footerRight.join("   |   "), PAGE_W - MARGIN - 270, FOOTER_Y + 10, { width: 270, align: "right" });
+    }
+    doc.fontSize(8).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text(companyName, PAGE_W - MARGIN - 270, FOOTER_Y + 22, { width: 270, align: "right" });
 
     doc.end();
   } catch (error) {

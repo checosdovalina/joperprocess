@@ -72,6 +72,7 @@ The system implements subdomain-based multi-tenancy, allowing each company (tena
 - **Check-in/Checkout Functionality**: Supports field visit tracking, including GPS coordinates, photo uploads, PDF generation of visit minutes, and secure checkout processes.
 - **Secure Photo Uploads**: Implements a robust system for handling photo uploads to object storage, including presigned URLs, issuance tracking, two-phase commit for atomicity, and strict ACL policies.
 - **Streaming PDF Generation**: Generates PDF documents for check-in minutes using a streaming architecture to prevent memory issues, including image processing and secure upload to object storage.
+- **Corporate PDF Design**: All 4 PDF generators (quotation, check-in minutes, credit authorization, invoice) share the same corporate design: colored header band with logo + company info/RFC/address, title band with document type, 2-column styled info boxes, professional totals section, and corporate footer. All generators are async and receive full tenant branding data.
 
 ## External Dependencies
 

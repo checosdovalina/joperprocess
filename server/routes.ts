@@ -2040,14 +2040,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Get tenant branding for PDF
+      const tenantForPdf = auth.quotation.tenantId
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, auth.quotation.tenantId) })
+        : null;
+
       const { generateCreditAuthPDFStream } = await import("./credit-auth-pdf-generator");
       
-      const pdfStream = generateCreditAuthPDFStream({
+      const pdfStream = await generateCreditAuthPDFStream({
         authorization: auth,
         quotation: auth.quotation,
         customer: auth.quotation.customer,
         requestedBy: auth.user,
         approvedBy,
+        tenant: tenantForPdf,
       });
 
       res.setHeader("Content-Type", "application/pdf");
@@ -2946,8 +2952,12 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Invoice not found" });
       }
 
+      const tenantForPdf = invoice.tenantId
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, invoice.tenantId) })
+        : null;
+
       const { generateInvoicePDFStream } = await import("./invoice-pdf-generator");
-      const pdfStream = generateInvoicePDFStream({ invoice, customer: invoice.customer });
+      const pdfStream = await generateInvoicePDFStream({ invoice, customer: invoice.customer, tenant: tenantForPdf });
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="factura-${invoice.serie}-${invoice.folio}.pdf"`);
