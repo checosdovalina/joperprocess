@@ -314,6 +314,20 @@ export default function QuotationsPage() {
     setSendEmailDialogOpen(true);
   };
 
+  const handleCopyApprovalLink = (quotation: QuotationWithDetails) => {
+    const token = (quotation as any).approvalToken;
+    if (!token) {
+      toast({ title: "Sin enlace", description: "Esta cotización aún no tiene un enlace generado. Envíala primero por correo.", variant: "destructive" });
+      return;
+    }
+    const link = `${window.location.origin}/aprobar-cotizacion/${token}`;
+    navigator.clipboard.writeText(link).then(() => {
+      toast({ title: "Enlace copiado", description: "El enlace de aprobación fue copiado al portapapeles." });
+    }).catch(() => {
+      toast({ title: "Error", description: "No se pudo copiar. Enlace: " + link, variant: "destructive" });
+    });
+  };
+
   const formatCurrency = (value: string | number, currency: string = "MXN") => {
     const num = typeof value === "string" ? parseFloat(value) : value;
     return num.toLocaleString("es-MX", {
@@ -501,6 +515,13 @@ export default function QuotationsPage() {
                                   >
                                     <Mail className="h-4 w-4 mr-2" />
                                     Enviar por correo
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleCopyApprovalLink(quotation)}
+                                    data-testid={`menu-copy-link-quotation-${quotation.id}`}
+                                  >
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Copiar enlace de aprobación
                                   </DropdownMenuItem>
                                 </>
                               )}
