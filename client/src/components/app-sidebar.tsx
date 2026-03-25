@@ -17,6 +17,7 @@ import {
   Settings,
   Database,
   Factory,
+  FileBarChart2,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -142,6 +143,12 @@ export function AppSidebar() {
       url: "/products",
       icon: Package,
       roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA],
+    },
+    {
+      title: "Reportes",
+      url: "/reports",
+      icon: FileBarChart2,
+      roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA],
     },
     {
       title: "Incidentes",

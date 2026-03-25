@@ -33,6 +33,7 @@ import PublicSupportPage from "@/pages/public-support-page";
 import PublicTicketPage from "@/pages/public-ticket-page";
 import TenantsPage from "@/pages/tenants-page";
 import ProductionPage from "@/pages/production-page";
+import ReportsPage from "@/pages/reports-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -81,6 +82,7 @@ function Router() {
       <ProtectedRoute path="/incidents" component={IncidentsPage} />
       <ProtectedRoute path="/company-settings" component={CompanySettingsPage} />
       <ProtectedRoute path="/microsip" component={MicrosipSettingsPage} />
+      <ProtectedRoute path="/reports" component={ReportsPage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA]} />
       <ProtectedRoute path="/tenants" component={TenantsPage} />
       <Route component={NotFound} />
     </Switch>

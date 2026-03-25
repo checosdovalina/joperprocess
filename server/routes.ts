@@ -2747,6 +2747,127 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // ─── REPORTS ────────────────────────────────────────────────────────────────
+
+  app.get("/api/reports/orders", isAuthenticated, async (req, res) => {
+    try {
+      const tenantId = req.tenant?.id;
+      const { dateFrom, dateTo, customerId, status } = req.query as Record<string, string>;
+
+      const orderRows = await db.query.orders.findMany({
+        where: tenantId ? eq(orders.tenantId, tenantId) : undefined,
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+              items: true,
+            },
+          },
+        },
+        orderBy: (o, { desc }) => [desc(o.createdAt)],
+      });
+
+      // Get shipments for date filtering
+      const allShipments = await db.query.shipments.findMany({
+        where: tenantId ? eq(shipments.tenantId, tenantId) : undefined,
+      });
+      const shipmentByOrder = new Map(allShipments.map(s => [s.orderId, s]));
+
+      let filtered = orderRows;
+
+      // Filter by status
+      if (status && status !== "all") {
+        filtered = filtered.filter(o => o.status === status);
+      }
+
+      // Filter by customerId
+      if (customerId) {
+        filtered = filtered.filter(o => o.quotation?.customerId === customerId);
+      }
+
+      // Filter by date range (using estimatedDelivery or createdAt)
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        filtered = filtered.filter(o => {
+          const d = o.estimatedDelivery || o.createdAt;
+          return d && new Date(d) >= from;
+        });
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(o => {
+          const d = o.estimatedDelivery || o.createdAt;
+          return d && new Date(d) <= to;
+        });
+      }
+
+      const result = filtered.map(o => {
+        const shipment = shipmentByOrder.get(o.id);
+        return {
+          id: o.id,
+          folio: o.quotation?.folio || o.id.substring(0, 8),
+          customerName: o.quotation?.customer?.name || "—",
+          customerRfc: o.quotation?.customer?.rfc || null,
+          purchaseOrder: null,
+          closeDate: o.actualDelivery || o.estimatedDelivery || null,
+          shippingDate: shipment?.shippedAt || null,
+          comments: o.factoryNotes || null,
+          status: o.status,
+          createdAt: o.createdAt,
+          items: (o.quotation?.items || []).map(item => ({
+            productCode: item.productCode || null,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitOfMeasure: item.unitOfMeasure,
+            unitPrice: item.unitPrice ?? null,
+          })),
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching orders report:", error);
+      res.status(500).json({ error: "Error generating report" });
+    }
+  });
+
+  app.post("/api/reports/orders/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { filters = {}, orders: orderData } = req.body;
+      const tenant = req.tenant;
+
+      const tenantBranding = tenant ? {
+        name: tenant.name,
+        legalName: (tenant as any).legalName || null,
+        logoUrl: tenant.logoUrl,
+        primaryColor: tenant.primaryColor,
+        rfc: (tenant as any).rfc || null,
+        address: (tenant as any).address || null,
+        city: (tenant as any).city || null,
+        state: (tenant as any).state || null,
+        zipCode: (tenant as any).zipCode || null,
+        phone: (tenant as any).phone || null,
+        email: (tenant as any).email || null,
+        website: (tenant as any).website || null,
+      } : null;
+
+      const { generateOrdersReportPDF } = await import("./reports-pdf-generator");
+      const pdfStream = await generateOrdersReportPDF({
+        orders: orderData,
+        tenant: tenantBranding,
+        filters,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="reporte-pedidos-${Date.now()}.pdf"`);
+      pdfStream.pipe(res);
+    } catch (error) {
+      console.error("Error generating orders PDF:", error);
+      res.status(500).json({ error: "Error generating PDF" });
+    }
+  });
+
   // Shipments endpoints
   app.get("/api/shipments", isAuthenticated, async (req, res) => {
     try {
