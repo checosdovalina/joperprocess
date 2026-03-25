@@ -7,9 +7,11 @@ import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { localStorageService, LocalStorageService } from "./localStorage";
 
-// Helper to determine if we should use local storage (production without GCS)
+// Helper to determine if we should use server-side direct upload (instead of GCS presigned URL).
+// In development, always use direct upload (GCS presigned URLs are blocked/CORS-restricted).
 function useLocalStorage(): boolean {
   return process.env.USE_LOCAL_STORAGE === "true" || 
+         process.env.NODE_ENV !== "production" ||
          (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
 }
 import { ObjectPermission, setObjectAclPolicy, getObjectAclPolicy } from "./objectAcl";
