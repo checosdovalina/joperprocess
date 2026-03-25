@@ -1,6 +1,6 @@
 import { useParams, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Checkin, Customer } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -103,6 +103,19 @@ export default function CheckinDetailPage() {
     enabled: !!id,
   });
 
+  // Fetch planned email recipients (pre-populate when dialog opens)
+  const { data: recipientsData } = useQuery<{ recipients: { email: string; label: string }[] }>({
+    queryKey: [`/api/checkins/${id}/email-recipients`],
+    enabled: !!id && checkoutDialogOpen,
+  });
+
+  // Pre-populate emailList when recipients data loads and dialog just opened
+  useEffect(() => {
+    if (checkoutDialogOpen && recipientsData?.recipients && emailList.length === 0) {
+      setEmailList(recipientsData.recipients.map(r => r.email));
+    }
+  }, [checkoutDialogOpen, recipientsData]);
+
   const { data: summary, isLoading: summaryLoading, error: summaryError } = useQuery<CustomerSummary>({
     queryKey: [`/api/customers/${checkin?.customerId}/summary`],
     enabled: !!checkin?.customerId,
@@ -113,7 +126,7 @@ export default function CheckinDetailPage() {
       return await apiRequest("POST", `/api/checkins/${id}/checkout`, {
         checkoutNotes: checkoutNotes || undefined,
         internalNotes: internalNotes || undefined,
-        additionalEmails: emailList.length > 0 ? emailList : undefined,
+        recipients: emailList.length > 0 ? emailList : undefined,
       });
     },
     onSuccess: () => {
@@ -558,7 +571,7 @@ export default function CheckinDetailPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={checkoutDialogOpen} onOpenChange={setCheckoutDialogOpen}>
+      <Dialog open={checkoutDialogOpen} onOpenChange={(open) => { setCheckoutDialogOpen(open); if (!open) { setEmailList([]); setEmailInput(""); } }}>
         <DialogContent data-testid="dialog-checkout" className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Finalizar Visita</DialogTitle>
@@ -573,41 +586,51 @@ export default function CheckinDetailPage() {
               Esta información se enviará al cliente, directivos y personas agregadas en administración.
             </div>
 
-            {/* Correo adicional — chips igual que en cotizaciones */}
+            {/* Destinatarios de la minuta */}
             <div className="space-y-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
                 <Mail className="h-3.5 w-3.5" />
-                Enviar minuta también a (opcional)
+                Destinatarios de la minuta
               </Label>
 
-              {/* Chips de correos agregados */}
-              {emailList.length > 0 && (
-                <div className="flex flex-wrap gap-2 p-3 rounded-md border bg-muted/30 min-h-[44px]">
-                  {emailList.map((email) => (
+              {/* Chips — todos los destinatarios (precargados + extras) */}
+              <div className="flex flex-wrap gap-2 p-3 rounded-md border bg-muted/30 min-h-[52px]">
+                {emailList.length === 0 && (
+                  <span className="text-xs text-muted-foreground self-center">Cargando destinatarios...</span>
+                )}
+                {emailList.map((email) => {
+                  const defaultRecipient = recipientsData?.recipients?.find(r => r.email === email);
+                  return (
                     <span
                       key={email}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background border text-sm"
                       data-testid={`chip-email-${email}`}
                     >
-                      {email}
+                      <span className="flex flex-col leading-tight">
+                        <span>{email}</span>
+                        {defaultRecipient && (
+                          <span className="text-[10px] text-muted-foreground">{defaultRecipient.label}</span>
+                        )}
+                      </span>
                       <button
                         type="button"
                         onClick={() => removeCheckinEmail(email)}
-                        className="text-muted-foreground hover:text-foreground transition-colors ml-1"
+                        className="text-muted-foreground hover:text-foreground transition-colors ml-1 shrink-0"
                         data-testid={`remove-email-${email}`}
+                        title="Quitar destinatario"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </span>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
 
-              {/* Input + botón agregar */}
+              {/* Input + botón agregar correo adicional */}
               <div className="flex gap-2">
                 <Input
                   type="email"
-                  placeholder="correo@ejemplo.com"
+                  placeholder="Agregar otro correo..."
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCheckinEmail(); } }}
@@ -625,7 +648,7 @@ export default function CheckinDetailPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Presiona Enter o el botón para agregar. Puedes agregar múltiples correos.
+                Puedes quitar destinatarios con la X o agregar otros con el campo de arriba.
               </p>
             </div>
             

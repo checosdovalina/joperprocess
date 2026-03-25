@@ -3524,18 +3524,49 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Get planned email recipients for a check-in checkout (preview before sending)
+  app.get("/api/checkins/:id/email-recipients", isAuthenticated, async (req, res) => {
+    const { id: checkinId } = req.params;
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.getCheckin(checkinId);
+      if (!checkin) return res.status(404).json({ error: "Check-in not found" });
+
+      const customer = await scopedStorage.getCustomer(checkin.customerId);
+      const user = await storage.getUser(checkin.userId);
+
+      const recipients: { email: string; label: string }[] = [];
+
+      if (user?.email) recipients.push({ email: user.email, label: `Vendedor — ${user.fullName}` });
+      if (customer?.email) recipients.push({ email: customer.email, label: `Cliente — ${customer.name}` });
+
+      const admins = await db.query.users.findMany({ where: eq(users.role, UserRole.ADMIN) });
+      for (const admin of admins) {
+        if (admin.email && !recipients.find(r => r.email === admin.email)) {
+          recipients.push({ email: admin.email, label: `Admin — ${admin.fullName}` });
+        }
+      }
+
+      res.json({ recipients });
+    } catch (error) {
+      console.error("Error fetching email recipients:", error);
+      res.status(500).json({ error: "Error fetching recipients" });
+    }
+  });
+
   app.post("/api/checkins/:id/checkout", isAuthenticated, async (req, res) => {
     const { id: checkinId } = req.params;
     const userId = req.user!.id;
 
     try {
-      // Parse optional checkoutNotes, internalNotes, and additionalEmails from body
+      // Parse optional checkoutNotes, internalNotes, and recipients from body
+      // `recipients` is the full list of emails to send to (overrides auto-detection when provided)
       const schema = z.object({
         checkoutNotes: z.string().optional(),
         internalNotes: z.string().optional(),
-        additionalEmails: z.array(z.string().email()).optional(),
+        recipients: z.array(z.string().email()).optional(),
       });
-      const { checkoutNotes, internalNotes, additionalEmails = [] } = schema.parse(req.body);
+      const { checkoutNotes, internalNotes, recipients: overrideRecipients } = schema.parse(req.body);
 
       const scopedStorage = createTenantScopedStorage(req);
       const checkin = await scopedStorage.getCheckin(checkinId);
@@ -3605,34 +3636,20 @@ Proporciona tu análisis en el siguiente formato JSON:
       // Send email notifications with PDF attachment
       try {
         console.log(`Sending email notifications...`);
-        const recipients: string[] = [];
-        
-        // Add salesperson (user) email
-        if (user.email) {
-          recipients.push(user.email);
-        }
-        
-        // Add customer email if exists
-        if (customer.email) {
-          recipients.push(customer.email);
-        }
-        
-        // Get admin emails
-        const admins = await db.query.users.findMany({
-          where: eq(users.role, UserRole.ADMIN),
-        });
-        
-        admins.forEach(admin => {
-          if (admin.email && !recipients.includes(admin.email)) {
-            recipients.push(admin.email);
-          }
-        });
+        let recipients: string[];
 
-        // Add any manually specified additional emails
-        for (const email of additionalEmails) {
-          if (!recipients.includes(email)) {
-            recipients.push(email);
-          }
+        if (overrideRecipients && overrideRecipients.length > 0) {
+          // Use the list provided by the user (full override — they confirmed who gets it)
+          recipients = overrideRecipients;
+        } else {
+          // Auto-build the recipient list: salesperson + customer + admins
+          recipients = [];
+          if (user.email) recipients.push(user.email);
+          if (customer.email) recipients.push(customer.email);
+          const admins = await db.query.users.findMany({ where: eq(users.role, UserRole.ADMIN) });
+          admins.forEach(admin => {
+            if (admin.email && !recipients.includes(admin.email)) recipients.push(admin.email);
+          });
         }
         
         if (recipients.length > 0) {
