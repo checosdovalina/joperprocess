@@ -399,9 +399,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.execute(sql`DELETE FROM shipments WHERE tenant_id = ${tenantId}`);
       await db.execute(sql`DELETE FROM orders WHERE tenant_id = ${tenantId}`);
 
-      // Credit auth sub-tables (no tenant_id, join via credit_authorizations)
-      await db.execute(sql`DELETE FROM credit_authorization_comments WHERE credit_authorization_id IN (SELECT id FROM credit_authorizations WHERE tenant_id = ${tenantId})`);
-      await db.execute(sql`DELETE FROM credit_authorizations WHERE tenant_id = ${tenantId}`);
+      // Credit auth — no tienen tenant_id, se accede via quotation_id → quotations
+      await db.execute(sql`DELETE FROM credit_authorization_comments WHERE credit_authorization_id IN (SELECT ca.id FROM credit_authorizations ca JOIN quotations q ON q.id = ca.quotation_id WHERE q.tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM credit_authorizations WHERE quotation_id IN (SELECT id FROM quotations WHERE tenant_id = ${tenantId})`);
 
       // Quotation items (no tenant_id, join via quotations)
       await db.execute(sql`DELETE FROM quotation_items WHERE quotation_id IN (SELECT id FROM quotations WHERE tenant_id = ${tenantId})`);
