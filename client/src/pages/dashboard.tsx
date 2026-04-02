@@ -58,6 +58,8 @@ export default function Dashboard() {
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
   
   const isVendedor = user?.role === UserRole.VENDEDOR || user?.role === UserRole.ADMIN;
@@ -65,11 +67,15 @@ export default function Dashboard() {
   const { data: salesByCategory, isLoading: isLoadingCategories } = useQuery<SalesByCategory[]>({
     queryKey: ["/api/dashboard/sales-by-category"],
     enabled: isVendedor,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
   
   const { data: recentContacts, isLoading: isLoadingContacts } = useQuery<RecentContact[]>({
     queryKey: ["/api/dashboard/recent-contacts"],
     enabled: isVendedor,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
   if (!user) return null;
