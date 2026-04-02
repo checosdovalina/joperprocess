@@ -407,12 +407,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.execute(sql`DELETE FROM quotation_items WHERE quotation_id IN (SELECT id FROM quotations WHERE tenant_id = ${tenantId})`);
       await db.execute(sql`DELETE FROM quotations WHERE tenant_id = ${tenantId}`);
 
+      // Scheduled visits primero (FK a checkins)
+      await db.execute(sql`DELETE FROM scheduled_visits WHERE tenant_id = ${tenantId}`);
+
       // Pending uploads (no tenant_id, references checkins — delete before checkins)
       await db.execute(sql`DELETE FROM pending_uploads WHERE checkin_id IN (SELECT id FROM checkins WHERE tenant_id = ${tenantId})`);
 
-      // Check-ins and scheduled visits
+      // Check-ins
       await db.execute(sql`DELETE FROM checkins WHERE tenant_id = ${tenantId}`);
-      await db.execute(sql`DELETE FROM scheduled_visits WHERE tenant_id = ${tenantId}`);
 
       // Customer sub-tables (no tenant_id, join via customers)
       await db.execute(sql`DELETE FROM customer_product_prices WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = ${tenantId})`);
