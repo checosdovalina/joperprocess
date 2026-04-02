@@ -378,79 +378,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Operación no permitida sin contexto de empresa" });
       }
 
-      // Execute all deletes in a transaction, respecting FK order (dependents first)
-      await db.execute(sql`
-        DO $$
-        DECLARE
-          v_tenant TEXT := ${tenantId};
-        BEGIN
-          -- Incident sub-tables (no tenant_id, join via incidents)
-          DELETE FROM incident_activities
-            WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = v_tenant);
-          DELETE FROM incident_attachments
-            WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = v_tenant);
-          DELETE FROM incident_comments
-            WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = v_tenant);
-          DELETE FROM incidents WHERE tenant_id = v_tenant;
+      // Execute deletes in FK-safe order using individual statements (Neon doesn't support
+      // parameterized queries inside PL/pgSQL DO blocks)
 
-          -- Shipment sub-tables
-          DELETE FROM shipment_product_instances
-            WHERE shipment_id IN (SELECT id FROM shipments WHERE tenant_id = v_tenant);
+      // Incident sub-tables (no tenant_id, join via incidents)
+      await db.execute(sql`DELETE FROM incident_activities WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM incident_attachments WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM incident_comments WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM incidents WHERE tenant_id = ${tenantId}`);
 
-          -- Order releases (no tenant_id, via orders)
-          DELETE FROM order_releases
-            WHERE order_id IN (SELECT id FROM orders WHERE tenant_id = v_tenant);
+      // Shipment sub-tables (no tenant_id, join via shipments)
+      await db.execute(sql`DELETE FROM shipment_product_instances WHERE shipment_id IN (SELECT id FROM shipments WHERE tenant_id = ${tenantId})`);
 
-          -- Payments
-          DELETE FROM payments WHERE tenant_id = v_tenant;
+      // Order releases (no tenant_id, join via orders)
+      await db.execute(sql`DELETE FROM order_releases WHERE order_id IN (SELECT id FROM orders WHERE tenant_id = ${tenantId})`);
 
-          -- Invoices
-          DELETE FROM invoices WHERE tenant_id = v_tenant;
+      // Payments, invoices, shipments, orders
+      await db.execute(sql`DELETE FROM payments WHERE tenant_id = ${tenantId}`);
+      await db.execute(sql`DELETE FROM invoices WHERE tenant_id = ${tenantId}`);
+      await db.execute(sql`DELETE FROM shipments WHERE tenant_id = ${tenantId}`);
+      await db.execute(sql`DELETE FROM orders WHERE tenant_id = ${tenantId}`);
 
-          -- Shipments
-          DELETE FROM shipments WHERE tenant_id = v_tenant;
+      // Credit auth sub-tables (no tenant_id, join via credit_authorizations)
+      await db.execute(sql`DELETE FROM credit_authorization_comments WHERE credit_authorization_id IN (SELECT id FROM credit_authorizations WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM credit_authorizations WHERE tenant_id = ${tenantId}`);
 
-          -- Orders
-          DELETE FROM orders WHERE tenant_id = v_tenant;
+      // Quotation items (no tenant_id, join via quotations)
+      await db.execute(sql`DELETE FROM quotation_items WHERE quotation_id IN (SELECT id FROM quotations WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM quotations WHERE tenant_id = ${tenantId}`);
 
-          -- Credit authorization comments (no tenant_id, via credit_authorizations)
-          DELETE FROM credit_authorization_comments
-            WHERE credit_authorization_id IN (
-              SELECT id FROM credit_authorizations WHERE tenant_id = v_tenant
-            );
-          DELETE FROM credit_authorizations WHERE tenant_id = v_tenant;
+      // Pending uploads (no tenant_id, references checkins — delete before checkins)
+      await db.execute(sql`DELETE FROM pending_uploads WHERE checkin_id IN (SELECT id FROM checkins WHERE tenant_id = ${tenantId})`);
 
-          -- Quotation items (no tenant_id, via quotations)
-          DELETE FROM quotation_items
-            WHERE quotation_id IN (SELECT id FROM quotations WHERE tenant_id = v_tenant);
-          DELETE FROM quotations WHERE tenant_id = v_tenant;
+      // Check-ins and scheduled visits
+      await db.execute(sql`DELETE FROM checkins WHERE tenant_id = ${tenantId}`);
+      await db.execute(sql`DELETE FROM scheduled_visits WHERE tenant_id = ${tenantId}`);
 
-          -- Pending uploads (no tenant_id, references checkins — must go before checkins)
-          DELETE FROM pending_uploads
-            WHERE checkin_id IN (SELECT id FROM checkins WHERE tenant_id = v_tenant);
+      // Customer sub-tables (no tenant_id, join via customers)
+      await db.execute(sql`DELETE FROM customer_product_prices WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM customer_locations WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM customers WHERE tenant_id = ${tenantId}`);
 
-          -- Check-ins and scheduled visits
-          DELETE FROM checkins WHERE tenant_id = v_tenant;
-          DELETE FROM scheduled_visits WHERE tenant_id = v_tenant;
+      // Products and categories
+      await db.execute(sql`DELETE FROM products WHERE tenant_id = ${tenantId}`);
+      await db.execute(sql`DELETE FROM product_categories WHERE tenant_id = ${tenantId}`);
 
-          -- Customer sub-tables
-          DELETE FROM customer_product_prices
-            WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = v_tenant);
-          DELETE FROM customer_locations
-            WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = v_tenant);
-          DELETE FROM customers WHERE tenant_id = v_tenant;
-
-          -- Products and categories
-          DELETE FROM products WHERE tenant_id = v_tenant;
-          DELETE FROM product_categories WHERE tenant_id = v_tenant;
-
-          -- Microsip
-          DELETE FROM microsip_sync_logs
-            WHERE config_id IN (SELECT id FROM microsip_configs WHERE tenant_id = v_tenant);
-          DELETE FROM microsip_configs WHERE tenant_id = v_tenant;
-
-        END $$;
-      `);
+      // Microsip (sync_logs no tienen tenant_id directo, join via configs)
+      await db.execute(sql`DELETE FROM microsip_sync_logs WHERE config_id IN (SELECT id FROM microsip_configs WHERE tenant_id = ${tenantId})`);
+      await db.execute(sql`DELETE FROM microsip_configs WHERE tenant_id = ${tenantId}`);
 
       console.log(`[ADMIN] Tenant data reset by user ${req.user?.id} for tenant ${tenantId}`);
       res.json({ success: true, message: "Datos eliminados correctamente. Solo quedan los usuarios." });
