@@ -364,6 +364,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // ─── DANGER ZONE: Reset tenant data ──────────────────────────────────────────
+  app.post("/api/admin/reset-tenant-data", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { confirmPhrase } = req.body;
+
+      if (confirmPhrase !== "CONFIRMAR RESET") {
+        return res.status(400).json({ error: "Frase de confirmación incorrecta" });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Operación no permitida sin contexto de empresa" });
+      }
+
+      // Execute all deletes in a transaction, respecting FK order (dependents first)
+      await db.execute(sql`
+        DO $$
+        DECLARE
+          v_tenant TEXT := ${tenantId};
+        BEGIN
+          -- Incident sub-tables (no tenant_id, join via incidents)
+          DELETE FROM incident_activities
+            WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = v_tenant);
+          DELETE FROM incident_attachments
+            WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = v_tenant);
+          DELETE FROM incident_comments
+            WHERE incident_id IN (SELECT id FROM incidents WHERE tenant_id = v_tenant);
+          DELETE FROM incidents WHERE tenant_id = v_tenant;
+
+          -- Shipment sub-tables
+          DELETE FROM shipment_product_instances
+            WHERE shipment_id IN (SELECT id FROM shipments WHERE tenant_id = v_tenant);
+
+          -- Order releases (no tenant_id, via orders)
+          DELETE FROM order_releases
+            WHERE order_id IN (SELECT id FROM orders WHERE tenant_id = v_tenant);
+
+          -- Payments
+          DELETE FROM payments WHERE tenant_id = v_tenant;
+
+          -- Invoices
+          DELETE FROM invoices WHERE tenant_id = v_tenant;
+
+          -- Shipments
+          DELETE FROM shipments WHERE tenant_id = v_tenant;
+
+          -- Orders
+          DELETE FROM orders WHERE tenant_id = v_tenant;
+
+          -- Credit authorization comments (no tenant_id, via credit_authorizations)
+          DELETE FROM credit_authorization_comments
+            WHERE credit_authorization_id IN (
+              SELECT id FROM credit_authorizations WHERE tenant_id = v_tenant
+            );
+          DELETE FROM credit_authorizations WHERE tenant_id = v_tenant;
+
+          -- Quotation items (no tenant_id, via quotations)
+          DELETE FROM quotation_items
+            WHERE quotation_id IN (SELECT id FROM quotations WHERE tenant_id = v_tenant);
+          DELETE FROM quotations WHERE tenant_id = v_tenant;
+
+          -- Pending uploads (no tenant_id, references checkins — must go before checkins)
+          DELETE FROM pending_uploads
+            WHERE checkin_id IN (SELECT id FROM checkins WHERE tenant_id = v_tenant);
+
+          -- Check-ins and scheduled visits
+          DELETE FROM checkins WHERE tenant_id = v_tenant;
+          DELETE FROM scheduled_visits WHERE tenant_id = v_tenant;
+
+          -- Customer sub-tables
+          DELETE FROM customer_product_prices
+            WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = v_tenant);
+          DELETE FROM customer_locations
+            WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = v_tenant);
+          DELETE FROM customers WHERE tenant_id = v_tenant;
+
+          -- Products and categories
+          DELETE FROM products WHERE tenant_id = v_tenant;
+          DELETE FROM product_categories WHERE tenant_id = v_tenant;
+
+          -- Microsip
+          DELETE FROM microsip_sync_logs
+            WHERE config_id IN (SELECT id FROM microsip_configs WHERE tenant_id = v_tenant);
+          DELETE FROM microsip_configs WHERE tenant_id = v_tenant;
+
+        END $$;
+      `);
+
+      console.log(`[ADMIN] Tenant data reset by user ${req.user?.id} for tenant ${tenantId}`);
+      res.json({ success: true, message: "Datos eliminados correctamente. Solo quedan los usuarios." });
+    } catch (error) {
+      console.error("Error resetting tenant data:", error);
+      res.status(500).json({ error: "Error al eliminar los datos" });
+    }
+  });
+
   // ==================== END COMPANY SETTINGS ENDPOINTS ====================
 
   // Dashboard stats
