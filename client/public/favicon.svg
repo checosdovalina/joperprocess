@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark background rounded square -->
+  <rect width="32" height="32" rx="6" fill="#0a1628"/>
+
+  <!-- Top hexagon (pointy-top, center 16,10, r=7) -->
+  <polygon
+    points="16,3 22.06,6.5 22.06,13.5 16,17 9.94,13.5 9.94,6.5"
+    fill="url(#g1)"
+    opacity="0.95"
+  />
+
+  <!-- Bottom-left hexagon (center 10,20, r=7) -->
+  <polygon
+    points="10,13 16.06,16.5 16.06,23.5 10,27 3.94,23.5 3.94,16.5"
+    fill="url(#g2)"
+    opacity="0.88"
+  />
+
+  <!-- Bottom-right hexagon (center 22,20, r=7) -->
+  <polygon
+    points="22,13 28.06,16.5 28.06,23.5 22,27 15.94,23.5 15.94,16.5"
+    fill="url(#g3)"
+    opacity="0.78"
+  />
+
+  <!-- Connecting lines between hexagon centers to suggest network -->
+  <line x1="16" y1="10" x2="10" y2="20" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+  <line x1="16" y1="10" x2="22" y2="20" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+  <line x1="10" y1="20" x2="22" y2="20" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+</svg>
