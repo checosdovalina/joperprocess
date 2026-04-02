@@ -230,29 +230,30 @@ function OrderCard({ order }: { order: BoardOrder }) {
 function Column({ col, orders }: { col: typeof COLUMNS[0]; orders: BoardOrder[] }) {
   const Icon = col.icon;
   return (
-    <div style={{ flexShrink: 0, width: 290, display: "flex", flexDirection: "column", gap: 0 }}>
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
       {/* Column header */}
       <div style={{
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "10px 14px",
+        gap: 6,
+        padding: "8px 10px",
         background: col.bg,
         border: `1px solid ${col.border}`,
         borderRadius: "10px 10px 0 0",
-        marginBottom: 0,
+        flexShrink: 0,
       }}>
-        <Icon size={15} style={{ color: col.color, flexShrink: 0 }} />
-        <span style={{ color: col.color, fontWeight: 700, fontSize: 13, letterSpacing: "0.03em", flex: 1 }}>{col.label}</span>
+        <Icon size={13} style={{ color: col.color, flexShrink: 0 }} />
+        <span style={{ color: col.color, fontWeight: 700, fontSize: 12, letterSpacing: "0.03em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.label}</span>
         <span style={{
           background: col.border,
           color: "#fff",
           borderRadius: 20,
-          padding: "1px 8px",
+          padding: "1px 7px",
           fontSize: 11,
           fontWeight: 700,
-          minWidth: 24,
+          minWidth: 22,
           textAlign: "center",
+          flexShrink: 0,
         }}>
           {orders.length}
         </span>
@@ -262,19 +263,18 @@ function Column({ col, orders }: { col: typeof COLUMNS[0]; orders: BoardOrder[] 
       <div style={{
         flex: 1,
         overflowY: "auto",
+        overflowX: "hidden",
         display: "flex",
         flexDirection: "column",
-        gap: 8,
-        padding: 10,
+        gap: 6,
+        padding: 8,
         background: "rgba(255,255,255,0.02)",
         border: `1px solid ${col.border}`,
         borderTop: "none",
         borderRadius: "0 0 10px 10px",
-        minHeight: 100,
-        maxHeight: "calc(100vh - 140px)",
       }}>
         {orders.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 80, color: "rgba(255,255,255,0.2)", fontSize: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 60, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
             Sin pedidos
           </div>
         ) : (
@@ -352,7 +352,7 @@ export default function ProductionBoardPage() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      height: "100vh",
       background: "linear-gradient(180deg, #0a0f1e 0%, #0d1324 100%)",
       display: "flex",
       flexDirection: "column",
@@ -462,12 +462,11 @@ export default function ProductionBoardPage() {
       {/* Board columns */}
       <div style={{
         flex: 1,
-        overflowX: "auto",
-        overflowY: "hidden",
+        overflow: "hidden",
         display: "flex",
-        gap: 12,
-        padding: "14px 16px 16px",
-        alignItems: "flex-start",
+        gap: 10,
+        padding: "10px 14px 12px",
+        alignItems: "stretch",
       }}>
         {/* Active status columns */}
         {COLUMNS.map(col => (
