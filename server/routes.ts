@@ -425,8 +425,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.execute(sql`DELETE FROM products WHERE tenant_id = ${tenantId}`);
       await db.execute(sql`DELETE FROM product_categories WHERE tenant_id = ${tenantId}`);
 
-      // Microsip (sync_logs no tienen tenant_id directo, join via configs)
-      await db.execute(sql`DELETE FROM microsip_sync_logs WHERE config_id IN (SELECT id FROM microsip_configs WHERE tenant_id = ${tenantId})`);
+      // Microsip (sync_logs sí tienen tenant_id directo)
+      await db.execute(sql`DELETE FROM microsip_sync_logs WHERE tenant_id = ${tenantId}`);
       await db.execute(sql`DELETE FROM microsip_configs WHERE tenant_id = ${tenantId}`);
 
       console.log(`[ADMIN] Tenant data reset by user ${req.user?.id} for tenant ${tenantId}`);
