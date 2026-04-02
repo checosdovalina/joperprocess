@@ -470,7 +470,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : await db.select({ count: sql<number>`count(*)` }).from(shipments).where(eq(shipments.status, 'pending'));
       
       const pendingCreditAuth = tenantId
-        ? await db.select({ count: sql<number>`count(*)` }).from(creditAuthorizations).where(and(eq(creditAuthorizations.tenantId, tenantId), eq(creditAuthorizations.status, 'pending')))
+        ? await db.select({ count: sql<number>`count(*)` }).from(creditAuthorizations).where(and(
+            sql`${creditAuthorizations.quotationId} IN (SELECT id FROM quotations WHERE tenant_id = ${tenantId})`,
+            eq(creditAuthorizations.status, 'pending')
+          ))
         : await db.select({ count: sql<number>`count(*)` }).from(creditAuthorizations).where(eq(creditAuthorizations.status, 'pending'));
       
       const ordersReady = tenantId
