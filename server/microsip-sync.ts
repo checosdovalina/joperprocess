@@ -245,10 +245,10 @@ class MicrosipSyncService {
       throw new Error('No se permiten comentarios SQL');
     }
 
-    // Add FIRST 100 if not present to limit results
+    // Add FIRST 5000 if not present to limit results
     let safeSql = cleanSql;
     if (!normalizedSql.includes('FIRST') && !normalizedSql.includes('ROWS')) {
-      safeSql = safeSql.replace(/^SELECT/i, 'SELECT FIRST 100');
+      safeSql = safeSql.replace(/^SELECT/i, 'SELECT FIRST 5000');
     }
 
     let fbDb: FirebirdConnection | null = null;

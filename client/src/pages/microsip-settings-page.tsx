@@ -724,7 +724,7 @@ export default function MicrosipSettingsPage() {
                   Ejecutar
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  Solo consultas SELECT - máximo 100 filas
+                  Solo consultas SELECT - máximo 5,000 filas
                 </span>
               </div>
 
