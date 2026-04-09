@@ -424,8 +424,8 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      const microsipCategories = await this.query<MicrosipCategory>(fbDb, `
-        SELECT LINEA_ARTICULO_ID, NOMBRE
+      const microsipCategories = await this.query<MicrosipCategory & { ESTATUS?: string }>(fbDb, `
+        SELECT LINEA_ARTICULO_ID, NOMBRE, ESTATUS
         FROM LINEAS_ARTICULOS
       `);
 
@@ -443,9 +443,13 @@ class MicrosipSyncService {
               eq(productCategories.microsipLineaId, msCategory.LINEA_ARTICULO_ID)
             ));
 
+          const msEstatusRaw = (msCategory as any).ESTATUS;
+          const categoryActive = !msEstatusRaw || msEstatusRaw === 'A';
+
           const categoryData = {
             name: msCategory.NOMBRE?.trim() || 'Sin categoría',
             description: null,
+            active: categoryActive,
             microsipLineaId: msCategory.LINEA_ARTICULO_ID,
             microsipSyncedAt: new Date(),
           };
@@ -515,13 +519,14 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      // Sync ALL products that are in price list 42 (active and inactive)
+      // Sync ALL active products; price from list 42 if available, otherwise 0
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
           A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS,
           P.PRECIO AS PRECIO_1
         FROM ARTICULOS A
-        INNER JOIN PRECIOS_ARTICULOS P ON A.ARTICULO_ID = P.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 42
+        LEFT JOIN PRECIOS_ARTICULOS P ON A.ARTICULO_ID = P.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 42
+        WHERE A.ESTATUS = 'A'
       `);
 
       console.log(`[Microsip] Found ${microsipProducts.length} products to sync`);
@@ -542,7 +547,7 @@ class MicrosipSyncService {
         console.log(`[Microsip] First product all data:`, JSON.stringify(microsipProducts[0]));
       }
 
-      const categoryMap = new Map<number, string>();
+      const categoryMap = new Map<number, { id: string; active: boolean }>();
       const categories = await db
         .select()
         .from(productCategories)
@@ -550,7 +555,7 @@ class MicrosipSyncService {
       
       for (const cat of categories) {
         if (cat.microsipLineaId) {
-          categoryMap.set(cat.microsipLineaId, cat.id);
+          categoryMap.set(cat.microsipLineaId, { id: cat.id, active: cat.active });
         }
       }
 
@@ -566,15 +571,20 @@ class MicrosipSyncService {
               eq(products.microsipArticuloId, msProduct.ARTICULO_ID)
             ));
 
-          const categoryId = msProduct.LINEA_ARTICULO_ID 
+          const categoryEntry = msProduct.LINEA_ARTICULO_ID 
             ? categoryMap.get(msProduct.LINEA_ARTICULO_ID) || null
             : null;
+          const categoryId = categoryEntry ? categoryEntry.id : null;
+          const categoryActive = categoryEntry ? categoryEntry.active : true;
 
           // Firebird driver ignores aliases - use actual column name PRECIO
           const rawPrice = (msProduct as any).PRECIO ?? msProduct.PRECIO_1;
           const listPrice = rawPrice 
             ? String(Number(rawPrice).toFixed(2)) 
             : "0";
+
+          // Product is active only if it's active in Microsip AND its category is active
+          const productActive = msProduct.ESTATUS === 'A' && categoryActive;
 
           const productData = {
             code: String(msProduct.ARTICULO_ID),
@@ -585,7 +595,7 @@ class MicrosipSyncService {
             listPrice,
             cost: null,
             stock: "0",
-            active: msProduct.ESTATUS === 'A',
+            active: productActive,
             microsipArticuloId: msProduct.ARTICULO_ID,
             microsipSyncedAt: new Date(),
             updatedAt: new Date(),
@@ -626,7 +636,7 @@ class MicrosipSyncService {
               .where(eq(products.id, product.id));
           }
         }
-        console.log(`[Microsip] Deactivated products not in list 42`);
+        console.log(`[Microsip] Deactivated products no longer active in Microsip`);
       }
 
       await db.update(microsipConfigs)
