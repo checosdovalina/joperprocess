@@ -2828,11 +2828,18 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.get("/api/reports/orders", isAuthenticated, async (req, res) => {
     try {
-      const tenantId = req.tenant?.id;
+      // Resolve tenantId using same priority as TenantScopedStorage:
+      // 1. Subdomain tenant, 2. User's tenantId, 3. SuperAdmin global (no filter)
+      const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
+      const isSuperAdminGlobal = req.user?.isSuperAdmin && !resolvedTenantId;
       const { dateFrom, dateTo, customerId, status } = req.query as Record<string, string>;
 
+      const tenantWhere = (!isSuperAdminGlobal && resolvedTenantId)
+        ? eq(orders.tenantId, resolvedTenantId)
+        : undefined;
+
       const orderRows = await db.query.orders.findMany({
-        where: tenantId ? eq(orders.tenantId, tenantId) : undefined,
+        where: tenantWhere,
         with: {
           quotation: {
             with: {
@@ -2845,8 +2852,11 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
 
       // Get shipments for date filtering
+      const shipmentWhere = (!isSuperAdminGlobal && resolvedTenantId)
+        ? eq(shipments.tenantId, resolvedTenantId)
+        : undefined;
       const allShipments = await db.query.shipments.findMany({
-        where: tenantId ? eq(shipments.tenantId, tenantId) : undefined,
+        where: shipmentWhere,
       });
       const shipmentByOrder = new Map(allShipments.map(s => [s.orderId, s]));
 
@@ -2949,10 +2959,14 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   app.get("/api/board/orders", isAuthenticated, async (req, res) => {
     try {
-      const tenantId = req.tenant?.id;
+      const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
+      const isSuperAdminGlobal = req.user?.isSuperAdmin && !resolvedTenantId;
+      const boardTenantWhere = (!isSuperAdminGlobal && resolvedTenantId)
+        ? eq(orders.tenantId, resolvedTenantId)
+        : undefined;
 
       const orderRows = await db.query.orders.findMany({
-        where: tenantId ? eq(orders.tenantId, tenantId) : undefined,
+        where: boardTenantWhere,
         with: {
           quotation: {
             with: {
