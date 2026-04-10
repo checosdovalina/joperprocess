@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Shipment, Order, Quotation, Customer, ShipmentStatus, ShipmentProductInstance, Product } from "@shared/schema";
+import { Shipment, Order, Quotation, Customer, ShipmentStatus, ShipmentProductInstance, Product, QuotationItem } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -81,6 +81,30 @@ export default function ShipmentsPage() {
     },
     enabled: !!selectedShipment,
   });
+
+  type OrderDetails = Order & {
+    quotation: Quotation & {
+      items: (QuotationItem & { product: Product })[];
+    };
+  };
+
+  const { data: orderDetails } = useQuery<OrderDetails>({
+    queryKey: ["/api/orders", selectedShipment?.orderId, "details"],
+    queryFn: async () => {
+      if (!selectedShipment) throw new Error();
+      const response = await fetch(`/api/orders/${selectedShipment.orderId}/details`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Error fetching order details");
+      return response.json();
+    },
+    enabled: !!selectedShipment && serialDialogOpen,
+  });
+
+  // Products that belong to this order's quotation
+  const orderProducts = orderDetails?.quotation?.items
+    ?.map(item => item.product)
+    .filter((p, idx, arr) => p && arr.findIndex(x => x?.id === p.id) === idx) ?? [];
 
   const addSerialsMutation = useMutation({
     mutationFn: async (instances: { productId: string; serialNumber: string }[]) => {
@@ -177,7 +201,8 @@ export default function ShipmentsPage() {
   };
 
   const addNewSerialRow = () => {
-    setNewSerials([...newSerials, { productId: "", serialNumber: "" }]);
+    const autoProductId = orderProducts.length === 1 ? (orderProducts[0]?.id ?? "") : "";
+    setNewSerials([...newSerials, { productId: autoProductId, serialNumber: "" }]);
   };
 
   const updateSerialRow = (index: number, field: "productId" | "serialNumber", value: string) => {
@@ -414,14 +439,14 @@ export default function ShipmentsPage() {
                         value={serial.productId || "_select"}
                         onValueChange={(v) => updateSerialRow(index, "productId", v === "_select" ? "" : v)}
                       >
-                        <SelectTrigger className="w-48" data-testid={`select-product-${index}`}>
+                        <SelectTrigger className="w-56" data-testid={`select-product-${index}`}>
                           <SelectValue placeholder="Producto" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="_select">Seleccionar producto</SelectItem>
-                          {products?.filter(p => p.active).map((product) => (
-                            <SelectItem key={product.id} value={product.id}>
-                              {product.name}
+                          {(orderProducts.length > 0 ? orderProducts : products?.filter(p => p.active) ?? []).map((product) => (
+                            <SelectItem key={product!.id} value={product!.id}>
+                              {product!.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
