@@ -1,4 +1,4 @@
-import { Switch, Route, useRoute, Redirect } from "wouter";
+import { Switch, Route, useRoute, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,8 +8,9 @@ import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import { useAuth } from "./hooks/use-auth";
-import { Loader2 } from "lucide-react";
+import { Loader2, Moon, Sun } from "lucide-react";
 import { TenantProvider } from "./hooks/use-tenant";
+import { ThemeProvider, useTheme } from "./hooks/use-theme";
 import CustomersPage from "@/pages/customers-page";
 import CheckinsPage from "@/pages/checkins-page";
 import CheckinDetailPage from "@/pages/checkin-detail-page";
@@ -42,10 +43,54 @@ import { AuthProvider } from "./hooks/use-auth";
 import { UserRole } from "@shared/schema";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { Button } from "@/components/ui/button";
+
+const PAGE_TITLES: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/customers": "Clientes",
+  "/checkins": "Check-ins",
+  "/scheduled-visits": "Visitas Programadas",
+  "/quotations": "Cotizaciones",
+  "/credit-auth": "Autorización de Crédito",
+  "/orders": "Pedidos",
+  "/production": "Producción",
+  "/board": "Tablero de Producción",
+  "/shipments": "Embarques",
+  "/accounts-receivable": "Facturación",
+  "/payments": "Cobranza",
+  "/reports": "Reportes",
+  "/incidents": "Incidentes",
+  "/products": "Productos",
+  "/users": "Usuarios",
+  "/company-settings": "Configuración de Empresa",
+  "/microsip": "Integración Microsip",
+  "/tenants": "Gestionar Empresas",
+};
+
+function getPageTitle(location: string): string {
+  if (location.startsWith("/checkins/")) return "Detalle de Check-in";
+  if (location.startsWith("/incidents/")) return "Detalle de Incidente";
+  return PAGE_TITLES[location] ?? "Nexxo";
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleTheme}
+      data-testid="button-theme-toggle"
+      aria-label="Cambiar tema"
+    >
+      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </Button>
+  );
+}
 
 function SmartLandingPage() {
   const { user, isLoading } = useAuth();
-  
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -53,11 +98,11 @@ function SmartLandingPage() {
       </div>
     );
   }
-  
+
   if (user) {
     return <Redirect to="/dashboard" />;
   }
-  
+
   return <LandingPage />;
 }
 
@@ -91,18 +136,26 @@ function Router() {
 }
 
 function MainLayout() {
+  const [location] = useLocation();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
+
+  const pageTitle = getPageTitle(location);
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center h-14 px-4 border-b bg-background shrink-0">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+          <header className="flex items-center justify-between h-14 px-4 border-b bg-background/95 backdrop-blur shrink-0 sticky top-0 z-50">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="h-5 w-px bg-border" />
+              <h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1>
+            </div>
+            <ThemeToggle />
           </header>
           <main className="flex-1 overflow-y-auto bg-background p-6">
             <Router />
@@ -127,29 +180,31 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TenantProvider>
-        <AuthProvider>
-          <TooltipProvider>
-            {isPublicRoute ? (
-              <Switch>
-                <Route path="/" component={SmartLandingPage} />
-                <Route path="/auth" component={AuthPage} />
-                <Route path="/forgot-password" component={ForgotPasswordPage} />
-                <Route path="/reset-password" component={ResetPasswordPage} />
-                <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
-                <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
-                <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
-                <Route path="/soporte" component={PublicSupportPage} />
-              </Switch>
-            ) : isBoardRoute ? (
-              <ProtectedRoute path="/board" component={ProductionBoardPage} />
-            ) : (
-              <MainLayout />
-            )}
-            <Toaster />
-          </TooltipProvider>
-        </AuthProvider>
-      </TenantProvider>
+      <ThemeProvider>
+        <TenantProvider>
+          <AuthProvider>
+            <TooltipProvider>
+              {isPublicRoute ? (
+                <Switch>
+                  <Route path="/" component={SmartLandingPage} />
+                  <Route path="/auth" component={AuthPage} />
+                  <Route path="/forgot-password" component={ForgotPasswordPage} />
+                  <Route path="/reset-password" component={ResetPasswordPage} />
+                  <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
+                  <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
+                  <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
+                  <Route path="/soporte" component={PublicSupportPage} />
+                </Switch>
+              ) : isBoardRoute ? (
+                <ProtectedRoute path="/board" component={ProductionBoardPage} />
+              ) : (
+                <MainLayout />
+              )}
+              <Toaster />
+            </TooltipProvider>
+          </AuthProvider>
+        </TenantProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
