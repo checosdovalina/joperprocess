@@ -19,6 +19,7 @@ interface SendQuotationEmailParams {
 
 function useLocalStorage(): boolean {
   return process.env.USE_LOCAL_STORAGE === "true" || 
+         process.env.NODE_ENV !== "production" ||
          (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
 }
 

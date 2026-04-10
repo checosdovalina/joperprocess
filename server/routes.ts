@@ -4048,13 +4048,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         });
       }
 
-      // Check if expired
-      if (quotation.validUntil && new Date(quotation.validUntil) < new Date()) {
-        return res.json({
-          ...quotation,
-          alreadyProcessed: true,
-          decision: "expired",
-        });
+      // Check if expired — use end of validUntil day (23:59:59) so the full day is valid
+      if (quotation.validUntil) {
+        const expiry = new Date(quotation.validUntil);
+        expiry.setHours(23, 59, 59, 999);
+        if (expiry < new Date()) {
+          return res.json({
+            ...quotation,
+            alreadyProcessed: true,
+            decision: "expired",
+          });
+        }
       }
 
       // Get items
@@ -4095,9 +4099,13 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Esta cotización ya fue procesada" });
       }
 
-      // Check if expired
-      if (quotation.validUntil && new Date(quotation.validUntil) < new Date()) {
-        return res.status(400).json({ error: "Esta cotización ha expirado" });
+      // Check if expired — use end of validUntil day (23:59:59)
+      if (quotation.validUntil) {
+        const expiry = new Date(quotation.validUntil);
+        expiry.setHours(23, 59, 59, 999);
+        if (expiry < new Date()) {
+          return res.status(400).json({ error: "Esta cotización ha expirado" });
+        }
       }
 
       const now = new Date();
