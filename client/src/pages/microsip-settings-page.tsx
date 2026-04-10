@@ -41,6 +41,7 @@ export default function MicrosipSettingsPage() {
     host: "",
     port: 3050,
     database: "",
+    cxcDatabase: "",
     username: "",
     password: "",
     enabled: false,
@@ -67,6 +68,7 @@ export default function MicrosipSettingsPage() {
         host: config.host || "",
         port: config.port || 3050,
         database: config.database || "",
+        cxcDatabase: config.cxcDatabase || "",
         username: config.username || "",
         password: config.password || "",
         enabled: config.enabled || false,
@@ -329,7 +331,7 @@ export default function MicrosipSettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="database">Ruta de la base de datos</Label>
+              <Label htmlFor="database">Base de datos principal (Inventario)</Label>
               <Input
                 id="database"
                 placeholder="C:\Microsip\Base de Datos\EMPRESA.FDB"
@@ -338,7 +340,21 @@ export default function MicrosipSettingsPage() {
                 data-testid="input-database"
               />
               <p className="text-xs text-muted-foreground">
-                Ruta completa al archivo .FDB en el servidor de Microsip
+                Ruta al archivo .FDB principal (clientes, productos, categorías)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cxcDatabase">Base de datos CXC / Facturas <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+              <Input
+                id="cxcDatabase"
+                placeholder="C:\Microsip\Base de Datos\EMPRESA_CXC.FDB"
+                value={formData.cxcDatabase}
+                onChange={(e) => setFormData({ ...formData, cxcDatabase: e.target.value })}
+                data-testid="input-cxc-database"
+              />
+              <p className="text-xs text-muted-foreground">
+                Solo si tu instalación de Microsip tiene las facturas (DOCTOS_VE) en una base de datos separada. Déjalo vacío para usar la misma base de datos principal.
               </p>
             </div>
 

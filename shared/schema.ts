@@ -1191,7 +1191,8 @@ export const microsipConfigs = pgTable("microsip_configs", {
   // Firebird connection settings
   host: text("host").notNull(), // Firebird server IP or hostname
   port: integer("port").notNull().default(3050), // Default Firebird port
-  database: text("database").notNull(), // Path to .fdb file on the server
+  database: text("database").notNull(), // Path to .fdb file on the server (inventory/master data)
+  cxcDatabase: text("cxc_database"), // Optional: separate .fdb for CXC/facturas (DOCTOS_VE, DOCTOS_CC)
   username: text("username").notNull(),
   password: text("password").notNull(), // Encrypted in production
   // Sync settings

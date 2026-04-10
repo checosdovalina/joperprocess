@@ -112,13 +112,17 @@ class MicrosipSyncService {
     return true;
   }
 
-  private getFirebirdOptions(): Firebird.Options {
+  private getFirebirdOptions(useCxc: boolean = false): Firebird.Options {
     if (!this.config) throw new Error('Config not loaded');
     
+    const database = (useCxc && this.config.cxcDatabase)
+      ? this.config.cxcDatabase
+      : this.config.database;
+
     return {
       host: this.config.host,
       port: this.config.port,
-      database: this.config.database,
+      database,
       user: this.config.username,
       password: this.config.password,
       lowercase_keys: false,
@@ -127,9 +131,9 @@ class MicrosipSyncService {
     };
   }
 
-  private connect(): Promise<FirebirdConnection> {
+  private connect(useCxc: boolean = false): Promise<FirebirdConnection> {
     return new Promise((resolve, reject) => {
-      const options = this.getFirebirdOptions();
+      const options = this.getFirebirdOptions(useCxc);
       
       // Add connection timeout of 15 seconds
       const timeout = setTimeout(() => {
@@ -424,8 +428,10 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect();
       
-      const microsipCategories = await this.query<MicrosipCategory & { ESTATUS?: string }>(fbDb, `
-        SELECT LINEA_ARTICULO_ID, NOMBRE, ESTATUS
+      // Note: LINEAS_ARTICULOS may not have ESTATUS column in all Microsip versions
+      // We fetch without it and treat all categories as active
+      const microsipCategories = await this.query<MicrosipCategory>(fbDb, `
+        SELECT LINEA_ARTICULO_ID, NOMBRE
         FROM LINEAS_ARTICULOS
       `);
 
@@ -443,13 +449,10 @@ class MicrosipSyncService {
               eq(productCategories.microsipLineaId, msCategory.LINEA_ARTICULO_ID)
             ));
 
-          const msEstatusRaw = (msCategory as any).ESTATUS;
-          const categoryActive = !msEstatusRaw || msEstatusRaw === 'A';
-
           const categoryData = {
             name: msCategory.NOMBRE?.trim() || 'Sin categoría',
             description: null,
-            active: categoryActive,
+            active: true,
             microsipLineaId: msCategory.LINEA_ARTICULO_ID,
             microsipSyncedAt: new Date(),
           };
@@ -684,7 +687,8 @@ class MicrosipSyncService {
     const stats = { processed: 0, created: 0, updated: 0, skipped: 0 };
 
     try {
-      fbDb = await this.connect();
+      // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
+      fbDb = await this.connect(true);
       
       // Query invoices - filter by TIPO_DOCTO = 'F' for invoices only
       // Using IMPORTE_COBRO as total, PLAZOS_COND_PAG.DIAS_PLAZO for credit days
@@ -845,7 +849,8 @@ class MicrosipSyncService {
     const affectedInvoiceIds = new Set<string>();
 
     try {
-      fbDb = await this.connect();
+      // Use CXC database if configured (some Microsip installations have DOCTOS_CC in a separate DB)
+      fbDb = await this.connect(true);
       
       // Query payments with invoice relationship
       // P = Recibo (pago), I = IMPORTES_DOCTOS_CC (liga pago con cargo CXC)
