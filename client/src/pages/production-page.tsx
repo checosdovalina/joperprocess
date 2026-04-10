@@ -214,7 +214,6 @@ export default function ProductionPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Folio</TableHead>
-            <TableHead>Cliente</TableHead>
             <TableHead>Fecha</TableHead>
             <TableHead>Progreso</TableHead>
             <TableHead>Entrega Est.</TableHead>
@@ -225,7 +224,6 @@ export default function ProductionPage() {
           {ordersList.map((order) => (
             <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
               <TableCell className="font-medium">{order.quotation.folio}</TableCell>
-              <TableCell>{order.quotation.customer.name}</TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {format(new Date(order.createdAt), "dd/MM/yyyy", { locale: es })}
               </TableCell>
@@ -426,7 +424,7 @@ export default function ProductionPage() {
               Gestión de Producción
             </DialogTitle>
             <DialogDescription>
-              {orderDetails?.quotation.folio} - {orderDetails?.quotation.customer.name}
+              {orderDetails?.quotation.folio}
             </DialogDescription>
           </DialogHeader>
 
