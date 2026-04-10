@@ -1,13 +1,11 @@
 import { useState, useMemo } from "react";
-import { Check, ChevronsUpDown, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, Search, X, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
-  CommandItem,
   CommandList,
 } from "@/components/ui/command";
 import {
@@ -45,10 +43,15 @@ export function CustomerCombobox({
   const normalize = (str: string) =>
     str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
+  const sortedCustomers = useMemo(
+    () => [...customers].sort((a, b) => (a.name || "").localeCompare(b.name || "", "es")),
+    [customers]
+  );
+
   const filteredCustomers = useMemo(() => {
-    if (!search) return customers.slice(0, 50);
+    if (!search) return sortedCustomers.slice(0, 60);
     const query = normalize(search);
-    return customers
+    return sortedCustomers
       .filter(
         (c) =>
           normalize(c.name || "").includes(query) ||
@@ -58,8 +61,8 @@ export function CustomerCombobox({
           normalize(c.microsipCode || "").includes(query) ||
           normalize(c.address || "").includes(query)
       )
-      .slice(0, 50);
-  }, [customers, search]);
+      .slice(0, 60);
+  }, [sortedCustomers, search]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -72,72 +75,112 @@ export function CustomerCombobox({
           disabled={disabled}
           data-testid={testId}
         >
-          <span className="truncate">
-            {selectedCustomer ? selectedCustomer.name : placeholder}
-          </span>
+          {selectedCustomer ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="truncate font-medium">{selectedCustomer.name}</span>
+              {selectedCustomer.microsipCode && (
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {selectedCustomer.microsipCode}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" align="start">
+      <PopoverContent className="w-[480px] p-0" align="start">
         <Command shouldFilter={false}>
-          <div className="flex items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+          <div className="flex items-center border-b px-3 gap-2">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
-              className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Buscar por nombre, RFC, clave, teléfono..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid={`${testId}-search`}
+              autoFocus
             />
             {search && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
                 onClick={() => setSearch("")}
               >
-                <X className="h-3 w-3" />
+                <X className="h-4 w-4" />
               </Button>
             )}
           </div>
-          <CommandList>
+          <CommandList className="max-h-[320px]">
             <CommandEmpty>
-              {search
-                ? "No se encontraron clientes"
-                : "Escribe para buscar..."}
+              {search ? "No se encontraron clientes" : "Escribe para buscar..."}
             </CommandEmpty>
             <CommandGroup>
               {filteredCustomers.map((customer) => (
-                <CommandItem
+                <div
                   key={customer.id}
-                  value={customer.id}
-                  onSelect={() => {
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 cursor-pointer hover-elevate rounded-md mx-1 my-0.5",
+                    value === customer.id && "bg-primary/10"
+                  )}
+                  onClick={() => {
                     onValueChange(customer.id);
                     setOpen(false);
                     setSearch("");
                   }}
-                  className="cursor-pointer"
                   data-testid={`${testId}-option-${customer.id}`}
                 >
+                  <div className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                    value === customer.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    {(customer.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className={cn(
+                      "text-sm font-medium truncate",
+                      value === customer.id && "text-primary"
+                    )}>
+                      {customer.name}
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {customer.microsipCode && (
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {customer.microsipCode}
+                        </span>
+                      )}
+                      {customer.rfc && (
+                        <span className="text-xs text-muted-foreground">
+                          RFC: {customer.rfc}
+                        </span>
+                      )}
+                      {customer.phone && (
+                        <span className="text-xs text-muted-foreground">
+                          {customer.phone}
+                        </span>
+                      )}
+                      {customer.city && (
+                        <span className="text-xs text-muted-foreground">
+                          {customer.city}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "h-4 w-4 shrink-0 text-primary",
                       value === customer.id ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <div className="flex flex-col">
-                    <span className="font-medium">{customer.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {[customer.rfc, customer.city, customer.phone]
-                        .filter(Boolean)
-                        .join(" • ")}
-                    </span>
-                  </div>
-                </CommandItem>
+                </div>
               ))}
-              {filteredCustomers.length === 50 && (
-                <div className="py-2 px-4 text-xs text-muted-foreground text-center">
-                  Mostrando primeros 50 resultados. Escribe para filtrar más.
+              {filteredCustomers.length === 60 && (
+                <div className="py-2 px-4 text-xs text-muted-foreground text-center border-t">
+                  Mostrando 60 resultados. Escribe para filtrar.
                 </div>
               )}
             </CommandGroup>

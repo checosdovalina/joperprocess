@@ -1037,20 +1037,30 @@ class MicrosipSyncService {
   }
 
   async syncAll(): Promise<{
-    categories: { created: number; updated: number; skipped: number };
-    customers: { created: number; updated: number; skipped: number };
-    products: { created: number; updated: number; skipped: number };
-    invoices: { created: number; updated: number; skipped: number };
-    payments: { created: number; updated: number; skipped: number };
+    categories: { created: number; updated: number; skipped: number; error?: string };
+    customers: { created: number; updated: number; skipped: number; error?: string };
+    products: { created: number; updated: number; skipped: number; error?: string };
+    invoices: { created: number; updated: number; skipped: number; error?: string };
+    payments: { created: number; updated: number; skipped: number; error?: string };
   }> {
     console.log(`[Microsip] Starting full sync for tenant ${this.tenantId}`);
-    
+    const empty = { created: 0, updated: 0, skipped: 0 };
+
+    const safe = async (fn: () => Promise<{ created: number; updated: number; skipped: number }>) => {
+      try { return await fn(); }
+      catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[Microsip] syncAll partial error:', msg);
+        return { ...empty, error: msg };
+      }
+    };
+
     const results = {
-      categories: await this.syncCategories(),
-      customers: await this.syncCustomers(),
-      products: await this.syncProducts(),
-      invoices: await this.syncInvoices(),
-      payments: await this.syncPayments(),
+      categories: await safe(() => this.syncCategories()),
+      customers:  await safe(() => this.syncCustomers()),
+      products:   await safe(() => this.syncProducts()),
+      invoices:   await safe(() => this.syncInvoices()),
+      payments:   await safe(() => this.syncPayments()),
     };
 
     console.log(`[Microsip] Full sync complete for tenant ${this.tenantId}`);

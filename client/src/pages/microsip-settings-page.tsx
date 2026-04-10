@@ -138,10 +138,29 @@ export default function MicrosipSettingsPage() {
     onSuccess: (data) => {
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ["/api/microsip/logs"] });
-        toast({
-          title: "Sincronización completada",
-          description: "Los datos han sido sincronizados correctamente.",
-        });
+        const result = data.result;
+        const errors: string[] = [];
+        if (result && typeof result === "object") {
+          const labels: Record<string, string> = {
+            categories: "Categorías", customers: "Clientes",
+            products: "Productos", invoices: "Facturas", payments: "Pagos",
+          };
+          for (const key of Object.keys(labels)) {
+            if (result[key]?.error) errors.push(`${labels[key]}: ${result[key].error}`);
+          }
+        }
+        if (errors.length > 0) {
+          toast({
+            title: "Sincronización parcial",
+            description: `Algunas entidades fallaron: ${errors.join("; ")}`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Sincronización completada",
+            description: "Los datos han sido sincronizados correctamente.",
+          });
+        }
       } else {
         toast({
           title: "Error en sincronización",
