@@ -104,12 +104,15 @@ export default function ProductionPage() {
 
   const quickShipMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      // Create a shipment record for the order
       const res = await apiRequest("POST", `/api/shipments`, { 
         orderId,
         transporter: "Por asignar",
         transportType: "propio",
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error al enviar a embarque");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -117,8 +120,8 @@ export default function ProductionPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
     },
-    onError: () => {
-      toast({ title: "Error", description: "No se pudo enviar a embarque", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "No se pudo enviar a embarque", variant: "destructive" });
     },
   });
 

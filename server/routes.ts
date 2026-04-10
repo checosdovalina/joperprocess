@@ -3035,7 +3035,24 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const validated = insertShipmentSchema.parse(req.body);
+
+      // Prevent duplicate shipments for the same order
+      if (validated.orderId) {
+        const existing = await db.query.shipments.findFirst({
+          where: eq(shipments.orderId, validated.orderId),
+        });
+        if (existing) {
+          return res.status(409).json({ error: "Ya existe un embarque para este pedido" });
+        }
+      }
+
       const shipment = await scopedStorage.createShipment(validated);
+
+      // Mark order as SHIPPED so the button disappears from production
+      if (validated.orderId) {
+        await scopedStorage.updateOrder(validated.orderId, { status: OrderStatus.SHIPPED });
+      }
+
       res.status(201).json(shipment);
     } catch (error) {
       console.error("Error creating shipment:", error);
