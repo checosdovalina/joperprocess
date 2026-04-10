@@ -3064,7 +3064,14 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const updatedShipment = await scopedStorage.updateShipment(id, req.body);
+      const data = { ...req.body };
+      if (data.shippedAt && typeof data.shippedAt === "string") {
+        data.shippedAt = new Date(data.shippedAt);
+      }
+      if (data.deliveredAt && typeof data.deliveredAt === "string") {
+        data.deliveredAt = new Date(data.deliveredAt);
+      }
+      const updatedShipment = await scopedStorage.updateShipment(id, data);
       if (!updatedShipment) {
         return res.status(404).json({ error: "Shipment not found" });
       }
