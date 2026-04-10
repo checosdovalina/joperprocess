@@ -138,12 +138,18 @@ export default function ShipmentsPage() {
   const updateShipmentMutation = useMutation({
     mutationFn: async (data: { transporter?: string; transportType?: string; trackingNumber?: string; driverName?: string; vehiclePlates?: string; status?: string; shippedAt?: string }) => {
       if (!selectedShipment) throw new Error("No shipment selected");
-      return apiRequest("PATCH", `/api/shipments/${selectedShipment.id}`, data);
+      const res = await apiRequest("PATCH", `/api/shipments/${selectedShipment.id}`, data);
+      if (!res.ok) throw new Error("Error al actualizar");
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast({ title: "Embarque actualizado", description: "La información se guardó correctamente" });
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
       setEditMode(false);
+      // Update local state so status buttons reflect the new status immediately
+      if (selectedShipment && updated) {
+        setSelectedShipment({ ...selectedShipment, ...updated });
+      }
     },
     onError: () => {
       toast({ title: "Error", description: "No se pudo actualizar el embarque", variant: "destructive" });

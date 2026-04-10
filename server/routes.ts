@@ -46,6 +46,7 @@ import {
   QuotationStatus,
   CreditAuthStatus,
   OrderStatus,
+  ShipmentStatus,
   InvoiceStatus,
   ScheduledVisitStatus,
   MeetingType,
@@ -3064,6 +3065,19 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
+
+      // Guard: validate status transitions
+      if (req.body.status) {
+        const current = await scopedStorage.getShipment(id);
+        if (!current) return res.status(404).json({ error: "Shipment not found" });
+        const order = [ShipmentStatus.PENDING, ShipmentStatus.IN_TRANSIT, ShipmentStatus.DELIVERED];
+        const currentIdx = order.indexOf(current.status as any);
+        const newIdx = order.indexOf(req.body.status);
+        if (newIdx <= currentIdx) {
+          return res.status(409).json({ error: "El embarque ya tiene ese estado o uno posterior" });
+        }
+      }
+
       const data = { ...req.body };
       if (data.shippedAt && typeof data.shippedAt === "string") {
         data.shippedAt = new Date(data.shippedAt);
