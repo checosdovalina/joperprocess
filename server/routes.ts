@@ -1275,8 +1275,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderBy: (products, { desc, asc }) => [desc(products.listPrice), asc(products.name)],
       });
       
-      // Filter out products whose category is inactive
-      productsData = productsData.filter(p => !p.categoryId || p.category?.active !== false);
+      // Filter out products whose category is inactive.
+      // A product is shown if: it has no category, OR its category is explicitly active (true).
+      // If category is null/undefined (deleted), hide to be safe.
+      productsData = productsData.filter(p => {
+        if (!p.categoryId) return true;           // no category → show
+        if (!p.category) return false;            // category deleted → hide
+        return p.category.active === true;        // only show if category is explicitly active
+      });
 
       // Filter by search query if provided
       if (q && typeof q === 'string') {

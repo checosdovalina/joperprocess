@@ -449,22 +449,23 @@ class MicrosipSyncService {
               eq(productCategories.microsipLineaId, msCategory.LINEA_ARTICULO_ID)
             ));
 
-          const categoryData = {
-            name: msCategory.NOMBRE?.trim() || 'Sin categoría',
-            description: null,
-            active: true,
-            microsipLineaId: msCategory.LINEA_ARTICULO_ID,
-            microsipSyncedAt: new Date(),
-          };
-
           if (existing) {
+            // For existing categories: update name only, preserve the user's active/inactive setting
             await db.update(productCategories)
-              .set(categoryData)
+              .set({
+                name: msCategory.NOMBRE?.trim() || 'Sin categoría',
+                microsipSyncedAt: new Date(),
+              })
               .where(eq(productCategories.id, existing.id));
             stats.updated++;
           } else {
+            // For new categories: default to active=true
             await db.insert(productCategories).values({
-              ...categoryData,
+              name: msCategory.NOMBRE?.trim() || 'Sin categoría',
+              description: null,
+              active: true,
+              microsipLineaId: msCategory.LINEA_ARTICULO_ID,
+              microsipSyncedAt: new Date(),
               tenantId: this.tenantId,
             });
             stats.created++;
