@@ -210,17 +210,18 @@ export default function ScheduledVisitsPage() {
   const cancelledVisits = visits?.filter(v => v.status === "cancelled") || [];
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold" data-testid="title-scheduled-visits">Visitas Programadas</h1>
+    <div className="container mx-auto p-4 md:p-6 space-y-6">
+      <div className="flex justify-between items-center gap-3">
+        <h1 className="text-xl md:text-3xl font-bold" data-testid="title-scheduled-visits">Visitas Programadas</h1>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
           if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
-            <Button data-testid="button-create-visit">
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Visita
+            <Button size="default" data-testid="button-create-visit" className="shrink-0">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline ml-2">Nueva Visita</span>
+              <span className="sm:hidden ml-1">Nueva</span>
             </Button>
           </DialogTrigger>
           <DialogContent data-testid="dialog-create-visit">
