@@ -32,6 +32,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -144,6 +145,11 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
   const { tenant, selectedTenantId, setSelectedTenantId } = useTenant();
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   const { data: tenants = [] } = useQuery<Tenant[]>({
     queryKey: ["/api/tenants"],
@@ -189,10 +195,11 @@ export function AppSidebar() {
                       asChild
                       isActive={location === item.url || location.startsWith(item.url + "/")}
                       data-testid={`link-${item.url.slice(1) || "dashboard"}`}
+                      size="lg"
                     >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                      <Link href={item.url} onClick={handleNavClick}>
+                        <item.icon className="h-5 w-5 shrink-0" />
+                        <span className="text-sm">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -232,10 +239,11 @@ export function AppSidebar() {
                     asChild
                     isActive={location === "/tenants"}
                     data-testid="link-tenants"
+                    size="lg"
                   >
-                    <Link href="/tenants">
-                      <Globe className="h-4 w-4" />
-                      <span>Gestionar Empresas</span>
+                    <Link href="/tenants" onClick={handleNavClick}>
+                      <Globe className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Gestionar Empresas</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
