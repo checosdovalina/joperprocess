@@ -700,7 +700,7 @@ export function QuotationForm({
                           </FormControl>
                           <div className="space-y-1 leading-none">
                             <FormLabel className="cursor-pointer">
-                              Envío por cuenta de Joper (sin costo)
+                              Envío por cuenta de Joper (sin costo al cliente)
                             </FormLabel>
                             <p className="text-xs text-muted-foreground">
                               Requiere autorización del administrador antes de enviar al cliente

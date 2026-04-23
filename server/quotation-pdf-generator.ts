@@ -120,7 +120,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     // HEADER BAND — full width colored bar
     // ═══════════════════════════════════════════════
-    const HEADER_H = 100;
+    const HEADER_H = 112;
     doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
 
     // Logo: always on the LEFT side
@@ -140,20 +140,19 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.fontSize(13).font("Helvetica-Bold").fillColor("#ffffff");
     doc.text(companyName.toUpperCase(), TEXT_X, 14, { width: TEXT_W, align: "right", lineBreak: false });
 
-    // Company info lines — each on its own fixed Y, never wraps
+    // Company info lines — each part on its own line to avoid overflow
     const infoLines: string[] = [];
     if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-    const cityState = [tenant?.city, tenant?.state].filter(Boolean).join(", ");
-    const zipPart  = tenant?.zipCode ? `C.P. ${tenant.zipCode}` : "";
-    const addrLine = [tenant?.address, cityState, zipPart].filter(Boolean).join("  •  ");
-    if (addrLine) infoLines.push(addrLine);
+    if (tenant?.address) infoLines.push(tenant.address);
+    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+    if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
     const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
 
     doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
     infoLines.forEach((line, i) => {
-      doc.text(line, TEXT_X, 32 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
+      doc.text(line, TEXT_X, 33 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
     });
 
     // ═══════════════════════════════════════════════
@@ -268,30 +267,36 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.text("Subtotal",   cols.total.x+ 2, currentY + 4, { width: cols.total.w- 4, align: "right" });
     currentY += TH;
 
-    // Table rows
-    const ROW_H = 16;
+    // Table rows — dynamic height to handle long product names
+    const ROW_PAD = 4;
+    const MIN_ROW_H = 16;
     doc.fontSize(7.5).font("Helvetica");
 
     items.forEach((item, index) => {
-      if (currentY > PAGE_H - 160) {
+      // Calculate row height based on description text wrapping
+      const descH = doc.heightOfString(item.productName, { width: cols.desc.w - 4 });
+      const rowH = Math.max(MIN_ROW_H, descH + ROW_PAD * 2);
+
+      if (currentY + rowH > PAGE_H - 160) {
         doc.addPage({ size: "LETTER", margin: 0 });
         currentY = 20;
       }
 
       const rowBg = index % 2 === 0 ? "#ffffff" : lightColor;
-      doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(rowBg);
+      doc.rect(MARGIN, currentY, CONTENT_W, rowH).fill(rowBg);
       doc.fillColor("#333333");
 
-      const rowY = currentY + 4;
-      doc.text(String(index + 1),  cols.num.x  + 2, rowY, { width: cols.num.w  - 2, align: "center" });
-      doc.text(item.productCode || "-", cols.code.x + 2, rowY, { width: cols.code.w - 4 });
+      const rowY = currentY + ROW_PAD;
+      doc.text(String(index + 1),  cols.num.x  + 2, rowY, { width: cols.num.w  - 2, align: "center", lineBreak: false });
+      doc.text(item.productCode || "-", cols.code.x + 2, rowY, { width: cols.code.w - 4, lineBreak: false });
+      // Description allows wrapping
       doc.text(item.productName,   cols.desc.x + 2, rowY, { width: cols.desc.w - 4 });
-      doc.text(parseFloat(item.quantity).toString(), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center" });
-      doc.text(formatCurrency(item.unitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right" });
-      doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center" });
-      doc.text(formatCurrency(item.subtotal), cols.total.x + 2, rowY, { width: cols.total.w - 4, align: "right" });
+      doc.text(parseFloat(item.quantity).toString(), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
+      doc.text(formatCurrency(item.unitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
+      doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
+      doc.text(formatCurrency(item.subtotal), cols.total.x + 2, rowY, { width: cols.total.w - 4, align: "right", lineBreak: false });
 
-      currentY += ROW_H;
+      currentY += rowH;
     });
 
     // Bottom border of table
@@ -352,15 +357,37 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // NOTES
     // ═══════════════════════════════════════════════
     if (quotation.notes) {
+      const notesH = Math.max(40, doc.heightOfString(quotation.notes, { width: CONTENT_W - 12 }) + 16);
       doc.rect(MARGIN, currentY, CONTENT_W, 14).fill(mediumColor);
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
       doc.text("NOTAS", MARGIN + 6, currentY + 3);
       currentY += 14;
 
-      doc.rect(MARGIN, currentY, CONTENT_W, 40).fill(lightColor);
+      doc.rect(MARGIN, currentY, CONTENT_W, notesH).fill(lightColor);
       doc.fontSize(8).font("Helvetica").fillColor("#444");
       doc.text(quotation.notes, MARGIN + 6, currentY + 6, { width: CONTENT_W - 12 });
-      currentY += 50;
+      currentY += notesH + 10;
+    }
+
+    // ═══════════════════════════════════════════════
+    // CONDITIONS
+    // ═══════════════════════════════════════════════
+    if ((quotation as any).conditions) {
+      const condText = (quotation as any).conditions as string;
+      const condH = Math.max(40, doc.heightOfString(condText, { width: CONTENT_W - 12 }) + 16);
+      if (currentY + condH + 30 > PAGE_H - 60) {
+        doc.addPage({ size: "LETTER", margin: 0 });
+        currentY = 20;
+      }
+      doc.rect(MARGIN, currentY, CONTENT_W, 14).fill(mediumColor);
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
+      doc.text("CONDICIONES", MARGIN + 6, currentY + 3);
+      currentY += 14;
+
+      doc.rect(MARGIN, currentY, CONTENT_W, condH).fill(lightColor);
+      doc.fontSize(8).font("Helvetica").fillColor("#444");
+      doc.text(condText, MARGIN + 6, currentY + 6, { width: CONTENT_W - 12 });
+      currentY += condH + 10;
     }
 
     // ═══════════════════════════════════════════════

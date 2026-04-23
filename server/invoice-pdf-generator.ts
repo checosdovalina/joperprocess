@@ -88,7 +88,7 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     // ═══════════════════════════════════════════════
     // HEADER BAND
     // ═══════════════════════════════════════════════
-    const HEADER_H = 100;
+    const HEADER_H = 112;
     doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
 
     // Logo: always on the LEFT side
@@ -107,16 +107,16 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
 
     const infoLines: string[] = [];
     if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-    const cityState = [tenant?.city, tenant?.state].filter(Boolean).join(", ");
-    const addrLine = [tenant?.address, cityState, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : ""].filter(Boolean).join("  •  ");
-    if (addrLine) infoLines.push(addrLine);
+    if (tenant?.address) infoLines.push(tenant.address);
+    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+    if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
     const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
 
     doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
     infoLines.forEach((line, i) => {
-      doc.text(line, TEXT_X, 32 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
+      doc.text(line, TEXT_X, 33 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
     });
 
     // ═══════════════════════════════════════════════

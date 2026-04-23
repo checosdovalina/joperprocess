@@ -158,7 +158,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       // ═══════════════════════════════════════════════
       // HEADER BAND
       // ═══════════════════════════════════════════════
-      const HEADER_H = 100;
+      const HEADER_H = 112;
       doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
 
       // Logo: always on the LEFT side
@@ -386,30 +386,6 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
           currentY += PHOTO_MAX_H + 10;
         }
       }
-
-      // ═══════════════════════════════════════════════
-      // SIGNATURE AREA
-      // ═══════════════════════════════════════════════
-      if (currentY + 80 > PAGE_H - 60) {
-        doc.addPage({ size: "LETTER", margin: 0 });
-        currentY = 20;
-      }
-
-      currentY += 20;
-      const SIG_W = (CONTENT_W / 2) - 20;
-      const SIG_X2 = MARGIN + CONTENT_W / 2 + 20;
-      const SIG_LINE_Y = currentY + 50;
-
-      // Signature lines
-      doc.moveTo(MARGIN, SIG_LINE_Y).lineTo(MARGIN + SIG_W, SIG_LINE_Y).stroke(mediumColor);
-      doc.moveTo(SIG_X2, SIG_LINE_Y).lineTo(SIG_X2 + SIG_W, SIG_LINE_Y).stroke(mediumColor);
-
-      doc.fontSize(8).font("Helvetica").fillColor("#666");
-      doc.text("Firma del Vendedor", MARGIN, SIG_LINE_Y + 4, { width: SIG_W, align: "center" });
-      doc.text(user.fullName, MARGIN, SIG_LINE_Y + 14, { width: SIG_W, align: "center" });
-
-      doc.text("Firma del Cliente / Representante", SIG_X2, SIG_LINE_Y + 4, { width: SIG_W, align: "center" });
-      doc.text(customer.contactName || customer.name, SIG_X2, SIG_LINE_Y + 14, { width: SIG_W, align: "center" });
 
       // ═══════════════════════════════════════════════
       // FOOTER
