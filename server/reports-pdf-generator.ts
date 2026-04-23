@@ -139,7 +139,9 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
 
         const infoLines: string[] = [];
         if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-        if (tenant?.address) infoLines.push(tenant.address);
+        if (tenant?.address) {
+          tenant.address.split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean).forEach((part: string) => infoLines.push(part));
+        }
         const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
         if (cityParts.length) infoLines.push(cityParts.join(", "));
         const contact = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);

@@ -120,7 +120,9 @@ export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Prom
 
     const infoLines: string[] = [];
     if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-    if (tenant?.address) infoLines.push(tenant.address);
+    if (tenant?.address) {
+      tenant.address.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(part => infoLines.push(part));
+    }
     const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
     if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
     const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);

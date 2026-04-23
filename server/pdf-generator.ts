@@ -180,7 +180,9 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       // Build info lines — split address into street and city/state for readability
       const infoLines: string[] = [];
       if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
-      if (tenant?.address) infoLines.push(tenant.address);
+      if (tenant?.address) {
+        tenant.address.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(part => infoLines.push(part));
+      }
       const cityStateParts = [
         tenant?.city,
         tenant?.state,
