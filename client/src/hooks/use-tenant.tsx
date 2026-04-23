@@ -8,6 +8,7 @@ export interface TenantConfig {
   logoUrl: string | null;
   primaryColor: string | null;
   secondaryColor: string | null;
+  timezone: string | null;
 }
 
 interface TenantContextType {

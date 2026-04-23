@@ -35,6 +35,7 @@ export const tenants = pgTable("tenants", {
   state: text("state"),
   zipCode: text("zip_code"),
   country: text("country").default("México"),
+  timezone: text("timezone").default("America/Mexico_City"),
   // Billing/subscription info (for future)
   plan: text("plan").default("basic"), // basic, professional, enterprise
   maxUsers: integer("max_users").default(10),

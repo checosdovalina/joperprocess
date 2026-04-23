@@ -20,6 +20,7 @@ interface TenantBranding {
   email?: string | null;
   website?: string | null;
   rfc?: string | null;
+  timezone?: string | null;
 }
 
 interface MinuteData {
@@ -130,11 +131,12 @@ function lightenColor(hex: string, amount: number): string {
   return `#${lr.toString(16).padStart(2, "0")}${lg.toString(16).padStart(2, "0")}${lb.toString(16).padStart(2, "0")}`;
 }
 
-function formatDateTime(date: Date | string): string {
+function formatDateTime(date: Date | string, timezone?: string | null): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleString("es-MX", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
+    timeZone: timezone || "America/Mexico_City",
   });
 }
 
@@ -215,7 +217,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       doc.text("MINUTA DE VISITA A CLIENTE", MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2 });
 
       // Visit date on right
-      const visitDate = formatDateTime(checkin.checkinAt);
+      const visitDate = formatDateTime(checkin.checkinAt, tenant.timezone);
       doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
       doc.text(visitDate, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 11, { width: CONTENT_W / 2, align: "right" });
 
@@ -264,8 +266,8 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       let rightY = currentY + 22;
       const visitRows: [string, string][] = [
         ["Vendedor:", user.fullName],
-        ["Check-in:", formatDateTime(checkin.checkinAt)],
-        ...(checkin.checkoutAt ? [["Check-out:", formatDateTime(checkin.checkoutAt)] as [string, string]] : []),
+        ["Check-in:", formatDateTime(checkin.checkinAt, tenant.timezone)],
+        ...(checkin.checkoutAt ? [["Check-out:", formatDateTime(checkin.checkoutAt, tenant.timezone)] as [string, string]] : []),
       ];
       if (checkin.latitude && checkin.longitude) {
         visitRows.push(["Ubicación:", `${Number(checkin.latitude).toFixed(4)}, ${Number(checkin.longitude).toFixed(4)}`]);
@@ -397,7 +399,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
 
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
       doc.text("Documento generado automáticamente. Válido como constancia de visita comercial.", MARGIN, FOOTER_Y + 6, { width: 260 });
-      doc.text(`Generado el ${formatDateTime(new Date())}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+      doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
 
       const footerRight: string[] = [];
       if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);

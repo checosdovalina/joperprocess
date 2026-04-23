@@ -135,6 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       logoUrl: req.tenant.logoUrl,
       primaryColor: req.tenant.primaryColor,
       secondaryColor: req.tenant.secondaryColor,
+      timezone: (req.tenant as any).timezone || "America/Mexico_City",
     });
   });
 
@@ -270,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allowedFields = [
         'name', 'legalName', 'rfc', 'website', 'email', 'phone', 
         'address', 'city', 'state', 'zipCode', 'country',
-        'primaryColor', 'secondaryColor'
+        'primaryColor', 'secondaryColor', 'timezone'
       ];
       
       const updateData: Record<string, any> = {};

@@ -15,6 +15,7 @@ interface TenantBranding {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  timezone?: string | null;
 }
 
 export interface ReportOrderItem {

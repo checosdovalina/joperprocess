@@ -14,6 +14,7 @@ interface TenantBranding {
   zipCode?: string | null;
   phone?: string | null;
   email?: string | null;
+  timezone?: string | null;
   website?: string | null;
   rfc?: string | null;
 }
@@ -46,16 +47,16 @@ function formatCurrency(value: string | number, currency: string = "MXN"): strin
   return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDate(date: Date | string | null): string {
+function formatDate(date: Date | string | null, timezone?: string | null): string {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
+  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric", timeZone: timezone || "America/Mexico_City" });
 }
 
-function formatDateTime(date: Date | string | null): string {
+function formatDateTime(date: Date | string | null, timezone?: string | null): string {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: timezone || "America/Mexico_City" });
 }
 
 function lightenColor(hex: string, amount: number): string {
@@ -182,8 +183,8 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
 
     let rightY = currentY + 22;
     const invoiceRows: [string, string][] = [
-      ["Fecha Emisión:", formatDate(invoice.issuedAt)],
-      ...(invoice.dueDate ? [["Vencimiento:", formatDate(invoice.dueDate)] as [string, string]] : []),
+      ["Fecha Emisión:", formatDate(invoice.issuedAt, tenant.timezone)],
+      ...(invoice.dueDate ? [["Vencimiento:", formatDate(invoice.dueDate, tenant.timezone)] as [string, string]] : []),
       ["Método Pago:", invoice.paymentMethod || "Por definir"],
       ["Forma Pago:",  invoice.paymentForm  || "Por definir"],
       ["Moneda:", invoice.currency || "MXN"],
@@ -249,7 +250,7 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
 
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
     doc.text("Representación impresa de Comprobante Fiscal Digital por Internet (CFDI).", MARGIN, FOOTER_Y + 6, { width: 280 });
-    doc.text(`Generado el ${formatDateTime(new Date())}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+    doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
 
     const footerRight: string[] = [];
     if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);

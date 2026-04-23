@@ -14,6 +14,7 @@ interface TenantBranding {
   zipCode?: string | null;
   phone?: string | null;
   email?: string | null;
+  timezone?: string | null;
   website?: string | null;
   rfc?: string | null;
 }
@@ -50,16 +51,16 @@ function formatCurrency(value: string | number | null, currency: string = "MXN")
   return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDate(date: Date | string | null): string {
+function formatDate(date: Date | string | null, timezone?: string | null): string {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric", timeZone: timezone || "America/Mexico_City" });
 }
 
-function formatDateTime(date: Date | string | null): string {
+function formatDateTime(date: Date | string | null, timezone?: string | null): string {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: timezone || "America/Mexico_City" });
 }
 
 function getStatusLabel(status: string): string {
@@ -190,9 +191,9 @@ export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Prom
     const quotRows: [string, string][] = [
       ["Folio:", quotation.folio],
       ["Importe:", formatCurrency(quotation.total, quotation.currency || "MXN")],
-      ["Fecha:", formatDate(quotation.createdAt)],
+      ["Fecha:", formatDate(quotation.createdAt, tenant.timezone)],
       ["Solicitado por:", requestedBy.fullName],
-      ["Solicitud:", formatDate(authorization.createdAt)],
+      ["Solicitud:", formatDate(authorization.createdAt, tenant.timezone)],
     ];
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
     const VALUE_W_R = COL_W - LABEL_W - 10;
@@ -260,7 +261,7 @@ export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Prom
       doc.font("Helvetica-Bold").fillColor("#555").text("Aprobado por:", MARGIN + 8, currentY + 8, { continued: true, width: 90 });
       doc.font("Helvetica").fillColor("#222").text(approvedBy.fullName);
       doc.font("Helvetica-Bold").fillColor("#555").text("Fecha:", MARGIN + 8, currentY + 20, { continued: true, width: 90 });
-      doc.font("Helvetica").fillColor("#222").text(formatDate(authorization.authorizedAt));
+      doc.font("Helvetica").fillColor("#222").text(formatDate(authorization.authorizedAt, tenant.timezone));
       currentY += 50;
 
       // Signature
@@ -306,7 +307,7 @@ export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Prom
 
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
     doc.text("Documento generado automáticamente. Válido como constancia de autorización de crédito.", MARGIN, FOOTER_Y + 6, { width: 280 });
-    doc.text(`Generado el ${formatDateTime(new Date())}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+    doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
 
     const footerRight: string[] = [];
     if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);

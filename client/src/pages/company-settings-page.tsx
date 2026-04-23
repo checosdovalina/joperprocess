@@ -18,10 +18,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Upload, Save, Loader2, Palette, TriangleAlert, Trash2, ShieldAlert, ChevronRight } from "lucide-react";
+import { Building2, Upload, Save, Loader2, Palette, TriangleAlert, Trash2, ShieldAlert, ChevronRight, Clock } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Tenant } from "@shared/schema";
 
 const CONFIRM_PHRASE = "CONFIRMAR RESET";
+
+const TIMEZONES = [
+  { value: "America/Mexico_City",   label: "Ciudad de México (CST/CDT)" },
+  { value: "America/Monterrey",     label: "Monterrey (CST/CDT)" },
+  { value: "America/Chihuahua",     label: "Chihuahua (MST/MDT)" },
+  { value: "America/Mazatlan",      label: "Mazatlán (MST/MDT)" },
+  { value: "America/Hermosillo",    label: "Hermosillo (MST, sin DST)" },
+  { value: "America/Tijuana",       label: "Tijuana (PST/PDT)" },
+  { value: "America/Cancun",        label: "Cancún (EST, sin DST)" },
+  { value: "America/New_York",      label: "Nueva York (EST/EDT)" },
+  { value: "America/Los_Angeles",   label: "Los Ángeles (PST/PDT)" },
+  { value: "America/Chicago",       label: "Chicago (CST/CDT)" },
+  { value: "America/Denver",        label: "Denver (MST/MDT)" },
+  { value: "UTC",                   label: "UTC (Coordinado Universal)" },
+];
 
 export default function CompanySettingsPage() {
   const { toast } = useToast();
@@ -390,6 +412,29 @@ export default function CompanySettingsPage() {
                   data-testid="input-country"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="timezone">Zona Horaria</Label>
+              <Select
+                value={currentData.timezone || "America/Mexico_City"}
+                onValueChange={(value) => handleChange("timezone" as keyof Tenant, value)}
+              >
+                <SelectTrigger id="timezone" data-testid="select-timezone">
+                  <Clock className="h-4 w-4 text-muted-foreground mr-2" />
+                  <SelectValue placeholder="Selecciona zona horaria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Zona horaria para las fechas en PDFs generados por el sistema
+              </p>
             </div>
           </CardContent>
         </Card>

@@ -17,6 +17,7 @@ interface TenantBranding {
   email?: string | null;
   website?: string | null;
   rfc?: string | null;
+  timezone?: string | null;
 }
 
 interface QuotationPDFData {
@@ -70,18 +71,19 @@ function formatCurrency(value: string | number): string {
   return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDate(date: Date | string | null): string {
+function formatDate(date: Date | string | null, timezone?: string | null): string {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: timezone || "America/Mexico_City" });
 }
 
-function formatDateTime(date: Date | string | null): string {
+function formatDateTime(date: Date | string | null, timezone?: string | null): string {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleString("es-MX", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
+    timeZone: timezone || "America/Mexico_City",
   });
 }
 
@@ -218,11 +220,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // Quotation info
     let rightY = currentY + 22;
     const quotationRows: [string, string][] = [
-      ["Fecha:", formatDate(quotation.createdAt)],
+      ["Fecha:", formatDate(quotation.createdAt, tenant.timezone)],
       ["Moneda:", quotation.currency || "MXN"],
       ["Vendedor:", user.fullName],
     ];
-    if (quotation.validUntil) quotationRows.push(["Vigencia:", formatDate(quotation.validUntil)]);
+    if (quotation.validUntil) quotationRows.push(["Vigencia:", formatDate(quotation.validUntil, tenant.timezone)]);
     if (quotation.paymentTerms) quotationRows.push(["Cond. Pago:", PAYMENT_TERMS_LABELS[quotation.paymentTerms] || quotation.paymentTerms]);
     if (quotation.deliveryTime) quotationRows.push(["T. Entrega:", DELIVERY_TIME_LABELS[quotation.deliveryTime] || quotation.deliveryTime]);
 
@@ -401,7 +403,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // Left: legal disclaimer
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
     doc.text("Este documento es una cotización y no constituye un pedido en firme.", MARGIN, FOOTER_Y + 6, { width: 260 });
-    doc.text(`Generado el ${formatDateTime(new Date())}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+    doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
 
     // Right: company contact summary
     const footerRight: string[] = [];
