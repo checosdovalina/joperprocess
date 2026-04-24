@@ -1462,6 +1462,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk-apply max discount to products (global or by category)
+  app.post("/api/products/bulk-discount", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const { discount, categoryId } = z.object({
+        discount: z.number().min(0).max(100),
+        categoryId: z.string().optional(),
+      }).parse(req.body);
+
+      const discountStr = discount.toFixed(2);
+
+      // Build where clause
+      const conditions = [eq(products.tenantId, tenantId)];
+      if (categoryId) {
+        conditions.push(eq(products.categoryId, categoryId));
+      }
+
+      // Update products
+      const updatedProducts = await db
+        .update(products)
+        .set({ maxDiscount: discountStr })
+        .where(and(...conditions))
+        .returning({ id: products.id });
+
+      // If scoped to a category, also update that category's maxDiscount
+      if (categoryId) {
+        await db
+          .update(productCategories)
+          .set({ maxDiscount: discountStr })
+          .where(and(eq(productCategories.id, categoryId), eq(productCategories.tenantId, tenantId)));
+      }
+
+      res.json({ updated: updatedProducts.length, discount: discountStr });
+    } catch (error) {
+      console.error("Error applying bulk discount:", error);
+      res.status(500).json({ error: "Error applying bulk discount" });
+    }
+  });
+
+  // Set max discount at category level only (without touching products)
+  app.post("/api/product-categories/bulk-discount", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const rows = z.array(z.object({
+        categoryId: z.string(),
+        discount: z.number().min(0).max(100),
+      })).parse(req.body);
+
+      for (const row of rows) {
+        await db
+          .update(productCategories)
+          .set({ maxDiscount: row.discount.toFixed(2) })
+          .where(and(eq(productCategories.id, row.categoryId), eq(productCategories.tenantId, tenantId)));
+      }
+
+      res.json({ updated: rows.length });
+    } catch (error) {
+      console.error("Error applying category discounts:", error);
+      res.status(500).json({ error: "Error applying category discounts" });
+    }
+  });
+
   // Customer Product Prices endpoints
   app.get("/api/customers/:customerId/product-prices", isAuthenticated, async (req, res) => {
     try {

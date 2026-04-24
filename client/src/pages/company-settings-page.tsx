@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Upload, Save, Loader2, Palette, TriangleAlert, Trash2, ShieldAlert, ChevronRight, Clock } from "lucide-react";
+import { Building2, Upload, Save, Loader2, Palette, TriangleAlert, Trash2, ShieldAlert, ChevronRight, Clock, Tag, Percent, CheckCircle2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -26,6 +26,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import type { Tenant } from "@shared/schema";
 
 const CONFIRM_PHRASE = "CONFIRMAR RESET";
@@ -55,6 +64,11 @@ export default function CompanySettingsPage() {
   const [resetStep, setResetStep] = useState<1 | 2 | 3>(1);
   const [resetUnderstood, setResetUnderstood] = useState(false);
   const [resetPhrase, setResetPhrase] = useState("");
+
+  // Discount management state
+  const [globalDiscount, setGlobalDiscount] = useState("");
+  const [categoryDiscounts, setCategoryDiscounts] = useState<Record<string, string>>({});
+  const [applyingCategory, setApplyingCategory] = useState<string | null>(null);
 
   const resetDialogClose = () => {
     setResetDialogOpen(false);
@@ -96,6 +110,54 @@ export default function CompanySettingsPage() {
   const { data: company, isLoading } = useQuery<Tenant>({
     queryKey: ["/api/company-settings"],
   });
+
+  // Product categories for discount management
+  const { data: categories = [] } = useQuery<{ id: string; name: string; maxDiscount: string | null }[]>({
+    queryKey: ["/api/product-categories"],
+  });
+
+  // Apply bulk discount mutation
+  const bulkDiscountMutation = useMutation({
+    mutationFn: async ({ discount, categoryId }: { discount: number; categoryId?: string }) => {
+      const res = await apiRequest("POST", "/api/products/bulk-discount", { discount, categoryId });
+      if (!res.ok) throw new Error((await res.json()).error || "Error al aplicar descuento");
+      return res.json() as Promise<{ updated: number; discount: string }>;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/product-categories"] });
+      setApplyingCategory(null);
+      toast({
+        title: "Descuento aplicado",
+        description: `Se actualizaron ${data.updated} producto${data.updated !== 1 ? "s" : ""} con ${data.discount}% de descuento máximo.`,
+      });
+      if (!variables.categoryId) setGlobalDiscount("");
+    },
+    onError: (error: Error) => {
+      setApplyingCategory(null);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleApplyCategory = (categoryId: string) => {
+    const val = parseFloat(categoryDiscounts[categoryId] ?? "");
+    if (isNaN(val) || val < 0 || val > 100) {
+      toast({ title: "Valor inválido", description: "Ingresa un porcentaje entre 0 y 100.", variant: "destructive" });
+      return;
+    }
+    setApplyingCategory(categoryId);
+    bulkDiscountMutation.mutate({ discount: val, categoryId });
+  };
+
+  const handleApplyGlobal = () => {
+    const val = parseFloat(globalDiscount);
+    if (isNaN(val) || val < 0 || val > 100) {
+      toast({ title: "Valor inválido", description: "Ingresa un porcentaje entre 0 y 100.", variant: "destructive" });
+      return;
+    }
+    setApplyingCategory("global");
+    bulkDiscountMutation.mutate({ discount: val });
+  };
 
   const [formData, setFormData] = useState<Partial<Tenant>>({});
 
@@ -513,6 +575,139 @@ export default function CompanySettingsPage() {
           </Button>
         </div>
       </form>
+
+      {/* ─── DESCUENTOS MÁXIMOS ──────────────────────────────────────────────── */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold text-muted-foreground tracking-widest uppercase px-2">
+            Descuentos Máximos en Productos
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        {/* Global apply */}
+        <Card className="mb-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Percent className="h-4 w-4 text-primary" />
+              Aplicar a Todos los Productos
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Establece el mismo descuento máximo para todos los productos de todas las categorías de un solo paso.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5 w-40">
+                <Label htmlFor="global-discount" className="text-xs">Descuento máximo %</Label>
+                <div className="relative">
+                  <Input
+                    id="global-discount"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    placeholder="Ej: 10.00"
+                    value={globalDiscount}
+                    onChange={(e) => setGlobalDiscount(e.target.value)}
+                    className="pr-7"
+                    data-testid="input-global-discount"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none">%</span>
+                </div>
+              </div>
+              <Button
+                onClick={handleApplyGlobal}
+                disabled={!globalDiscount || bulkDiscountMutation.isPending}
+                data-testid="button-apply-global-discount"
+              >
+                {applyingCategory === "global" && bulkDiscountMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Aplicando...</>
+                  : <><CheckCircle2 className="h-4 w-4 mr-2" />Aplicar a todos</>
+                }
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Per-category */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Tag className="h-4 w-4 text-primary" />
+              Aplicar por Categoría
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Define un descuento máximo diferente para cada categoría. Al aplicar, se actualiza el límite en todos los productos de esa categoría.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {categories.length === 0 ? (
+              <p className="text-sm text-muted-foreground px-6 py-4">No hay categorías configuradas.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead className="w-32 text-center">Actual</TableHead>
+                    <TableHead className="w-44">Nuevo descuento %</TableHead>
+                    <TableHead className="w-36" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categories.map((cat) => {
+                    const isBusy = applyingCategory === cat.id && bulkDiscountMutation.isPending;
+                    const val = categoryDiscounts[cat.id] ?? "";
+                    const currentDiscount = parseFloat(cat.maxDiscount ?? "0");
+                    return (
+                      <TableRow key={cat.id}>
+                        <TableCell className="font-medium text-sm">{cat.name}</TableCell>
+                        <TableCell className="text-center">
+                          {currentDiscount > 0
+                            ? <Badge variant="secondary">{currentDiscount.toFixed(0)}%</Badge>
+                            : <span className="text-xs text-muted-foreground">—</span>
+                          }
+                        </TableCell>
+                        <TableCell>
+                          <div className="relative w-36">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={val}
+                              onChange={(e) => setCategoryDiscounts(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                              className="pr-7"
+                              data-testid={`input-discount-category-${cat.id}`}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none">%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!val || isBusy || bulkDiscountMutation.isPending}
+                            onClick={() => handleApplyCategory(cat.id)}
+                            data-testid={`button-apply-discount-${cat.id}`}
+                          >
+                            {isBusy
+                              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Aplicando</>
+                              : <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Aplicar</>
+                            }
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ─── ZONA DE PELIGRO ─────────────────────────────────────────────────── */}
       <div className="mt-10">
