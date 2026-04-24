@@ -3,6 +3,7 @@ import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { tenantMiddleware } from "./tenant";
+import { runMigrations } from "./migrate";
 
 const app = express();
 
@@ -55,6 +56,8 @@ app.use((req, res, next) => {
 app.use(tenantMiddleware);
 
 (async () => {
+  await runMigrations();
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
