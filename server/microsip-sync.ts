@@ -40,6 +40,7 @@ interface MicrosipCustomer {
 interface MicrosipProduct {
   ARTICULO_ID: number;
   CLAVE?: string;
+  CLAVE_ARTICULO?: string;
   NOMBRE: string;
   DESCRIPCION?: string;
   LINEA_ARTICULO_ID: number;
@@ -524,10 +525,12 @@ class MicrosipSyncService {
       fbDb = await this.connect();
       
       // Sync ALL active products; price from list 42 if available, otherwise 0
+      // CLAVE_ARTICULO comes from CLAVES_ARTICULOS (the human-readable product code)
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
           A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS,
-          P.PRECIO AS PRECIO_1
+          P.PRECIO AS PRECIO_1,
+          (SELECT FIRST 1 CA.CLAVE_ARTICULO FROM CLAVES_ARTICULOS CA WHERE CA.ARTICULO_ID = A.ARTICULO_ID) AS CLAVE_ARTICULO
         FROM ARTICULOS A
         LEFT JOIN PRECIOS_ARTICULOS P ON A.ARTICULO_ID = P.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 42
         WHERE A.ESTATUS = 'A'
@@ -591,7 +594,7 @@ class MicrosipSyncService {
           const productActive = msProduct.ESTATUS === 'A' && categoryActive;
 
           const productData = {
-            code: String(msProduct.ARTICULO_ID),
+            code: msProduct.CLAVE_ARTICULO?.toString().trim() || (msProduct as any).CLAVE?.toString().trim() || String(msProduct.ARTICULO_ID),
             name: msProduct.NOMBRE?.trim() || 'Sin nombre',
             description: null,
             categoryId,
