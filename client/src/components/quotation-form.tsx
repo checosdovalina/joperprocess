@@ -200,7 +200,7 @@ export function QuotationForm({
   });
 
   useEffect(() => {
-    if (isEditing && initialData && open && !initialized) {
+    if (isEditing && initialData && open && !initialized && products !== undefined) {
       form.reset({
         customerId: initialData.customerId || "",
         currency: initialData.currency || "MXN",
@@ -219,26 +219,32 @@ export function QuotationForm({
       });
 
       if (initialData.items && initialData.items.length > 0) {
-        const items: QuotationLineItem[] = initialData.items.map((item: any, index: number) => ({
-          productId: item.productId || null,
-          productCode: item.productCode || "",
-          productName: item.productName || "",
-          description: item.description || "",
-          unitOfMeasure: item.unitOfMeasure || "PZA",
-          quantity: item.quantity?.toString() || "1",
-          listPrice: item.listPrice?.toString() || "0",
-          unitPrice: item.unitPrice?.toString() || "0",
-          discountPercent: item.discountPercent?.toString() || "0",
-          discountAmount: item.discountAmount?.toString() || "0",
-          subtotal: item.subtotal?.toString() || "0",
-          taxRate: item.taxRate?.toString() || "16",
-          taxAmount: item.taxAmount?.toString() || "0",
-          total: item.total?.toString() || "0",
-          exceedsMaxDiscount: false,
-          maxDiscount: "0",
-          position: item.position ?? index,
-          currency: item.currency || "MXN",
-        }));
+        const items: QuotationLineItem[] = initialData.items.map((item: any, index: number) => {
+          const productData = products?.find((p: any) => p.id === item.productId);
+          const resolvedMaxDiscount = productData?.maxDiscount || "0";
+          const discountPercent = parseFloat(item.discountPercent?.toString() || "0");
+          const maxDisc = parseFloat(resolvedMaxDiscount);
+          return {
+            productId: item.productId || null,
+            productCode: item.productCode || "",
+            productName: item.productName || "",
+            description: item.description || "",
+            unitOfMeasure: item.unitOfMeasure || "PZA",
+            quantity: item.quantity?.toString() || "1",
+            listPrice: item.listPrice?.toString() || "0",
+            unitPrice: item.unitPrice?.toString() || "0",
+            discountPercent: item.discountPercent?.toString() || "0",
+            discountAmount: item.discountAmount?.toString() || "0",
+            subtotal: item.subtotal?.toString() || "0",
+            taxRate: item.taxRate?.toString() || "16",
+            taxAmount: item.taxAmount?.toString() || "0",
+            total: item.total?.toString() || "0",
+            exceedsMaxDiscount: maxDisc > 0 && discountPercent > maxDisc,
+            maxDiscount: resolvedMaxDiscount,
+            position: item.position ?? index,
+            currency: item.currency || "MXN",
+          };
+        });
         setLineItems(items);
       }
       setInitialized(true);
