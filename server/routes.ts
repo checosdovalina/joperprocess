@@ -234,10 +234,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         return res.json(items.map(i => ({
           id: i.id,
-          productCode: i.product?.code ?? i.description?.split(" ")[0] ?? "",
-          description: i.description,
+          productCode: i.product?.code ?? "",
+          description: i.product?.name ?? i.description ?? "",
           qty: i.quantity,
-          unit: i.unit,
+          unit: i.unit ?? i.product?.unit,
           unitPrice: i.unitPrice,
           discount: i.discount,
           total: i.total,
@@ -262,9 +262,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(order.quotation.items.map(i => ({
           id: i.id,
           productCode: i.product?.code ?? "",
-          description: i.description,
+          description: i.product?.name ?? i.description ?? "",
           qty: i.quantity,
-          unit: i.unit,
+          unit: i.unit ?? i.product?.unit,
           unitPrice: i.unitPrice,
           discount: i.discount,
           total: i.total,
@@ -289,9 +289,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(auth.quotation.items.map(i => ({
           id: i.id,
           productCode: i.product?.code ?? "",
-          description: i.description,
+          description: i.product?.name ?? i.description ?? "",
           qty: i.quantity,
-          unit: i.unit,
+          unit: i.unit ?? i.product?.unit,
           unitPrice: i.unitPrice,
           discount: i.discount,
           total: i.total,
