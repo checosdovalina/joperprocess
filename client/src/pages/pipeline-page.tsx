@@ -326,7 +326,7 @@ const STATUS_MAPS: Record<EntityType, Record<string, { label: string; color: str
   shipment: SHIP_STATUS,
 };
 
-function ItemsSheet({ selected, onClose }: { selected: SelectedCard | null; onClose: () => void }) {
+function ItemsSheet({ selected, onClose, container }: { selected: SelectedCard | null; onClose: () => void; container?: HTMLElement | null }) {
   const { data: items = [], isLoading } = useQuery<PipelineItem[]>({
     queryKey: ["/api/pipeline/items", selected?.type, selected?.id],
     queryFn: async () => {
@@ -343,7 +343,7 @@ function ItemsSheet({ selected, onClose }: { selected: SelectedCard | null; onCl
 
   return (
     <Sheet open={!!selected} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0">
+      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0" container={container}>
         {selected && (
           <>
             <SheetHeader className="px-6 py-4 border-b sticky top-0 bg-background z-10">
@@ -565,8 +565,8 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      {/* Items detail sheet (outside the fullscreen container so it overlays correctly) */}
-      <ItemsSheet selected={selected} onClose={() => setSelected(null)} />
+      {/* Items detail sheet – portal renders into the fullscreen container so it stays visible in fullscreen mode */}
+      <ItemsSheet selected={selected} onClose={() => setSelected(null)} container={containerRef.current} />
     </>
   );
 }
