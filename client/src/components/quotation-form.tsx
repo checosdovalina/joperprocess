@@ -314,6 +314,14 @@ export function QuotationForm({
   }, []);
 
   const normalizeDecimal = (value: string) => value.replace(',', '.');
+  const normalizeDecimal2 = (value: string) => {
+    const clean = value.replace(',', '.');
+    const match = clean.match(/^-?\d*(\.\d{0,2})?/);
+    return match ? match[0] : '';
+  };
+  const preventEnter = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') e.preventDefault();
+  };
 
   const updateLineItem = useCallback((index: number, updates: Partial<QuotationLineItem>, recalculateFrom?: 'discountPercent' | 'unitPrice') => {
     setLineItems(prev => {
@@ -908,11 +916,12 @@ export function QuotationForm({
                                   inputMode="decimal"
                                   value={item.quantity}
                                   onChange={(e) => {
-                                    updateLineItem(index, { quantity: normalizeDecimal(e.target.value) });
+                                    updateLineItem(index, { quantity: normalizeDecimal2(e.target.value) });
                                   }}
                                   onBlur={() => {
                                     updateLineItem(index, {}, 'discountPercent');
                                   }}
+                                  onKeyDown={preventEnter}
                                   className="w-20 text-center"
                                   data-testid={`input-quantity-${index}`}
                                 />
@@ -926,11 +935,12 @@ export function QuotationForm({
                                   inputMode="decimal"
                                   value={item.discountPercent}
                                   onChange={(e) => {
-                                    updateLineItem(index, { discountPercent: normalizeDecimal(e.target.value) });
+                                    updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) });
                                   }}
                                   onBlur={() => {
                                     updateLineItem(index, {}, 'discountPercent');
                                   }}
+                                  onKeyDown={preventEnter}
                                   className={`w-16 text-center ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
                                   data-testid={`input-discount-${index}`}
                                 />
@@ -941,11 +951,12 @@ export function QuotationForm({
                                   inputMode="decimal"
                                   value={item.unitPrice}
                                   onChange={(e) => {
-                                    updateLineItem(index, { unitPrice: normalizeDecimal(e.target.value) });
+                                    updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) });
                                   }}
                                   onBlur={() => {
                                     updateLineItem(index, {}, 'unitPrice');
                                   }}
+                                  onKeyDown={preventEnter}
                                   className="w-24 text-right font-mono"
                                   data-testid={`input-unit-price-${index}`}
                                 />
