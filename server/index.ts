@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { tenantMiddleware } from "./tenant";
 import { runMigrations } from "./migrate";
+import { runScheduledSync } from "./microsip-sync";
 
 const app = express();
 
@@ -89,4 +90,15 @@ app.use(tenantMiddleware);
   }, () => {
     log(`serving on port ${port}`);
   });
+
+  // Microsip auto-sync: check every 5 minutes if any tenant is due for sync.
+  // The runScheduledSync function compares last sync times against each
+  // tenant's configured masterDataInterval / transactionalInterval.
+  const MICROSIP_POLL_MS = 5 * 60 * 1000; // 5 minutes
+  setInterval(() => {
+    runScheduledSync().catch((err) =>
+      console.error("[Microsip] Scheduler error:", err)
+    );
+  }, MICROSIP_POLL_MS);
+  log(`Microsip scheduler started (poll every 5 min)`);
 })();

@@ -59,7 +59,7 @@ import {
   insertIncidentAttachmentSchema,
 } from "@shared/schema";
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
-import { createMicrosipSyncService, runScheduledSync } from "./microsip-sync";
+import { createMicrosipSyncService } from "./microsip-sync";
 import { randomBytes } from "crypto";
 import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or } from "drizzle-orm";
 import type { Request } from "express";
