@@ -350,7 +350,6 @@ export default function OrdersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Folio Cotización</TableHead>
-                    <TableHead>Cliente</TableHead>
                     <TableHead>Fecha Creación</TableHead>
                     <TableHead>Entrega Estimada</TableHead>
                     <TableHead>Progreso</TableHead>
@@ -363,9 +362,6 @@ export default function OrdersPage() {
                     <TableRow key={order.id} className="hover-elevate" data-testid={`row-order-${order.id}`}>
                       <TableCell>
                         <div className="font-mono font-medium">{order.quotation.folio}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{order.quotation.customer.name}</div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
@@ -447,7 +443,7 @@ export default function OrdersPage() {
           <DialogHeader>
             <DialogTitle>Detalles del Pedido</DialogTitle>
             <DialogDescription>
-              {orderDetails?.quotation.folio} - {orderDetails?.quotation.customer.name}
+              {orderDetails?.quotation.folio}
             </DialogDescription>
           </DialogHeader>
 
