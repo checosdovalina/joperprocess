@@ -1,35 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   RefreshCw, FileText, ShieldCheck, Package, Truck,
-  Filter, Maximize2, Minimize2, Radio, X,
+  Radio, Maximize2, Minimize2, ChevronDown,
+  Calendar, DollarSign,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const REFRESH_INTERVAL = 20_000;
+const REFRESH_INTERVAL = 20; // seconds
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,58 +39,42 @@ interface PipelineData {
   shipments: PipelineShipment[];
   creditAuths: PipelineCreditAuth[];
 }
-
 interface PipelineItem {
-  id: string;
-  productCode: string;
-  description: string;
-  qty: string | number;
-  unit: string | null;
-  unitPrice: string | null;
-  discount: string | null;
-  total: string | null;
-}
-
-type EntityType = "quotation" | "order" | "creditAuth" | "shipment";
-
-interface SelectedCard {
-  type: EntityType;
-  id: string;
-  folio: string;
-  status: string;
-  label: string;
+  id: string; productCode: string; description: string;
+  qty: string | number; unit: string | null;
+  unitPrice: string | null; discount: string | null; total: string | null;
 }
 
 // ─── Status configs ─────────────────────────────────────────────────────────────
 
 const QUOT_STATUS: Record<string, { label: string; color: string }> = {
-  draft:                 { label: "Borrador",           color: "bg-muted text-muted-foreground" },
-  sent:                  { label: "Enviada",            color: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
-  pending_approval:      { label: "Pend. Aprobación",   color: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
-  pending_authorization: { label: "Pend. Autorización", color: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300" },
-  authorized:            { label: "Autorizada",         color: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
-  converted:             { label: "Convertida",         color: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300" },
-  rejected:              { label: "Rechazada",          color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
-  expired:               { label: "Vencida",            color: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" },
+  draft:                 { label: "Borrador",           color: "#6b7280" },
+  sent:                  { label: "Enviada",            color: "#3b82f6" },
+  pending_approval:      { label: "Pend. Aprobación",   color: "#f59e0b" },
+  pending_authorization: { label: "Pend. Autorización", color: "#f97316" },
+  authorized:            { label: "Autorizada",         color: "#22c55e" },
+  converted:             { label: "Convertida",         color: "#14b8a6" },
+  rejected:              { label: "Rechazada",          color: "#ef4444" },
+  expired:               { label: "Vencida",            color: "#6b7280" },
 };
 const AUTH_STATUS: Record<string, { label: string; color: string }> = {
-  pending:  { label: "Pendiente", color: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
-  approved: { label: "Aprobada",  color: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
-  rejected: { label: "Rechazada", color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  pending:  { label: "Pendiente", color: "#f59e0b" },
+  approved: { label: "Aprobada",  color: "#22c55e" },
+  rejected: { label: "Rechazada", color: "#ef4444" },
 };
 const ORDER_STATUS: Record<string, { label: string; color: string }> = {
-  pending:            { label: "Pendiente",     color: "bg-muted text-muted-foreground" },
-  in_production:      { label: "En Producción", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
-  ready:              { label: "Listo",         color: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
-  partially_released: { label: "Parcial",       color: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300" },
-  released:           { label: "Liberado",      color: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300" },
-  shipped:            { label: "Embarcado",     color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300" },
-  delivered:          { label: "Entregado",     color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  pending:            { label: "Pendiente",     color: "#6b7280" },
+  in_production:      { label: "En Producción", color: "#3b82f6" },
+  ready:              { label: "Listo",         color: "#22c55e" },
+  partially_released: { label: "Parcial",       color: "#f97316" },
+  released:           { label: "Liberado",      color: "#a855f7" },
+  shipped:            { label: "Embarcado",     color: "#818cf8" },
+  delivered:          { label: "Entregado",     color: "#10b981" },
 };
 const SHIP_STATUS: Record<string, { label: string; color: string }> = {
-  pending:    { label: "Pendiente",   color: "bg-muted text-muted-foreground" },
-  in_transit: { label: "En Tránsito", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
-  delivered:  { label: "Entregado",   color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  pending:    { label: "Pendiente",   color: "#6b7280" },
+  in_transit: { label: "En Tránsito", color: "#3b82f6" },
+  delivered:  { label: "Entregado",   color: "#10b981" },
 };
 
 const ACTIVE_QUOT  = new Set(["draft", "sent", "pending_approval", "pending_authorization", "authorized"]);
@@ -117,363 +82,415 @@ const ACTIVE_AUTH  = new Set(["pending"]);
 const ACTIVE_ORDER = new Set(["pending", "in_production", "ready", "partially_released", "released"]);
 const ACTIVE_SHIP  = new Set(["pending", "in_transit"]);
 
-// ─── Helpers ────────────────────────────────────────────────────────────────────
+// ─── Column config ────────────────────────────────────────────────────────────
 
-function StatusBadge({ map, status }: { map: Record<string, { label: string; color: string }>; status: string }) {
-  const cfg = map[status] ?? { label: status, color: "bg-muted text-muted-foreground" };
+const COLUMNS = [
+  {
+    key: "quotations" as const,
+    label: "Cotizaciones",
+    icon: FileText,
+    color: "#3b82f6",
+    bg: "rgba(59,130,246,0.10)",
+    border: "rgba(59,130,246,0.35)",
+  },
+  {
+    key: "creditAuths" as const,
+    label: "Autorizaciones",
+    icon: ShieldCheck,
+    color: "#f59e0b",
+    bg: "rgba(245,158,11,0.10)",
+    border: "rgba(245,158,11,0.35)",
+  },
+  {
+    key: "orders" as const,
+    label: "Pedidos",
+    icon: Package,
+    color: "#a855f7",
+    bg: "rgba(168,85,247,0.10)",
+    border: "rgba(168,85,247,0.35)",
+  },
+  {
+    key: "shipments" as const,
+    label: "Embarques",
+    icon: Truck,
+    color: "#10b981",
+    bg: "rgba(16,185,129,0.10)",
+    border: "rgba(16,185,129,0.35)",
+  },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function StatusPill({ color, label }: { color: string; label: string }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold leading-tight whitespace-nowrap ${cfg.color}`}>
-      {cfg.label}
+    <span style={{
+      background: `${color}22`,
+      color,
+      border: `1px solid ${color}55`,
+      borderRadius: 20,
+      fontSize: 10,
+      fontWeight: 700,
+      padding: "1px 7px",
+      whiteSpace: "nowrap",
+      letterSpacing: "0.02em",
+    }}>
+      {label}
     </span>
   );
 }
 
 function Money({ amount, currency }: { amount: string | null | undefined; currency?: string | null }) {
-  if (!amount) return <span className="text-muted-foreground">—</span>;
+  if (!amount) return <span style={{ color: "rgba(255,255,255,0.25)" }}>—</span>;
   const cur = currency || "MXN";
-  return <span>{cur} {parseFloat(amount).toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>;
+  const n = parseFloat(amount).toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return <span>{cur} {n}</span>;
 }
 
 function ShortDate({ date }: { date: string | null | undefined }) {
-  if (!date) return <span className="text-muted-foreground">—</span>;
+  if (!date) return <span style={{ color: "rgba(255,255,255,0.25)" }}>—</span>;
   return <span>{format(new Date(date), "d MMM yy", { locale: es })}</span>;
 }
 
-function PanelSkeleton() {
+// ─── Expandable cards ────────────────────────────────────────────────────────
+
+function ItemsList({ type, id, showPrices }: { type: string; id: string; showPrices: boolean }) {
+  const { data: items = [], isLoading } = useQuery<PipelineItem[]>({
+    queryKey: ["/api/pipeline/items", type, id],
+    queryFn: async () => {
+      const r = await fetch(`/api/pipeline/items?type=${type}&id=${id}`);
+      if (!r.ok) throw new Error("Error");
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
+
+  if (isLoading) {
+    return (
+      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, padding: "6px 0" }}>
+        Cargando artículos...
+      </div>
+    );
+  }
+  if (!items.length) {
+    return <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>Sin artículos</div>;
+  }
   return (
-    <div className="space-y-2">
-      {[1, 2, 3].map(i => <Skeleton key={i} className="h-[60px] w-full rounded-md" />)}
+    <div>
+      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 600, marginBottom: 5, letterSpacing: "0.06em" }}>
+        ARTÍCULOS
+      </div>
+      {items.map((item, i) => (
+        <div key={item.id ?? i} style={{ display: "flex", gap: 6, fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 4, alignItems: "baseline" }}>
+          <span style={{ color: "#60a5fa", fontWeight: 700, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+            {parseFloat(String(item.qty)).toLocaleString("es-MX", { maximumFractionDigits: 2 })} {item.unit ?? "pza"}
+          </span>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {item.description || item.productCode || "—"}
+          </span>
+          {showPrices && item.total && (
+            <span style={{ color: "rgba(255,255,255,0.4)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+              {parseFloat(item.total).toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
 
-// ─── Entity cards (customer removed) ───────────────────────────────────────────
+// ─── Quotation card ───────────────────────────────────────────────────────────
 
-function QuotCard({ q, onSelect }: { q: PipelineQuotation; onSelect: (c: SelectedCard) => void }) {
+function QuotCard({ q }: { q: PipelineQuotation }) {
+  const [expanded, setExpanded] = useState(false);
+  const cfg = QUOT_STATUS[q.status] ?? { label: q.status, color: "#6b7280" };
+
   return (
-    <button
-      onClick={() => onSelect({ type: "quotation", id: q.id, folio: q.folio, status: q.status, label: "Cotización" })}
-      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
+    <div
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1.5px solid rgba(59,130,246,0.2)",
+        borderRadius: 10,
+        padding: "11px 13px",
+        cursor: "pointer",
+        transition: "background 0.15s",
+      }}
+      onClick={() => setExpanded(!expanded)}
       data-testid={`card-quotation-${q.id}`}
     >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs font-bold text-primary truncate">{q.folio}</span>
-        <StatusBadge map={QUOT_STATUS} status={q.status} />
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold"><Money amount={q.total} currency={q.currency} /></span>
-        <span className="text-[11px] text-muted-foreground"><ShortDate date={q.createdAt} /></span>
-      </div>
-      {q.sellerName && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{q.sellerName}</p>}
-    </button>
-  );
-}
-
-function AuthCard({ a, onSelect }: { a: PipelineCreditAuth; onSelect: (c: SelectedCard) => void }) {
-  return (
-    <button
-      onClick={() => onSelect({ type: "creditAuth", id: a.id, folio: a.quotFolio ?? a.id, status: a.status, label: "Autorización" })}
-      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
-      data-testid={`card-auth-${a.id}`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs font-bold text-primary">{a.quotFolio ?? "—"}</span>
-        <StatusBadge map={AUTH_STATUS} status={a.status} />
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold"><Money amount={a.quotTotal} currency={a.quotCurrency} /></span>
-        <span className="text-[11px] text-muted-foreground"><ShortDate date={a.createdAt} /></span>
-      </div>
-    </button>
-  );
-}
-
-function OrderCard({ o, onSelect }: { o: PipelineOrder; onSelect: (c: SelectedCard) => void }) {
-  return (
-    <button
-      onClick={() => onSelect({ type: "order", id: o.id, folio: o.quotFolio ?? o.id, status: o.status, label: "Pedido" })}
-      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
-      data-testid={`card-order-${o.id}`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs font-bold text-primary">{o.quotFolio ?? "—"}</span>
-        <StatusBadge map={ORDER_STATUS} status={o.status} />
-      </div>
-      <div className="mt-1 space-y-1">
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>Producción</span>
-          <span className="font-semibold text-foreground">{o.productionProgress}%</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
+        <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: 14, letterSpacing: "0.01em" }}>{q.folio}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <StatusPill color={cfg.color} label={cfg.label} />
+          <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
         </div>
-        <Progress value={o.productionProgress} className="h-1" />
       </div>
-      <div className="flex items-center justify-between mt-1.5 gap-2">
-        <span className="text-sm font-semibold"><Money amount={o.quotTotal} currency={o.quotCurrency} /></span>
-        <span className="text-[11px] text-muted-foreground">
-          {o.estimatedDelivery ? <>Est: <ShortDate date={o.estimatedDelivery} /></> : <ShortDate date={o.createdAt} />}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 3 }}>
+        <DollarSign size={10} style={{ flexShrink: 0 }} />
+        <Money amount={q.total} currency={q.currency} />
+        <span style={{ color: "rgba(255,255,255,0.2)", marginLeft: "auto" }}>
+          <ShortDate date={q.createdAt} />
         </span>
       </div>
-    </button>
-  );
-}
 
-function ShipmentCard({ s, onSelect }: { s: PipelineShipment; onSelect: (c: SelectedCard) => void }) {
-  return (
-    <button
-      onClick={() => onSelect({ type: "shipment", id: s.id, folio: s.quotFolio ?? s.id, status: s.status, label: "Embarque" })}
-      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
-      data-testid={`card-shipment-${s.id}`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs font-bold text-primary">{s.quotFolio ?? "—"}</span>
-        <StatusBadge map={SHIP_STATUS} status={s.status} />
-      </div>
-      <p className="text-[11px] text-muted-foreground truncate">{s.transporter}</p>
-      <div className="flex items-center justify-between mt-1 gap-2">
-        {s.trackingNumber
-          ? <span className="text-[11px] font-mono text-muted-foreground truncate">{s.trackingNumber}</span>
-          : <span className="text-[11px] text-muted-foreground italic">Sin guía</span>
-        }
-        <span className="text-[11px] text-muted-foreground shrink-0"><ShortDate date={s.shippedAt ?? s.createdAt} /></span>
-      </div>
-    </button>
-  );
-}
-
-// ─── Panel container ─────────────────────────────────────────────────────────────
-
-function Panel({ title, icon: Icon, count, total, color, children, isLoading, fullscreen }:
-  { title: string; icon: React.ElementType; count: number; total: number; color: string; children: React.ReactNode; isLoading: boolean; fullscreen: boolean }) {
-  const maxH = fullscreen ? "max-h-[calc(100vh-180px)]" : "max-h-[calc(100vh-290px)]";
-  return (
-    <div className="flex flex-col min-h-0">
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-t-md ${color} text-white`}>
-        <Icon className="h-4 w-4 shrink-0" />
-        <span className="font-semibold text-sm flex-1">{title}</span>
-        <span className="text-xs font-bold bg-white/25 px-1.5 py-0.5 rounded">{count}</span>
-        {count !== total && <span className="text-[10px] opacity-70">/ {total}</span>}
-      </div>
-      <div className={`flex-1 overflow-y-auto space-y-2 p-2 border border-t-0 rounded-b-md bg-muted/30 min-h-[100px] ${maxH}`}>
-        {isLoading
-          ? <PanelSkeleton />
-          : count === 0
-            ? <p className="text-center text-sm text-muted-foreground py-8">Sin registros</p>
-            : children
-        }
-      </div>
-    </div>
-  );
-}
-
-// ─── KPI card ────────────────────────────────────────────────────────────────────
-
-function KpiCard({ icon: Icon, title, total, highlight, highlightLabel, color }:
-  { icon: React.ElementType; title: string; total: number; highlight: number; highlightLabel: string; color: string }) {
-  return (
-    <Card className="flex-1 min-w-[130px]">
-      <CardContent className="p-3">
-        <div className="flex items-start gap-3">
-          <div className={`flex items-center justify-center h-8 w-8 rounded-md shrink-0 ${color}`}>
-            <Icon className="h-4 w-4 text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground font-medium truncate">{title}</p>
-            <p className="text-xl font-bold leading-tight">{total}</p>
-            <p className="text-[11px] text-muted-foreground">
-              <span className="font-semibold text-foreground">{highlight}</span> {highlightLabel}
-            </p>
-          </div>
+      {q.sellerName && (
+        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {q.sellerName}
         </div>
-      </CardContent>
-    </Card>
-  );
-}
+      )}
 
-// ─── Live indicator ──────────────────────────────────────────────────────────────
-
-function LiveIndicator({ countdown, isFetching, lastUpdated }:
-  { countdown: number; isFetching: boolean; lastUpdated: Date | null }) {
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span className="relative flex h-2 w-2">
-        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isFetching ? "bg-amber-500" : "bg-emerald-500"}`} />
-        <span className={`relative inline-flex rounded-full h-2 w-2 ${isFetching ? "bg-amber-500" : "bg-emerald-500"}`} />
-      </span>
-      <span className="hidden sm:inline">
-        {isFetching ? "Actualizando..." : lastUpdated ? `Actualizado ${formatDistanceToNow(lastUpdated, { locale: es, addSuffix: true })}` : "En vivo"}
-      </span>
-      {!isFetching && (
-        <span className="text-[11px] tabular-nums text-muted-foreground/70 hidden md:inline">
-          · próx. en {countdown}s
-        </span>
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <ItemsList type="quotation" id={q.id} showPrices />
+        </div>
       )}
     </div>
   );
 }
 
-// ─── Items detail sheet ──────────────────────────────────────────────────────────
+// ─── Auth card ────────────────────────────────────────────────────────────────
 
-const TYPE_LABELS: Record<EntityType, string> = {
-  quotation: "Cotización",
-  order: "Pedido",
-  creditAuth: "Autorización de Crédito",
-  shipment: "Embarque",
-};
-
-const STATUS_MAPS: Record<EntityType, Record<string, { label: string; color: string }>> = {
-  quotation: QUOT_STATUS,
-  order: ORDER_STATUS,
-  creditAuth: AUTH_STATUS,
-  shipment: SHIP_STATUS,
-};
-
-function ItemsSheet({ selected, onClose, container }: { selected: SelectedCard | null; onClose: () => void; container?: HTMLElement | null }) {
-  const { data: items = [], isLoading } = useQuery<PipelineItem[]>({
-    queryKey: ["/api/pipeline/items", selected?.type, selected?.id],
-    queryFn: async () => {
-      if (!selected) return [];
-      const res = await fetch(`/api/pipeline/items?type=${selected.type}&id=${selected.id}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Error al cargar artículos");
-      return res.json();
-    },
-    enabled: !!selected,
-    staleTime: 30_000,
-  });
-
-  const showPrices = selected?.type !== "shipment";
+function AuthCard({ a }: { a: PipelineCreditAuth }) {
+  const [expanded, setExpanded] = useState(false);
+  const cfg = AUTH_STATUS[a.status] ?? { label: a.status, color: "#6b7280" };
 
   return (
-    <Sheet open={!!selected} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0" container={container}>
-        {selected && (
-          <>
-            <SheetHeader className="px-6 py-4 border-b sticky top-0 bg-background z-10">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground font-medium">{TYPE_LABELS[selected.type]}</p>
-                  <SheetTitle className="text-lg font-bold leading-tight">{selected.folio}</SheetTitle>
-                  <div className="mt-1">
-                    <StatusBadge map={STATUS_MAPS[selected.type]} status={selected.status} />
-                  </div>
-                </div>
-                <Button size="icon" variant="ghost" onClick={onClose} className="shrink-0 mt-0.5" data-testid="button-close-sheet">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </SheetHeader>
+    <div
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1.5px solid rgba(245,158,11,0.2)",
+        borderRadius: 10,
+        padding: "11px 13px",
+        cursor: "pointer",
+        transition: "background 0.15s",
+      }}
+      onClick={() => setExpanded(!expanded)}
+      data-testid={`card-auth-${a.id}`}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
+        <span style={{ color: "#fcd34d", fontWeight: 700, fontSize: 14 }}>{a.quotFolio ?? "—"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <StatusPill color={cfg.color} label={cfg.label} />
+          <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+        <DollarSign size={10} style={{ flexShrink: 0 }} />
+        <Money amount={a.quotTotal} currency={a.quotCurrency} />
+        <span style={{ color: "rgba(255,255,255,0.2)", marginLeft: "auto" }}>
+          <ShortDate date={a.createdAt} />
+        </span>
+      </div>
 
-            <SheetDescription className="sr-only">
-              Artículos del {TYPE_LABELS[selected.type]} {selected.folio}
-            </SheetDescription>
-
-            <div className="px-6 py-4">
-              <h3 className="text-sm font-semibold mb-3">
-                Artículos
-                {!isLoading && (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">({items.length} {items.length === 1 ? "artículo" : "artículos"})</span>
-                )}
-              </h3>
-
-              {isLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 w-full" />)}
-                </div>
-              ) : items.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">Sin artículos registrados</p>
-                </div>
-              ) : (
-                <div className="rounded-md border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="text-xs w-[40%]">Descripción</TableHead>
-                        <TableHead className="text-xs text-right">Cant.</TableHead>
-                        <TableHead className="text-xs">Unidad</TableHead>
-                        {showPrices && (
-                          <>
-                            <TableHead className="text-xs text-right">Precio</TableHead>
-                            <TableHead className="text-xs text-right">Desc.</TableHead>
-                            <TableHead className="text-xs text-right">Total</TableHead>
-                          </>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((item, idx) => (
-                        <TableRow key={item.id} className={idx % 2 === 0 ? "" : "bg-muted/20"}>
-                          <TableCell className="py-2">
-                            {item.productCode && (
-                              <span className="block text-[10px] font-mono text-muted-foreground">{item.productCode}</span>
-                            )}
-                            <span className="text-xs leading-tight line-clamp-2">{item.description}</span>
-                          </TableCell>
-                          <TableCell className="text-xs text-right tabular-nums py-2 font-medium">
-                            {parseFloat(String(item.qty)).toLocaleString("es-MX")}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground py-2">{item.unit ?? "—"}</TableCell>
-                          {showPrices && (
-                            <>
-                              <TableCell className="text-xs text-right tabular-nums py-2">
-                                {item.unitPrice
-                                  ? parseFloat(item.unitPrice).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                  : "—"}
-                              </TableCell>
-                              <TableCell className="text-xs text-right tabular-nums py-2">
-                                {item.discount && parseFloat(item.discount) > 0
-                                  ? `${parseFloat(item.discount).toFixed(1)}%`
-                                  : "—"}
-                              </TableCell>
-                              <TableCell className="text-xs text-right tabular-nums py-2 font-semibold">
-                                {item.total
-                                  ? parseFloat(item.total).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                  : "—"}
-                              </TableCell>
-                            </>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <ItemsList type="creditAuth" id={a.id} showPrices />
+        </div>
+      )}
+    </div>
   );
 }
 
-// ─── Main page ──────────────────────────────────────────────────────────────────
+// ─── Order card ───────────────────────────────────────────────────────────────
+
+function OrderCard({ o }: { o: PipelineOrder }) {
+  const [expanded, setExpanded] = useState(false);
+  const cfg = ORDER_STATUS[o.status] ?? { label: o.status, color: "#6b7280" };
+
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1.5px solid rgba(168,85,247,0.22)",
+        borderRadius: 10,
+        padding: "11px 13px",
+        cursor: "pointer",
+        transition: "background 0.15s",
+      }}
+      onClick={() => setExpanded(!expanded)}
+      data-testid={`card-order-${o.id}`}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
+        <span style={{ color: "#d8b4fe", fontWeight: 700, fontSize: 14 }}>{o.quotFolio ?? "—"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <StatusPill color={cfg.color} label={cfg.label} />
+          <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {o.status === "in_production" && (
+        <div style={{ marginBottom: 7 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontWeight: 600 }}>PRODUCCIÓN</span>
+            <span style={{ color: "#a855f7", fontSize: 10, fontWeight: 700 }}>{o.productionProgress}%</span>
+          </div>
+          <div style={{ height: 5, background: "rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${o.productionProgress}%`, background: "linear-gradient(90deg,#a855f7,#c084fc)", borderRadius: 10, transition: "width 0.5s" }} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+        <DollarSign size={10} style={{ flexShrink: 0 }} />
+        <Money amount={o.quotTotal} currency={o.quotCurrency} />
+        {o.estimatedDelivery && (
+          <span style={{ color: "rgba(255,255,255,0.25)", marginLeft: "auto", display: "flex", alignItems: "center", gap: 3 }}>
+            <Calendar size={10} />
+            <ShortDate date={o.estimatedDelivery} />
+          </span>
+        )}
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <ItemsList type="order" id={o.id} showPrices />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Shipment card ────────────────────────────────────────────────────────────
+
+function ShipmentCard({ s }: { s: PipelineShipment }) {
+  const [expanded, setExpanded] = useState(false);
+  const cfg = SHIP_STATUS[s.status] ?? { label: s.status, color: "#6b7280" };
+
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1.5px solid rgba(16,185,129,0.2)",
+        borderRadius: 10,
+        padding: "11px 13px",
+        cursor: "pointer",
+        transition: "background 0.15s",
+      }}
+      onClick={() => setExpanded(!expanded)}
+      data-testid={`card-shipment-${s.id}`}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
+        <span style={{ color: "#6ee7b7", fontWeight: 700, fontSize: 14 }}>{s.quotFolio ?? "—"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <StatusPill color={cfg.color} label={cfg.label} />
+          <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
+        </div>
+      </div>
+      <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 3 }}>
+        {s.transporter}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+        <span style={{ fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {s.trackingNumber ?? <em>Sin guía</em>}
+        </span>
+        <ShortDate date={s.shippedAt ?? s.createdAt} />
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <ItemsList type="shipment" id={s.id} showPrices={false} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Column ───────────────────────────────────────────────────────────────────
+
+function Column({ col, count, total, children, isLoading, isFullscreen }:
+  { col: typeof COLUMNS[0]; count: number; total: number; children: React.ReactNode; isLoading: boolean; isFullscreen: boolean }) {
+  const Icon = col.icon;
+  const maxH = isFullscreen ? "calc(100vh - 140px)" : "calc(100vh - 260px)";
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 7,
+        padding: "8px 12px",
+        background: col.bg,
+        border: `1px solid ${col.border}`,
+        borderRadius: "10px 10px 0 0",
+        flexShrink: 0,
+      }}>
+        <Icon size={13} style={{ color: col.color, flexShrink: 0 }} />
+        <span style={{ color: col.color, fontWeight: 700, fontSize: 12, letterSpacing: "0.03em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {col.label}
+        </span>
+        <span style={{ background: col.border, color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+          {count}
+        </span>
+        {count !== total && (
+          <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, flexShrink: 0 }}>/ {total}</span>
+        )}
+      </div>
+
+      {/* Cards container */}
+      <div style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        display: "flex", flexDirection: "column", gap: 6,
+        padding: 8,
+        background: "rgba(255,255,255,0.015)",
+        border: `1px solid ${col.border}`,
+        borderTop: "none",
+        borderRadius: "0 0 10px 10px",
+        maxHeight: maxH,
+        minHeight: 80,
+      }}>
+        {isLoading ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 60, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
+            Cargando...
+          </div>
+        ) : count === 0 ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 60, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
+            Sin registros
+          </div>
+        ) : children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function PipelinePage() {
-  const [showAll, setShowAll] = useState(false);
+  const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [countdown, setCountdown] = useState(REFRESH_INTERVAL / 1000);
-  const [selected, setSelected] = useState<SelectedCard | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [showActive, setShowActive] = useState(true);
 
-  const { data, isLoading, refetch, isFetching, dataUpdatedAt } = useQuery<PipelineData>({
+  const { data, refetch, isFetching, isLoading } = useQuery<PipelineData>({
     queryKey: ["/api/pipeline"],
-    staleTime: REFRESH_INTERVAL,
-    refetchInterval: REFRESH_INTERVAL,
-    refetchIntervalInBackground: true,
+    refetchInterval: REFRESH_INTERVAL * 1000,
+    staleTime: 15_000,
   });
 
-  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
+  // Countdown timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) { setLastUpdated(new Date()); return REFRESH_INTERVAL; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
-    setCountdown(REFRESH_INTERVAL / 1000);
-    const id = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(id);
-  }, [dataUpdatedAt]);
+    if (!isFetching) setLastUpdated(new Date());
+  }, [isFetching]);
+
+  const handleManualRefresh = useCallback(() => {
+    refetch();
+    setLastUpdated(new Date());
+    setCountdown(REFRESH_INTERVAL);
+  }, [refetch]);
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch(() => {});
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true));
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().then(() => setIsFullscreen(false));
     }
   }, []);
 
@@ -483,90 +500,166 @@ export default function PipelinePage() {
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "f" && !e.ctrlKey && !e.metaKey && !e.altKey && (e.target as HTMLElement).tagName !== "INPUT") {
-        toggleFullscreen();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [toggleFullscreen]);
+  // Filter data
+  const allQuots  = data?.quotations  ?? [];
+  const allAuths  = data?.creditAuths ?? [];
+  const allOrds   = data?.orders      ?? [];
+  const allShips  = data?.shipments   ?? [];
 
-  const quots = (data?.quotations ?? []).filter(q => showAll || ACTIVE_QUOT.has(q.status));
-  const auths = (data?.creditAuths ?? []).filter(a => showAll || ACTIVE_AUTH.has(a.status));
-  const ords  = (data?.orders ?? []).filter(o => showAll || ACTIVE_ORDER.has(o.status));
-  const ships = (data?.shipments ?? []).filter(s => showAll || ACTIVE_SHIP.has(s.status));
+  const quots = showActive ? allQuots.filter(q => ACTIVE_QUOT.has(q.status))  : allQuots;
+  const auths = showActive ? allAuths.filter(a => ACTIVE_AUTH.has(a.status))  : allAuths;
+  const ords  = showActive ? allOrds.filter(o => ACTIVE_ORDER.has(o.status))  : allOrds;
+  const ships = showActive ? allShips.filter(s => ACTIVE_SHIP.has(s.status))  : allShips;
 
-  const totalQuots = data?.quotations.length ?? 0;
-  const totalAuths = data?.creditAuths.length ?? 0;
-  const totalOrds  = data?.orders.length ?? 0;
-  const totalShips = data?.shipments.length ?? 0;
+  const columnData = [
+    { col: COLUMNS[0], items: quots,  total: allQuots.length },
+    { col: COLUMNS[1], items: auths,  total: allAuths.length },
+    { col: COLUMNS[2], items: ords,   total: allOrds.length  },
+    { col: COLUMNS[3], items: ships,  total: allShips.length },
+  ];
 
-  const pendingApproval = (data?.quotations ?? []).filter(q => ["pending_approval", "pending_authorization"].includes(q.status)).length;
-  const pendingAuth     = (data?.creditAuths ?? []).filter(a => a.status === "pending").length;
-  const inProduction    = (data?.orders ?? []).filter(o => o.status === "in_production").length;
-  const inTransit       = (data?.shipments ?? []).filter(s => s.status === "in_transit").length;
-
-  const fsWrap = isFullscreen
-    ? "fixed inset-0 z-[9999] bg-background overflow-auto p-4 flex flex-col gap-4"
-    : "space-y-4";
+  const btnBase: React.CSSProperties = {
+    background: "rgba(255,255,255,0.07)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 8, padding: "7px 11px",
+    cursor: "pointer", color: "#fff",
+    display: "flex", alignItems: "center", gap: 5,
+    fontSize: 12, fontFamily: "inherit",
+  };
 
   return (
-    <>
-      <div ref={containerRef} className={fsWrap} data-testid="pipeline-container">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold leading-tight" data-testid="text-pipeline-title">Tablero de Operaciones</h1>
-                <Radio className="h-4 w-4 text-emerald-500 shrink-0" />
-              </div>
-              <LiveIndicator countdown={countdown} isFetching={isFetching} lastUpdated={lastUpdated} />
+    <div style={{
+      height: "100vh",
+      background: "linear-gradient(180deg, #0a0f1e 0%, #0d1324 100%)",
+      display: "flex", flexDirection: "column",
+      fontFamily: "'Inter', system-ui, sans-serif",
+      color: "#fff", overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 20px",
+        background: "rgba(255,255,255,0.04)",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        flexShrink: 0, gap: 12, flexWrap: "wrap",
+      }}>
+        {/* Left: title */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Radio size={22} style={{ color: "#3b82f6" }} />
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "0.03em", color: "#fff" }}>
+              Tablero de Operaciones
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 1 }}>
+              Nexxo — Sistema Comercial
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant={showAll ? "default" : "outline"} size="sm" onClick={() => setShowAll(v => !v)} data-testid="button-toggle-filter">
-              <Filter className="h-4 w-4 mr-1.5" />
-              {showAll ? "Todos" : "Activos"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} data-testid="button-manual-refresh">
-              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-            </Button>
-            <Button variant="outline" size="sm" onClick={toggleFullscreen} data-testid="button-fullscreen" title={isFullscreen ? "Salir de pantalla completa (F)" : "Pantalla completa (F)"}>
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
+        </div>
+
+        {/* Center: KPIs */}
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          {[
+            { label: "COTIZACIONES",  value: allQuots.length,  color: "#3b82f6" },
+            { label: "AUTORIZACIONES",value: allAuths.length,  color: "#f59e0b" },
+            { label: "PEDIDOS",       value: allOrds.length,   color: "#a855f7" },
+            { label: "EMBARQUES",     value: allShips.length,  color: "#10b981" },
+          ].map(stat => (
+            <div key={stat.label} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: stat.color, lineHeight: 1.1 }}>{stat.value}</div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", letterSpacing: "0.07em", marginTop: 1 }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Right: controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", textAlign: "right" }}>
+            <div>Actualizado {format(lastUpdated, "HH:mm:ss")}</div>
+            <div style={{ color: countdown <= 8 ? "#f59e0b" : "rgba(255,255,255,0.3)" }}>
+              Refresco en {countdown}s
+            </div>
           </div>
-        </div>
 
-        {/* KPI strip */}
-        <div className="flex flex-wrap gap-3">
-          <KpiCard icon={FileText}    title="Cotizaciones"   total={totalQuots} highlight={pendingApproval} highlightLabel="requieren atención" color="bg-blue-600" />
-          <KpiCard icon={ShieldCheck} title="Autorizaciones" total={totalAuths} highlight={pendingAuth}     highlightLabel="pendientes"         color="bg-amber-600" />
-          <KpiCard icon={Package}     title="Pedidos"        total={totalOrds}  highlight={inProduction}    highlightLabel="en producción"       color="bg-violet-600" />
-          <KpiCard icon={Truck}       title="Embarques"      total={totalShips} highlight={inTransit}       highlightLabel="en tránsito"         color="bg-emerald-600" />
-        </div>
+          <button onClick={handleManualRefresh} title="Actualizar ahora" style={btnBase} data-testid="button-refresh">
+            <RefreshCw size={13} style={{ animation: isFetching ? "spin 1s linear infinite" : "none" }} />
+            <span>Actualizar</span>
+          </button>
 
-        {/* 4-panel grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 flex-1">
-          <Panel title="Cotizaciones"  icon={FileText}    count={quots.length} total={totalQuots} color="bg-blue-600"    isLoading={isLoading} fullscreen={isFullscreen}>
-            {quots.map(q => <QuotCard     key={q.id} q={q} onSelect={setSelected} />)}
-          </Panel>
-          <Panel title="Autorizaciones" icon={ShieldCheck} count={auths.length} total={totalAuths} color="bg-amber-600"  isLoading={isLoading} fullscreen={isFullscreen}>
-            {auths.map(a => <AuthCard     key={a.id} a={a} onSelect={setSelected} />)}
-          </Panel>
-          <Panel title="Pedidos"        icon={Package}     count={ords.length}  total={totalOrds}  color="bg-violet-600" isLoading={isLoading} fullscreen={isFullscreen}>
-            {ords.map(o => <OrderCard    key={o.id} o={o} onSelect={setSelected} />)}
-          </Panel>
-          <Panel title="Embarques"      icon={Truck}       count={ships.length} total={totalShips} color="bg-emerald-600" isLoading={isLoading} fullscreen={isFullscreen}>
-            {ships.map(s => <ShipmentCard key={s.id} s={s} onSelect={setSelected} />)}
-          </Panel>
+          <button
+            onClick={() => setShowActive(!showActive)}
+            title="Filtrar activos / todos"
+            style={{ ...btnBase, background: showActive ? "rgba(59,130,246,0.22)" : "rgba(255,255,255,0.07)", border: showActive ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.14)" }}
+            data-testid="button-filter-active"
+          >
+            <span style={{ fontSize: 11 }}>{showActive ? "Activos" : "Todos"}</span>
+          </button>
+
+          <button onClick={toggleFullscreen} title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"} style={btnBase} data-testid="button-fullscreen">
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
         </div>
       </div>
 
-      {/* Items detail sheet – portal renders into the fullscreen container so it stays visible in fullscreen mode */}
-      <ItemsSheet selected={selected} onClose={() => setSelected(null)} container={containerRef.current} />
-    </>
+      {/* Legend */}
+      <div style={{
+        display: "flex", gap: 16, padding: "5px 20px",
+        background: "rgba(0,0,0,0.2)",
+        borderBottom: "1px solid rgba(255,255,255,0.05)",
+        flexShrink: 0, flexWrap: "wrap", alignItems: "center",
+      }}>
+        {[
+          { color: "#3b82f6",  label: "Cotizaciones" },
+          { color: "#f59e0b",  label: "Autorizaciones" },
+          { color: "#a855f7",  label: "Pedidos" },
+          { color: "#10b981",  label: "Embarques" },
+        ].map(l => (
+          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
+            {l.label}
+          </div>
+        ))}
+        <div style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.2)" }}>
+          Haz clic en una tarjeta para ver los artículos
+        </div>
+      </div>
+
+      {/* Board */}
+      <div style={{
+        flex: 1, overflow: "hidden",
+        display: "flex", gap: 10,
+        padding: "10px 14px 12px",
+        alignItems: "stretch",
+      }}>
+        {columnData.map(({ col, items, total }) => (
+          <Column key={col.key} col={col} count={items.length} total={total} isLoading={isLoading} isFullscreen={isFullscreen}>
+            {col.key === "quotations"  && (items as PipelineQuotation[]).map(q  => <QuotCard     key={q.id}  q={q} />)}
+            {col.key === "creditAuths" && (items as PipelineCreditAuth[]).map(a  => <AuthCard     key={a.id}  a={a} />)}
+            {col.key === "orders"      && (items as PipelineOrder[]).map(o       => <OrderCard    key={o.id}  o={o} />)}
+            {col.key === "shipments"   && (items as PipelineShipment[]).map(s    => <ShipmentCard key={s.id}  s={s} />)}
+          </Column>
+        ))}
+      </div>
+
+      {/* Loading overlay */}
+      {isFetching && (
+        <div style={{
+          position: "fixed", bottom: 16, right: 16,
+          background: "rgba(59,130,246,0.9)", color: "#fff",
+          borderRadius: 8, padding: "8px 14px",
+          fontSize: 12, display: "flex", alignItems: "center", gap: 6,
+          zIndex: 100,
+        }}>
+          <RefreshCw size={13} style={{ animation: "spin 1s linear infinite" }} />
+          Actualizando...
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
+      `}</style>
+    </div>
   );
 }
