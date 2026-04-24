@@ -1,20 +1,35 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   RefreshCw, FileText, ShieldCheck, Package, Truck,
-  Filter, Maximize2, Minimize2, Radio,
+  Filter, Maximize2, Minimize2, Radio, X,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const REFRESH_INTERVAL = 20_000; // 20 seconds
+const REFRESH_INTERVAL = 20_000;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,29 +38,46 @@ interface PipelineQuotation {
   customerName: string | null; sellerName: string | null; createdAt: string;
   validUntil: string | null;
 }
-
 interface PipelineOrder {
   id: string; status: string; productionProgress: number;
   quotFolio: string | null; quotTotal: string | null; quotCurrency: string | null;
   customerName: string | null; estimatedDelivery: string | null; createdAt: string;
 }
-
 interface PipelineShipment {
   id: string; status: string; transporter: string;
   trackingNumber: string | null; quotFolio: string | null; customerName: string | null;
   shippedAt: string | null; createdAt: string;
 }
-
 interface PipelineCreditAuth {
   id: string; status: string; quotFolio: string | null; quotTotal: string | null;
   quotCurrency: string | null; customerName: string | null; createdAt: string;
 }
-
 interface PipelineData {
   quotations: PipelineQuotation[];
   orders: PipelineOrder[];
   shipments: PipelineShipment[];
   creditAuths: PipelineCreditAuth[];
+}
+
+interface PipelineItem {
+  id: string;
+  productCode: string;
+  description: string;
+  qty: string | number;
+  unit: string | null;
+  unitPrice: string | null;
+  discount: string | null;
+  total: string | null;
+}
+
+type EntityType = "quotation" | "order" | "creditAuth" | "shipment";
+
+interface SelectedCard {
+  type: EntityType;
+  id: string;
+  folio: string;
+  status: string;
+  label: string;
 }
 
 // ─── Status configs ─────────────────────────────────────────────────────────────
@@ -60,13 +92,11 @@ const QUOT_STATUS: Record<string, { label: string; color: string }> = {
   rejected:              { label: "Rechazada",          color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
   expired:               { label: "Vencida",            color: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" },
 };
-
 const AUTH_STATUS: Record<string, { label: string; color: string }> = {
   pending:  { label: "Pendiente", color: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
   approved: { label: "Aprobada",  color: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
   rejected: { label: "Rechazada", color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
 };
-
 const ORDER_STATUS: Record<string, { label: string; color: string }> = {
   pending:            { label: "Pendiente",     color: "bg-muted text-muted-foreground" },
   in_production:      { label: "En Producción", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
@@ -76,7 +106,6 @@ const ORDER_STATUS: Record<string, { label: string; color: string }> = {
   shipped:            { label: "Embarcado",     color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300" },
   delivered:          { label: "Entregado",     color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
 };
-
 const SHIP_STATUS: Record<string, { label: string; color: string }> = {
   pending:    { label: "Pendiente",   color: "bg-muted text-muted-foreground" },
   in_transit: { label: "En Tránsito", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
@@ -88,7 +117,7 @@ const ACTIVE_AUTH  = new Set(["pending"]);
 const ACTIVE_ORDER = new Set(["pending", "in_production", "ready", "partially_released", "released"]);
 const ACTIVE_SHIP  = new Set(["pending", "in_transit"]);
 
-// ─── Small helpers ──────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function StatusBadge({ map, status }: { map: Record<string, { label: string; color: string }>; status: string }) {
   const cfg = map[status] ?? { label: status, color: "bg-muted text-muted-foreground" };
@@ -113,22 +142,25 @@ function ShortDate({ date }: { date: string | null | undefined }) {
 function PanelSkeleton() {
   return (
     <div className="space-y-2">
-      {[1, 2, 3].map(i => <Skeleton key={i} className="h-[76px] w-full rounded-md" />)}
+      {[1, 2, 3].map(i => <Skeleton key={i} className="h-[60px] w-full rounded-md" />)}
     </div>
   );
 }
 
-// ─── Individual entity cards ────────────────────────────────────────────────────
+// ─── Entity cards (customer removed) ───────────────────────────────────────────
 
-function QuotCard({ q, onClick }: { q: PipelineQuotation; onClick: () => void }) {
+function QuotCard({ q, onSelect }: { q: PipelineQuotation; onSelect: (c: SelectedCard) => void }) {
   return (
-    <button onClick={onClick} className="w-full text-left p-3 rounded-md border bg-card hover-elevate" data-testid={`card-quotation-${q.id}`}>
+    <button
+      onClick={() => onSelect({ type: "quotation", id: q.id, folio: q.folio, status: q.status, label: "Cotización" })}
+      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
+      data-testid={`card-quotation-${q.id}`}
+    >
       <div className="flex items-center justify-between gap-2 mb-1">
         <span className="text-xs font-bold text-primary truncate">{q.folio}</span>
         <StatusBadge map={QUOT_STATUS} status={q.status} />
       </div>
-      <p className="text-sm font-medium truncate">{q.customerName ?? "Sin cliente"}</p>
-      <div className="flex items-center justify-between mt-1.5 gap-2">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold"><Money amount={q.total} currency={q.currency} /></span>
         <span className="text-[11px] text-muted-foreground"><ShortDate date={q.createdAt} /></span>
       </div>
@@ -137,15 +169,18 @@ function QuotCard({ q, onClick }: { q: PipelineQuotation; onClick: () => void })
   );
 }
 
-function AuthCard({ a, onClick }: { a: PipelineCreditAuth; onClick: () => void }) {
+function AuthCard({ a, onSelect }: { a: PipelineCreditAuth; onSelect: (c: SelectedCard) => void }) {
   return (
-    <button onClick={onClick} className="w-full text-left p-3 rounded-md border bg-card hover-elevate" data-testid={`card-auth-${a.id}`}>
+    <button
+      onClick={() => onSelect({ type: "creditAuth", id: a.id, folio: a.quotFolio ?? a.id, status: a.status, label: "Autorización" })}
+      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
+      data-testid={`card-auth-${a.id}`}
+    >
       <div className="flex items-center justify-between gap-2 mb-1">
         <span className="text-xs font-bold text-primary">{a.quotFolio ?? "—"}</span>
         <StatusBadge map={AUTH_STATUS} status={a.status} />
       </div>
-      <p className="text-sm font-medium truncate">{a.customerName ?? "Sin cliente"}</p>
-      <div className="flex items-center justify-between mt-1.5 gap-2">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold"><Money amount={a.quotTotal} currency={a.quotCurrency} /></span>
         <span className="text-[11px] text-muted-foreground"><ShortDate date={a.createdAt} /></span>
       </div>
@@ -153,15 +188,18 @@ function AuthCard({ a, onClick }: { a: PipelineCreditAuth; onClick: () => void }
   );
 }
 
-function OrderCard({ o, onClick }: { o: PipelineOrder; onClick: () => void }) {
+function OrderCard({ o, onSelect }: { o: PipelineOrder; onSelect: (c: SelectedCard) => void }) {
   return (
-    <button onClick={onClick} className="w-full text-left p-3 rounded-md border bg-card hover-elevate" data-testid={`card-order-${o.id}`}>
+    <button
+      onClick={() => onSelect({ type: "order", id: o.id, folio: o.quotFolio ?? o.id, status: o.status, label: "Pedido" })}
+      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
+      data-testid={`card-order-${o.id}`}
+    >
       <div className="flex items-center justify-between gap-2 mb-1">
         <span className="text-xs font-bold text-primary">{o.quotFolio ?? "—"}</span>
         <StatusBadge map={ORDER_STATUS} status={o.status} />
       </div>
-      <p className="text-sm font-medium truncate">{o.customerName ?? "Sin cliente"}</p>
-      <div className="mt-1.5 space-y-1">
+      <div className="mt-1 space-y-1">
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
           <span>Producción</span>
           <span className="font-semibold text-foreground">{o.productionProgress}%</span>
@@ -178,15 +216,18 @@ function OrderCard({ o, onClick }: { o: PipelineOrder; onClick: () => void }) {
   );
 }
 
-function ShipmentCard({ s, onClick }: { s: PipelineShipment; onClick: () => void }) {
+function ShipmentCard({ s, onSelect }: { s: PipelineShipment; onSelect: (c: SelectedCard) => void }) {
   return (
-    <button onClick={onClick} className="w-full text-left p-3 rounded-md border bg-card hover-elevate" data-testid={`card-shipment-${s.id}`}>
+    <button
+      onClick={() => onSelect({ type: "shipment", id: s.id, folio: s.quotFolio ?? s.id, status: s.status, label: "Embarque" })}
+      className="w-full text-left p-3 rounded-md border bg-card hover-elevate"
+      data-testid={`card-shipment-${s.id}`}
+    >
       <div className="flex items-center justify-between gap-2 mb-1">
         <span className="text-xs font-bold text-primary">{s.quotFolio ?? "—"}</span>
         <StatusBadge map={SHIP_STATUS} status={s.status} />
       </div>
-      <p className="text-sm font-medium truncate">{s.customerName ?? "Sin cliente"}</p>
-      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{s.transporter}</p>
+      <p className="text-[11px] text-muted-foreground truncate">{s.transporter}</p>
       <div className="flex items-center justify-between mt-1 gap-2">
         {s.trackingNumber
           ? <span className="text-[11px] font-mono text-muted-foreground truncate">{s.trackingNumber}</span>
@@ -198,18 +239,11 @@ function ShipmentCard({ s, onClick }: { s: PipelineShipment; onClick: () => void
   );
 }
 
-// ─── Panel ──────────────────────────────────────────────────────────────────────
+// ─── Panel container ─────────────────────────────────────────────────────────────
 
-function Panel({
-  title, icon: Icon, count, total, color, children, isLoading, fullscreen,
-}: {
-  title: string; icon: React.ElementType; count: number; total: number;
-  color: string; children: React.ReactNode; isLoading: boolean; fullscreen: boolean;
-}) {
-  const maxH = fullscreen
-    ? "max-h-[calc(100vh-180px)]"
-    : "max-h-[calc(100vh-290px)]";
-
+function Panel({ title, icon: Icon, count, total, color, children, isLoading, fullscreen }:
+  { title: string; icon: React.ElementType; count: number; total: number; color: string; children: React.ReactNode; isLoading: boolean; fullscreen: boolean }) {
+  const maxH = fullscreen ? "max-h-[calc(100vh-180px)]" : "max-h-[calc(100vh-290px)]";
   return (
     <div className="flex flex-col min-h-0">
       <div className={`flex items-center gap-2 px-3 py-2 rounded-t-md ${color} text-white`}>
@@ -218,7 +252,7 @@ function Panel({
         <span className="text-xs font-bold bg-white/25 px-1.5 py-0.5 rounded">{count}</span>
         {count !== total && <span className="text-[10px] opacity-70">/ {total}</span>}
       </div>
-      <div className={`flex-1 overflow-y-auto space-y-2 p-2 border border-t-0 rounded-b-md bg-muted/30 min-h-[120px] ${maxH}`}>
+      <div className={`flex-1 overflow-y-auto space-y-2 p-2 border border-t-0 rounded-b-md bg-muted/30 min-h-[100px] ${maxH}`}>
         {isLoading
           ? <PanelSkeleton />
           : count === 0
@@ -230,12 +264,12 @@ function Panel({
   );
 }
 
-// ─── KPI card ───────────────────────────────────────────────────────────────────
+// ─── KPI card ────────────────────────────────────────────────────────────────────
 
 function KpiCard({ icon: Icon, title, total, highlight, highlightLabel, color }:
   { icon: React.ElementType; title: string; total: number; highlight: number; highlightLabel: string; color: string }) {
   return (
-    <Card className="flex-1 min-w-[140px]">
+    <Card className="flex-1 min-w-[130px]">
       <CardContent className="p-3">
         <div className="flex items-start gap-3">
           <div className={`flex items-center justify-center h-8 w-8 rounded-md shrink-0 ${color}`}>
@@ -254,7 +288,7 @@ function KpiCard({ icon: Icon, title, total, highlight, highlightLabel, color }:
   );
 }
 
-// ─── Live indicator ─────────────────────────────────────────────────────────────
+// ─── Live indicator ──────────────────────────────────────────────────────────────
 
 function LiveIndicator({ countdown, isFetching, lastUpdated }:
   { countdown: number; isFetching: boolean; lastUpdated: Date | null }) {
@@ -265,12 +299,7 @@ function LiveIndicator({ countdown, isFetching, lastUpdated }:
         <span className={`relative inline-flex rounded-full h-2 w-2 ${isFetching ? "bg-amber-500" : "bg-emerald-500"}`} />
       </span>
       <span className="hidden sm:inline">
-        {isFetching
-          ? "Actualizando..."
-          : lastUpdated
-            ? `Actualizado ${formatDistanceToNow(lastUpdated, { locale: es, addSuffix: true })}`
-            : "En vivo"
-        }
+        {isFetching ? "Actualizando..." : lastUpdated ? `Actualizado ${formatDistanceToNow(lastUpdated, { locale: es, addSuffix: true })}` : "En vivo"}
       </span>
       {!isFetching && (
         <span className="text-[11px] tabular-nums text-muted-foreground/70 hidden md:inline">
@@ -281,16 +310,150 @@ function LiveIndicator({ countdown, isFetching, lastUpdated }:
   );
 }
 
+// ─── Items detail sheet ──────────────────────────────────────────────────────────
+
+const TYPE_LABELS: Record<EntityType, string> = {
+  quotation: "Cotización",
+  order: "Pedido",
+  creditAuth: "Autorización de Crédito",
+  shipment: "Embarque",
+};
+
+const STATUS_MAPS: Record<EntityType, Record<string, { label: string; color: string }>> = {
+  quotation: QUOT_STATUS,
+  order: ORDER_STATUS,
+  creditAuth: AUTH_STATUS,
+  shipment: SHIP_STATUS,
+};
+
+function ItemsSheet({ selected, onClose }: { selected: SelectedCard | null; onClose: () => void }) {
+  const { data: items = [], isLoading } = useQuery<PipelineItem[]>({
+    queryKey: ["/api/pipeline/items", selected?.type, selected?.id],
+    queryFn: async () => {
+      if (!selected) return [];
+      const res = await fetch(`/api/pipeline/items?type=${selected.type}&id=${selected.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Error al cargar artículos");
+      return res.json();
+    },
+    enabled: !!selected,
+    staleTime: 30_000,
+  });
+
+  const showPrices = selected?.type !== "shipment";
+
+  return (
+    <Sheet open={!!selected} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0">
+        {selected && (
+          <>
+            <SheetHeader className="px-6 py-4 border-b sticky top-0 bg-background z-10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground font-medium">{TYPE_LABELS[selected.type]}</p>
+                  <SheetTitle className="text-lg font-bold leading-tight">{selected.folio}</SheetTitle>
+                  <div className="mt-1">
+                    <StatusBadge map={STATUS_MAPS[selected.type]} status={selected.status} />
+                  </div>
+                </div>
+                <Button size="icon" variant="ghost" onClick={onClose} className="shrink-0 mt-0.5" data-testid="button-close-sheet">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </SheetHeader>
+
+            <SheetDescription className="sr-only">
+              Artículos del {TYPE_LABELS[selected.type]} {selected.folio}
+            </SheetDescription>
+
+            <div className="px-6 py-4">
+              <h3 className="text-sm font-semibold mb-3">
+                Artículos
+                {!isLoading && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">({items.length} {items.length === 1 ? "artículo" : "artículos"})</span>
+                )}
+              </h3>
+
+              {isLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+                </div>
+              ) : items.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">Sin artículos registrados</p>
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="text-xs w-[40%]">Descripción</TableHead>
+                        <TableHead className="text-xs text-right">Cant.</TableHead>
+                        <TableHead className="text-xs">Unidad</TableHead>
+                        {showPrices && (
+                          <>
+                            <TableHead className="text-xs text-right">Precio</TableHead>
+                            <TableHead className="text-xs text-right">Desc.</TableHead>
+                            <TableHead className="text-xs text-right">Total</TableHead>
+                          </>
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((item, idx) => (
+                        <TableRow key={item.id} className={idx % 2 === 0 ? "" : "bg-muted/20"}>
+                          <TableCell className="py-2">
+                            {item.productCode && (
+                              <span className="block text-[10px] font-mono text-muted-foreground">{item.productCode}</span>
+                            )}
+                            <span className="text-xs leading-tight line-clamp-2">{item.description}</span>
+                          </TableCell>
+                          <TableCell className="text-xs text-right tabular-nums py-2 font-medium">
+                            {parseFloat(String(item.qty)).toLocaleString("es-MX")}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground py-2">{item.unit ?? "—"}</TableCell>
+                          {showPrices && (
+                            <>
+                              <TableCell className="text-xs text-right tabular-nums py-2">
+                                {item.unitPrice
+                                  ? parseFloat(item.unitPrice).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-right tabular-nums py-2">
+                                {item.discount && parseFloat(item.discount) > 0
+                                  ? `${parseFloat(item.discount).toFixed(1)}%`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-right tabular-nums py-2 font-semibold">
+                                {item.total
+                                  ? parseFloat(item.total).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                  : "—"}
+                              </TableCell>
+                            </>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ─── Main page ──────────────────────────────────────────────────────────────────
 
 export default function PipelinePage() {
-  const [, navigate] = useLocation();
   const [showAll, setShowAll] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL / 1000);
+  const [selected, setSelected] = useState<SelectedCard | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ── Data with auto-refresh ──
   const { data, isLoading, refetch, isFetching, dataUpdatedAt } = useQuery<PipelineData>({
     queryKey: ["/api/pipeline"],
     staleTime: REFRESH_INTERVAL,
@@ -300,16 +463,12 @@ export default function PipelinePage() {
 
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
-  // ── Countdown timer (resets whenever data refreshes) ──
   useEffect(() => {
     setCountdown(REFRESH_INTERVAL / 1000);
-    const id = setInterval(() => {
-      setCountdown(c => Math.max(0, c - 1));
-    }, 1000);
+    const id = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
     return () => clearInterval(id);
   }, [dataUpdatedAt]);
 
-  // ── Fullscreen API ──
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen().catch(() => {});
@@ -324,8 +483,6 @@ export default function PipelinePage() {
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
-  // ── Keyboard: Escape already exits fullscreen natively ──
-  // Extra: pressing F key toggles fullscreen while on the page
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "f" && !e.ctrlKey && !e.metaKey && !e.altKey && (e.target as HTMLElement).tagName !== "INPUT") {
@@ -336,7 +493,6 @@ export default function PipelinePage() {
     return () => window.removeEventListener("keydown", handler);
   }, [toggleFullscreen]);
 
-  // ── Filtered lists ──
   const quots = (data?.quotations ?? []).filter(q => showAll || ACTIVE_QUOT.has(q.status));
   const auths = (data?.creditAuths ?? []).filter(a => showAll || ACTIVE_AUTH.has(a.status));
   const ords  = (data?.orders ?? []).filter(o => showAll || ACTIVE_ORDER.has(o.status));
@@ -352,84 +508,65 @@ export default function PipelinePage() {
   const inProduction    = (data?.orders ?? []).filter(o => o.status === "in_production").length;
   const inTransit       = (data?.shipments ?? []).filter(s => s.status === "in_transit").length;
 
-  // ── Styles when inside native fullscreen ──
   const fsWrap = isFullscreen
     ? "fixed inset-0 z-[9999] bg-background overflow-auto p-4 flex flex-col gap-4"
     : "space-y-4";
 
   return (
-    <div ref={containerRef} className={fsWrap} data-testid="pipeline-container">
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold leading-tight" data-testid="text-pipeline-title">
-                Tablero de Operaciones
-              </h1>
-              <Radio className="h-4 w-4 text-emerald-500 shrink-0" />
+    <>
+      <div ref={containerRef} className={fsWrap} data-testid="pipeline-container">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold leading-tight" data-testid="text-pipeline-title">Tablero de Operaciones</h1>
+                <Radio className="h-4 w-4 text-emerald-500 shrink-0" />
+              </div>
+              <LiveIndicator countdown={countdown} isFetching={isFetching} lastUpdated={lastUpdated} />
             </div>
-            <LiveIndicator countdown={countdown} isFetching={isFetching} lastUpdated={lastUpdated} />
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant={showAll ? "default" : "outline"} size="sm" onClick={() => setShowAll(v => !v)} data-testid="button-toggle-filter">
+              <Filter className="h-4 w-4 mr-1.5" />
+              {showAll ? "Todos" : "Activos"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} data-testid="button-manual-refresh">
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+            </Button>
+            <Button variant="outline" size="sm" onClick={toggleFullscreen} data-testid="button-fullscreen" title={isFullscreen ? "Salir de pantalla completa (F)" : "Pantalla completa (F)"}>
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant={showAll ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowAll(v => !v)}
-            data-testid="button-toggle-filter"
-          >
-            <Filter className="h-4 w-4 mr-1.5" />
-            {showAll ? "Todos" : "Activos"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            data-testid="button-manual-refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleFullscreen}
-            data-testid="button-fullscreen"
-            title={isFullscreen ? "Salir de pantalla completa (F)" : "Pantalla completa (F)"}
-          >
-            {isFullscreen
-              ? <Minimize2 className="h-4 w-4" />
-              : <Maximize2 className="h-4 w-4" />
-            }
-          </Button>
+        {/* KPI strip */}
+        <div className="flex flex-wrap gap-3">
+          <KpiCard icon={FileText}    title="Cotizaciones"   total={totalQuots} highlight={pendingApproval} highlightLabel="requieren atención" color="bg-blue-600" />
+          <KpiCard icon={ShieldCheck} title="Autorizaciones" total={totalAuths} highlight={pendingAuth}     highlightLabel="pendientes"         color="bg-amber-600" />
+          <KpiCard icon={Package}     title="Pedidos"        total={totalOrds}  highlight={inProduction}    highlightLabel="en producción"       color="bg-violet-600" />
+          <KpiCard icon={Truck}       title="Embarques"      total={totalShips} highlight={inTransit}       highlightLabel="en tránsito"         color="bg-emerald-600" />
+        </div>
+
+        {/* 4-panel grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 flex-1">
+          <Panel title="Cotizaciones"  icon={FileText}    count={quots.length} total={totalQuots} color="bg-blue-600"    isLoading={isLoading} fullscreen={isFullscreen}>
+            {quots.map(q => <QuotCard     key={q.id} q={q} onSelect={setSelected} />)}
+          </Panel>
+          <Panel title="Autorizaciones" icon={ShieldCheck} count={auths.length} total={totalAuths} color="bg-amber-600"  isLoading={isLoading} fullscreen={isFullscreen}>
+            {auths.map(a => <AuthCard     key={a.id} a={a} onSelect={setSelected} />)}
+          </Panel>
+          <Panel title="Pedidos"        icon={Package}     count={ords.length}  total={totalOrds}  color="bg-violet-600" isLoading={isLoading} fullscreen={isFullscreen}>
+            {ords.map(o => <OrderCard    key={o.id} o={o} onSelect={setSelected} />)}
+          </Panel>
+          <Panel title="Embarques"      icon={Truck}       count={ships.length} total={totalShips} color="bg-emerald-600" isLoading={isLoading} fullscreen={isFullscreen}>
+            {ships.map(s => <ShipmentCard key={s.id} s={s} onSelect={setSelected} />)}
+          </Panel>
         </div>
       </div>
 
-      {/* ── KPI strip ── */}
-      <div className="flex flex-wrap gap-3">
-        <KpiCard icon={FileText}    title="Cotizaciones"  total={totalQuots} highlight={pendingApproval} highlightLabel="requieren atención" color="bg-blue-600" />
-        <KpiCard icon={ShieldCheck} title="Autorizaciones" total={totalAuths} highlight={pendingAuth}     highlightLabel="pendientes"         color="bg-amber-600" />
-        <KpiCard icon={Package}     title="Pedidos"        total={totalOrds}  highlight={inProduction}    highlightLabel="en producción"       color="bg-violet-600" />
-        <KpiCard icon={Truck}       title="Embarques"      total={totalShips} highlight={inTransit}       highlightLabel="en tránsito"         color="bg-emerald-600" />
-      </div>
-
-      {/* ── 4-panel grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 flex-1">
-        <Panel title="Cotizaciones"  icon={FileText}    count={quots.length} total={totalQuots} color="bg-blue-600"    isLoading={isLoading} fullscreen={isFullscreen}>
-          {quots.map(q => <QuotCard     key={q.id} q={q} onClick={() => navigate("/quotations")} />)}
-        </Panel>
-        <Panel title="Autorizaciones" icon={ShieldCheck} count={auths.length} total={totalAuths} color="bg-amber-600"  isLoading={isLoading} fullscreen={isFullscreen}>
-          {auths.map(a => <AuthCard     key={a.id} a={a} onClick={() => navigate("/credit-auth")} />)}
-        </Panel>
-        <Panel title="Pedidos"        icon={Package}     count={ords.length}  total={totalOrds}  color="bg-violet-600" isLoading={isLoading} fullscreen={isFullscreen}>
-          {ords.map(o => <OrderCard    key={o.id} o={o} onClick={() => navigate("/orders")} />)}
-        </Panel>
-        <Panel title="Embarques"      icon={Truck}       count={ships.length} total={totalShips} color="bg-emerald-600" isLoading={isLoading} fullscreen={isFullscreen}>
-          {ships.map(s => <ShipmentCard key={s.id} s={s} onClick={() => navigate("/shipments")} />)}
-        </Panel>
-      </div>
-    </div>
+      {/* Items detail sheet (outside the fullscreen container so it overlays correctly) */}
+      <ItemsSheet selected={selected} onClose={() => setSelected(null)} />
+    </>
   );
 }

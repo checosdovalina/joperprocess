@@ -220,6 +220,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pipeline items detail endpoint
+  app.get("/api/pipeline/items", isAuthenticated, async (req, res) => {
+    try {
+      const { type, id } = req.query as { type: string; id: string };
+      if (!type || !id) return res.status(400).json({ error: "Missing type or id" });
+
+      if (type === "quotation") {
+        const items = await db.query.quotationItems.findMany({
+          where: eq(quotationItems.quotationId, id),
+          with: { product: { columns: { name: true, code: true, unit: true } } },
+          orderBy: (qi, { asc }) => [asc(qi.position)],
+        });
+        return res.json(items.map(i => ({
+          id: i.id,
+          productCode: i.product?.code ?? i.description?.split(" ")[0] ?? "",
+          description: i.description,
+          qty: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice,
+          discount: i.discount,
+          total: i.total,
+        })));
+      }
+
+      if (type === "order") {
+        const order = await db.query.orders.findFirst({
+          where: eq(orders.id, id),
+          with: {
+            quotation: {
+              with: {
+                items: {
+                  with: { product: { columns: { name: true, code: true, unit: true } } },
+                  orderBy: (qi, { asc }) => [asc(qi.position)],
+                },
+              },
+            },
+          },
+        });
+        if (!order?.quotation) return res.json([]);
+        return res.json(order.quotation.items.map(i => ({
+          id: i.id,
+          productCode: i.product?.code ?? "",
+          description: i.description,
+          qty: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice,
+          discount: i.discount,
+          total: i.total,
+        })));
+      }
+
+      if (type === "creditAuth") {
+        const auth = await db.query.creditAuthorizations.findFirst({
+          where: eq(creditAuthorizations.id, id),
+          with: {
+            quotation: {
+              with: {
+                items: {
+                  with: { product: { columns: { name: true, code: true, unit: true } } },
+                  orderBy: (qi, { asc }) => [asc(qi.position)],
+                },
+              },
+            },
+          },
+        });
+        if (!auth?.quotation) return res.json([]);
+        return res.json(auth.quotation.items.map(i => ({
+          id: i.id,
+          productCode: i.product?.code ?? "",
+          description: i.description,
+          qty: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice,
+          discount: i.discount,
+          total: i.total,
+        })));
+      }
+
+      if (type === "shipment") {
+        const instances = await db.query.shipmentProductInstances.findMany({
+          where: eq(shipmentProductInstances.shipmentId, id),
+          with: { product: { columns: { name: true, code: true, unit: true } } },
+        });
+        return res.json(instances.map(i => ({
+          id: i.id,
+          productCode: i.product?.code ?? "",
+          description: i.product?.name ?? "",
+          qty: i.quantity,
+          unit: i.product?.unit ?? "Pza",
+          unitPrice: null,
+          discount: null,
+          total: null,
+        })));
+      }
+
+      res.status(400).json({ error: "Invalid type" });
+    } catch (error) {
+      console.error("Error fetching pipeline items:", error);
+      res.status(500).json({ error: "Error fetching pipeline items" });
+    }
+  });
+
   // ==================== END PIPELINE ====================
 
   app.get("/api/tenants", isAuthenticated, async (req, res) => {
