@@ -19,6 +19,7 @@ import {
   FileBarChart2,
   MonitorPlay,
   CreditCard,
+  LayoutGrid,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -72,6 +73,7 @@ const menuGroups: MenuGroup[] = [
     label: "Principal",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: Object.values(UserRole) },
+      { title: "Tablero Operaciones", url: "/pipeline", icon: LayoutGrid, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA] },
     ],
   },
   {

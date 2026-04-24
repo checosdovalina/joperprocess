@@ -140,6 +140,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all tenants (superadmin only, main domain only)
+  // ==================== PIPELINE / ADMIN BOARD ENDPOINT ====================
+
+  app.get("/api/pipeline", isAuthenticated, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      const tenantFilter = tenantId ? eq(quotations.tenantId, tenantId) : undefined;
+      const orderTenantFilter = tenantId ? eq(orders.tenantId, tenantId) : undefined;
+      const shipmentTenantFilter = tenantId ? eq(shipments.tenantId, tenantId) : undefined;
+
+      // Quotations with customer and seller
+      const quotRows = await db.select({
+        q: quotations,
+        customerName: customers.name,
+        sellerName: users.fullName,
+      })
+        .from(quotations)
+        .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .leftJoin(users, eq(quotations.userId, users.id))
+        .where(tenantFilter)
+        .orderBy(sql`${quotations.createdAt} DESC`)
+        .limit(200);
+
+      // Orders with quotation → customer info
+      const orderRows = await db.select({
+        o: orders,
+        quotFolio: quotations.folio,
+        quotTotal: quotations.total,
+        quotCurrency: quotations.currency,
+        customerName: customers.name,
+        estimatedDelivery: orders.estimatedDelivery,
+      })
+        .from(orders)
+        .leftJoin(quotations, eq(orders.quotationId, quotations.id))
+        .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .where(orderTenantFilter)
+        .orderBy(sql`${orders.createdAt} DESC`)
+        .limit(200);
+
+      // Shipments with order → quotation → customer info
+      const shipmentRows = await db.select({
+        s: shipments,
+        quotFolio: quotations.folio,
+        customerName: customers.name,
+        orderId: orders.id,
+      })
+        .from(shipments)
+        .leftJoin(orders, eq(shipments.orderId, orders.id))
+        .leftJoin(quotations, eq(orders.quotationId, quotations.id))
+        .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .where(shipmentTenantFilter)
+        .orderBy(sql`${shipments.createdAt} DESC`)
+        .limit(200);
+
+      // Credit authorizations with quotation → customer info
+      const authRows = await db.select({
+        a: creditAuthorizations,
+        quotFolio: quotations.folio,
+        quotTotal: quotations.total,
+        quotCurrency: quotations.currency,
+        customerName: customers.name,
+      })
+        .from(creditAuthorizations)
+        .leftJoin(quotations, eq(creditAuthorizations.quotationId, quotations.id))
+        .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .where(tenantFilter ? eq(quotations.tenantId, tenantId!) : undefined)
+        .orderBy(sql`${creditAuthorizations.createdAt} DESC`)
+        .limit(200);
+
+      res.json({
+        quotations: quotRows.map(r => ({ ...r.q, customerName: r.customerName, sellerName: r.sellerName })),
+        orders: orderRows.map(r => ({ ...r.o, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName })),
+        shipments: shipmentRows.map(r => ({ ...r.s, quotFolio: r.quotFolio, customerName: r.customerName })),
+        creditAuths: authRows.map(r => ({ ...r.a, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName })),
+      });
+    } catch (error) {
+      console.error("Error fetching pipeline data:", error);
+      res.status(500).json({ error: "Error fetching pipeline data" });
+    }
+  });
+
+  // ==================== END PIPELINE ====================
+
   app.get("/api/tenants", isAuthenticated, async (req, res) => {
     try {
       if (!req.user?.isSuperAdmin) {

@@ -66,6 +66,17 @@ The system implements subdomain-based multi-tenancy, allowing each company (tena
 - Wildcard SSL certificate for `*.nexxo.com.mx`
 - Nginx configured to route all subdomains to the application
 
+### Pipeline / Operations Board
+
+A real-time admin operations board at `/pipeline` (accessible to ADMIN and VENTAS_LOGISTICA roles):
+
+- **Endpoint**: `GET /api/pipeline` — returns joined data for all 4 entities with customer/quotation context
+- **UI**: 4 KPI summary cards + 4 scrollable panels (Cotizaciones, Autorizaciones, Pedidos, Embarques)
+- **Filter toggle**: "Activos" (hides closed/delivered/rejected/expired) vs "Todos"
+- **Navigation**: Clicking any card navigates to the corresponding module page
+- **Status colors**: Each entity has color-coded status badges
+- **Order progress**: Production progress bar shown on order cards
+
 ### Key Features
 
 - **Customer Summary Endpoint**: Aggregates comprehensive customer data for sales visits, including credit calculations, overdue invoices, pending orders, and check-in history.

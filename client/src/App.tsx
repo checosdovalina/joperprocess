@@ -36,6 +36,7 @@ import TenantsPage from "@/pages/tenants-page";
 import ProductionPage from "@/pages/production-page";
 import ReportsPage from "@/pages/reports-page";
 import ProductionBoardPage from "@/pages/production-board-page";
+import PipelinePage from "@/pages/pipeline-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -55,6 +56,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/orders": "Pedidos",
   "/production": "Producción",
   "/board": "Tablero de Producción",
+  "/pipeline": "Tablero de Operaciones",
   "/shipments": "Embarques",
   "/accounts-receivable": "Facturación",
   "/payments": "Cobranza",
@@ -128,6 +130,7 @@ function Router() {
       <ProtectedRoute path="/incidents" component={IncidentsPage} />
       <ProtectedRoute path="/company-settings" component={CompanySettingsPage} />
       <ProtectedRoute path="/microsip" component={MicrosipSettingsPage} />
+      <ProtectedRoute path="/pipeline" component={PipelinePage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA]} />
       <ProtectedRoute path="/reports" component={ReportsPage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA]} />
       <ProtectedRoute path="/tenants" component={TenantsPage} />
       <Route component={NotFound} />
