@@ -398,13 +398,12 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       drawTotalsBox(usdX, currentY, BOX_W, "DÓLARES (USD)", "#1a6b3a",
         usdTotals.subtotal, usdTotals.discount, usdTotals.tax, usdTotals.total, fmtUSD);
 
-      currentY += mxnH + 20;
+      currentY += mxnH + 8;
 
-      // Note
-      const noteY2 = currentY - mxnH - 20 + 8;
+      // Note below both boxes
       doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#777");
-      doc.text("Los precios incluyen IVA 16%.", MARGIN, noteY2, { width: mxnX - MARGIN - 10 });
-      doc.text("Tipo de cambio USD a convenir al momento del pedido.", MARGIN, noteY2 + 10, { width: mxnX - MARGIN - 10 });
+      doc.text("Los precios incluyen IVA 16%.  |  Tipo de cambio USD a convenir al momento del pedido.", MARGIN, currentY, { width: CONTENT_W, align: "center" });
+      currentY += 16;
     } else {
       // Single totals box
       const TOTALS_W = 200;
