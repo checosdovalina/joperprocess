@@ -2279,10 +2279,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Credit authorization not found" });
       }
 
+      let order: any = undefined;
+
       // If approved, create order and update quotation status to converted
       if (updatedAuth.status === CreditAuthStatus.APPROVED) {
         // Create order from quotation
-        const order = await scopedStorage.createOrder({
+        order = await scopedStorage.createOrder({
           quotationId: updatedAuth.quotationId,
           status: OrderStatus.PENDING,
         });
@@ -2294,10 +2296,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
           authorizedAt: new Date(),
           convertedToOrderId: order.id,
         });
-
-        return res.json({ ...updatedAuth, order });
       }
 
+      // Send email notifications to seller, customer, and admins
+      try {
+        const authWithDetails = await db.query.creditAuthorizations.findFirst({
+          where: eq(creditAuthorizations.id, id),
+          with: {
+            quotation: {
+              with: {
+                customer: true,
+                user: true,
+              },
+            },
+          },
+        });
+
+        if (authWithDetails?.quotation) {
+          const q = authWithDetails.quotation;
+          const tenantId = q.tenantId;
+
+          // Fetch tenant name
+          const tenantRecord = tenantId
+            ? await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) })
+            : null;
+          const tenantName = tenantRecord?.name || "Nexxo Sistema Comercial";
+
+          // Fetch admin users for this tenant with email
+          const adminUsers = tenantId
+            ? await db
+                .select({ email: users.email, fullName: users.fullName })
+                .from(users)
+                .where(
+                  and(
+                    eq(users.tenantId, tenantId),
+                    eq(users.role, UserRole.ADMIN),
+                    eq(users.active, true)
+                  )
+                )
+            : [];
+
+          // Build recipient list (deduplicated by email)
+          const emailMap = new Map<string, string>();
+
+          // Seller
+          if (q.user?.email) emailMap.set(q.user.email, q.user.fullName || q.user.username);
+
+          // Customer
+          if (q.customer?.email) emailMap.set(q.customer.email, q.customer.name);
+
+          // Admins
+          for (const admin of adminUsers) {
+            if (admin.email) emailMap.set(admin.email, admin.fullName);
+          }
+
+          // Format total
+          const totalVal = parseFloat(q.total || "0");
+          const totalDisplay = `$${totalVal.toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN`;
+
+          const recipientList = Array.from(emailMap.entries()).map(([email, name]) => ({ email, name }));
+
+          const { sendCreditAuthStatusEmail } = await import("./quotation-email-service");
+          await sendCreditAuthStatusEmail({
+            status: updatedAuth.status === CreditAuthStatus.APPROVED ? "approved" : "rejected",
+            quotationFolio: q.folio,
+            customerName: q.customer?.name || "Cliente",
+            quotationTotal: totalDisplay,
+            rejectionNotes: rejectionNotes,
+            tenantName,
+            recipients: recipientList,
+          });
+        }
+      } catch (emailError: any) {
+        console.warn("Email notification failed for credit auth:", emailError.message || emailError);
+      }
+
+      if (order) return res.json({ ...updatedAuth, order });
       res.json(updatedAuth);
     } catch (error) {
       console.error("Error updating credit authorization:", error);

@@ -397,3 +397,127 @@ export async function sendShippingRejectionEmail({
     throw error;
   }
 }
+
+// ─── Credit Authorization Status Email ───────────────────────────────────────
+
+interface CreditAuthEmailRecipient {
+  email: string;
+  name: string;
+}
+
+interface SendCreditAuthStatusEmailParams {
+  status: "approved" | "rejected";
+  quotationFolio: string;
+  customerName: string;
+  quotationTotal: string;
+  rejectionNotes?: string;
+  tenantName: string;
+  recipients: CreditAuthEmailRecipient[];
+}
+
+export async function sendCreditAuthStatusEmail({
+  status,
+  quotationFolio,
+  customerName,
+  quotationTotal,
+  rejectionNotes,
+  tenantName,
+  recipients,
+}: SendCreditAuthStatusEmailParams): Promise<void> {
+  const apiKey = process.env.MAILERSEND_API_KEY;
+  if (!apiKey) {
+    console.warn("MAILERSEND_API_KEY not configured — skipping credit auth email");
+    return;
+  }
+
+  const isApproved = status === "approved";
+  const ms = new MailerSend({ apiKey });
+  const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+
+  const subject = isApproved
+    ? `Crédito autorizado — Cotización ${quotationFolio}`
+    : `Crédito rechazado — Cotización ${quotationFolio}`;
+
+  const headerColor = isApproved
+    ? "linear-gradient(135deg, #15803d 0%, #14532d 100%)"
+    : "linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%)";
+
+  const statusBadge = isApproved
+    ? `<span style="background:#dcfce7;color:#15803d;padding:4px 14px;border-radius:9999px;font-size:13px;font-weight:700;">AUTORIZADO</span>`
+    : `<span style="background:#fef2f2;color:#b91c1c;padding:4px 14px;border-radius:9999px;font-size:13px;font-weight:700;">RECHAZADO</span>`;
+
+  const nextStepsHtml = isApproved
+    ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-top:24px;">
+        <h3 style="margin:0 0 8px;color:#15803d;font-size:14px;">Próximos pasos</h3>
+        <ul style="margin:0;padding-left:20px;color:#374151;font-size:13px;">
+          <li style="margin-bottom:4px;">Se ha generado automáticamente un pedido de producción</li>
+          <li style="margin-bottom:4px;">El equipo de producción comenzará a procesar el pedido</li>
+          <li>Puedes consultar el avance desde el panel de pedidos</li>
+        </ul>
+      </div>`
+    : `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:16px 20px;margin-top:24px;">
+        <h3 style="margin:0 0 8px;color:#b91c1c;font-size:14px;">Motivo del rechazo</h3>
+        <p style="margin:0;color:#374151;font-size:13px;">${rejectionNotes || "No se proporcionó motivo"}</p>
+      </div>`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+      </head>
+      <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;background:#f5f5f5;">
+        <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.08);">
+          <div style="background:${headerColor};padding:28px 32px;">
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Autorización de Crédito</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:13px;">${tenantName} — Sistema Comercial</p>
+          </div>
+          <div style="padding:28px 32px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+              <span style="font-size:15px;font-weight:600;color:#111827;">Estatus:</span>
+              ${statusBadge}
+            </div>
+            <div style="margin-bottom:8px;display:flex;gap:12px;">
+              <span style="color:#6b7280;font-size:13px;min-width:130px;">Cotización:</span>
+              <span style="color:#111827;font-size:13px;font-weight:600;">${quotationFolio}</span>
+            </div>
+            <div style="margin-bottom:8px;display:flex;gap:12px;">
+              <span style="color:#6b7280;font-size:13px;min-width:130px;">Cliente:</span>
+              <span style="color:#111827;font-size:13px;font-weight:600;">${customerName}</span>
+            </div>
+            <div style="margin-bottom:8px;display:flex;gap:12px;">
+              <span style="color:#6b7280;font-size:13px;min-width:130px;">Monto cotización:</span>
+              <span style="color:#111827;font-size:13px;font-weight:600;">${quotationTotal}</span>
+            </div>
+            ${nextStepsHtml}
+          </div>
+          <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;">${tenantName} — Este es un mensaje automático, por favor no respondas a este correo.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  // Send one email per valid recipient
+  const validRecipients = recipients.filter((r) => r.email && r.email.trim() !== "");
+  if (validRecipients.length === 0) {
+    console.warn("No valid recipients for credit auth status email — skipping");
+    return;
+  }
+
+  for (const recipient of validRecipients) {
+    try {
+      const emailParams = new EmailParams()
+        .setFrom(sentFrom)
+        .setTo([new Recipient(recipient.email, recipient.name)])
+        .setSubject(subject)
+        .setHtml(htmlContent);
+
+      await ms.email.send(emailParams);
+      console.log(`✅ Credit auth ${status} email sent to: ${recipient.email}`);
+    } catch (err: any) {
+      console.warn(`Failed to send credit auth email to ${recipient.email}:`, err.message || err);
+    }
+  }
+}
