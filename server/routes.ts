@@ -771,6 +771,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Seller-specific dashboard stats (own data only)
+  app.get("/api/dashboard/seller-stats", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = getEffectiveTenantId(req);
+      const userId = user.id;
+
+      // My pending quotations (draft or sent)
+      const myPendingQ = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(quotations)
+        .where(
+          and(
+            tenantId ? eq(quotations.tenantId, tenantId) : sql`1=1`,
+            eq(quotations.userId, userId),
+            sql`${quotations.status} IN ('draft', 'sent')`
+          )
+        );
+
+      // My check-ins today
+      const myCheckins = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(checkins)
+        .where(
+          and(
+            tenantId ? eq(checkins.tenantId, tenantId) : sql`1=1`,
+            eq(checkins.salesPersonId, userId),
+            sql`DATE(${checkins.checkinAt}) = CURRENT_DATE`
+          )
+        );
+
+      // My orders ready to deliver (via quotation link)
+      const myOrdersReady = await db.execute(sql`
+        SELECT COUNT(*) as count
+        FROM ${orders} o
+        JOIN ${quotations} q ON q.id = o.quotation_id
+        WHERE o.status IN ('ready', 'partially_released')
+          ${tenantId ? sql`AND o.tenant_id = ${tenantId}` : sql``}
+          AND q.user_id = ${userId}
+      `);
+
+      // My monthly sales: sum of quotation totals approved/converted this month
+      const myMonthlySales = await db.execute(sql`
+        SELECT COALESCE(SUM(total::numeric), 0) as sum
+        FROM ${quotations}
+        WHERE user_id = ${userId}
+          ${tenantId ? sql`AND tenant_id = ${tenantId}` : sql``}
+          AND status IN ('approved', 'converted')
+          AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW())
+          AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())
+      `);
+
+      // My recent quotations (last 5)
+      const myRecentQuotations = await db
+        .select({
+          id: quotations.id,
+          folio: quotations.folio,
+          status: quotations.status,
+          total: quotations.total,
+          createdAt: quotations.createdAt,
+          customerName: customers.name,
+        })
+        .from(quotations)
+        .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .where(
+          and(
+            tenantId ? eq(quotations.tenantId, tenantId) : sql`1=1`,
+            eq(quotations.userId, userId)
+          )
+        )
+        .orderBy(sql`${quotations.createdAt} DESC`)
+        .limit(5);
+
+      res.json({
+        myPendingQuotations: Number(myPendingQ[0]?.count || 0),
+        myTodayCheckins: Number(myCheckins[0]?.count || 0),
+        myOrdersReady: Number((myOrdersReady.rows[0] as any)?.count || 0),
+        myMonthlySales: Number((myMonthlySales.rows[0] as any)?.sum || 0),
+        myRecentQuotations,
+      });
+    } catch (error) {
+      console.error("Error fetching seller stats:", error);
+      res.status(500).json({ error: "Error fetching seller statistics" });
+    }
+  });
+
   // Users endpoints (Admin only)
   app.get("/api/users", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
