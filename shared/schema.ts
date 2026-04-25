@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, timestamp, boolean, integer, jsonb, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, timestamp, boolean, integer, jsonb, bigint, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -571,12 +571,15 @@ export const products = pgTable("products", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default("16"),
   imageUrl: text("image_url"),
   active: boolean("active").notNull().default(true),
+  currency: text("currency").notNull().default("MXN"), // MXN or USD from Microsip MONEDA_ID
   // Microsip integration fields
   microsipArticuloId: integer("microsip_articulo_id"), // ARTICULO_ID from Microsip ARTICULOS
   microsipSyncedAt: timestamp("microsip_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("products_tenant_code_unique").on(table.tenantId, table.code),
+]);
 
 // Customer-specific product prices
 export const customerProductPrices = pgTable("customer_product_prices", {
