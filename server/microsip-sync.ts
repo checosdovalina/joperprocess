@@ -49,6 +49,7 @@ interface MicrosipProduct {
   COSTO_ULTIMA_COMPRA?: number;
   EXISTENCIA?: number;
   ESTATUS: string;
+  MONEDA_ID?: number;
 }
 
 interface MicrosipCategory {
@@ -528,7 +529,7 @@ class MicrosipSyncService {
       // CLAVE_ARTICULO comes from CLAVES_ARTICULOS (the human-readable product code)
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
-          A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS,
+          A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS, A.MONEDA_ID,
           P.PRECIO AS PRECIO_1,
           (SELECT FIRST 1 CA.CLAVE_ARTICULO FROM CLAVES_ARTICULOS CA WHERE CA.ARTICULO_ID = A.ARTICULO_ID) AS CLAVE_ARTICULO
         FROM ARTICULOS A
@@ -593,6 +594,9 @@ class MicrosipSyncService {
           // Product is active only if it's active in Microsip AND its category is active
           const productActive = msProduct.ESTATUS === 'A' && categoryActive;
 
+          // Map MONEDA_ID to currency: 1 = MXN (Peso), anything else (e.g. 2089) = USD
+          const currency = msProduct.MONEDA_ID === 1 ? "MXN" : msProduct.MONEDA_ID ? "USD" : "MXN";
+
           const productData = {
             code: msProduct.CLAVE_ARTICULO?.toString().trim() || (msProduct as any).CLAVE?.toString().trim() || String(msProduct.ARTICULO_ID),
             name: msProduct.NOMBRE?.trim() || 'Sin nombre',
@@ -603,6 +607,7 @@ class MicrosipSyncService {
             cost: null,
             stock: "0",
             active: productActive,
+            currency,
             microsipArticuloId: msProduct.ARTICULO_ID,
             microsipSyncedAt: new Date(),
             updatedAt: new Date(),

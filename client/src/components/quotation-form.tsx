@@ -368,7 +368,7 @@ export function QuotationForm({
       exceedsMaxDiscount,
       maxDiscount: product.maxDiscount || "0",
       position: index,
-      currency: "MXN",
+      currency: product.currency || "MXN",
     };
 
     setLineItems(prev => {
@@ -408,11 +408,15 @@ export function QuotationForm({
     
     const mxnSubtotal = mxnItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
     const mxnTax = mxnItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
-    const mxnTotal = (mxnSubtotal + mxnTax) * (1 - globalDiscountPercent / 100);
+    const mxnDiscount = mxnSubtotal * (globalDiscountPercent / 100);
+    const mxnTaxAdjusted = mxnTax * (1 - globalDiscountPercent / 100);
+    const mxnTotal = (mxnSubtotal - mxnDiscount) + mxnTaxAdjusted;
     
     const usdSubtotal = usdItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
     const usdTax = usdItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
-    const usdTotal = (usdSubtotal + usdTax) * (1 - globalDiscountPercent / 100);
+    const usdDiscount = usdSubtotal * (globalDiscountPercent / 100);
+    const usdTaxAdjusted = usdTax * (1 - globalDiscountPercent / 100);
+    const usdTotal = (usdSubtotal - usdDiscount) + usdTaxAdjusted;
     
     const hasMixedCurrencies = mxnItems.length > 0 && usdItems.length > 0;
 
@@ -422,9 +426,15 @@ export function QuotationForm({
       tax: adjustedTax.toFixed(2),
       total: total.toFixed(2),
       totalSavings: totalSavings.toFixed(2),
-      mxnTotal: mxnTotal.toFixed(2),
-      usdTotal: usdTotal.toFixed(2),
       hasMixedCurrencies,
+      mxnSubtotal: mxnSubtotal.toFixed(2),
+      mxnDiscount: mxnDiscount.toFixed(2),
+      mxnTax: mxnTaxAdjusted.toFixed(2),
+      mxnTotal: mxnTotal.toFixed(2),
+      usdSubtotal: usdSubtotal.toFixed(2),
+      usdDiscount: usdDiscount.toFixed(2),
+      usdTax: usdTaxAdjusted.toFixed(2),
+      usdTotal: usdTotal.toFixed(2),
     };
   }, [lineItems, form]);
 
@@ -569,7 +579,7 @@ export function QuotationForm({
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
             <ScrollArea className="flex-1 pr-4 min-h-0">
               <div className="space-y-6 pb-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="customerId"
@@ -585,31 +595,6 @@ export function QuotationForm({
                             data-testid="select-customer"
                           />
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="currency"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Moneda</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-currency">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {CURRENCIES.map((curr) => (
-                              <SelectItem key={curr.value} value={curr.value}>
-                                {curr.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -871,7 +856,7 @@ export function QuotationForm({
                             <TableHead className="w-[80px] text-center">Desc %</TableHead>
                             <TableHead className="w-[100px] text-right">P. Unitario</TableHead>
                             <TableHead className="w-[100px] text-right">Subtotal</TableHead>
-                            <TableHead className="w-[80px] text-center">Moneda</TableHead>
+                            <TableHead className="w-[60px] text-center">Mon.</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                           </TableRow>
                         </TableHeader>
@@ -964,19 +949,14 @@ export function QuotationForm({
                               <TableCell className="text-right font-mono text-sm font-medium">
                                 {formatCurrency(item.subtotal)}
                               </TableCell>
-                              <TableCell>
-                                <Select
-                                  value={item.currency}
-                                  onValueChange={(value) => updateLineItem(index, { currency: value })}
+                              <TableCell className="text-center">
+                                <Badge
+                                  variant={item.currency === "USD" ? "secondary" : "outline"}
+                                  className="text-xs font-mono"
+                                  data-testid={`badge-currency-${index}`}
                                 >
-                                  <SelectTrigger className="w-[70px] h-8" data-testid={`select-currency-${index}`}>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="MXN">MXN</SelectItem>
-                                    <SelectItem value="USD">USD</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                  {item.currency || "MXN"}
+                                </Badge>
                               </TableCell>
                               <TableCell>
                                 <Button
@@ -1047,11 +1027,7 @@ export function QuotationForm({
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Subtotal:</span>
-                        <span className="font-mono">{formatCurrency(totals.subtotal)}</span>
-                      </div>
-                      
+                      {/* Descuento Global — siempre visible */}
                       <div className="flex items-center justify-between text-sm gap-2">
                         <span>Descuento Global:</span>
                         <div className="flex items-center gap-2">
@@ -1070,70 +1046,132 @@ export function QuotationForm({
                             )}
                           />
                           <span>%</span>
-                          <span className="font-mono text-destructive">
-                            -{formatCurrency(totals.globalDiscountAmount)}
-                          </span>
                         </div>
                       </div>
 
-                      <div className="flex justify-between text-sm">
-                        <span>IVA:</span>
-                        <span className="font-mono">{formatCurrency(totals.tax)}</span>
-                      </div>
-
-                      <div className="flex justify-between text-sm">
-                        <span>Envío:</span>
-                        <span className="font-mono">
-                          {form.watch("shippingHandledByJoper") 
-                            ? "$0.00 (Joper)" 
-                            : form.watch("shippingCostStatus") === "pending"
-                              ? "Por cotizar"
-                              : formatCurrency(form.watch("shippingCost") || "0")}
-                        </span>
-                      </div>
-
-                      <Separator />
-
-                      <div className="flex justify-between items-center text-lg font-bold gap-2">
-                        <span>Total:</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-muted-foreground">$</span>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            value={(parseFloat(totals.total) + 
-                              (form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending" 
-                                ? 0 
-                                : parseFloat(form.watch("shippingCost") || "0"))
-                            ).toFixed(2)}
-                            onChange={(e) => handleTotalChange(normalizeDecimal(e.target.value))}
-                            className="w-28 h-8 text-right font-mono font-bold"
-                            data-testid="input-total"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Edita el total para ajustar el descuento global automáticamente
-                      </p>
-
-                      {parseFloat(totals.totalSavings) > 0 && (
-                        <div className="flex justify-between text-sm text-green-600">
-                          <span>Ahorro Total:</span>
-                          <span className="font-mono">{formatCurrency(totals.totalSavings)}</span>
-                        </div>
-                      )}
-
-                      {totals.hasMixedCurrencies && (
-                        <div className="mt-3 p-3 bg-muted/50 rounded-lg space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">Totales por Moneda:</p>
-                          <div className="flex justify-between text-sm">
-                            <span>Total MXN:</span>
-                            <span className="font-mono font-medium">${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                      {totals.hasMixedCurrencies ? (
+                        /* ── Modo monedas mixtas: dos bloques separados ── */
+                        <div className="space-y-3 mt-1">
+                          {/* Bloque MXN */}
+                          <div className="rounded-md border p-3 space-y-1.5">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pesos MXN</p>
+                            <div className="flex justify-between text-sm">
+                              <span>Subtotal:</span>
+                              <span className="font-mono">${parseFloat(totals.mxnSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            {parseFloat(totals.mxnDiscount) > 0 && (
+                              <div className="flex justify-between text-sm text-destructive">
+                                <span>Descuento:</span>
+                                <span className="font-mono">-${parseFloat(totals.mxnDiscount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-sm">
+                              <span>IVA:</span>
+                              <span className="font-mono">${parseFloat(totals.mxnTax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <Separator />
+                            <div className="flex justify-between text-base font-bold">
+                              <span>Total MXN:</span>
+                              <span className="font-mono">${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span>Total USD:</span>
-                            <span className="font-mono font-medium">${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+
+                          {/* Bloque USD */}
+                          <div className="rounded-md border p-3 space-y-1.5">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dólares USD</p>
+                            <div className="flex justify-between text-sm">
+                              <span>Subtotal:</span>
+                              <span className="font-mono">${parseFloat(totals.usdSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                            {parseFloat(totals.usdDiscount) > 0 && (
+                              <div className="flex justify-between text-sm text-destructive">
+                                <span>Descuento:</span>
+                                <span className="font-mono">-${parseFloat(totals.usdDiscount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-sm">
+                              <span>IVA:</span>
+                              <span className="font-mono">${parseFloat(totals.usdTax).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                            <Separator />
+                            <div className="flex justify-between text-base font-bold">
+                              <span>Total USD:</span>
+                              <span className="font-mono">${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                            </div>
                           </div>
+
+                          <div className="flex justify-between text-sm">
+                            <span>Envío:</span>
+                            <span className="font-mono">
+                              {form.watch("shippingHandledByJoper")
+                                ? "$0.00 (Joper)"
+                                : form.watch("shippingCostStatus") === "pending"
+                                  ? "Por cotizar"
+                                  : formatCurrency(form.watch("shippingCost") || "0")}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        /* ── Modo moneda única: resumen normal ── */
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Subtotal:</span>
+                            <span className="font-mono">{formatCurrency(totals.subtotal)}</span>
+                          </div>
+
+                          {parseFloat(totals.globalDiscountAmount) > 0 && (
+                            <div className="flex justify-between text-sm text-destructive">
+                              <span>Descuento:</span>
+                              <span className="font-mono">-{formatCurrency(totals.globalDiscountAmount)}</span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between text-sm">
+                            <span>IVA:</span>
+                            <span className="font-mono">{formatCurrency(totals.tax)}</span>
+                          </div>
+
+                          <div className="flex justify-between text-sm">
+                            <span>Envío:</span>
+                            <span className="font-mono">
+                              {form.watch("shippingHandledByJoper")
+                                ? "$0.00 (Joper)"
+                                : form.watch("shippingCostStatus") === "pending"
+                                  ? "Por cotizar"
+                                  : formatCurrency(form.watch("shippingCost") || "0")}
+                            </span>
+                          </div>
+
+                          <Separator />
+
+                          <div className="flex justify-between items-center text-lg font-bold gap-2">
+                            <span>Total:</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm text-muted-foreground">$</span>
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                value={(parseFloat(totals.total) +
+                                  (form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending"
+                                    ? 0
+                                    : parseFloat(form.watch("shippingCost") || "0"))
+                                ).toFixed(2)}
+                                onChange={(e) => handleTotalChange(normalizeDecimal(e.target.value))}
+                                className="w-28 h-8 text-right font-mono font-bold"
+                                data-testid="input-total"
+                              />
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Edita el total para ajustar el descuento global automáticamente
+                          </p>
+
+                          {parseFloat(totals.totalSavings) > 0 && (
+                            <div className="flex justify-between text-sm text-green-600">
+                              <span>Ahorro Total:</span>
+                              <span className="font-mono">{formatCurrency(totals.totalSavings)}</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1162,7 +1200,10 @@ export function QuotationForm({
 
             <div className="flex justify-between items-center gap-4">
               <div className="text-sm text-muted-foreground">
-                {lineItems.filter(i => i.productName).length} producto(s) | Total: {formatCurrency(totals.total)}
+                {lineItems.filter(i => i.productName).length} producto(s)
+                {totals.hasMixedCurrencies
+                  ? ` | MXN: $${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} | USD: $${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                  : ` | Total: ${formatCurrency(totals.total)}`}
               </div>
               <div className="flex gap-2">
                 <Button
