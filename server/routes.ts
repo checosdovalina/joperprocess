@@ -1894,6 +1894,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "No autorizado para enviar esta cotización" });
       }
 
+      // Block email if shipping is handled by Joper and still pending admin approval
+      if (
+        (quotation as any).shippingHandledByJoper &&
+        (quotation as any).shippingApprovalStatus === "pending"
+      ) {
+        return res.status(403).json({
+          error: "Esta cotización tiene un envío a cargo de la empresa pendiente de aprobación. Espera a que el administrador apruebe o rechace el envío antes de enviar la cotización al cliente.",
+          code: "SHIPPING_APPROVAL_PENDING",
+        });
+      }
+
       const items = await db.query.quotationItems.findMany({
         where: eq(quotationItems.quotationId, id),
       });

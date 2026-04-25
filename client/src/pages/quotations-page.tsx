@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus, Lock } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -510,25 +510,36 @@ export default function QuotationsPage() {
                                 )}
                                 Descargar PDF
                               </DropdownMenuItem>
-                              {quotation.status !== QuotationStatus.CONVERTED && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem 
-                                    onClick={() => openSendEmailDialog(quotation)}
-                                    data-testid={`menu-email-quotation-${quotation.id}`}
-                                  >
-                                    <Mail className="h-4 w-4 mr-2" />
-                                    Enviar por correo
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleCopyApprovalLink(quotation)}
-                                    data-testid={`menu-copy-link-quotation-${quotation.id}`}
-                                  >
-                                    <Copy className="h-4 w-4 mr-2" />
-                                    Copiar enlace de aprobación
-                                  </DropdownMenuItem>
-                                </>
-                              )}
+                              {quotation.status !== QuotationStatus.CONVERTED && (() => {
+                                const shippingPending = (quotation as any).shippingHandledByJoper && (quotation as any).shippingApprovalStatus === "pending";
+                                return (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      onClick={shippingPending ? undefined : () => openSendEmailDialog(quotation)}
+                                      disabled={shippingPending}
+                                      data-testid={`menu-email-quotation-${quotation.id}`}
+                                      title={shippingPending ? "El envío a cargo de la empresa debe ser aprobado por el administrador antes de enviar al cliente" : undefined}
+                                      className={shippingPending ? "opacity-50 cursor-not-allowed" : ""}
+                                    >
+                                      {shippingPending ? <Lock className="h-4 w-4 mr-2 text-amber-500" /> : <Mail className="h-4 w-4 mr-2" />}
+                                      <span>Enviar por correo</span>
+                                      {shippingPending && <span className="ml-auto text-xs text-amber-500">Pendiente</span>}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={shippingPending ? undefined : () => handleCopyApprovalLink(quotation)}
+                                      disabled={shippingPending}
+                                      data-testid={`menu-copy-link-quotation-${quotation.id}`}
+                                      title={shippingPending ? "El envío a cargo de la empresa debe ser aprobado por el administrador antes de compartir el enlace" : undefined}
+                                      className={shippingPending ? "opacity-50 cursor-not-allowed" : ""}
+                                    >
+                                      {shippingPending ? <Lock className="h-4 w-4 mr-2 text-amber-500" /> : <Copy className="h-4 w-4 mr-2" />}
+                                      <span>Copiar enlace de aprobación</span>
+                                      {shippingPending && <span className="ml-auto text-xs text-amber-500">Pendiente</span>}
+                                    </DropdownMenuItem>
+                                  </>
+                                );
+                              })()}
                               {isAdmin && (quotation as any).shippingHandledByJoper && (quotation as any).shippingApprovalStatus === "pending" && (
                                 <>
                                   <DropdownMenuSeparator />
