@@ -288,3 +288,112 @@ export async function sendQuotationEmail({
     throw error;
   }
 }
+
+// ─── Shipping Rejection Email ────────────────────────────────────────────────
+
+interface SendShippingRejectionEmailParams {
+  sellerEmail: string;
+  sellerName: string;
+  quotationFolio: string;
+  customerName: string;
+  rejectionReason: string;
+  tenantName: string;
+}
+
+export async function sendShippingRejectionEmail({
+  sellerEmail,
+  sellerName,
+  quotationFolio,
+  customerName,
+  rejectionReason,
+  tenantName,
+}: SendShippingRejectionEmailParams): Promise<void> {
+  try {
+    const apiKey = process.env.MAILERSEND_API_KEY;
+    if (!apiKey) throw new Error("MAILERSEND_API_KEY not configured");
+
+    const ms = new MailerSend({ apiKey });
+    const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+    const recipients = [new Recipient(sellerEmail, sellerName)];
+
+    const subject = `Envío sin costo rechazado — Cotización ${quotationFolio}`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+            .container { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+            .header { background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%); padding: 28px 32px; }
+            .header h1 { color: #fff; margin: 0; font-size: 20px; font-weight: 700; }
+            .header p { color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px; }
+            .body { padding: 28px 32px; }
+            .alert-box { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; }
+            .alert-box p { margin: 0; color: #991b1b; font-size: 14px; }
+            .reason-box { background: #f8fafc; border-left: 4px solid #b91c1c; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 20px 0; }
+            .reason-box p { margin: 0; color: #374151; font-size: 14px; }
+            .reason-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin-bottom: 6px; }
+            .info-row { display: flex; gap: 12px; margin-bottom: 8px; }
+            .info-label { color: #6b7280; font-size: 13px; min-width: 120px; }
+            .info-value { color: #111827; font-size: 13px; font-weight: 600; }
+            .action-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px 20px; margin-top: 24px; }
+            .action-box h3 { margin: 0 0 8px; color: #1e40af; font-size: 14px; }
+            .action-box ul { margin: 0; padding-left: 20px; color: #374151; font-size: 13px; }
+            .action-box li { margin-bottom: 4px; }
+            .footer { background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 16px 32px; text-align: center; }
+            .footer p { margin: 0; color: #9ca3af; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Envío sin costo rechazado</h1>
+              <p>${tenantName} — Sistema Comercial</p>
+            </div>
+            <div class="body">
+              <p>Hola <strong>${sellerName}</strong>,</p>
+              <div class="alert-box">
+                <p>El administrador ha <strong>rechazado</strong> la solicitud de envío sin costo para la cotización <strong>${quotationFolio}</strong>. La cotización ha sido regresada a estado <strong>Borrador</strong> para que puedas retrabajarla.</p>
+              </div>
+
+              <div class="info-row"><span class="info-label">Cotización:</span><span class="info-value">${quotationFolio}</span></div>
+              <div class="info-row"><span class="info-label">Cliente:</span><span class="info-value">${customerName}</span></div>
+
+              <div class="reason-box">
+                <p class="reason-label">Motivo del rechazo</p>
+                <p>${rejectionReason}</p>
+              </div>
+
+              <div class="action-box">
+                <h3>Pasos a seguir</h3>
+                <ul>
+                  <li>Revisa el motivo del rechazo indicado arriba</li>
+                  <li>Abre la cotización en el sistema y ajusta el costo de envío</li>
+                  <li>Una vez lista, envíala nuevamente para aprobación</li>
+                </ul>
+              </div>
+            </div>
+            <div class="footer">
+              <p>${tenantName} — Este es un mensaje automático, por favor no respondas a este correo.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setSubject(subject)
+      .setHtml(htmlContent);
+
+    console.log(`📧 Sending shipping rejection email to: ${sellerEmail}`);
+    await ms.email.send(emailParams);
+    console.log(`✅ Shipping rejection email sent successfully`);
+  } catch (error) {
+    console.error("Error sending shipping rejection email:", error);
+    throw error;
+  }
+}

@@ -2176,24 +2176,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: QuotationStatus.DRAFT, // Return to draft for vendor to modify
       });
 
-      // Send notification to salesperson
+      // Send notification email to seller via MailerSend
       try {
-        if (quotation.user.email) {
-          const { Resend } = await import("resend");
-          const resend = new Resend(process.env.RESEND_API_KEY);
-          
-          await resend.emails.send({
-            from: "GRUPO JOPER <noreply@resend.dev>",
-            to: quotation.user.email,
-            subject: `Envío sin costo rechazado - Cotización ${quotation.folio}`,
-            html: `
-              <h2>Cotización ${quotation.folio}</h2>
-              <p>El envío sin costo por cuenta de Joper ha sido <strong>rechazado</strong>.</p>
-              <p><strong>Motivo:</strong> ${reason || "No se proporcionó motivo"}</p>
-              <p>Por favor, modifica la cotización y ajusta el costo de envío según sea necesario.</p>
-              <p>Saludos,<br>Sistema GRUPO JOPER</p>
-            `,
+        if (quotation.user?.email) {
+          // Get tenant name for the email
+          const tenantRecord = quotation.tenantId
+            ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
+            : null;
+          const tenantName = tenantRecord?.name || "Nexxo Sistema Comercial";
+
+          const { sendShippingRejectionEmail } = await import("./quotation-email-service");
+          await sendShippingRejectionEmail({
+            sellerEmail: quotation.user.email,
+            sellerName: quotation.user.fullName || quotation.user.username,
+            quotationFolio: quotation.folio,
+            customerName: quotation.customer?.name || "Cliente",
+            rejectionReason: reason || "No se proporcionó motivo",
+            tenantName,
           });
+        } else {
+          console.warn(`Seller has no email — skipping rejection notification for quotation ${quotation.folio}`);
         }
       } catch (emailError: any) {
         console.warn("Email notification failed after shipping rejection:", emailError.message || emailError);

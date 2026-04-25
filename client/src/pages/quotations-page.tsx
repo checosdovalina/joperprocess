@@ -1045,7 +1045,7 @@ export default function QuotationsPage() {
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Se notificará al vendedor para que modifique la cotización.
+                  La cotización regresará a <strong>Borrador</strong> y se enviará un correo al vendedor con el motivo del rechazo para que retrabaje su propuesta.
                 </p>
               </div>
             </AlertDialogDescription>
