@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw, FileText, ShieldCheck, Package, Truck,
   Radio, Maximize2, Minimize2, ChevronDown,
-  Calendar, DollarSign,
+  Calendar, DollarSign, User,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -22,16 +22,16 @@ interface PipelineQuotation {
 interface PipelineOrder {
   id: string; status: string; productionProgress: number;
   quotFolio: string | null; quotTotal: string | null; quotCurrency: string | null;
-  customerName: string | null; estimatedDelivery: string | null; createdAt: string;
+  customerName: string | null; sellerName: string | null; estimatedDelivery: string | null; createdAt: string;
 }
 interface PipelineShipment {
   id: string; status: string; transporter: string;
   trackingNumber: string | null; quotFolio: string | null; customerName: string | null;
-  shippedAt: string | null; createdAt: string;
+  sellerName: string | null; shippedAt: string | null; createdAt: string;
 }
 interface PipelineCreditAuth {
   id: string; status: string; quotFolio: string | null; quotTotal: string | null;
-  quotCurrency: string | null; customerName: string | null; createdAt: string;
+  quotCurrency: string | null; customerName: string | null; sellerName: string | null; createdAt: string;
 }
 interface PipelineData {
   quotations: PipelineQuotation[];
@@ -274,13 +274,20 @@ function AuthCard({ a }: { a: PipelineCreditAuth }) {
           <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 3 }}>
         <DollarSign size={10} style={{ flexShrink: 0 }} />
         <Money amount={a.quotTotal} currency={a.quotCurrency} />
         <span style={{ color: "rgba(255,255,255,0.2)", marginLeft: "auto" }}>
           <ShortDate date={a.createdAt} />
         </span>
       </div>
+
+      {a.sellerName && (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "rgba(255,255,255,0.3)", fontSize: 10, overflow: "hidden" }}>
+          <User size={9} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.sellerName}</span>
+        </div>
+      )}
 
       {expanded && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
@@ -331,7 +338,7 @@ function OrderCard({ o }: { o: PipelineOrder }) {
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 3 }}>
         <DollarSign size={10} style={{ flexShrink: 0 }} />
         <Money amount={o.quotTotal} currency={o.quotCurrency} />
         {o.estimatedDelivery && (
@@ -341,6 +348,13 @@ function OrderCard({ o }: { o: PipelineOrder }) {
           </span>
         )}
       </div>
+
+      {o.sellerName && (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "rgba(255,255,255,0.3)", fontSize: 10, overflow: "hidden" }}>
+          <User size={9} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.sellerName}</span>
+        </div>
+      )}
 
       {expanded && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
@@ -377,15 +391,22 @@ function ShipmentCard({ s }: { s: PipelineShipment }) {
           <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
         </div>
       </div>
-      <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 3 }}>
+      <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>
         {s.transporter}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 3 }}>
         <span style={{ fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {s.trackingNumber ?? <em>Sin guía</em>}
         </span>
         <ShortDate date={s.shippedAt ?? s.createdAt} />
       </div>
+
+      {s.sellerName && (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "rgba(255,255,255,0.3)", fontSize: 10, overflow: "hidden" }}>
+          <User size={9} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.sellerName}</span>
+        </div>
+      )}
 
       {expanded && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>

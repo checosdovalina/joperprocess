@@ -61,7 +61,7 @@ import {
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or } from "drizzle-orm";
+import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable } from "drizzle-orm";
 import type { Request } from "express";
 
 // Helper to get effective tenantId for data filtering
@@ -162,57 +162,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(sql`${quotations.createdAt} DESC`)
         .limit(200);
 
-      // Orders with quotation → customer info
+      // Orders with quotation → customer info + seller
+      const sellerAlias = aliasedTable(users, "seller");
       const orderRows = await db.select({
         o: orders,
         quotFolio: quotations.folio,
         quotTotal: quotations.total,
         quotCurrency: quotations.currency,
         customerName: customers.name,
+        sellerName: sellerAlias.fullName,
         estimatedDelivery: orders.estimatedDelivery,
       })
         .from(orders)
         .leftJoin(quotations, eq(orders.quotationId, quotations.id))
         .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .leftJoin(sellerAlias, eq(quotations.userId, sellerAlias.id))
         .where(orderTenantFilter)
         .orderBy(sql`${orders.createdAt} DESC`)
         .limit(200);
 
-      // Shipments with order → quotation → customer info
+      // Shipments with order → quotation → customer info + seller
+      const sellerAlias2 = aliasedTable(users, "seller2");
       const shipmentRows = await db.select({
         s: shipments,
         quotFolio: quotations.folio,
         customerName: customers.name,
+        sellerName: sellerAlias2.fullName,
         orderId: orders.id,
       })
         .from(shipments)
         .leftJoin(orders, eq(shipments.orderId, orders.id))
         .leftJoin(quotations, eq(orders.quotationId, quotations.id))
         .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .leftJoin(sellerAlias2, eq(quotations.userId, sellerAlias2.id))
         .where(shipmentTenantFilter)
         .orderBy(sql`${shipments.createdAt} DESC`)
         .limit(200);
 
-      // Credit authorizations with quotation → customer info
+      // Credit authorizations with quotation → customer info + seller
+      const sellerAlias3 = aliasedTable(users, "seller3");
       const authRows = await db.select({
         a: creditAuthorizations,
         quotFolio: quotations.folio,
         quotTotal: quotations.total,
         quotCurrency: quotations.currency,
         customerName: customers.name,
+        sellerName: sellerAlias3.fullName,
       })
         .from(creditAuthorizations)
         .leftJoin(quotations, eq(creditAuthorizations.quotationId, quotations.id))
         .leftJoin(customers, eq(quotations.customerId, customers.id))
+        .leftJoin(sellerAlias3, eq(quotations.userId, sellerAlias3.id))
         .where(tenantFilter ? eq(quotations.tenantId, tenantId!) : undefined)
         .orderBy(sql`${creditAuthorizations.createdAt} DESC`)
         .limit(200);
 
       res.json({
         quotations: quotRows.map(r => ({ ...r.q, customerName: r.customerName, sellerName: r.sellerName })),
-        orders: orderRows.map(r => ({ ...r.o, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName })),
-        shipments: shipmentRows.map(r => ({ ...r.s, quotFolio: r.quotFolio, customerName: r.customerName })),
-        creditAuths: authRows.map(r => ({ ...r.a, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName })),
+        orders: orderRows.map(r => ({ ...r.o, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName })),
+        shipments: shipmentRows.map(r => ({ ...r.s, quotFolio: r.quotFolio, customerName: r.customerName, sellerName: r.sellerName })),
+        creditAuths: authRows.map(r => ({ ...r.a, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName })),
       });
     } catch (error) {
       console.error("Error fetching pipeline data:", error);
