@@ -24,7 +24,8 @@ import {
   CreditCard,
   FolderTree,
   Play,
-  TestTube
+  TestTube,
+  DollarSign
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -200,6 +201,32 @@ export default function MicrosipSettingsPage() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  // USD products query state
+  const [usdProducts, setUsdProducts] = useState<{ CLAVE_ARTICULO: string; NOMBRE: string; MONEDA_ID: number }[] | null>(null);
+  const [usdError, setUsdError] = useState<string | null>(null);
+
+  const usdProductsMutation = useMutation({
+    mutationFn: async () => {
+      // MONEDA_ID is in PRECIOS_ARTICULOS (per price list 42), not in ARTICULOS
+      const sql = `SELECT FIRST 500 A.ARTICULO_ID, A.NOMBRE, P.MONEDA_ID, (SELECT FIRST 1 CA.CLAVE_ARTICULO FROM CLAVES_ARTICULOS CA WHERE CA.ARTICULO_ID = A.ARTICULO_ID) AS CLAVE_ARTICULO FROM ARTICULOS A JOIN PRECIOS_ARTICULOS P ON P.ARTICULO_ID = A.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 42 WHERE A.ESTATUS = 'A' AND P.MONEDA_ID <> 1 ORDER BY A.NOMBRE`;
+      const response = await apiRequest("POST", "/api/microsip/query", { sql });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.error) {
+        setUsdError(data.error);
+        setUsdProducts(null);
+      } else {
+        setUsdProducts(data.rows ?? []);
+        setUsdError(null);
+      }
+    },
+    onError: (error: Error) => {
+      setUsdError(error.message);
+      setUsdProducts(null);
     },
   });
 
@@ -722,6 +749,85 @@ export default function MicrosipSettingsPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* ── Productos USD en Microsip ── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Productos en USD (Microsip)
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => usdProductsMutation.mutate()}
+                  disabled={usdProductsMutation.isPending}
+                  data-testid="button-query-usd-products"
+                >
+                  {usdProductsMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Consultar
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                Lista los artículos activos en Microsip con MONEDA_ID distinto de 1 (Peso), es decir, en dólares u otra divisa.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {usdError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <p className="text-sm text-destructive">{usdError}</p>
+                </div>
+              )}
+
+              {usdProducts === null && !usdError && (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Haz clic en "Consultar" para ver los productos en USD
+                </p>
+              )}
+
+              {usdProducts !== null && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    {usdProducts.length} producto{usdProducts.length !== 1 ? "s" : ""} encontrado{usdProducts.length !== 1 ? "s" : ""}
+                    {usdProducts.length === 0 ? " — ningún artículo activo tiene MONEDA_ID ≠ 1" : ""}
+                  </p>
+                  {usdProducts.length > 0 && (
+                    <ScrollArea className="h-[320px] border rounded-lg">
+                      <table className="w-full text-sm" data-testid="table-usd-products">
+                        <thead className="sticky top-0 bg-muted">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium border-b">Clave</th>
+                            <th className="px-3 py-2 text-left font-medium border-b">Nombre</th>
+                            <th className="px-3 py-2 text-center font-medium border-b w-[90px]">MONEDA_ID</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {usdProducts.map((p, i) => (
+                            <tr key={i} className="border-b hover:bg-muted/50">
+                              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                                {p.CLAVE_ARTICULO ?? "—"}
+                              </td>
+                              <td className="px-3 py-2">{p.NOMBRE}</td>
+                              <td className="px-3 py-2 text-center">
+                                <Badge variant="secondary" className="font-mono text-xs">
+                                  {p.MONEDA_ID}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </ScrollArea>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

@@ -527,10 +527,11 @@ class MicrosipSyncService {
       
       // Sync ALL active products; price from list 42 if available, otherwise 0
       // CLAVE_ARTICULO comes from CLAVES_ARTICULOS (the human-readable product code)
+      // MONEDA_ID lives in PRECIOS_ARTICULOS (per price list), not in ARTICULOS
       const microsipProducts = await this.query<MicrosipProduct>(fbDb, `
         SELECT 
-          A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS, A.MONEDA_ID,
-          P.PRECIO AS PRECIO_1,
+          A.ARTICULO_ID, A.NOMBRE, A.LINEA_ARTICULO_ID, A.ESTATUS,
+          P.PRECIO AS PRECIO_1, P.MONEDA_ID,
           (SELECT FIRST 1 CA.CLAVE_ARTICULO FROM CLAVES_ARTICULOS CA WHERE CA.ARTICULO_ID = A.ARTICULO_ID) AS CLAVE_ARTICULO
         FROM ARTICULOS A
         LEFT JOIN PRECIOS_ARTICULOS P ON A.ARTICULO_ID = P.ARTICULO_ID AND P.PRECIO_EMPRESA_ID = 42
