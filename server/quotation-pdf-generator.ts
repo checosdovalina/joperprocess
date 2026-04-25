@@ -239,6 +239,27 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     currentY += BOX_H + 20;
 
     // ═══════════════════════════════════════════════
+    // DETECT MIXED CURRENCIES
+    // ═══════════════════════════════════════════════
+    const mxnItems = items.filter(i => ((i as any).currency || "MXN") === "MXN");
+    const usdItems = items.filter(i => (i as any).currency === "USD");
+    const hasMixedCurrencies = mxnItems.length > 0 && usdItems.length > 0;
+
+    const discountPct = parseFloat(quotation.globalDiscount || "0");
+
+    // Per-currency totals from line items
+    const calcCurrencyTotals = (currItems: typeof items) => {
+      const sub = currItems.reduce((s, i) => s + parseFloat(String(i.subtotal)), 0);
+      const disc = discountPct > 0 ? sub * (discountPct / 100) : 0;
+      const afterDisc = sub - disc;
+      const tax = afterDisc * 0.16;
+      return { subtotal: sub, discount: disc, afterDisc, tax, total: afterDisc + tax };
+    };
+
+    const mxnTotals = calcCurrencyTotals(mxnItems);
+    const usdTotals = calcCurrencyTotals(usdItems);
+
+    // ═══════════════════════════════════════════════
     // PRODUCTS TABLE
     // ═══════════════════════════════════════════════
     // Section label
@@ -247,15 +268,18 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.text("PRODUCTOS Y SERVICIOS", MARGIN + 6, currentY + 4);
     currentY += 16;
 
-    // Table column widths
+    // Table column widths — squeeze desc slightly when showing Mon. column
+    const MON_W = hasMixedCurrencies ? 32 : 0;
+    const DESC_W = hasMixedCurrencies ? 168 : 200;
     const cols = {
-      num:    { x: MARGIN,           w: 22  },
-      code:   { x: MARGIN + 22,      w: 72  },
-      desc:   { x: MARGIN + 94,      w: 200 },
-      qty:    { x: MARGIN + 294,     w: 44  },
-      price:  { x: MARGIN + 338,     w: 72  },
-      disc:   { x: MARGIN + 410,     w: 42  },
-      total:  { x: MARGIN + 452,     w: 80  },
+      num:    { x: MARGIN,                             w: 22       },
+      code:   { x: MARGIN + 22,                        w: 72       },
+      desc:   { x: MARGIN + 94,                        w: DESC_W   },
+      qty:    { x: MARGIN + 94 + DESC_W,               w: 44       },
+      price:  { x: MARGIN + 94 + DESC_W + 44,          w: 72       },
+      disc:   { x: MARGIN + 94 + DESC_W + 44 + 72,     w: 42       },
+      mon:    { x: MARGIN + 94 + DESC_W + 44 + 72 + 42, w: MON_W  },
+      total:  { x: MARGIN + 94 + DESC_W + 44 + 72 + 42 + MON_W, w: 80 },
     };
 
     // Table header row
@@ -268,6 +292,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.text("Cant.",      cols.qty.x  + 2, currentY + 4, { width: cols.qty.w  - 4, align: "center" });
     doc.text("P. Unit.",   cols.price.x+ 2, currentY + 4, { width: cols.price.w- 4, align: "right" });
     doc.text("Desc%",      cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
+    if (hasMixedCurrencies) {
+      doc.text("Mon.",     cols.mon.x  + 2, currentY + 4, { width: cols.mon.w  - 2, align: "center" });
+    }
     doc.text("Subtotal",   cols.total.x+ 2, currentY + 4, { width: cols.total.w- 4, align: "right" });
     currentY += TH;
 
@@ -277,6 +304,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.fontSize(7.5).font("Helvetica");
 
     items.forEach((item, index) => {
+      const itemCurrency = (item as any).currency || "MXN";
       // Calculate row height based on description text wrapping
       const descH = doc.heightOfString(item.productName, { width: cols.desc.w - 4 });
       const rowH = Math.max(MIN_ROW_H, descH + ROW_PAD * 2);
@@ -298,6 +326,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       doc.text(parseFloat(item.quantity).toString(), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
       doc.text(formatCurrency(item.unitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
       doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
+      if (hasMixedCurrencies) {
+        doc.fillColor(itemCurrency === "USD" ? "#1a6b3a" : "#444");
+        doc.text(itemCurrency, cols.mon.x + 2, rowY, { width: cols.mon.w - 2, align: "center", lineBreak: false });
+        doc.fillColor("#333333");
+      }
       doc.text(formatCurrency(item.subtotal), cols.total.x + 2, rowY, { width: cols.total.w - 4, align: "right", lineBreak: false });
 
       currentY += rowH;
@@ -308,54 +341,93 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     currentY += 20;
 
     // ═══════════════════════════════════════════════
-    // TOTALS BOX (right-aligned)
+    // TOTALS BOX — single or dual currency
     // ═══════════════════════════════════════════════
-    const TOTALS_W = 200;
-    const TOTALS_X = PAGE_W - MARGIN - TOTALS_W;
-
-    const subtotalVal = parseFloat(String(quotation.subtotal));
-    const taxVal = parseFloat(String(quotation.tax));
-    const totalVal = parseFloat(String(quotation.total));
-    const discountPct = parseFloat(quotation.globalDiscount || "0");
-    const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
-
-    const totalsRows: [string, string, boolean][] = [
-      ["Subtotal:", formatCurrency(subtotalVal), false],
-      ...(discountAmt > 0 ? [[`Descuento (${discountPct}%):`, `-${formatCurrency(discountAmt)}`, false] as [string, string, boolean]] : []),
-      ["IVA (16%):", formatCurrency(taxVal), false],
-    ];
-
     const TOTALS_ROW_H = 16;
-    const TOTALS_H = totalsRows.length * TOTALS_ROW_H + 22;
 
-    doc.rect(TOTALS_X, currentY, TOTALS_W, TOTALS_H + 26).fill(lightColor);
-    doc.rect(TOTALS_X, currentY, TOTALS_W, TOTALS_H + 26).stroke(mediumColor);
+    const drawTotalsBox = (
+      bx: number, by: number, bw: number,
+      label: string, labelColor: string,
+      sub: number, disc: number, tax: number, total: number,
+      fmtFn: (v: number) => string
+    ) => {
+      const rows: [string, string][] = [
+        ["Subtotal:", fmtFn(sub)],
+        ...(disc > 0 ? [[`Desc. (${discountPct}%):`, `-${fmtFn(disc)}`] as [string, string]] : []),
+        ["IVA (16%):", fmtFn(tax)],
+      ];
+      const boxH = rows.length * TOTALS_ROW_H + 22 + 26;
 
-    let totY = currentY + 8;
-    doc.fontSize(8.5).font("Helvetica").fillColor("#444");
-    for (const [label, value] of totalsRows) {
-      doc.text(label, TOTALS_X + 6, totY, { width: 100 });
-      doc.text(value, TOTALS_X + 106, totY, { width: TOTALS_W - 112, align: "right" });
-      totY += TOTALS_ROW_H;
+      // Header band
+      doc.rect(bx, by, bw, 14).fill(labelColor);
+      doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text(label, bx + 4, by + 3, { width: bw - 8, align: "center" });
+
+      doc.rect(bx, by + 14, bw, boxH - 14 - 22).fill(lightColor);
+      doc.rect(bx, by + 14, bw, boxH - 14 - 22).stroke(mediumColor);
+
+      let ty = by + 14 + 6;
+      doc.fontSize(8).font("Helvetica").fillColor("#444");
+      for (const [lbl, val] of rows) {
+        doc.text(lbl, bx + 6, ty, { width: bw * 0.52 });
+        doc.text(val, bx + bw * 0.52, ty, { width: bw * 0.44, align: "right" });
+        ty += TOTALS_ROW_H;
+      }
+
+      // Total row
+      doc.rect(bx, by + boxH - 22, bw, 22).fill(labelColor);
+      doc.fontSize(9.5).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text("TOTAL:", bx + 6, by + boxH - 16, { width: bw * 0.45 });
+      doc.text(fmtFn(total), bx + bw * 0.45, by + boxH - 16, { width: bw * 0.5, align: "right" });
+
+      return boxH;
+    };
+
+    const fmtMXN = (v: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v);
+    const fmtUSD = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
+
+    if (hasMixedCurrencies) {
+      // Two totals boxes side by side
+      const BOX_W = 240;
+      const GAP = 12;
+      const mxnX = PAGE_W - MARGIN - BOX_W * 2 - GAP;
+      const usdX = PAGE_W - MARGIN - BOX_W;
+
+      const mxnH = drawTotalsBox(mxnX, currentY, BOX_W, "PESOS MEXICANOS (MXN)", primaryColor,
+        mxnTotals.subtotal, mxnTotals.discount, mxnTotals.tax, mxnTotals.total, fmtMXN);
+      drawTotalsBox(usdX, currentY, BOX_W, "DÓLARES (USD)", "#1a6b3a",
+        usdTotals.subtotal, usdTotals.discount, usdTotals.tax, usdTotals.total, fmtUSD);
+
+      currentY += mxnH + 20;
+
+      // Note
+      const noteY2 = currentY - mxnH - 20 + 8;
+      doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#777");
+      doc.text("Los precios incluyen IVA 16%.", MARGIN, noteY2, { width: mxnX - MARGIN - 10 });
+      doc.text("Tipo de cambio USD a convenir al momento del pedido.", MARGIN, noteY2 + 10, { width: mxnX - MARGIN - 10 });
+    } else {
+      // Single totals box
+      const TOTALS_W = 200;
+      const TOTALS_X = PAGE_W - MARGIN - TOTALS_W;
+      const subtotalVal = parseFloat(String(quotation.subtotal));
+      const taxVal = parseFloat(String(quotation.tax));
+      const totalVal = parseFloat(String(quotation.total));
+      const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
+      const isMXN = (mxnItems.length > 0 || items.length === 0);
+      const fmtSingle = isMXN ? fmtMXN : fmtUSD;
+      const singleLabel = isMXN ? "PESOS MEXICANOS (MXN)" : "DÓLARES (USD)";
+      const singleColor = isMXN ? primaryColor : "#1a6b3a";
+
+      const singleH = drawTotalsBox(TOTALS_X, currentY, TOTALS_W, singleLabel, singleColor,
+        subtotalVal, discountAmt, taxVal, totalVal, fmtSingle);
+
+      currentY += singleH + 20;
+
+      const noteY = currentY - singleH - 20 + 8;
+      doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#777");
+      doc.text(`Precios expresados en ${isMXN ? "MXN (Pesos Mexicanos)" : "USD (Dólares Americanos)"}.`, MARGIN, noteY, { width: TOTALS_X - MARGIN - 10 });
+      doc.text("Los precios incluyen IVA 16%.", MARGIN, noteY + 10, { width: TOTALS_X - MARGIN - 10 });
     }
-
-    // Separator line before total
-    doc.rect(TOTALS_X, totY, TOTALS_W, 1).fill(mediumColor);
-    totY += 6;
-
-    // Total row
-    doc.rect(TOTALS_X, totY, TOTALS_W, 22).fill(primaryColor);
-    doc.fontSize(10).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text("TOTAL:", TOTALS_X + 6, totY + 6, { width: 80 });
-    doc.text(formatCurrency(totalVal), TOTALS_X + 86, totY + 6, { width: TOTALS_W - 92, align: "right" });
-
-    currentY += TOTALS_H + 26 + 20;
-
-    // Currency note (left side, same level as totals)
-    const noteY = currentY - TOTALS_H - 26 - 20 + 8;
-    doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#777");
-    doc.text(`Precios expresados en ${quotation.currency || "MXN"} (Pesos Mexicanos).`, MARGIN, noteY, { width: TOTALS_X - MARGIN - 10 });
-    doc.text("Los precios incluyen IVA 16%.", MARGIN, noteY + 10, { width: TOTALS_X - MARGIN - 10 });
 
     // ═══════════════════════════════════════════════
     // NOTES

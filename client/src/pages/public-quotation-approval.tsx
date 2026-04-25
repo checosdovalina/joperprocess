@@ -22,6 +22,7 @@ interface QuotationItem {
   unitPrice: string;
   discount: string;
   subtotal: string;
+  currency?: string;
 }
 
 interface PublicQuotation {
@@ -101,6 +102,16 @@ export default function PublicQuotationApproval() {
     rejectMutation.mutate(rejectionReason);
   };
 
+  const formatMXN = (amount: string | number) => {
+    const num = typeof amount === "string" ? parseFloat(amount) : amount;
+    return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(num);
+  };
+
+  const formatUSD = (amount: string | number) => {
+    const num = typeof amount === "string" ? parseFloat(amount) : amount;
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(num);
+  };
+
   const formatCurrency = (amount: string | number) => {
     const num = typeof amount === "string" ? parseFloat(amount) : amount;
     return new Intl.NumberFormat("es-MX", {
@@ -108,6 +119,24 @@ export default function PublicQuotationApproval() {
       currency: quotation?.currency || "MXN",
     }).format(num);
   };
+
+  // Detect mixed currencies in items
+  const mxnItems = quotation?.items?.filter(i => (i.currency || "MXN") === "MXN") ?? [];
+  const usdItems = quotation?.items?.filter(i => i.currency === "USD") ?? [];
+  const hasMixedCurrencies = mxnItems.length > 0 && usdItems.length > 0;
+
+  const discountPct = parseFloat(quotation?.globalDiscount || "0");
+
+  const calcTotals = (currItems: QuotationItem[]) => {
+    const sub = currItems.reduce((s, i) => s + parseFloat(i.subtotal), 0);
+    const disc = discountPct > 0 ? sub * (discountPct / 100) : 0;
+    const afterDisc = sub - disc;
+    const tax = afterDisc * 0.16;
+    return { subtotal: sub, discount: disc, afterDisc, tax, total: afterDisc + tax };
+  };
+
+  const mxnTotals = calcTotals(mxnItems);
+  const usdTotals = calcTotals(usdItems);
 
   if (isLoading) {
     return (
@@ -260,32 +289,44 @@ export default function PublicQuotationApproval() {
                     <TableHead className="text-center">Cantidad</TableHead>
                     <TableHead className="text-right">Precio Unit.</TableHead>
                     <TableHead className="text-center">Desc.</TableHead>
+                    {hasMixedCurrencies && <TableHead className="text-center">Mon.</TableHead>}
                     <TableHead className="text-right">Subtotal</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {quotation.items?.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{item.productName}</p>
-                          {item.productCode && (
-                            <p className="text-xs text-muted-foreground">{item.productCode}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {item.quantity} {item.unit}
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                      <TableCell className="text-center">
-                        {parseFloat(item.discount) > 0 ? `${item.discount}%` : "-"}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(item.subtotal)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {quotation.items?.map((item) => {
+                    const itemCurrency = item.currency || "MXN";
+                    const fmt = itemCurrency === "USD" ? formatUSD : formatMXN;
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{item.productName}</p>
+                            {item.productCode && (
+                              <p className="text-xs text-muted-foreground">{item.productCode}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.quantity} {item.unit}
+                        </TableCell>
+                        <TableCell className="text-right">{fmt(item.unitPrice)}</TableCell>
+                        <TableCell className="text-center">
+                          {parseFloat(item.discount) > 0 ? `${item.discount}%` : "-"}
+                        </TableCell>
+                        {hasMixedCurrencies && (
+                          <TableCell className="text-center">
+                            <Badge variant={itemCurrency === "USD" ? "secondary" : "outline"} className="text-xs">
+                              {itemCurrency}
+                            </Badge>
+                          </TableCell>
+                        )}
+                        <TableCell className="text-right font-medium">
+                          {fmt(item.subtotal)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -295,30 +336,90 @@ export default function PublicQuotationApproval() {
         {/* Totals */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col items-end space-y-2">
-              <div className="flex justify-between w-full max-w-xs text-sm">
-                <span className="text-muted-foreground">Subtotal:</span>
-                <span>{formatCurrency(quotation.subtotal)}</span>
-              </div>
-              {parseFloat(quotation.globalDiscount || "0") > 0 && (
-                <div className="flex justify-between w-full max-w-xs text-sm text-green-600">
-                  <span>Descuento ({quotation.globalDiscount}%):</span>
-                  <span>
-                    -{formatCurrency(
-                      parseFloat(quotation.subtotal) * (parseFloat(quotation.globalDiscount) / 100)
+            {hasMixedCurrencies ? (
+              <div className="flex flex-col sm:flex-row gap-4 justify-end">
+                {/* MXN totals */}
+                <div className="w-full sm:w-72 rounded-md border overflow-hidden">
+                  <div className="bg-primary px-4 py-2">
+                    <p className="text-xs font-semibold text-primary-foreground uppercase tracking-wide">Pesos Mexicanos (MXN)</p>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span>{formatMXN(mxnTotals.subtotal)}</span>
+                    </div>
+                    {mxnTotals.discount > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Descuento ({discountPct}%):</span>
+                        <span>-{formatMXN(mxnTotals.discount)}</span>
+                      </div>
                     )}
-                  </span>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">IVA (16%):</span>
+                      <span>{formatMXN(mxnTotals.tax)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t font-bold text-base">
+                      <span>Total MXN:</span>
+                      <span>{formatMXN(mxnTotals.total)}</span>
+                    </div>
+                  </div>
                 </div>
-              )}
-              <div className="flex justify-between w-full max-w-xs text-sm">
-                <span className="text-muted-foreground">IVA (16%):</span>
-                <span>{formatCurrency(quotation.tax)}</span>
+                {/* USD totals */}
+                <div className="w-full sm:w-72 rounded-md border overflow-hidden">
+                  <div className="bg-emerald-700 px-4 py-2">
+                    <p className="text-xs font-semibold text-white uppercase tracking-wide">Dólares Americanos (USD)</p>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span>{formatUSD(usdTotals.subtotal)}</span>
+                    </div>
+                    {usdTotals.discount > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Descuento ({discountPct}%):</span>
+                        <span>-{formatUSD(usdTotals.discount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">IVA (16%):</span>
+                      <span>{formatUSD(usdTotals.tax)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t font-bold text-base">
+                      <span>Total USD:</span>
+                      <span>{formatUSD(usdTotals.total)}</span>
+                    </div>
+                  </div>
+                  <div className="px-4 pb-3">
+                    <p className="text-xs text-muted-foreground">Tipo de cambio a convenir al momento del pedido.</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between w-full max-w-xs pt-2 border-t text-lg font-bold">
-                <span>Total:</span>
-                <span>{formatCurrency(quotation.total)}</span>
+            ) : (
+              <div className="flex flex-col items-end space-y-2">
+                <div className="flex justify-between w-full max-w-xs text-sm">
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span>{formatCurrency(quotation.subtotal)}</span>
+                </div>
+                {parseFloat(quotation.globalDiscount || "0") > 0 && (
+                  <div className="flex justify-between w-full max-w-xs text-sm text-green-600">
+                    <span>Descuento ({quotation.globalDiscount}%):</span>
+                    <span>
+                      -{formatCurrency(
+                        parseFloat(quotation.subtotal) * (parseFloat(quotation.globalDiscount) / 100)
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between w-full max-w-xs text-sm">
+                  <span className="text-muted-foreground">IVA (16%):</span>
+                  <span>{formatCurrency(quotation.tax)}</span>
+                </div>
+                <div className="flex justify-between w-full max-w-xs pt-2 border-t text-lg font-bold">
+                  <span>Total:</span>
+                  <span>{formatCurrency(quotation.total)}</span>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
