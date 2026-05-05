@@ -1906,6 +1906,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete quotation (admin only)
+  app.delete("/api/quotations/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const existing = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      // Cascade delete: items and credit authorizations first
+      await db.delete(creditAuthorizations).where(eq(creditAuthorizations.quotationId, id));
+      await db.delete(quotationItems).where(eq(quotationItems.quotationId, id));
+      await db.delete(quotations).where(eq(quotations.id, id));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting quotation:", error);
+      res.status(500).json({ error: "Error al eliminar la cotización" });
+    }
+  });
+
   // Generate and download quotation PDF
   app.get("/api/quotations/:id/pdf", isAuthenticated, async (req, res) => {
     try {

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus, Lock } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus, Lock, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -67,6 +67,9 @@ export default function QuotationsPage() {
   const [shippingRejectDialogOpen, setShippingRejectDialogOpen] = useState(false);
   const [shippingRejectReason, setShippingRejectReason] = useState("");
   const [isProcessingShipping, setIsProcessingShipping] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [quotationToDelete, setQuotationToDelete] = useState<QuotationWithDetails | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
@@ -145,6 +148,22 @@ export default function QuotationsPage() {
       });
     } finally {
       setIsLoadingDetails(false);
+    }
+  };
+
+  const handleDeleteQuotation = async () => {
+    if (!quotationToDelete) return;
+    setIsDeleting(true);
+    try {
+      await apiRequest("DELETE", `/api/quotations/${quotationToDelete.id}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
+      toast({ title: "Cotización eliminada", description: `${quotationToDelete.folio} eliminada correctamente` });
+      setDeleteDialogOpen(false);
+      setQuotationToDelete(null);
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo eliminar la cotización", variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -564,6 +583,19 @@ export default function QuotationsPage() {
                                   >
                                     <X className="h-4 w-4 mr-2" />
                                     Rechazar Envío Gratis
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {isAdmin && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => { setQuotationToDelete(quotation); setDeleteDialogOpen(true); }}
+                                    data-testid={`menu-delete-quotation-${quotation.id}`}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Eliminar cotización
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -1085,6 +1117,43 @@ export default function QuotationsPage() {
                 <>
                   <X className="h-4 w-4 mr-2" />
                   Rechazar Envío
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Eliminar cotización
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de eliminar la cotización{" "}
+              <strong>{quotationToDelete?.folio}</strong>? Esta acción no se puede deshacer y eliminará también sus ítems y autorizaciones de crédito asociadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteQuotation}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete-quotation"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Eliminar
                 </>
               )}
             </AlertDialogAction>
