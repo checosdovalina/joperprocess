@@ -1099,19 +1099,14 @@ export function QuotationForm({
                               <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono shrink-0 mt-0.5">
                                 {item.currency || "MXN"}
                               </Badge>
-                              <div className="flex flex-col leading-tight min-w-0">
-                                <span className="text-xs text-muted-foreground truncate">
-                                  P. Lista: {formatItemCurrency(item.listPrice, item.currency)}
-                                </span>
-                                {item.currency !== quoteCurrencyWatched && item.productName && (
-                                  <span className="text-xs text-muted-foreground/70 truncate">
-                                    ≈ {formatCurrency(convertToQuote(parseFloat(item.listPrice) || 0, item.currency))}
-                                  </span>
-                                )}
-                              </div>
+                              <span className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
+                                P. Lista: {formatItemCurrency(item.listPrice, item.currency)}
+                              </span>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              <span className="font-mono font-semibold text-sm">{formatItemCurrency(item.subtotal, item.currency)}</span>
+                              <span className="font-mono font-semibold text-sm">
+                                {formatCurrency(convertToQuote(parseFloat(item.subtotal) || 0, item.currency))}
+                              </span>
                               <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(index)}
                                 disabled={lineItems.length === 1} data-testid={`button-remove-line-${index}`}>
                                 <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -1448,7 +1443,7 @@ export function QuotationForm({
                     )}
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end">
-                    <span className="text-sm font-semibold">{formatCurrency(product.listPrice)}</span>
+                    <span className="text-sm font-semibold">{formatItemCurrency(product.listPrice, product.currency || "MXN")}</span>
                     {parseFloat(product.maxDiscount || "0") > 0 && (
                       <span className="text-xs text-muted-foreground">
                         Desc. máx: {product.maxDiscount}%
