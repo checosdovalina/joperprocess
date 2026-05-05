@@ -578,6 +578,16 @@ export function QuotationForm({
     });
   };
 
+  // Convert a per-item amount to the quotation currency
+  const quoteCurrencyWatched = form.watch("currency") || "MXN";
+  const exRateWatched = Math.max(parseFloat(form.watch("exchangeRate") || "18"), 0.0001);
+  const convertToQuote = (amount: number, itemCurrency: string): number => {
+    if (itemCurrency === quoteCurrencyWatched) return amount;
+    if (itemCurrency === "USD" && quoteCurrencyWatched === "MXN") return amount * exRateWatched;
+    if (itemCurrency === "MXN" && quoteCurrencyWatched === "USD") return amount / exRateWatched;
+    return amount;
+  };
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -970,7 +980,16 @@ export function QuotationForm({
                                   onKeyDown={preventEnter}
                                   className="w-20 text-center" data-testid={`input-quantity-${index}`} />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm">{formatItemCurrency(item.listPrice, item.currency)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                <div className="flex flex-col items-end leading-tight">
+                                  <span>{formatItemCurrency(item.listPrice, item.currency)}</span>
+                                  {item.currency !== quoteCurrencyWatched && item.productName && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatCurrency(convertToQuote(parseFloat(item.listPrice) || 0, item.currency))}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell>
                                 <Input type="text" inputMode="decimal" value={item.discountPercent}
                                   onChange={(e) => updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) })}
@@ -986,7 +1005,16 @@ export function QuotationForm({
                                   onKeyDown={preventEnter}
                                   className="w-24 text-right font-mono" data-testid={`input-unit-price-${index}`} />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm font-medium">{formatItemCurrency(item.subtotal, item.currency)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm font-medium">
+                                <div className="flex flex-col items-end leading-tight">
+                                  <span>{formatItemCurrency(item.subtotal, item.currency)}</span>
+                                  {item.currency !== quoteCurrencyWatched && item.productName && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatCurrency(convertToQuote(parseFloat(item.subtotal) || 0, item.currency))}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell className="text-center">
                                 <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono" data-testid={`badge-currency-${index}`}>
                                   {item.currency || "MXN"}
@@ -1071,7 +1099,16 @@ export function QuotationForm({
                               <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono">
                                 {item.currency || "MXN"}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">P. Lista: {formatItemCurrency(item.listPrice, item.currency)}</span>
+                              <div className="flex flex-col leading-tight">
+                                <span className="text-xs text-muted-foreground">
+                                  P. Lista: {formatItemCurrency(item.listPrice, item.currency)}
+                                </span>
+                                {item.currency !== quoteCurrencyWatched && item.productName && (
+                                  <span className="text-xs text-muted-foreground/70">
+                                    ≈ {formatCurrency(convertToQuote(parseFloat(item.listPrice) || 0, item.currency))}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-semibold text-sm">{formatItemCurrency(item.subtotal, item.currency)}</span>
