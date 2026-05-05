@@ -251,12 +251,12 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       return amount;
     };
 
-    // Show "Mon." column when any item has a different native currency than the quotation
     const hasItemsInForeignCurrency = items.some(i => ((i as any).currency || "MXN") !== quoteCurrency);
-    // Also show Mon. column when items themselves differ from each other (mixed item currencies)
+    // Show "Mon." column only when items have MIXED currencies among themselves
+    // (e.g. some MXN and some USD in the same quotation)
     const mxnItems = items.filter(i => ((i as any).currency || "MXN") === "MXN");
     const usdItems = items.filter(i => (i as any).currency === "USD");
-    const showMonColumn = hasItemsInForeignCurrency || (mxnItems.length > 0 && usdItems.length > 0);
+    const showMonColumn = mxnItems.length > 0 && usdItems.length > 0;
 
     const discountPct = parseFloat(quotation.globalDiscount || "0");
 
