@@ -1066,51 +1066,51 @@ export function QuotationForm({
 
                           {/* Numeric fields row */}
                           <div className="grid grid-cols-3 gap-2">
-                            <div className="space-y-1">
+                            <div className="space-y-1 min-w-0">
                               <label className="text-xs text-muted-foreground">Cantidad</label>
                               <Input type="text" inputMode="decimal" value={item.quantity}
                                 onChange={(e) => updateLineItem(index, { quantity: normalizeDecimal2(e.target.value) })}
                                 onBlur={() => updateLineItem(index, {}, 'discountPercent')}
                                 onKeyDown={preventEnter}
-                                className="text-center text-sm" data-testid={`input-quantity-${index}`} />
+                                className="w-full text-center text-sm" data-testid={`input-quantity-${index}`} />
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1 min-w-0">
                               <label className="text-xs text-muted-foreground">Desc %</label>
                               <Input type="text" inputMode="decimal" value={item.discountPercent}
                                 onChange={(e) => updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) })}
                                 onBlur={() => updateLineItem(index, {}, 'discountPercent')}
                                 onKeyDown={preventEnter}
-                                className={`text-center text-sm ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
+                                className={`w-full text-center text-sm ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
                                 data-testid={`input-discount-${index}`} />
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1 min-w-0">
                               <label className="text-xs text-muted-foreground">P. Unitario</label>
                               <Input type="text" inputMode="decimal" value={item.unitPrice}
                                 onChange={(e) => updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) })}
                                 onBlur={() => updateLineItem(index, {}, 'unitPrice')}
                                 onKeyDown={preventEnter}
-                                className="text-right font-mono text-sm" data-testid={`input-unit-price-${index}`} />
+                                className="w-full text-right font-mono text-sm" data-testid={`input-unit-price-${index}`} />
                             </div>
                           </div>
 
-                          {/* Summary row */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono">
+                          {/* Summary row: P.Lista info (left, shrinkable) + Subtotal + delete (right, fixed) */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                              <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono shrink-0 mt-0.5">
                                 {item.currency || "MXN"}
                               </Badge>
-                              <div className="flex flex-col leading-tight">
-                                <span className="text-xs text-muted-foreground">
+                              <div className="flex flex-col leading-tight min-w-0">
+                                <span className="text-xs text-muted-foreground truncate">
                                   P. Lista: {formatItemCurrency(item.listPrice, item.currency)}
                                 </span>
                                 {item.currency !== quoteCurrencyWatched && item.productName && (
-                                  <span className="text-xs text-muted-foreground/70">
+                                  <span className="text-xs text-muted-foreground/70 truncate">
                                     ≈ {formatCurrency(convertToQuote(parseFloat(item.listPrice) || 0, item.currency))}
                                   </span>
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 shrink-0">
                               <span className="font-mono font-semibold text-sm">{formatItemCurrency(item.subtotal, item.currency)}</span>
                               <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(index)}
                                 disabled={lineItems.length === 1} data-testid={`button-remove-line-${index}`}>
