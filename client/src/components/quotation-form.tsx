@@ -604,7 +604,7 @@ export function QuotationForm({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
             <ScrollArea className="flex-1 pr-2 sm:pr-4 min-h-0">
-              <div className="space-y-6 pb-4 w-full overflow-x-hidden">
+              <div className="space-y-6 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -1064,9 +1064,9 @@ export function QuotationForm({
                             </div>
                           )}
 
-                          {/* Numeric fields row */}
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="space-y-1 min-w-0">
+                          {/* Numeric fields: Cantidad + Desc% side by side, P.Unitario full width below */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
                               <label className="text-xs text-muted-foreground">Cantidad</label>
                               <Input type="text" inputMode="decimal" value={item.quantity}
                                 onChange={(e) => updateLineItem(index, { quantity: normalizeDecimal2(e.target.value) })}
@@ -1074,7 +1074,7 @@ export function QuotationForm({
                                 onKeyDown={preventEnter}
                                 className="w-full text-center text-sm" data-testid={`input-quantity-${index}`} />
                             </div>
-                            <div className="space-y-1 min-w-0">
+                            <div className="space-y-1">
                               <label className="text-xs text-muted-foreground">Desc %</label>
                               <Input type="text" inputMode="decimal" value={item.discountPercent}
                                 onChange={(e) => updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) })}
@@ -1083,14 +1083,14 @@ export function QuotationForm({
                                 className={`w-full text-center text-sm ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
                                 data-testid={`input-discount-${index}`} />
                             </div>
-                            <div className="space-y-1 min-w-0">
-                              <label className="text-xs text-muted-foreground">P. Unitario</label>
-                              <Input type="text" inputMode="decimal" value={item.unitPrice}
-                                onChange={(e) => updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) })}
-                                onBlur={() => updateLineItem(index, {}, 'unitPrice')}
-                                onKeyDown={preventEnter}
-                                className="w-full text-right font-mono text-sm" data-testid={`input-unit-price-${index}`} />
-                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">P. Unitario</label>
+                            <Input type="text" inputMode="decimal" value={item.unitPrice}
+                              onChange={(e) => updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) })}
+                              onBlur={() => updateLineItem(index, {}, 'unitPrice')}
+                              onKeyDown={preventEnter}
+                              className="w-full text-right font-mono text-sm" data-testid={`input-unit-price-${index}`} />
                           </div>
 
                           {/* Summary row: P.Lista info (left, shrinkable) + Subtotal + delete (right, fixed) */}
