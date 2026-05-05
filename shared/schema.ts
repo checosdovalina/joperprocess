@@ -353,6 +353,8 @@ export const quotations = pgTable("quotations", {
   customerApprovedAt: timestamp("customer_approved_at"),
   customerRejectedAt: timestamp("customer_rejected_at"),
   customerRejectionReason: text("customer_rejection_reason"),
+  // Exchange rate (tipo de cambio) — used to unify mixed-currency totals
+  exchangeRate: decimal("exchange_rate", { precision: 10, scale: 4 }).default("18.0000"), // MXN per 1 USD
   // Shipping fields
   shippingHandledByJoper: boolean("shipping_handled_by_joper").notNull().default(false),
   shippingMethod: text("shipping_method").default("truck"), // truck (camión), parcel (paquetería)

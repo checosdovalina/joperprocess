@@ -106,6 +106,7 @@ const CURRENCIES = [
 const quotationFormSchema = z.object({
   customerId: z.string().min(1, "Selecciona un cliente"),
   currency: z.string().default("MXN"),
+  exchangeRate: z.string().default("18.00"),
   paymentTerms: z.string().optional(),
   deliveryTime: z.string().optional(),
   validUntil: z.string().optional(),
@@ -113,9 +114,9 @@ const quotationFormSchema = z.object({
   notes: z.string().optional(),
   conditions: z.string().optional(),
   shippingHandledByJoper: z.boolean().default(false),
-  shippingMethod: z.string().default("truck"), // truck (camión), parcel (paquetería)
+  shippingMethod: z.string().default("truck"),
   requiresPallet: z.boolean().default(false),
-  shippingNotes: z.string().optional(), // Notas de envío (no van en la cotización)
+  shippingNotes: z.string().optional(),
   shippingCost: z.string().default("0"),
   shippingCostStatus: z.string().default("confirmed"),
 });
@@ -184,6 +185,7 @@ export function QuotationForm({
     defaultValues: {
       customerId: "",
       currency: "MXN",
+      exchangeRate: "18.00",
       paymentTerms: "",
       deliveryTime: "",
       validUntil: "",
@@ -204,6 +206,7 @@ export function QuotationForm({
       form.reset({
         customerId: initialData.customerId || "",
         currency: initialData.currency || "MXN",
+        exchangeRate: initialData.exchangeRate?.toString() || "18.00",
         paymentTerms: initialData.paymentTerms || "",
         deliveryTime: initialData.deliveryTime || "",
         validUntil: initialData.validUntil ? new Date(initialData.validUntil).toISOString().split('T')[0] : "",
@@ -258,6 +261,7 @@ export function QuotationForm({
         form.reset({
           customerId: "",
           currency: "MXN",
+          exchangeRate: "18.00",
           paymentTerms: "",
           deliveryTime: "",
           validUntil: "",
@@ -393,32 +397,37 @@ export function QuotationForm({
 
   const calculateTotals = useCallback(() => {
     const globalDiscountPercent = parseFloat(form.watch("globalDiscount")) || 0;
-    
-    const subtotalBeforeDiscount = lineItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
-    const totalTax = lineItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
+    const quoteCurrency = form.watch("currency") || "MXN";
+    const exRate = Math.max(parseFloat(form.watch("exchangeRate")) || 18, 0.0001);
+
+    // Convert any amount from itemCurrency to the quotation currency
+    const toQuote = (amount: number, itemCurrency: string) => {
+      if (itemCurrency === quoteCurrency) return amount;
+      if (itemCurrency === "USD" && quoteCurrency === "MXN") return amount * exRate;
+      if (itemCurrency === "MXN" && quoteCurrency === "USD") return amount / exRate;
+      return amount;
+    };
+
+    const namedItems = lineItems.filter(item => item.productName);
+    const hasMixedCurrencies = namedItems.some(i => i.currency === "MXN") && namedItems.some(i => i.currency === "USD");
+
+    // All amounts converted to quotation currency
+    const subtotalBeforeDiscount = lineItems.reduce((sum, item) =>
+      sum + toQuote(parseFloat(item.subtotal), item.currency), 0);
+    const totalTax = lineItems.reduce((sum, item) =>
+      sum + toQuote(parseFloat(item.taxAmount), item.currency), 0);
     const globalDiscountAmount = subtotalBeforeDiscount * (globalDiscountPercent / 100);
     const subtotalAfterDiscount = subtotalBeforeDiscount - globalDiscountAmount;
     const adjustedTax = totalTax * (1 - globalDiscountPercent / 100);
     const total = subtotalAfterDiscount + adjustedTax;
-    const totalSavings = lineItems.reduce((sum, item) => 
-      sum + (parseFloat(item.quantity) * parseFloat(item.discountAmount)), 0) + globalDiscountAmount;
+    const totalSavings = lineItems.reduce((sum, item) =>
+      sum + toQuote(parseFloat(item.quantity) * parseFloat(item.discountAmount), item.currency), 0) + globalDiscountAmount;
 
-    const mxnItems = lineItems.filter(item => item.currency === "MXN" && item.productName);
-    const usdItems = lineItems.filter(item => item.currency === "USD" && item.productName);
-    
-    const mxnSubtotal = mxnItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
-    const mxnTax = mxnItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
-    const mxnDiscount = mxnSubtotal * (globalDiscountPercent / 100);
-    const mxnTaxAdjusted = mxnTax * (1 - globalDiscountPercent / 100);
-    const mxnTotal = (mxnSubtotal - mxnDiscount) + mxnTaxAdjusted;
-    
-    const usdSubtotal = usdItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
-    const usdTax = usdItems.reduce((sum, item) => sum + parseFloat(item.taxAmount), 0);
-    const usdDiscount = usdSubtotal * (globalDiscountPercent / 100);
-    const usdTaxAdjusted = usdTax * (1 - globalDiscountPercent / 100);
-    const usdTotal = (usdSubtotal - usdDiscount) + usdTaxAdjusted;
-    
-    const hasMixedCurrencies = mxnItems.length > 0 && usdItems.length > 0;
+    // Per-currency breakdown (in their original currency, for info display)
+    const mxnItems = namedItems.filter(i => i.currency === "MXN");
+    const usdItems = namedItems.filter(i => i.currency === "USD");
+    const mxnSubtotal = mxnItems.reduce((s, i) => s + parseFloat(i.subtotal), 0);
+    const usdSubtotal = usdItems.reduce((s, i) => s + parseFloat(i.subtotal), 0);
 
     return {
       subtotal: subtotalBeforeDiscount.toFixed(2),
@@ -427,14 +436,10 @@ export function QuotationForm({
       total: total.toFixed(2),
       totalSavings: totalSavings.toFixed(2),
       hasMixedCurrencies,
+      quoteCurrency,
+      exRate,
       mxnSubtotal: mxnSubtotal.toFixed(2),
-      mxnDiscount: mxnDiscount.toFixed(2),
-      mxnTax: mxnTaxAdjusted.toFixed(2),
-      mxnTotal: mxnTotal.toFixed(2),
       usdSubtotal: usdSubtotal.toFixed(2),
-      usdDiscount: usdDiscount.toFixed(2),
-      usdTax: usdTaxAdjusted.toFixed(2),
-      usdTotal: usdTotal.toFixed(2),
     };
   }, [lineItems, form]);
 
@@ -518,6 +523,7 @@ export function QuotationForm({
       userId: userId || "",
       status: (!saveAsDraftRef.current && requiresAnyApproval) ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
       currency: data.currency,
+      exchangeRate: data.exchangeRate,
       paymentTerms: data.paymentTerms || null,
       deliveryTime: data.deliveryTime || null,
       validUntil: data.validUntil ? new Date(data.validUntil) : null,
@@ -613,6 +619,61 @@ export function QuotationForm({
                             data-testid="input-valid-until"
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* ── Moneda y Tipo de Cambio ── */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Moneda de la Cotización</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-currency">
+                              <SelectValue placeholder="Seleccionar moneda" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CURRENCIES.map((c) => (
+                              <SelectItem key={c.value} value={c.value}>
+                                {c.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="exchangeRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Cambio (MXN/USD)</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              {...field}
+                              onChange={(e) => field.onChange(normalizeDecimal(e.target.value))}
+                              onKeyDown={preventEnter}
+                              className="pl-6"
+                              placeholder="18.00"
+                              data-testid="input-exchange-rate"
+                            />
+                          </div>
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Pesos mexicanos por 1 dólar</p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1087,131 +1148,76 @@ export function QuotationForm({
                         </div>
                       </div>
 
-                      {totals.hasMixedCurrencies ? (
-                        /* ── Modo monedas mixtas: dos bloques separados ── */
-                        <div className="space-y-3 mt-1">
-                          {/* Bloque MXN */}
-                          <div className="rounded-md border p-3 space-y-1.5">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pesos MXN</p>
-                            <div className="flex justify-between text-sm">
-                              <span>Subtotal:</span>
-                              <span className="font-mono">${parseFloat(totals.mxnSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            {parseFloat(totals.mxnDiscount) > 0 && (
-                              <div className="flex justify-between text-sm text-destructive">
-                                <span>Descuento:</span>
-                                <span className="font-mono">-${parseFloat(totals.mxnDiscount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between text-sm">
-                              <span>IVA:</span>
-                              <span className="font-mono">${parseFloat(totals.mxnTax).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <Separator />
-                            <div className="flex justify-between text-base font-bold">
-                              <span>Total MXN:</span>
-                              <span className="font-mono">${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                            </div>
+                      {/* ── Resumen unificado en moneda de la cotización ── */}
+                      <div className="space-y-2">
+                        {/* Nota de conversión cuando hay productos en ambas monedas */}
+                        {totals.hasMixedCurrencies && (
+                          <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-0.5">
+                            <p className="font-medium">Productos en monedas mixtas</p>
+                            <p>MXN: ${parseFloat(totals.mxnSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} · USD: ${parseFloat(totals.usdSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                            <p>Convertido a {totals.quoteCurrency} al T/C ${totals.exRate.toFixed(4)}</p>
                           </div>
+                        )}
 
-                          {/* Bloque USD */}
-                          <div className="rounded-md border p-3 space-y-1.5">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dólares USD</p>
-                            <div className="flex justify-between text-sm">
-                              <span>Subtotal:</span>
-                              <span className="font-mono">${parseFloat(totals.usdSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
-                            </div>
-                            {parseFloat(totals.usdDiscount) > 0 && (
-                              <div className="flex justify-between text-sm text-destructive">
-                                <span>Descuento:</span>
-                                <span className="font-mono">-${parseFloat(totals.usdDiscount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between text-sm">
-                              <span>IVA:</span>
-                              <span className="font-mono">${parseFloat(totals.usdTax).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
-                            </div>
-                            <Separator />
-                            <div className="flex justify-between text-base font-bold">
-                              <span>Total USD:</span>
-                              <span className="font-mono">${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
-                            </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Subtotal:</span>
+                          <span className="font-mono">{formatCurrency(totals.subtotal)}</span>
+                        </div>
+
+                        {parseFloat(totals.globalDiscountAmount) > 0 && (
+                          <div className="flex justify-between text-sm text-destructive">
+                            <span>Descuento:</span>
+                            <span className="font-mono">-{formatCurrency(totals.globalDiscountAmount)}</span>
                           </div>
+                        )}
 
-                          <div className="flex justify-between text-sm">
-                            <span>Envío:</span>
-                            <span className="font-mono">
-                              {form.watch("shippingHandledByJoper")
-                                ? "$0.00 (Joper)"
-                                : form.watch("shippingCostStatus") === "pending"
-                                  ? "Por cotizar"
-                                  : formatCurrency(form.watch("shippingCost") || "0")}
-                            </span>
+                        <div className="flex justify-between text-sm">
+                          <span>IVA:</span>
+                          <span className="font-mono">{formatCurrency(totals.tax)}</span>
+                        </div>
+
+                        <div className="flex justify-between text-sm">
+                          <span>Envío:</span>
+                          <span className="font-mono">
+                            {form.watch("shippingHandledByJoper")
+                              ? "$0.00 (Joper)"
+                              : form.watch("shippingCostStatus") === "pending"
+                                ? "Por cotizar"
+                                : formatCurrency(form.watch("shippingCost") || "0")}
+                          </span>
+                        </div>
+
+                        <Separator />
+
+                        <div className="flex justify-between items-center text-lg font-bold gap-2">
+                          <span>Total {totals.quoteCurrency}:</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm text-muted-foreground">$</span>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              value={(parseFloat(totals.total) +
+                                (form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending"
+                                  ? 0
+                                  : parseFloat(form.watch("shippingCost") || "0"))
+                              ).toFixed(2)}
+                              onChange={(e) => handleTotalChange(normalizeDecimal(e.target.value))}
+                              className="w-28 h-8 text-right font-mono font-bold"
+                              data-testid="input-total"
+                            />
                           </div>
                         </div>
-                      ) : (
-                        /* ── Modo moneda única: resumen normal ── */
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Subtotal:</span>
-                            <span className="font-mono">{formatCurrency(totals.subtotal)}</span>
+                        <p className="text-xs text-muted-foreground">
+                          Edita el total para ajustar el descuento global automáticamente
+                        </p>
+
+                        {parseFloat(totals.totalSavings) > 0 && (
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>Ahorro Total:</span>
+                            <span className="font-mono">{formatCurrency(totals.totalSavings)}</span>
                           </div>
-
-                          {parseFloat(totals.globalDiscountAmount) > 0 && (
-                            <div className="flex justify-between text-sm text-destructive">
-                              <span>Descuento:</span>
-                              <span className="font-mono">-{formatCurrency(totals.globalDiscountAmount)}</span>
-                            </div>
-                          )}
-
-                          <div className="flex justify-between text-sm">
-                            <span>IVA:</span>
-                            <span className="font-mono">{formatCurrency(totals.tax)}</span>
-                          </div>
-
-                          <div className="flex justify-between text-sm">
-                            <span>Envío:</span>
-                            <span className="font-mono">
-                              {form.watch("shippingHandledByJoper")
-                                ? "$0.00 (Joper)"
-                                : form.watch("shippingCostStatus") === "pending"
-                                  ? "Por cotizar"
-                                  : formatCurrency(form.watch("shippingCost") || "0")}
-                            </span>
-                          </div>
-
-                          <Separator />
-
-                          <div className="flex justify-between items-center text-lg font-bold gap-2">
-                            <span>Total:</span>
-                            <div className="flex items-center gap-1">
-                              <span className="text-sm text-muted-foreground">$</span>
-                              <Input
-                                type="text"
-                                inputMode="decimal"
-                                value={(parseFloat(totals.total) +
-                                  (form.watch("shippingHandledByJoper") || form.watch("shippingCostStatus") === "pending"
-                                    ? 0
-                                    : parseFloat(form.watch("shippingCost") || "0"))
-                                ).toFixed(2)}
-                                onChange={(e) => handleTotalChange(normalizeDecimal(e.target.value))}
-                                className="w-28 h-8 text-right font-mono font-bold"
-                                data-testid="input-total"
-                              />
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Edita el total para ajustar el descuento global automáticamente
-                          </p>
-
-                          {parseFloat(totals.totalSavings) > 0 && (
-                            <div className="flex justify-between text-sm text-green-600">
-                              <span>Ahorro Total:</span>
-                              <span className="font-mono">{formatCurrency(totals.totalSavings)}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        )}
+                      </div>
 
                       {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) && (
                         <div className="mt-4 p-3 bg-destructive/10 rounded-lg">
@@ -1240,7 +1246,7 @@ export function QuotationForm({
               <div className="text-xs text-muted-foreground">
                 {lineItems.filter(i => i.productName).length} producto(s)
                 {totals.hasMixedCurrencies
-                  ? ` · MXN $${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} · USD $${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                  ? ` · Total ${totals.quoteCurrency}: ${formatCurrency(totals.total)} (T/C ${totals.exRate.toFixed(2)})`
                   : ` · Total: ${formatCurrency(totals.total)}`}
               </div>
               <div className="flex gap-2 flex-wrap justify-end">
