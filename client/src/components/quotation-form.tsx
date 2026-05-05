@@ -604,7 +604,7 @@ export function QuotationForm({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
             <ScrollArea className="flex-1 pr-2 sm:pr-4 min-h-0">
-              <div className="space-y-6 pb-4">
+              <div className="space-y-6 pb-4 w-full overflow-x-hidden">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -1046,9 +1046,9 @@ export function QuotationForm({
                             onClick={() => { setProductSearchOpen(index); setSearchQuery(""); setProductCategoryFilter(""); }}
                           >
                             {item.productName ? (
-                              <div className="flex flex-col items-start min-w-0">
-                                <span className="font-medium text-xs text-muted-foreground">{item.productCode}</span>
-                                <span className="text-sm truncate w-full">{item.productName}</span>
+                              <div className="flex flex-col w-full min-w-0 overflow-hidden">
+                                <span className="font-medium text-xs text-muted-foreground truncate">{item.productCode}</span>
+                                <span className="text-sm truncate">{item.productName}</span>
                               </div>
                             ) : (
                               <span className="text-muted-foreground flex items-center gap-2">
