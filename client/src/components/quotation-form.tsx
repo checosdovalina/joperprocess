@@ -560,11 +560,21 @@ export function QuotationForm({
     }
   };
 
+  // Format in the quotation's currency (for totals/summary)
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
     return num.toLocaleString("es-MX", {
       style: "currency",
       currency: form.watch("currency") || "MXN",
+    });
+  };
+
+  // Format in the item's own currency (for per-row list price and subtotal)
+  const formatItemCurrency = (value: string | number, itemCurrency: string) => {
+    const num = typeof value === "string" ? parseFloat(value) : value;
+    return num.toLocaleString("es-MX", {
+      style: "currency",
+      currency: itemCurrency || "MXN",
     });
   };
 
@@ -626,7 +636,7 @@ export function QuotationForm({
                 </div>
 
                 {/* ── Moneda y Tipo de Cambio ── */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="currency"
@@ -960,7 +970,7 @@ export function QuotationForm({
                                   onKeyDown={preventEnter}
                                   className="w-20 text-center" data-testid={`input-quantity-${index}`} />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm">{formatCurrency(item.listPrice)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm">{formatItemCurrency(item.listPrice, item.currency)}</TableCell>
                               <TableCell>
                                 <Input type="text" inputMode="decimal" value={item.discountPercent}
                                   onChange={(e) => updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) })}
@@ -976,7 +986,7 @@ export function QuotationForm({
                                   onKeyDown={preventEnter}
                                   className="w-24 text-right font-mono" data-testid={`input-unit-price-${index}`} />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm font-medium">{formatCurrency(item.subtotal)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm font-medium">{formatItemCurrency(item.subtotal, item.currency)}</TableCell>
                               <TableCell className="text-center">
                                 <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono" data-testid={`badge-currency-${index}`}>
                                   {item.currency || "MXN"}
@@ -1061,10 +1071,10 @@ export function QuotationForm({
                               <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono">
                                 {item.currency || "MXN"}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">P. Lista: {formatCurrency(item.listPrice)}</span>
+                              <span className="text-xs text-muted-foreground">P. Lista: {formatItemCurrency(item.listPrice, item.currency)}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono font-semibold text-sm">{formatCurrency(item.subtotal)}</span>
+                              <span className="font-mono font-semibold text-sm">{formatItemCurrency(item.subtotal, item.currency)}</span>
                               <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(index)}
                                 disabled={lineItems.length === 1} data-testid={`button-remove-line-${index}`}>
                                 <Trash2 className="h-4 w-4 text-muted-foreground" />
