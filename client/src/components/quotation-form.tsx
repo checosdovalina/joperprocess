@@ -603,7 +603,7 @@ export function QuotationForm({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
-            <ScrollArea className="flex-1 pr-2 sm:pr-4 min-h-0">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden sm:pr-4 min-h-0">
               <div className="space-y-6 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
@@ -1285,7 +1285,7 @@ export function QuotationForm({
                   </Card>
                 </div>
               </div>
-            </ScrollArea>
+            </div>
 
             <Separator className="mt-3 mb-3" />
 
