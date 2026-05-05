@@ -565,8 +565,8 @@ export function QuotationForm({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl h-[90vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
+      <DialogContent className="w-full sm:max-w-6xl h-[100dvh] sm:h-[90vh] flex flex-col rounded-none sm:rounded-lg p-4 sm:p-6 gap-0">
+        <DialogHeader className="flex-shrink-0 mb-3">
           <DialogTitle>{isEditing ? "Editar Cotización" : "Nueva Cotización"}</DialogTitle>
           <DialogDescription>
             {isEditing 
@@ -577,7 +577,7 @@ export function QuotationForm({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
-            <ScrollArea className="flex-1 pr-4 min-h-0">
+            <ScrollArea className="flex-1 pr-2 sm:pr-4 min-h-0">
               <div className="space-y-6 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
@@ -831,7 +831,7 @@ export function QuotationForm({
 
                 <Card>
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <CardTitle className="text-base">Productos</CardTitle>
                       <Button
                         type="button"
@@ -846,7 +846,8 @@ export function QuotationForm({
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <div className="overflow-x-auto">
+                    {/* ── Desktop table (sm+) ── */}
+                    <div className="hidden sm:block overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -870,11 +871,7 @@ export function QuotationForm({
                                   role="combobox"
                                   className="w-full justify-start text-left font-normal h-auto min-h-9 py-1"
                                   data-testid={`button-select-product-${index}`}
-                                  onClick={() => {
-                                    setProductSearchOpen(index);
-                                    setSearchQuery("");
-                                    setProductCategoryFilter("");
-                                  }}
+                                  onClick={() => { setProductSearchOpen(index); setSearchQuery(""); setProductCategoryFilter(""); }}
                                 >
                                   {item.productName ? (
                                     <div className="flex flex-col items-start">
@@ -896,77 +893,37 @@ export function QuotationForm({
                                 )}
                               </TableCell>
                               <TableCell>
-                                <Input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={item.quantity}
-                                  onChange={(e) => {
-                                    updateLineItem(index, { quantity: normalizeDecimal2(e.target.value) });
-                                  }}
-                                  onBlur={() => {
-                                    updateLineItem(index, {}, 'discountPercent');
-                                  }}
+                                <Input type="text" inputMode="decimal" value={item.quantity}
+                                  onChange={(e) => updateLineItem(index, { quantity: normalizeDecimal2(e.target.value) })}
+                                  onBlur={() => updateLineItem(index, {}, 'discountPercent')}
                                   onKeyDown={preventEnter}
-                                  className="w-20 text-center"
-                                  data-testid={`input-quantity-${index}`}
-                                />
+                                  className="w-20 text-center" data-testid={`input-quantity-${index}`} />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm">
-                                {formatCurrency(item.listPrice)}
-                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm">{formatCurrency(item.listPrice)}</TableCell>
                               <TableCell>
-                                <Input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={item.discountPercent}
-                                  onChange={(e) => {
-                                    updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) });
-                                  }}
-                                  onBlur={() => {
-                                    updateLineItem(index, {}, 'discountPercent');
-                                  }}
+                                <Input type="text" inputMode="decimal" value={item.discountPercent}
+                                  onChange={(e) => updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) })}
+                                  onBlur={() => updateLineItem(index, {}, 'discountPercent')}
                                   onKeyDown={preventEnter}
                                   className={`w-16 text-center ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
-                                  data-testid={`input-discount-${index}`}
-                                />
+                                  data-testid={`input-discount-${index}`} />
                               </TableCell>
                               <TableCell>
-                                <Input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={item.unitPrice}
-                                  onChange={(e) => {
-                                    updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) });
-                                  }}
-                                  onBlur={() => {
-                                    updateLineItem(index, {}, 'unitPrice');
-                                  }}
+                                <Input type="text" inputMode="decimal" value={item.unitPrice}
+                                  onChange={(e) => updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) })}
+                                  onBlur={() => updateLineItem(index, {}, 'unitPrice')}
                                   onKeyDown={preventEnter}
-                                  className="w-24 text-right font-mono"
-                                  data-testid={`input-unit-price-${index}`}
-                                />
+                                  className="w-24 text-right font-mono" data-testid={`input-unit-price-${index}`} />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm font-medium">
-                                {formatCurrency(item.subtotal)}
-                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm font-medium">{formatCurrency(item.subtotal)}</TableCell>
                               <TableCell className="text-center">
-                                <Badge
-                                  variant={item.currency === "USD" ? "secondary" : "outline"}
-                                  className="text-xs font-mono"
-                                  data-testid={`badge-currency-${index}`}
-                                >
+                                <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono" data-testid={`badge-currency-${index}`}>
                                   {item.currency || "MXN"}
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeLine(index)}
-                                  disabled={lineItems.length === 1}
-                                  data-testid={`button-remove-line-${index}`}
-                                >
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(index)}
+                                  disabled={lineItems.length === 1} data-testid={`button-remove-line-${index}`}>
                                   <Trash2 className="h-4 w-4 text-muted-foreground" />
                                 </Button>
                               </TableCell>
@@ -974,6 +931,87 @@ export function QuotationForm({
                           ))}
                         </TableBody>
                       </Table>
+                    </div>
+
+                    {/* ── Mobile cards (below sm) ── */}
+                    <div className="sm:hidden divide-y">
+                      {lineItems.map((item, index) => (
+                        <div key={index} className={`p-3 space-y-3 ${item.exceedsMaxDiscount ? "bg-destructive/10" : ""}`}>
+                          {/* Product selector */}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-start text-left font-normal h-auto min-h-9 py-2"
+                            data-testid={`button-select-product-${index}`}
+                            onClick={() => { setProductSearchOpen(index); setSearchQuery(""); setProductCategoryFilter(""); }}
+                          >
+                            {item.productName ? (
+                              <div className="flex flex-col items-start min-w-0">
+                                <span className="font-medium text-xs text-muted-foreground">{item.productCode}</span>
+                                <span className="text-sm truncate w-full">{item.productName}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground flex items-center gap-2">
+                                <Search className="h-4 w-4 shrink-0" />
+                                Buscar producto...
+                              </span>
+                            )}
+                          </Button>
+                          {item.exceedsMaxDiscount && (
+                            <div className="flex items-center gap-1 text-destructive text-xs">
+                              <AlertTriangle className="h-3 w-3" />
+                              Excede descuento máximo ({item.maxDiscount}%)
+                            </div>
+                          )}
+
+                          {/* Numeric fields row */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">Cantidad</label>
+                              <Input type="text" inputMode="decimal" value={item.quantity}
+                                onChange={(e) => updateLineItem(index, { quantity: normalizeDecimal2(e.target.value) })}
+                                onBlur={() => updateLineItem(index, {}, 'discountPercent')}
+                                onKeyDown={preventEnter}
+                                className="text-center text-sm" data-testid={`input-quantity-${index}`} />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">Desc %</label>
+                              <Input type="text" inputMode="decimal" value={item.discountPercent}
+                                onChange={(e) => updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) })}
+                                onBlur={() => updateLineItem(index, {}, 'discountPercent')}
+                                onKeyDown={preventEnter}
+                                className={`text-center text-sm ${item.exceedsMaxDiscount ? "border-destructive" : ""}`}
+                                data-testid={`input-discount-${index}`} />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">P. Unitario</label>
+                              <Input type="text" inputMode="decimal" value={item.unitPrice}
+                                onChange={(e) => updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) })}
+                                onBlur={() => updateLineItem(index, {}, 'unitPrice')}
+                                onKeyDown={preventEnter}
+                                className="text-right font-mono text-sm" data-testid={`input-unit-price-${index}`} />
+                            </div>
+                          </div>
+
+                          {/* Summary row */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono">
+                                {item.currency || "MXN"}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">P. Lista: {formatCurrency(item.listPrice)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-semibold text-sm">{formatCurrency(item.subtotal)}</span>
+                              <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(index)}
+                                disabled={lineItems.length === 1} data-testid={`button-remove-line-${index}`}>
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -1196,16 +1234,16 @@ export function QuotationForm({
               </div>
             </ScrollArea>
 
-            <Separator className="my-4" />
+            <Separator className="mt-3 mb-3" />
 
-            <div className="flex justify-between items-center gap-4">
-              <div className="text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-shrink-0">
+              <div className="text-xs text-muted-foreground">
                 {lineItems.filter(i => i.productName).length} producto(s)
                 {totals.hasMixedCurrencies
-                  ? ` | MXN: $${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} | USD: $${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
-                  : ` | Total: ${formatCurrency(totals.total)}`}
+                  ? ` · MXN $${parseFloat(totals.mxnTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} · USD $${parseFloat(totals.usdTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                  : ` · Total: ${formatCurrency(totals.total)}`}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -1225,7 +1263,7 @@ export function QuotationForm({
                   {isPending && saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Guardar Borrador
                 </Button>
-                {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) && (
+                {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) ? (
                   <Button
                     type="submit"
                     disabled={isPending || lineItems.filter(i => i.productName).length === 0}
@@ -1235,8 +1273,7 @@ export function QuotationForm({
                     {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Enviar a Autorización
                   </Button>
-                )}
-                {!hasExceedingDiscounts && !form.watch("shippingHandledByJoper") && (
+                ) : (
                   <Button
                     type="submit"
                     disabled={isPending || lineItems.filter(i => i.productName).length === 0}
@@ -1265,8 +1302,8 @@ export function QuotationForm({
         }
       }}
     >
-      <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
+      <DialogContent className="w-full sm:max-w-3xl h-[100dvh] sm:h-[80vh] flex flex-col p-0 rounded-none sm:rounded-lg">
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 flex-shrink-0">
           <DialogTitle>Seleccionar Producto</DialogTitle>
           <DialogDescription>
             Busca por código, nombre o filtra por categoría
@@ -1274,7 +1311,7 @@ export function QuotationForm({
         </DialogHeader>
 
         {/* Search + Category filter */}
-        <div className="px-6 pb-3 flex gap-2 flex-shrink-0">
+        <div className="px-4 sm:px-6 pb-3 flex flex-col sm:flex-row gap-2 flex-shrink-0">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -1287,7 +1324,7 @@ export function QuotationForm({
             />
           </div>
           <Select value={productCategoryFilter || "all"} onValueChange={(v) => setProductCategoryFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[200px]" data-testid="select-product-category-filter">
+            <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-product-category-filter">
               <SelectValue placeholder="Todas las categorías" />
             </SelectTrigger>
             <SelectContent>
