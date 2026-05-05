@@ -1,0 +1,116 @@
+sergiodovalina@MacBook-Air-de-Sergio ~ % ssh root@74.208.13.243 
+root@74.208.13.243's password: 
+Last failed login: Tue May  5 18:07:51 UTC 2026 from 203.154.158.195 on ssh:notty
+There were 14882 failed login attempts since the last successful login.
+Last login: Sat Apr 25 03:47:57 2026 from 177.241.164.32
+[root@localhost ~]# cd /var/www/joper
+git pull origin main
+npm install
+npm run db:push
+npm run build
+pm2 restart joper-app
+remote: Enumerating objects: 110, done.
+remote: Counting objects: 100% (110/110), done.
+remote: Compressing objects: 100% (31/31), done.
+remote: Total 100 (delta 68), reused 100 (delta 68), pack-reused 0 (from 0)
+Receiving objects: 100% (100/100), 15.92 MiB | 27.40 MiB/s, done.
+Resolving deltas: 100% (68/68), completed with 9 local objects.
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+   d91ff7d..b84bd0e  main       -> origin/main
+Updating d91ff7d..b84bd0e
+Fast-forward
+ ...26-05-04_a_la(s)_5.56.40_p.m._1777939031715.png | Bin 0 -> 701997 bytes
+ ...26-05-04_a_la(s)_5.56.43_p.m._1777939031714.png | Bin 0 -> 770002 bytes
+ ...26-05-04_a_la(s)_5.56.51_p.m._1777939031713.png | Bin 0 -> 728927 bytes
+ ...26-05-04_a_la(s)_5.59.22_p.m._1777939171297.png | Bin 0 -> 743734 bytes
+ ...26-05-04_a_la(s)_6.15.25_p.m._1777940221719.png | Bin 0 -> 588487 bytes
+ ...26-05-04_a_la(s)_6.15.54_p.m._1777940221719.png | Bin 0 -> 564592 bytes
+ ...26-05-04_a_la(s)_6.16.02_p.m._1777940221719.png | Bin 0 -> 564592 bytes
+ ...26-05-04_a_la(s)_6.16.23_p.m._1777940221718.png | Bin 0 -> 715274 bytes
+ ...26-05-04_a_la(s)_6.16.29_p.m._1777940221718.png | Bin 0 -> 722358 bytes
+ ...26-05-04_a_la(s)_6.16.34_p.m._1777940221718.png | Bin 0 -> 798202 bytes
+ ...26-05-04_a_la(s)_6.16.39_p.m._1777940221717.png | Bin 0 -> 793530 bytes
+ ...6-05-05_a_la(s)_10.35.17_a.m._1777998927099.png | Bin 0 -> 785788 bytes
+ ...6-05-05_a_la(s)_10.40.05_a.m._1777999229830.png | Bin 0 -> 717237 bytes
+ ...6-05-05_a_la(s)_10.40.08_a.m._1777999229828.png | Bin 0 -> 787637 bytes
+ ...6-05-05_a_la(s)_10.45.20_a.m._1777999555566.png | Bin 0 -> 745229 bytes
+ ...6-05-05_a_la(s)_10.45.26_a.m._1777999555566.png | Bin 0 -> 802464 bytes
+ ...6-05-05_a_la(s)_10.45.42_a.m._1777999555565.png | Bin 0 -> 734778 bytes
+ ...6-05-05_a_la(s)_10.52.11_a.m._1777999959648.png | Bin 0 -> 741029 bytes
+ ...6-05-05_a_la(s)_10.55.49_a.m._1778000183404.png | Bin 0 -> 766376 bytes
+ ...6-05-05_a_la(s)_10.55.57_a.m._1778000183406.png | Bin 0 -> 738919 bytes
+ ...6-05-05_a_la(s)_11.39.20_a.m._1778002885654.png | Bin 0 -> 874991 bytes
+ ...6-05-05_a_la(s)_11.39.41_a.m._1778002885655.png | Bin 0 -> 871369 bytes
+ ...6-05-05_a_la(s)_11.39.53_a.m._1778002885656.png | Bin 0 -> 754493 bytes
+ ...6-05-05_a_la(s)_11.39.59_a.m._1778002885657.png | Bin 0 -> 789020 bytes
+ ...6-05-05_a_la(s)_11.40.20_a.m._1778002885659.png | Bin 0 -> 744142 bytes
+ ...6-05-05_a_la(s)_11.50.48_a.m._1778003458318.png | Bin 0 -> 491356 bytes
+ ...6-05-05_a_la(s)_11.56.32_a.m._1778003824129.png | Bin 0 -> 492972 bytes
+ client/src/components/quotation-form.tsx           | 529 ++++++++++++---------
+ server/quotation-pdf-generator.ts                  | 102 ++--
+ shared/schema.ts                                   |   2 +
+ 30 files changed, 356 insertions(+), 277 deletions(-)
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_5.56.40_p.m._1777939031715.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_5.56.43_p.m._1777939031714.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_5.56.51_p.m._1777939031713.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_5.59.22_p.m._1777939171297.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_6.15.25_p.m._1777940221719.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_6.15.54_p.m._1777940221719.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_6.16.02_p.m._1777940221719.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_6.16.23_p.m._1777940221718.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_6.16.29_p.m._1777940221718.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_6.16.34_p.m._1777940221718.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-04_a_la(s)_6.16.39_p.m._1777940221717.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.35.17_a.m._1777998927099.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.40.05_a.m._1777999229830.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.40.08_a.m._1777999229828.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.45.20_a.m._1777999555566.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.45.26_a.m._1777999555566.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.45.42_a.m._1777999555565.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.52.11_a.m._1777999959648.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.55.49_a.m._1778000183404.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_10.55.57_a.m._1778000183406.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_11.39.20_a.m._1778002885654.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_11.39.41_a.m._1778002885655.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_11.39.53_a.m._1778002885656.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_11.39.59_a.m._1778002885657.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_11.40.20_a.m._1778002885659.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_11.50.48_a.m._1778003458318.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-05_a_la(s)_11.56.32_a.m._1778003824129.png
+
+up to date, audited 616 packages in 4s
+
+89 packages are looking for funding
+  run `npm fund` for details
+
+28 vulnerabilities (8 low, 9 moderate, 10 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.13.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.13.0
+npm notice To update run: npm install -g npm@11.13.0
+npm notice
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/var/www/joper/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] Pulling schema from database...
+ Warning  Found data-loss statements:
+· You're about to delete _schema_migrations table with 2 items
+
+THIS ACTION WILL CAUSE DATA LOSS AND CANNOT BE REVERTED
+
+Do you still want to push changes?
+❯ No, abort
+  Yes, I want to remove 1 table, 
