@@ -160,8 +160,9 @@ export default function QuotationsPage() {
       toast({ title: "Cotización eliminada", description: `${quotationToDelete.folio} eliminada correctamente` });
       setDeleteDialogOpen(false);
       setQuotationToDelete(null);
-    } catch (error) {
-      toast({ title: "Error", description: "No se pudo eliminar la cotización", variant: "destructive" });
+    } catch (error: any) {
+      const msg = error?.message || "No se pudo eliminar la cotización";
+      toast({ title: "No se puede eliminar", description: msg, variant: "destructive" });
     } finally {
       setIsDeleting(false);
     }

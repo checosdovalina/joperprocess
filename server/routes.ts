@@ -1919,9 +1919,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Cotización no encontrada" });
       }
 
-      // Cascade delete: items and credit authorizations first
+      // Block deletion if a linked order exists (FK without cascade)
+      const linkedOrder = await db.query.orders.findFirst({
+        where: eq(orders.quotationId, id),
+      });
+      if (linkedOrder) {
+        return res.status(400).json({
+          error: "No se puede eliminar una cotización que ya tiene un pedido asociado. Elimina el pedido primero.",
+        });
+      }
+
+      // Delete credit authorization comments, then credit authorizations, then the quotation
+      // (quotation_items are deleted automatically via onDelete: cascade on the FK)
+      const linkedAuths = await db.query.creditAuthorizations.findMany({
+        where: eq(creditAuthorizations.quotationId, id),
+      });
+      for (const auth of linkedAuths) {
+        await db.delete(creditAuthorizationComments).where(eq(creditAuthorizationComments.creditAuthorizationId, auth.id));
+      }
       await db.delete(creditAuthorizations).where(eq(creditAuthorizations.quotationId, id));
-      await db.delete(quotationItems).where(eq(quotationItems.quotationId, id));
       await db.delete(quotations).where(eq(quotations.id, id));
 
       res.json({ success: true });
