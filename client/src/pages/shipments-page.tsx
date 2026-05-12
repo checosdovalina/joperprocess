@@ -14,9 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff } from "lucide-react";
+import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff, RotateCcw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   Dialog,
@@ -61,6 +61,10 @@ export default function ShipmentsPage() {
   const [editDriverName, setEditDriverName] = useState("");
   const [editVehiclePlates, setEditVehiclePlates] = useState("");
   const [hideDelivered, setHideDelivered] = useState(true);
+  const [searchText, setSearchText] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   const { data: shipments, isLoading } = useQuery<ShipmentWithDetails[]>({
     queryKey: ["/api/shipments"],
@@ -235,6 +239,38 @@ export default function ShipmentsPage() {
     addSerialsMutation.mutate(validSerials);
   };
 
+  const hasActiveFilters = searchText !== "" || filterStatus !== "all" || filterDateFrom !== "" || filterDateTo !== "";
+
+  const filteredShipments = (shipments ?? []).filter(s => {
+    if (hideDelivered && s.status === ShipmentStatus.DELIVERED) return false;
+    if (filterStatus !== "all" && s.status !== filterStatus) return false;
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      const matchCustomer = s.order.quotation.customer.name.toLowerCase().includes(q);
+      const matchFolio = s.order.quotation.folio?.toLowerCase().includes(q);
+      const matchTransporter = s.transporter?.toLowerCase().includes(q);
+      if (!matchCustomer && !matchFolio && !matchTransporter) return false;
+    }
+    if (filterDateFrom) {
+      const from = startOfDay(parseISO(filterDateFrom));
+      const date = s.shippedAt ? new Date(s.shippedAt) : new Date(s.createdAt);
+      if (date < from) return false;
+    }
+    if (filterDateTo) {
+      const to = endOfDay(parseISO(filterDateTo));
+      const date = s.shippedAt ? new Date(s.shippedAt) : new Date(s.createdAt);
+      if (date > to) return false;
+    }
+    return true;
+  });
+
+  const resetFilters = () => {
+    setSearchText("");
+    setFilterStatus("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -286,19 +322,65 @@ export default function ShipmentsPage() {
             <div>
               <CardTitle>Todos los Embarques</CardTitle>
               <CardDescription>
-                {(() => {
-                  const deliveredCount = shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0;
-                  const visible = hideDelivered ? (shipments?.filter(s => s.status !== ShipmentStatus.DELIVERED).length ?? 0) : (shipments?.length ?? 0);
-                  return <>
-                    {visible} de {shipments?.length || 0} embarques
-                    {hideDelivered && deliveredCount > 0 && <span className="ml-1">({deliveredCount} entregado{deliveredCount !== 1 ? "s" : ""} oculto{deliveredCount !== 1 ? "s" : ""})</span>}
-                  </>;
-                })()}
+                {filteredShipments.length} de {shipments?.length || 0} embarques
+                {hideDelivered && (shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0) > 0 && (
+                  <span className="ml-1">
+                    ({shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length} entregado{shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length !== 1 ? "s" : ""} oculto{shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length !== 1 ? "s" : ""})
+                  </span>
+                )}
               </CardDescription>
             </div>
             {(shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0) > 0 && (
               <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
                 {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar entregados</>}
+              </Button>
+            )}
+          </div>
+
+          {/* Filter bar */}
+          <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
+            <div className="flex-1 min-w-[180px]">
+              <Input
+                placeholder="Buscar cliente, folio o transportista..."
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                data-testid="input-search-shipment"
+              />
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[160px]" data-testid="select-filter-status">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value={ShipmentStatus.PENDING}>Pendiente</SelectItem>
+                <SelectItem value={ShipmentStatus.IN_TRANSIT}>En Tránsito</SelectItem>
+                <SelectItem value={ShipmentStatus.DELIVERED}>Entregado</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => setFilterDateFrom(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-from"
+                title="Desde"
+              />
+              <span className="text-muted-foreground text-sm">—</span>
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={e => setFilterDateTo(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-to"
+                title="Hasta"
+              />
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Limpiar
               </Button>
             )}
           </div>
@@ -310,7 +392,7 @@ export default function ShipmentsPage() {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : shipments && shipments.length > 0 ? (
+          ) : filteredShipments.length > 0 ? (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -325,7 +407,7 @@ export default function ShipmentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(hideDelivered ? shipments.filter(s => s.status !== ShipmentStatus.DELIVERED) : shipments).map((shipment) => (
+                  {filteredShipments.map((shipment) => (
                     <TableRow key={shipment.id} className="hover-elevate" data-testid={`row-shipment-${shipment.id}`}>
                       <TableCell>
                         <div className="font-medium">{shipment.order.quotation.customer.name}</div>
@@ -381,6 +463,10 @@ export default function ShipmentsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          ) : shipments && shipments.length > 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-results">
+              Ningún embarque coincide con los filtros aplicados
             </div>
           ) : (
             <div className="text-center py-12">
