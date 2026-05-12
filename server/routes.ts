@@ -1919,17 +1919,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Cotización no encontrada" });
       }
 
-      // Block deletion if a linked order exists (FK without cascade)
+      // Full cascade delete — handle linked order if it exists
       const linkedOrder = await db.query.orders.findFirst({
         where: eq(orders.quotationId, id),
       });
+
       if (linkedOrder) {
-        return res.status(400).json({
-          error: "No se puede eliminar una cotización que ya tiene un pedido asociado. Elimina el pedido primero.",
-        });
+        const orderId = linkedOrder.id;
+        // 1. shipmentProductInstances (references both shipments and orders)
+        await db.delete(shipmentProductInstances).where(eq(shipmentProductInstances.orderId, orderId));
+        // 2. shipments (references orders)
+        await db.delete(shipments).where(eq(shipments.orderId, orderId));
+        // 3. orderReleases (references orders)
+        await db.delete(orderReleases).where(eq(orderReleases.orderId, orderId));
+        // 4. Nullify nullable FKs in invoices and incidents
+        await db.update(invoices).set({ orderId: null }).where(eq(invoices.orderId, orderId));
+        await db.update(incidents).set({ orderId: null }).where(eq(incidents.orderId, orderId));
+        // 5. Delete the order itself
+        await db.delete(orders).where(eq(orders.id, orderId));
       }
 
-      // Delete credit authorization comments, then credit authorizations, then the quotation
+      // Delete credit authorization comments and credit authorizations
       // (quotation_items are deleted automatically via onDelete: cascade on the FK)
       const linkedAuths = await db.query.creditAuthorizations.findMany({
         where: eq(creditAuthorizations.quotationId, id),

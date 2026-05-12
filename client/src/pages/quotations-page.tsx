@@ -1133,9 +1133,21 @@ export default function QuotationsPage() {
               <Trash2 className="h-5 w-5 text-destructive" />
               Eliminar cotización
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de eliminar la cotización{" "}
-              <strong>{quotationToDelete?.folio}</strong>? Esta acción no se puede deshacer y eliminará también sus ítems y autorizaciones de crédito asociadas.
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  ¿Estás seguro de eliminar la cotización{" "}
+                  <strong>{quotationToDelete?.folio}</strong>? Esta acción no se puede deshacer.
+                </p>
+                {quotationToDelete?.status === QuotationStatus.CONVERTED && (
+                  <p className="text-destructive font-medium">
+                    Esta cotización ya fue convertida en pedido. Al eliminarla se borrarán también el pedido, embarques y liberaciones asociadas. Las facturas e incidencias vinculadas quedarán desvinculadas pero no se eliminarán.
+                  </p>
+                )}
+                {quotationToDelete?.status !== QuotationStatus.CONVERTED && (
+                  <p>Se eliminarán también sus ítems y autorizaciones de crédito asociadas.</p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
