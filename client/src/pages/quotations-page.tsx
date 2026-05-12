@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus, Lock, Trash2 } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus, Lock, Trash2, EyeOff } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -70,6 +70,7 @@ export default function QuotationsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [quotationToDelete, setQuotationToDelete] = useState<QuotationWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [hideConverted, setHideConverted] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
@@ -397,6 +398,11 @@ export default function QuotationsPage() {
     por_confirmar: "Por confirmar",
   };
 
+  const convertedCount = quotations?.filter(q => q.status === QuotationStatus.CONVERTED).length ?? 0;
+  const filteredQuotations = hideConverted
+    ? (quotations ?? []).filter(q => q.status !== QuotationStatus.CONVERTED)
+    : (quotations ?? []);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -414,13 +420,42 @@ export default function QuotationsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Todas las Cotizaciones
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Actualización automática cada 20 segundos" />
-          </CardTitle>
-          <CardDescription>
-            {quotations?.length || 0} cotizaciones registradas
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                Todas las Cotizaciones
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Actualización automática cada 20 segundos" />
+              </CardTitle>
+              <CardDescription>
+                {filteredQuotations.length} de {quotations?.length || 0} cotizaciones
+                {hideConverted && convertedCount > 0 && (
+                  <span className="ml-1 text-muted-foreground">
+                    ({convertedCount} convertida{convertedCount !== 1 ? "s" : ""} oculta{convertedCount !== 1 ? "s" : ""})
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+            {convertedCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHideConverted(v => !v)}
+                data-testid="button-toggle-converted"
+              >
+                {hideConverted ? (
+                  <>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Mostrar convertidas ({convertedCount})
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Ocultar convertidas ({convertedCount})
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -429,7 +464,7 @@ export default function QuotationsPage() {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : quotations && quotations.length > 0 ? (
+          ) : filteredQuotations.length > 0 ? (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -444,7 +479,7 @@ export default function QuotationsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {quotations.map((quotation) => (
+                  {filteredQuotations.map((quotation) => (
                     <TableRow key={quotation.id} className="hover-elevate" data-testid={`row-quotation-${quotation.id}`}>
                       <TableCell>
                         <div className="font-mono font-medium">{quotation.folio}</div>
@@ -608,6 +643,20 @@ export default function QuotationsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          ) : hideConverted && convertedCount > 0 ? (
+            <div className="text-center py-12">
+              <EyeOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Todas las cotizaciones están convertidas en pedido</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setHideConverted(false)}
+                data-testid="button-show-converted-empty"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Mostrar convertidas ({convertedCount})
+              </Button>
             </div>
           ) : (
             <div className="text-center py-12">
