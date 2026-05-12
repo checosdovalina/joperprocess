@@ -24,11 +24,11 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Loader2, FileText, Calendar, CheckCircle2 } from "lucide-react";
+import { Plus, MapPin, Loader2, FileText, Calendar, CheckCircle2, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Link } from "wouter";
 import { CustomerCombobox } from "@/components/customer-combobox";
@@ -47,6 +47,11 @@ export default function CheckinsPage() {
     notes: "",
     photos: [],
   });
+  const [searchText, setSearchText] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   const { data: checkins, isLoading } = useQuery<(Checkin & { customer: Customer })[]>({
     queryKey: ["/api/checkins"],
@@ -186,6 +191,35 @@ export default function CheckinsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate(formData as InsertCheckin);
+  };
+
+  const hasActiveFilters = searchText !== "" || filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "";
+
+  const filteredCheckins = (checkins ?? []).filter(c => {
+    if (filterStatus === "active" && c.checkoutAt) return false;
+    if (filterStatus === "done" && !c.checkoutAt) return false;
+    if (filterType !== "all" && c.meetingType !== filterType) return false;
+    if (searchText) {
+      const s = searchText.toLowerCase();
+      if (!c.customer?.name?.toLowerCase().includes(s)) return false;
+    }
+    if (filterDateFrom) {
+      const from = startOfDay(parseISO(filterDateFrom));
+      if (new Date(c.checkinAt) < from) return false;
+    }
+    if (filterDateTo) {
+      const to = endOfDay(parseISO(filterDateTo));
+      if (new Date(c.checkinAt) > to) return false;
+    }
+    return true;
+  });
+
+  const resetFilters = () => {
+    setSearchText("");
+    setFilterStatus("all");
+    setFilterType("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
   };
 
   return (
@@ -376,10 +410,72 @@ export default function CheckinsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Historial de Check-ins</CardTitle>
-          <CardDescription>
-            {checkins?.length || 0} visitas registradas
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Historial de Check-ins</CardTitle>
+              <CardDescription>
+                {filteredCheckins.length} de {checkins?.length || 0} visitas registradas
+              </CardDescription>
+            </div>
+          </div>
+
+          {/* Filter bar */}
+          <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
+            <div className="flex-1 min-w-[180px]">
+              <Input
+                placeholder="Buscar cliente..."
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                data-testid="input-search-checkin"
+              />
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[150px]" data-testid="select-filter-status">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="active">En curso</SelectItem>
+                <SelectItem value="done">Finalizado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-[150px]" data-testid="select-filter-type">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
+                <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
+                <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => setFilterDateFrom(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-from"
+                title="Desde"
+              />
+              <span className="text-muted-foreground text-sm">—</span>
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={e => setFilterDateTo(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-to"
+                title="Hasta"
+              />
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Limpiar
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -388,20 +484,21 @@ export default function CheckinsPage() {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : checkins && checkins.length > 0 ? (
+          ) : filteredCheckins.length > 0 ? (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Fecha y Hora</TableHead>
                     <TableHead>Cliente</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>Ubicación</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {checkins.map((checkin) => (
+                  {filteredCheckins.map((checkin) => (
                     <TableRow key={checkin.id} className="hover-elevate" data-testid={`row-checkin-${checkin.id}`}>
                       <TableCell>
                         <div className="text-sm">
@@ -416,6 +513,9 @@ export default function CheckinsPage() {
                       <TableCell>
                         <div className="font-medium">{checkin.customer?.name || "Sin cliente"}</div>
                         <div className="text-xs text-muted-foreground">{checkin.customer?.city || "-"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{checkin.meetingType || MeetingType.VISITA}</Badge>
                       </TableCell>
                       <TableCell>
                         {checkin.latitude && checkin.longitude ? (
@@ -454,6 +554,10 @@ export default function CheckinsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          ) : checkins && checkins.length > 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-results">
+              Ningún check-in coincide con los filtros aplicados
             </div>
           ) : (
             <div className="text-center py-12">

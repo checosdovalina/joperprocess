@@ -24,11 +24,11 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar as CalendarIcon, Trash2, Edit2 } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Trash2, Edit2, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { CustomerCombobox } from "@/components/customer-combobox";
@@ -52,6 +52,11 @@ export default function ScheduledVisitsPage() {
   });
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [topicsInput, setTopicsInput] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   const { data: visits, isLoading } = useQuery<(ScheduledVisit & { customer: Customer })[]>({
     queryKey: ["/api/scheduled-visits"],
@@ -204,10 +209,38 @@ export default function ScheduledVisitsPage() {
     }
   };
 
-  // Filter visits by status
+  // Summary counts (always from full list)
   const scheduledVisits = visits?.filter(v => v.status === "scheduled") || [];
   const completedVisits = visits?.filter(v => v.status === "completed") || [];
   const cancelledVisits = visits?.filter(v => v.status === "cancelled") || [];
+
+  const hasActiveFilters = searchText !== "" || filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "";
+
+  const filteredVisits = (visits ?? []).filter(v => {
+    if (filterStatus !== "all" && v.status !== filterStatus) return false;
+    if (filterType !== "all" && v.meetingType !== filterType) return false;
+    if (searchText) {
+      const s = searchText.toLowerCase();
+      if (!v.customer?.name?.toLowerCase().includes(s)) return false;
+    }
+    if (filterDateFrom) {
+      const from = startOfDay(parseISO(filterDateFrom));
+      if (new Date(v.scheduledDate) < from) return false;
+    }
+    if (filterDateTo) {
+      const to = endOfDay(parseISO(filterDateTo));
+      if (new Date(v.scheduledDate) > to) return false;
+    }
+    return true;
+  });
+
+  const resetFilters = () => {
+    setSearchText("");
+    setFilterStatus("all");
+    setFilterType("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  };
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
@@ -357,10 +390,73 @@ export default function ScheduledVisitsPage() {
       {/* Visits Table */}
       <Card>
         <CardHeader>
-          <CardTitle data-testid="card-title-visits">Todas las Visitas</CardTitle>
-          <CardDescription data-testid="card-description-visits">
-            Gestiona y revisa tus visitas programadas
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle data-testid="card-title-visits">Todas las Visitas</CardTitle>
+              <CardDescription data-testid="card-description-visits">
+                {filteredVisits.length} de {visits?.length || 0} visitas
+              </CardDescription>
+            </div>
+          </div>
+
+          {/* Filter bar */}
+          <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
+            <div className="flex-1 min-w-[180px]">
+              <Input
+                placeholder="Buscar cliente..."
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                data-testid="input-search-visit"
+              />
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[150px]" data-testid="select-filter-status">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="scheduled">Programada</SelectItem>
+                <SelectItem value="completed">Completada</SelectItem>
+                <SelectItem value="cancelled">Cancelada</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-[150px]" data-testid="select-filter-type">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
+                <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
+                <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => setFilterDateFrom(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-from"
+                title="Desde"
+              />
+              <span className="text-muted-foreground text-sm">—</span>
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={e => setFilterDateTo(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-to"
+                title="Hasta"
+              />
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Limpiar
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -369,23 +465,27 @@ export default function ScheduledVisitsPage() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
-          ) : visits && visits.length > 0 ? (
+          ) : filteredVisits.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead data-testid="header-customer">Cliente</TableHead>
                   <TableHead data-testid="header-date">Fecha</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead data-testid="header-topics">Temas</TableHead>
                   <TableHead data-testid="header-status">Estado</TableHead>
                   <TableHead data-testid="header-actions">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visits.map((visit) => (
-                  <TableRow key={visit.id} data-testid={`row-visit-${visit.id}`}>
+                {filteredVisits.map((visit) => (
+                  <TableRow key={visit.id} className="hover-elevate" data-testid={`row-visit-${visit.id}`}>
                     <TableCell data-testid={`cell-customer-${visit.id}`}>{visit.customer.name}</TableCell>
                     <TableCell data-testid={`cell-date-${visit.id}`}>
                       {format(new Date(visit.scheduledDate), "PPP", { locale: es })}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{visit.meetingType || MeetingType.VISITA}</Badge>
                     </TableCell>
                     <TableCell data-testid={`cell-topics-${visit.id}`}>
                       <div className="flex flex-wrap gap-1">
@@ -401,7 +501,7 @@ export default function ScheduledVisitsPage() {
                       {visit.status === "scheduled" && (
                         <div className="flex gap-2">
                           <Button
-                            size="sm"
+                            size="icon"
                             variant="outline"
                             onClick={() => handleEdit(visit)}
                             data-testid={`button-edit-${visit.id}`}
@@ -409,7 +509,7 @@ export default function ScheduledVisitsPage() {
                             <Edit2 className="h-4 w-4" />
                           </Button>
                           <Button
-                            size="sm"
+                            size="icon"
                             variant="destructive"
                             onClick={() => handleDelete(visit.id)}
                             data-testid={`button-delete-${visit.id}`}
@@ -423,6 +523,10 @@ export default function ScheduledVisitsPage() {
                 ))}
               </TableBody>
             </Table>
+          ) : visits && visits.length > 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="text-no-results">
+              Ninguna visita coincide con los filtros aplicados
+            </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground" data-testid="text-no-visits">
               No hay visitas programadas
