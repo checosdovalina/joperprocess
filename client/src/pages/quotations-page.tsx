@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product } from "@shared/schema";
+import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -11,12 +11,13 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus, Lock, Trash2, EyeOff } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, XCircle, Send, ShoppingCart, Download, Mail, Loader2, Eye, Pencil, MoreHorizontal, Copy, Truck, Check, X, UserPlus, Lock, Trash2, EyeOff, Filter, RotateCcw } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
+import { useQuery } from "@tanstack/react-query";
 import { QuotationForm } from "@/components/quotation-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +29,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -71,6 +79,11 @@ export default function QuotationsPage() {
   const [quotationToDelete, setQuotationToDelete] = useState<QuotationWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [hideConverted, setHideConverted] = useState(true);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterSeller, setFilterSeller] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [searchText, setSearchText] = useState("");
   const { user } = useAuth();
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
@@ -82,6 +95,7 @@ export default function QuotationsPage() {
 
   const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
   const { data: products } = useEntityQuery<Product[]>("/api/products");
+  const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
 
   const createQuotationMutation = useEntityMutation<Quotation, InsertQuotation & { items: InsertQuotationItem[] }>({
     endpoint: "/api/quotations",
@@ -399,9 +413,37 @@ export default function QuotationsPage() {
   };
 
   const convertedCount = quotations?.filter(q => q.status === QuotationStatus.CONVERTED).length ?? 0;
-  const filteredQuotations = hideConverted
-    ? (quotations ?? []).filter(q => q.status !== QuotationStatus.CONVERTED)
-    : (quotations ?? []);
+
+  const hasActiveFilters = filterStatus !== "all" || filterSeller !== "all" || filterDateFrom !== "" || filterDateTo !== "" || searchText !== "";
+
+  const filteredQuotations = (quotations ?? []).filter(q => {
+    if (hideConverted && q.status === QuotationStatus.CONVERTED) return false;
+    if (filterStatus !== "all" && q.status !== filterStatus) return false;
+    if (filterSeller !== "all" && q.userId !== filterSeller) return false;
+    if (searchText) {
+      const search = searchText.toLowerCase();
+      const matchFolio = q.folio?.toLowerCase().includes(search);
+      const matchCustomer = q.customer?.name?.toLowerCase().includes(search);
+      if (!matchFolio && !matchCustomer) return false;
+    }
+    if (filterDateFrom) {
+      const from = startOfDay(parseISO(filterDateFrom));
+      if (new Date(q.createdAt) < from) return false;
+    }
+    if (filterDateTo) {
+      const to = endOfDay(parseISO(filterDateTo));
+      if (new Date(q.createdAt) > to) return false;
+    }
+    return true;
+  });
+
+  const resetFilters = () => {
+    setFilterStatus("all");
+    setFilterSeller("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setSearchText("");
+  };
 
   return (
     <div className="space-y-6">
@@ -423,36 +465,97 @@ export default function QuotationsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
-                Todas las Cotizaciones
+                Cotizaciones
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Actualización automática cada 20 segundos" />
               </CardTitle>
               <CardDescription>
                 {filteredQuotations.length} de {quotations?.length || 0} cotizaciones
                 {hideConverted && convertedCount > 0 && (
-                  <span className="ml-1 text-muted-foreground">
+                  <span className="ml-1">
                     ({convertedCount} convertida{convertedCount !== 1 ? "s" : ""} oculta{convertedCount !== 1 ? "s" : ""})
                   </span>
                 )}
               </CardDescription>
             </div>
-            {convertedCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setHideConverted(v => !v)}
-                data-testid="button-toggle-converted"
-              >
-                {hideConverted ? (
-                  <>
-                    <Eye className="h-4 w-4 mr-2" />
-                    Mostrar convertidas ({convertedCount})
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="h-4 w-4 mr-2" />
-                    Ocultar convertidas ({convertedCount})
-                  </>
-                )}
+            <div className="flex flex-wrap gap-2">
+              {convertedCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setHideConverted(v => !v)}
+                  data-testid="button-toggle-converted"
+                >
+                  {hideConverted ? (
+                    <><Eye className="h-4 w-4 mr-2" />Mostrar convertidas ({convertedCount})</>
+                  ) : (
+                    <><EyeOff className="h-4 w-4 mr-2" />Ocultar convertidas ({convertedCount})</>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Filter bar */}
+          <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
+            <div className="relative flex-1 min-w-[180px]">
+              <Input
+                placeholder="Buscar folio o cliente..."
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                className="pl-3"
+                data-testid="input-search-quotation"
+              />
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus} data-testid="select-filter-status">
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value={QuotationStatus.DRAFT}>Borrador</SelectItem>
+                <SelectItem value={QuotationStatus.SENT}>Enviada</SelectItem>
+                <SelectItem value={QuotationStatus.PENDING_APPROVAL}>Pend. Aprobación</SelectItem>
+                <SelectItem value={QuotationStatus.PENDING_AUTHORIZATION}>En Autorización</SelectItem>
+                <SelectItem value={QuotationStatus.AUTHORIZED}>Autorizada</SelectItem>
+                <SelectItem value={QuotationStatus.CONVERTED}>Convertida</SelectItem>
+                <SelectItem value={QuotationStatus.REJECTED}>Rechazada</SelectItem>
+                <SelectItem value={QuotationStatus.EXPIRED}>Expirada</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterSeller} onValueChange={setFilterSeller} data-testid="select-filter-seller">
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Vendedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los vendedores</SelectItem>
+                {users?.map(u => (
+                  <SelectItem key={u.id} value={u.id}>{u.name || u.username}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => setFilterDateFrom(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-from"
+                title="Desde"
+              />
+              <span className="text-muted-foreground text-sm">—</span>
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={e => setFilterDateTo(e.target.value)}
+                className="w-[140px]"
+                data-testid="input-date-to"
+                title="Hasta"
+              />
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Limpiar
               </Button>
             )}
           </div>

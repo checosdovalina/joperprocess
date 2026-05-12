@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, XCircle, Eye, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2, MessageSquare, Send, PenLine, User2, Download } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, Eye, EyeOff, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2, MessageSquare, Send, PenLine, User2, Download } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -107,6 +107,7 @@ export default function CreditAuthPage() {
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [hideResolved, setHideResolved] = useState(true);
   const { toast } = useToast();
 
   const { data: authorizations, isLoading } = useQuery<CreditAuthWithDetails[]>({
@@ -416,10 +417,26 @@ export default function CreditAuthPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Solicitudes de Autorización</CardTitle>
-          <CardDescription>
-            {authorizations?.length || 0} solicitudes registradas
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Solicitudes de Autorización</CardTitle>
+              <CardDescription>
+                {(() => {
+                  const resolved = authorizations?.filter(a => a.status === "approved" || a.status === "rejected").length ?? 0;
+                  const visible = hideResolved ? (authorizations?.filter(a => a.status === "pending").length ?? 0) : (authorizations?.length ?? 0);
+                  return <>
+                    {visible} de {authorizations?.length || 0} solicitudes
+                    {hideResolved && resolved > 0 && <span className="ml-1">({resolved} resuelta{resolved !== 1 ? "s" : ""} oculta{resolved !== 1 ? "s" : ""})</span>}
+                  </>;
+                })()}
+              </CardDescription>
+            </div>
+            {(authorizations?.filter(a => a.status === "approved" || a.status === "rejected").length ?? 0) > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setHideResolved(v => !v)} data-testid="button-toggle-resolved">
+                {hideResolved ? <><Eye className="h-4 w-4 mr-2" />Mostrar resueltas</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar resueltas</>}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -443,7 +460,7 @@ export default function CreditAuthPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {authorizations.map((auth) => (
+                  {(hideResolved ? authorizations.filter(a => a.status === "pending") : authorizations).map((auth) => (
                     <TableRow key={auth.id} className="hover-elevate" data-testid={`row-auth-${auth.id}`}>
                       <TableCell>
                         <div className="text-sm">

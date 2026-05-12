@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Factory, Eye, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package, Truck } from "lucide-react";
+import { Factory, Eye, EyeOff, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package, Truck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -64,6 +64,7 @@ export default function ProductionPage() {
   const [editFactoryNotes, setEditFactoryNotes] = useState("");
   const [editProgress, setEditProgress] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+  const [hideDelivered, setHideDelivered] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -409,11 +410,35 @@ export default function ProductionPage() {
         <TabsContent value="all">
           <Card>
             <CardHeader>
-              <CardTitle>Todos los Pedidos</CardTitle>
-              <CardDescription>Lista completa de pedidos</CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Todos los Pedidos</CardTitle>
+                  <CardDescription>
+                    {(() => {
+                      const terminal = [OrderStatus.SHIPPED, OrderStatus.DELIVERED];
+                      const closedCount = orders?.filter(o => terminal.includes(o.status as any)).length ?? 0;
+                      const visible = hideDelivered ? (orders?.filter(o => !terminal.includes(o.status as any)).length ?? 0) : (orders?.length ?? 0);
+                      return <>
+                        {visible} de {orders?.length || 0} pedidos
+                        {hideDelivered && closedCount > 0 && <span className="ml-1">({closedCount} cerrado{closedCount !== 1 ? "s" : ""} oculto{closedCount !== 1 ? "s" : ""})</span>}
+                      </>;
+                    })()}
+                  </CardDescription>
+                </div>
+                {(orders?.filter(o => o.status === OrderStatus.SHIPPED || o.status === OrderStatus.DELIVERED).length ?? 0) > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
+                    {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar enviados/entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar enviados/entregados</>}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              {renderOrdersTable(orders || [], "No hay pedidos")}
+              {renderOrdersTable(
+                hideDelivered
+                  ? (orders || []).filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED)
+                  : (orders || []),
+                "No hay pedidos"
+              )}
             </CardContent>
           </Card>
         </TabsContent>

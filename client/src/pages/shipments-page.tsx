@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck, Barcode, Plus, Trash2, Loader2, Package } from "lucide-react";
+import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -60,6 +60,7 @@ export default function ShipmentsPage() {
   const [editTrackingNumber, setEditTrackingNumber] = useState("");
   const [editDriverName, setEditDriverName] = useState("");
   const [editVehiclePlates, setEditVehiclePlates] = useState("");
+  const [hideDelivered, setHideDelivered] = useState(true);
 
   const { data: shipments, isLoading } = useQuery<ShipmentWithDetails[]>({
     queryKey: ["/api/shipments"],
@@ -281,10 +282,26 @@ export default function ShipmentsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Todos los Embarques</CardTitle>
-          <CardDescription>
-            {shipments?.length || 0} embarques registrados
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Todos los Embarques</CardTitle>
+              <CardDescription>
+                {(() => {
+                  const deliveredCount = shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0;
+                  const visible = hideDelivered ? (shipments?.filter(s => s.status !== ShipmentStatus.DELIVERED).length ?? 0) : (shipments?.length ?? 0);
+                  return <>
+                    {visible} de {shipments?.length || 0} embarques
+                    {hideDelivered && deliveredCount > 0 && <span className="ml-1">({deliveredCount} entregado{deliveredCount !== 1 ? "s" : ""} oculto{deliveredCount !== 1 ? "s" : ""})</span>}
+                  </>;
+                })()}
+              </CardDescription>
+            </div>
+            {(shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0) > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
+                {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar entregados</>}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -308,7 +325,7 @@ export default function ShipmentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {shipments.map((shipment) => (
+                  {(hideDelivered ? shipments.filter(s => s.status !== ShipmentStatus.DELIVERED) : shipments).map((shipment) => (
                     <TableRow key={shipment.id} className="hover-elevate" data-testid={`row-shipment-${shipment.id}`}>
                       <TableCell>
                         <div className="font-medium">{shipment.order.quotation.customer.name}</div>
