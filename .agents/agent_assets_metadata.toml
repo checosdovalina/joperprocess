@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "OunX3TiIpF84ktHwomnvO"
+uri = "file://MANUAL_NEXXO.md"
+type = "text"
+title = "Manual Completo Nexxo — Por Módulo y Por Rol"
