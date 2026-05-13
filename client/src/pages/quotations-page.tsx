@@ -399,6 +399,8 @@ export default function QuotationsPage() {
     contado: "Contado",
     "15_dias": "15 días",
     "30_dias": "30 días",
+    "90_dias": "90 días",
+    "120_dias": "120 días",
     "45_dias": "45 días",
     "60_dias": "60 días",
   };

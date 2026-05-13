@@ -87,6 +87,8 @@ const PAYMENT_TERMS = [
   { value: "30_dias", label: "30 días" },
   { value: "45_dias", label: "45 días" },
   { value: "60_dias", label: "60 días" },
+  { value: "90_dias", label: "90 días" },
+  { value: "120_dias", label: "120 días" },
 ];
 
 const DELIVERY_TIMES = [
