@@ -61,6 +61,11 @@ export function setupAuth(app: Express) {
     new LocalStrategy({ passReqToCallback: true }, async (req: Request, username, password, done) => {
       try {
         const tenantId = req.tenant?.id || null;
+
+        // Build tenant condition safely: avoid eq(col, "") which never matches
+        const tenantCondition = tenantId
+          ? eq(users.tenantId, tenantId)
+          : isNull(users.tenantId);
         
         const [user] = await db
           .select()
@@ -69,7 +74,7 @@ export function setupAuth(app: Express) {
             and(
               eq(users.username, username),
               or(
-                eq(users.tenantId, tenantId || ""),
+                tenantCondition,
                 eq(users.isSuperAdmin, true)
               )
             )
@@ -77,20 +82,24 @@ export function setupAuth(app: Express) {
           .limit(1);
         
         if (!user) {
-          return done(null, false, { message: "Usuario no encontrado" });
+          console.warn(`[auth] Login failed — user not found: username="${username}" tenantId="${tenantId}"`);
+          return done(null, false, { message: "Usuario o contraseña incorrectos" });
         }
         
         if (!user.active) {
-          return done(null, false, { message: "Usuario inactivo" });
+          console.warn(`[auth] Login failed — inactive user: username="${username}"`);
+          return done(null, false, { message: "Usuario inactivo. Contacta al administrador." });
         }
 
         const isValid = await comparePasswords(password, user.password);
         if (!isValid) {
-          return done(null, false, { message: "Contraseña incorrecta" });
+          console.warn(`[auth] Login failed — wrong password: username="${username}" tenantId="${tenantId}"`);
+          return done(null, false, { message: "Usuario o contraseña incorrectos" });
         }
 
         return done(null, user);
       } catch (error) {
+        console.error(`[auth] Login error:`, error);
         return done(error);
       }
     }),
@@ -156,14 +165,14 @@ export function setupAuth(app: Express) {
         });
       }
 
-      // Validate username doesn't exist
-      const existingUser = await storage.getUserByUsername(userData.username);
+      // Get tenant context - users must belong to a tenant (except superadmin)
+      const tenantId = req.tenant?.id || null;
+
+      // Validate username doesn't exist within this tenant
+      const existingUser = await storage.getUserByUsername(userData.username, tenantId);
       if (existingUser) {
         return res.status(400).json({ error: "El usuario ya existe" });
       }
-
-      // Get tenant context - users must belong to a tenant (except superadmin)
-      const tenantId = req.tenant?.id || null;
       
       // Create user with hashed password (using validated data)
       const user = await storage.createUser({
@@ -206,8 +215,19 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) {
+        return res.status(401).json({ 
+          error: info?.message || "Credenciales incorrectas" 
+        });
+      }
+      req.logIn(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        res.status(200).json(user);
+      });
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {

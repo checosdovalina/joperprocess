@@ -37,6 +37,7 @@ export default function UsersPage() {
     fullName: "",
     email: "",
     role: "",
+    newPassword: "",
   });
   const [newUser, setNewUser] = useState({
     username: "",
@@ -102,7 +103,15 @@ export default function UsersPage() {
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data }: { userId: string; data: typeof editData }) => {
-      const res = await apiRequest("PATCH", `/api/users/${userId}`, data);
+      const payload: Record<string, string> = {
+        fullName: data.fullName,
+        email: data.email,
+        role: data.role,
+      };
+      if (data.newPassword.trim()) {
+        payload.password = data.newPassword.trim();
+      }
+      const res = await apiRequest("PATCH", `/api/users/${userId}`, payload);
       return await res.json();
     },
     onSuccess: () => {
@@ -113,6 +122,7 @@ export default function UsersPage() {
       });
       setIsEditDialogOpen(false);
       setEditingUser(null);
+      setEditData({ fullName: "", email: "", role: "", newPassword: "" });
     },
     onError: (error: Error) => {
       toast({
@@ -129,6 +139,7 @@ export default function UsersPage() {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
+      newPassword: "",
     });
     setIsEditDialogOpen(true);
   };
@@ -451,6 +462,18 @@ export default function UsersPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-newPassword">Nueva Contraseña <span className="text-muted-foreground text-xs">(dejar en blanco para no cambiar)</span></Label>
+              <Input
+                id="edit-newPassword"
+                data-testid="input-edit-password"
+                type="password"
+                value={editData.newPassword}
+                onChange={(e) => setEditData({ ...editData, newPassword: e.target.value })}
+                placeholder="••••••"
+                autoComplete="new-password"
+              />
             </div>
             <div className="flex gap-2 justify-end">
               <Button

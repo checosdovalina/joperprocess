@@ -898,10 +898,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ]).optional(),
         fullName: z.string().optional(),
         email: z.string().email().optional(),
+        password: z.string().min(6).optional(),
       });
       
       const validated = updateSchema.parse(req.body);
-      const updatedUser = await storage.updateUser(id, validated);
+      
+      // Hash new password if provided
+      let updateData: Omit<typeof validated, 'password'> & { password?: string } = { ...validated };
+      if (validated.password) {
+        const { hashPassword } = await import("./auth");
+        updateData = { ...validated, password: await hashPassword(validated.password) };
+      }
+      
+      const updatedUser = await storage.updateUser(id, updateData);
       if (!updatedUser) {
         return res.status(404).json({ error: "User not found" });
       }

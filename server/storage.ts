@@ -52,7 +52,7 @@ import {
   type Incident,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, asc } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc, isNull } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -65,7 +65,7 @@ export interface IStorage {
 
   // Users
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByUsername(username: string, tenantId?: string | null): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
@@ -171,8 +171,12 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+  async getUserByUsername(username: string, tenantId?: string | null): Promise<User | undefined> {
+    const conditions = [eq(users.username, username)];
+    if (tenantId !== undefined) {
+      conditions.push(tenantId ? eq(users.tenantId, tenantId) : isNull(users.tenantId));
+    }
+    const [user] = await db.select().from(users).where(and(...conditions));
     return user || undefined;
   }
 
@@ -852,7 +856,7 @@ export class TenantScopedStorage {
   // These methods verify tenant ownership before returning/modifying data
   
   async getUser(id: string) { return this.base.getUser(id); }
-  async getUserByUsername(username: string) { return this.base.getUserByUsername(username); }
+  async getUserByUsername(username: string, tenantId?: string | null) { return this.base.getUserByUsername(username, tenantId); }
   async createUser(data: InsertUser) { return this.base.createUser(this.withTenant(data)); }
   async updateUser(id: string, data: Partial<InsertUser>) { return this.base.updateUser(id, data); }
   
