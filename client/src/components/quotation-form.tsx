@@ -528,7 +528,7 @@ export function QuotationForm({
       exchangeRate: data.exchangeRate,
       paymentTerms: data.paymentTerms || null,
       deliveryTime: data.deliveryTime || null,
-      validUntil: data.validUntil ? new Date(data.validUntil) : null,
+      validUntil: data.validUntil ? new Date(data.validUntil + "T12:00:00") : null,
       subtotal: totals.subtotal,
       globalDiscount: data.globalDiscount,
       tax: totals.tax,
