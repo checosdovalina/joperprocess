@@ -841,11 +841,11 @@ export default function QuotationsPage() {
                     <p className="text-sm text-muted-foreground mt-1">
                       Creada: {format(new Date(selectedQuotation.createdAt), "PPP", { locale: es })}
                     </p>
-                    {selectedQuotation.validUntil && (
-                      <p className="text-sm text-muted-foreground">
-                        Vigente hasta: {format(new Date(selectedQuotation.validUntil), "PPP", { locale: es })}
-                      </p>
-                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {selectedQuotation.validUntil
+                        ? `Vigente hasta: ${format(new Date(selectedQuotation.validUntil), "PPP", { locale: es })}`
+                        : "Sin vencimiento"}
+                    </p>
                   </div>
                 </div>
 

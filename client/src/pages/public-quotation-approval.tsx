@@ -240,14 +240,14 @@ export default function PublicQuotationApproval() {
                   {format(new Date(quotation.createdAt), "PPP", { locale: es })}
                 </p>
               </div>
-              {quotation.validUntil && (
-                <div>
-                  <p className="text-muted-foreground">Válida Hasta</p>
-                  <p className="font-medium">
-                    {format(new Date(quotation.validUntil), "PPP", { locale: es })}
-                  </p>
-                </div>
-              )}
+              <div>
+                <p className="text-muted-foreground">Válida Hasta</p>
+                <p className="font-medium">
+                  {quotation.validUntil
+                    ? format(new Date(quotation.validUntil), "PPP", { locale: es })
+                    : "Sin vencimiento"}
+                </p>
+              </div>
               {quotation.user && (
                 <div>
                   <p className="text-muted-foreground">Vendedor</p>
