@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType } from "@shared/schema";
 import { Link } from "wouter";
@@ -166,6 +166,23 @@ export default function CheckinDetailPage() {
         variant: "destructive",
         title: "Error",
         description: error.message || "No se pudo actualizar el tipo de reunión",
+      });
+    },
+  });
+
+  const deletePhotoMutation = useMutation({
+    mutationFn: async (entityId: string) => {
+      return await apiRequest("DELETE", "/api/checkin-photos", { checkinId: id, entityId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
+      toast({ title: "Foto eliminada", description: "La foto se eliminó correctamente" });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo eliminar la foto",
       });
     },
   });
@@ -534,7 +551,7 @@ export default function CheckinDetailPage() {
                 {checkin.photos.map((photoEntityId, index) => (
                   <div
                     key={photoEntityId}
-                    className="relative aspect-square rounded-md overflow-hidden bg-muted"
+                    className="relative aspect-square rounded-md overflow-hidden bg-muted group"
                     data-testid={`image-photo-${index}`}
                   >
                     <img
@@ -546,6 +563,20 @@ export default function CheckinDetailPage() {
                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center">
                       Foto {index + 1}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm("¿Eliminar esta foto? Esta acción no se puede deshacer.")) {
+                          deletePhotoMutation.mutate(photoEntityId);
+                        }
+                      }}
+                      disabled={deletePhotoMutation.isPending}
+                      data-testid={`button-delete-photo-${index}`}
+                      className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-600 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                      aria-label="Eliminar foto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>

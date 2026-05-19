@@ -4356,6 +4356,67 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Delete a photo from a check-in
+  app.delete("/api/checkin-photos", isAuthenticated, async (req, res) => {
+    try {
+      const schema = z.object({
+        checkinId: z.string().uuid(),
+        entityId: z.string().refine(
+          (val) => !val.includes("..") && !val.includes("\\"),
+          { message: "Invalid entityId" }
+        ),
+      });
+      const { checkinId, entityId } = schema.parse(req.body);
+      const userId = req.user!.id;
+      const isAdmin = req.user!.role === UserRole.ADMIN || req.user!.isSuperAdmin;
+
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.getCheckin(checkinId);
+      if (!checkin) return res.status(404).json({ error: "Check-in not found" });
+      if (checkin.userId !== userId && !isAdmin) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const currentPhotos = checkin.photos || [];
+      if (!currentPhotos.includes(entityId)) {
+        return res.status(404).json({ error: "Photo not found in this check-in" });
+      }
+
+      // Remove from DB first
+      const updatedPhotos = currentPhotos.filter((p) => p !== entityId);
+      await db.update(checkins).set({ photos: updatedPhotos }).where(eq(checkins.id, checkinId));
+
+      // Delete from storage (best-effort — don't fail the request if storage delete fails)
+      try {
+        if (useLocalStorage()) {
+          const extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ""];
+          for (const ext of extensions) {
+            try {
+              await localStorageService.deleteFile(`photos/${entityId}${ext}`);
+            } catch {
+              // ignore individual extension misses
+            }
+          }
+        } else {
+          const objectStorageService = new ObjectStorageService();
+          try {
+            const objectFile = await objectStorageService.getObjectEntityFile(entityId);
+            await objectFile.delete();
+          } catch {
+            // Object may not exist in GCS — ignore
+          }
+        }
+      } catch (storageErr) {
+        console.warn("Could not delete photo from storage (non-fatal):", storageErr);
+      }
+
+      return res.status(200).json({ photos: updatedPhotos });
+    } catch (error) {
+      console.error("Error deleting check-in photo:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Get planned email recipients for a check-in checkout (preview before sending)
   app.get("/api/checkins/:id/email-recipients", isAuthenticated, async (req, res) => {
     const { id: checkinId } = req.params;
