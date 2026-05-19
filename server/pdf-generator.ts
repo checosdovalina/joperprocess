@@ -257,9 +257,12 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       const VALUE_W_L = COL_W - LABEL_W - 10;
       doc.fontSize(8);
       for (const [label, value] of customerRows) {
+        // Measure the wrapped height of the value text so long names don't overlap the next row
+        const lineH = doc.font("Helvetica").heightOfString(value, { width: VALUE_W_L });
+        const rowH = Math.max(lineH, 10);
         doc.font("Helvetica-Bold").fillColor("#555555").text(label, MARGIN + 6, leftY, { width: LABEL_W, lineBreak: false });
-        doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_L, leftY, { width: VALUE_W_L, lineBreak: false });
-        leftY += 12;
+        doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_L, leftY, { width: VALUE_W_L });
+        leftY += rowH + 2;
       }
 
       // Visit info
