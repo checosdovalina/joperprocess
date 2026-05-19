@@ -1154,8 +1154,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Check-ins endpoints
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
-      const scopedStorage = createTenantScopedStorage(req);
-      const allCheckins = await scopedStorage.getAllCheckins();
+      const tenant = req.tenant;
+      const user = req.user!;
+      // Determine tenant filter: subdomain tenant > superadmin selected tenant > user tenant
+      const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
+      const tenantId = tenant?.id || selectedTenantId || (user.isSuperAdmin ? null : user.tenantId);
+
+      const allCheckins = await db.query.checkins.findMany({
+        where: tenantId ? eq(checkins.tenantId, tenantId) : undefined,
+        orderBy: [desc(checkins.checkinAt)],
+        with: {
+          customer: true,
+        },
+      });
       res.json(allCheckins);
     } catch (error) {
       console.error("Error fetching checkins:", error);
@@ -4404,10 +4415,19 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Check-in already checked out" });
       }
 
-      const customer = await scopedStorage.getCustomer(checkin.customerId);
-      if (!customer) {
+      const customer = checkin.customerId ? await scopedStorage.getCustomer(checkin.customerId) : null;
+      if (checkin.customerId && !customer) {
         return res.status(404).json({ error: "Customer not found" });
       }
+      // If no customer, create a minimal placeholder for PDF generation
+      const effectiveCustomer = customer ?? {
+        id: "", name: "Sin cliente", rfc: null, contactName: null, phone: null,
+        address: null, city: null, state: null, email: null, tenantId: checkin.tenantId,
+        microsipCode: null, microsipId: null, creditLimit: null, creditBalance: null,
+        paymentTerms: null, isActive: true, createdAt: new Date(), updatedAt: new Date(),
+        secondaryPhone: null, website: null, notes: null, country: null, zipCode: null,
+        salesRepId: null,
+      } as any;
 
       const user = await storage.getUser(checkin.userId);
       if (!user) {
@@ -4423,7 +4443,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       const { generateMinutePDFStream } = await import("./pdf-generator");
       const pdfStream = await generateMinutePDFStream({ 
         checkin, 
-        customer, 
+        customer: effectiveCustomer, 
         user, 
         checkoutNotes,
         tenant,
@@ -4466,8 +4486,11 @@ Proporciona tu análisis en el siguiente formato JSON:
           // Auto-build the recipient list: salesperson + customer + admins
           recipients = [];
           if (user.email) recipients.push(user.email);
-          if (customer.email) recipients.push(customer.email);
-          const admins = await db.query.users.findMany({ where: eq(users.role, UserRole.ADMIN) });
+          if (effectiveCustomer.email) recipients.push(effectiveCustomer.email);
+          const adminWhere = checkin.tenantId
+            ? and(eq(users.role, UserRole.ADMIN), eq(users.tenantId, checkin.tenantId))
+            : eq(users.role, UserRole.ADMIN);
+          const admins = await db.query.users.findMany({ where: adminWhere });
           admins.forEach(admin => {
             if (admin.email && !recipients.includes(admin.email)) recipients.push(admin.email);
           });

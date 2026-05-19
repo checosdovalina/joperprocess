@@ -572,7 +572,7 @@ export default function CheckinDetailPage() {
       </Card>
 
       <Dialog open={checkoutDialogOpen} onOpenChange={(open) => { setCheckoutDialogOpen(open); if (!open) { setEmailList([]); setEmailInput(""); } }}>
-        <DialogContent data-testid="dialog-checkout" className="max-w-lg">
+        <DialogContent data-testid="dialog-checkout" className="max-w-lg max-h-[90dvh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Finalizar Visita</DialogTitle>
             <DialogDescription>
@@ -580,7 +580,7 @@ export default function CheckinDetailPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0 pr-1">
             {/* Leyenda de advertencia */}
             <div className="bg-red-600 text-white p-3 rounded-md text-sm font-medium">
               Esta información se enviará al cliente, directivos y personas agregadas en administración.

@@ -238,7 +238,7 @@ export default function CheckinsPage() {
               Nuevo Check-in
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nuevo Check-in</DialogTitle>
               <DialogDescription>
