@@ -4269,7 +4269,7 @@ Proporciona tu análisis en el siguiente formato JSON:
             throw new Error("DUPLICATE_PHOTO");
           }
 
-          if (currentPhotos.length >= 6) {
+          if (currentPhotos.length >= 20) {
             throw new Error("MAX_PHOTOS_REACHED");
           }
 
@@ -4292,7 +4292,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           return res.status(409).json({ error: "Photo already attached to this check-in" });
         }
         if (txError.message === "MAX_PHOTOS_REACHED") {
-          return res.status(409).json({ error: "Maximum 6 photos per check-in" });
+          return res.status(409).json({ error: "Maximum 20 photos per check-in" });
         }
         throw txError;
       }

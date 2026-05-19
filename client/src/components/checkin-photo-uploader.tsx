@@ -63,7 +63,7 @@ export function CheckinPhotoUploader({
   onUploadSuccess,
 }: CheckinPhotoUploaderProps) {
   const { toast } = useToast();
-  const maxPhotos = 6;
+  const maxPhotos = 20;
   const remainingSlots = maxPhotos - currentPhotoCount;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -201,7 +201,7 @@ export function CheckinPhotoUploader({
       inline: true,
       height: 300,
       proudlyDisplayPoweredByUppy: false,
-      note: "Máximo 6 fotos. Las fotos grandes se comprimen automáticamente.",
+      note: "Máximo 20 fotos. Las fotos grandes se comprimen automáticamente.",
     });
 
     uppyRef.current = uppyInstance;
@@ -217,7 +217,7 @@ export function CheckinPhotoUploader({
   if (remainingSlots <= 0) {
     return (
       <div className="text-center py-6 text-muted-foreground" data-testid="text-max-photos">
-        Ya has alcanzado el máximo de 6 fotos para este check-in
+        Ya has alcanzado el máximo de 20 fotos para este check-in
       </div>
     );
   }

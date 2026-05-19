@@ -540,7 +540,7 @@ export default function CheckinDetailPage() {
         <CardHeader>
           <CardTitle>Fotografías de la Visita</CardTitle>
           <CardDescription>
-            {checkin.photos?.length || 0} de 6 fotos capturadas
+            {checkin.photos?.length || 0} de 20 fotos capturadas
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
