@@ -13,21 +13,19 @@ interface CheckinPhotoUploaderProps {
   onUploadSuccess?: () => void;
 }
 
-const MAX_DIMENSION = 1920;
-const COMPRESS_QUALITY = 0.75;
-const COMPRESS_THRESHOLD = 1.5 * 1024 * 1024;
+const MAX_DIMENSION = 1280;
+const COMPRESS_QUALITY = 0.78;
 
 async function compressImage(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") || file.size < COMPRESS_THRESHOLD) {
-    return file;
-  }
+  if (!file.type.startsWith("image/")) return file;
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
       let { width, height } = img;
-      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+      const needsResize = width > MAX_DIMENSION || height > MAX_DIMENSION;
+      if (needsResize) {
         const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
         width = Math.round(width * ratio);
         height = Math.round(height * ratio);
@@ -201,7 +199,7 @@ export function CheckinPhotoUploader({
       inline: true,
       height: 300,
       proudlyDisplayPoweredByUppy: false,
-      note: "Máximo 20 fotos. Las fotos grandes se comprimen automáticamente.",
+      note: "Máximo 20 fotos. Todas las imágenes se comprimen automáticamente a 1280px antes de subir.",
     });
 
     uppyRef.current = uppyInstance;
