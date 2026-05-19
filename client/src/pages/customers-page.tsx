@@ -4,6 +4,7 @@ import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,7 +24,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Plus, Pencil, Search, X, Mail, Phone, MapPin, Building, CreditCard, Calendar } from "lucide-react";
+import { Users, UserCheck, UserX, Plus, Pencil, Search, X, Mail, Phone, MapPin, Building, CreditCard, Calendar, Trash2, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CustomerForm } from "@/components/customer-form";
 import {
@@ -32,12 +33,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 
 export default function CustomersPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [formOpen, setFormOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked">("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
@@ -127,6 +141,20 @@ export default function CustomersPage() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/customers/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      setCustomerToDelete(null);
+      toast({ title: "Cliente eliminado" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo eliminar el cliente", variant: "destructive" });
     },
   });
 
@@ -332,14 +360,27 @@ export default function CustomersPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditCustomer(customer)}
-                          data-testid={`button-edit-customer-${customer.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditCustomer(customer)}
+                            data-testid={`button-edit-customer-${customer.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => setCustomerToDelete(customer)}
+                              data-testid={`button-delete-customer-${customer.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -384,6 +425,28 @@ export default function CustomersPage() {
         isPending={createCustomerMutation.isPending || updateCustomerMutation.isPending}
         customer={editingCustomer}
       />
+
+      <AlertDialog open={!!customerToDelete} onOpenChange={(open) => { if (!open) setCustomerToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar cliente</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Eliminar a <strong>{customerToDelete?.name}</strong>? Esta acción no se puede deshacer. Se eliminarán también sus check-ins y ubicaciones asociadas. Las cotizaciones, pedidos y facturas quedarán sin cliente asignado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-customer">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              onClick={() => customerToDelete && deleteCustomerMutation.mutate(customerToDelete.id)}
+              disabled={deleteCustomerMutation.isPending}
+              data-testid="button-confirm-delete-customer"
+            >
+              {deleteCustomerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Customer Detail Modal */}
       <Dialog open={!!viewingCustomer} onOpenChange={() => setViewingCustomer(null)}>

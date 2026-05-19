@@ -1023,6 +1023,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete a customer (admin only)
+  app.delete("/api/customers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user!;
+
+      if (user.role !== UserRole.ADMIN) {
+        return res.status(403).json({ error: "Solo administradores pueden eliminar clientes" });
+      }
+
+      const scopedStorage = createTenantScopedStorage(req);
+      const customer = await scopedStorage.getCustomer(id);
+      if (!customer) {
+        return res.status(404).json({ error: "Cliente no encontrado" });
+      }
+
+      // Delete dependent records first (no tenant_id, joined via customer_id)
+      await db.execute(sql`DELETE FROM pending_uploads WHERE checkin_id IN (SELECT id FROM checkins WHERE customer_id = ${id})`);
+      await db.execute(sql`DELETE FROM checkins WHERE customer_id = ${id}`);
+      await db.execute(sql`DELETE FROM customer_locations WHERE customer_id = ${id}`);
+      await db.execute(sql`DELETE FROM customer_product_prices WHERE customer_id = ${id}`);
+      // Nullify FK references in other tables instead of cascading delete
+      await db.execute(sql`UPDATE quotations SET customer_id = NULL WHERE customer_id = ${id}`);
+      await db.execute(sql`UPDATE orders SET customer_id = NULL WHERE customer_id = ${id}`);
+      await db.execute(sql`UPDATE invoices SET customer_id = NULL WHERE customer_id = ${id}`);
+      await db.execute(sql`UPDATE payments SET customer_id = NULL WHERE customer_id = ${id}`);
+      await db.execute(sql`UPDATE incidents SET customer_id = NULL WHERE customer_id = ${id}`);
+      await db.execute(sql`UPDATE scheduled_visits SET customer_id = NULL WHERE customer_id = ${id}`);
+
+      await db.execute(sql`DELETE FROM customers WHERE id = ${id}`);
+
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      res.status(500).json({ error: "Error al eliminar el cliente" });
+    }
+  });
+
   // Customer summary for check-in (facturas vencidas, pedidos pendientes, historial)
   app.get("/api/customers/:id/summary", isAuthenticated, async (req, res) => {
     try {
