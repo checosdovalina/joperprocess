@@ -15,7 +15,7 @@ interface CheckinPhotoUploaderProps {
 
 const MAX_DIMENSION = 1920;
 const COMPRESS_QUALITY = 0.75;
-const COMPRESS_THRESHOLD = 1.5 * 1024 * 1024; // 1.5 MB
+const COMPRESS_THRESHOLD = 1.5 * 1024 * 1024;
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.size < COMPRESS_THRESHOLD) {
@@ -66,14 +66,15 @@ export function CheckinPhotoUploader({
   const maxPhotos = 6;
   const remainingSlots = maxPhotos - currentPhotoCount;
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const uppyRef = useRef<Uppy | null>(null);
-  const mountedRef = useRef(false);
   const toastRef = useRef(toast);
   const onUploadSuccessRef = useRef(onUploadSuccess);
 
   toastRef.current = toast;
   onUploadSuccessRef.current = onUploadSuccess;
 
+  // Update restrictions when remainingSlots changes without recreating Uppy
   useEffect(() => {
     if (uppyRef.current) {
       uppyRef.current.setOptions({
@@ -86,9 +87,10 @@ export function CheckinPhotoUploader({
     }
   }, [remainingSlots]);
 
+  // Create Uppy instance once — triggered when containerRef is available
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
+    const container = containerRef.current;
+    if (!container || uppyRef.current) return;
 
     const uppyInstance = new Uppy({
       restrictions: {
@@ -101,7 +103,6 @@ export function CheckinPhotoUploader({
 
     uppyInstance.on("file-added", async (file) => {
       try {
-        // Compress large images before uploading
         if (file.data instanceof File || file.data instanceof Blob) {
           const originalFile = file.data instanceof File
             ? file.data
@@ -117,7 +118,6 @@ export function CheckinPhotoUploader({
           }
         }
 
-        // Fetch presigned URL
         const response = await fetch("/api/objects/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -197,7 +197,7 @@ export function CheckinPhotoUploader({
     });
 
     uppyInstance.use(Dashboard, {
-      target: `#uppy-dashboard-${checkinId}`,
+      target: container,
       inline: true,
       height: 300,
       proudlyDisplayPoweredByUppy: false,
@@ -210,8 +210,8 @@ export function CheckinPhotoUploader({
       uppyInstance.cancelAll();
       uppyInstance.destroy();
       uppyRef.current = null;
-      mountedRef.current = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkinId]);
 
   if (remainingSlots <= 0) {
@@ -223,8 +223,6 @@ export function CheckinPhotoUploader({
   }
 
   return (
-    <div data-testid="uploader-photos">
-      <div id={`uppy-dashboard-${checkinId}`} />
-    </div>
+    <div ref={containerRef} data-testid="uploader-photos" />
   );
 }
