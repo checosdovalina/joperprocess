@@ -15,6 +15,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -24,7 +34,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Loader2, FileText, Calendar, CheckCircle2, RotateCcw } from "lucide-react";
+import { Plus, MapPin, Loader2, FileText, Calendar, CheckCircle2, RotateCcw, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,10 +42,14 @@ import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Link } from "wouter";
 import { CustomerCombobox } from "@/components/customer-combobox";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function CheckinsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [checkinToDelete, setCheckinToDelete] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [formData, setFormData] = useState<Partial<InsertCheckin>>({
@@ -148,6 +162,20 @@ export default function CheckinsPage() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/checkins/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      setCheckinToDelete(null);
+      toast({ title: "Check-in eliminado" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo eliminar el check-in", variant: "destructive" });
     },
   });
 
@@ -541,16 +569,29 @@ export default function CheckinsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/checkins/${checkin.id}`}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            data-testid={`button-view-checkin-${checkin.id}`}
-                          >
-                            <FileText className="h-4 w-4 mr-1" />
-                            Ver Detalle
-                          </Button>
-                        </Link>
+                        <div className="flex items-center justify-end gap-1">
+                          <Link href={`/checkins/${checkin.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              data-testid={`button-view-checkin-${checkin.id}`}
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              Ver Detalle
+                            </Button>
+                          </Link>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => setCheckinToDelete(checkin.id)}
+                              data-testid={`button-delete-checkin-${checkin.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -577,6 +618,28 @@ export default function CheckinsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!checkinToDelete} onOpenChange={(open) => { if (!open) setCheckinToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar check-in</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El check-in y sus registros asociados serán eliminados permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              onClick={() => checkinToDelete && deleteMutation.mutate(checkinToDelete)}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

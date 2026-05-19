@@ -1293,6 +1293,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete a check-in (admin only)
+  app.delete("/api/checkins/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user!;
+
+      if (user.role !== UserRole.ADMIN) {
+        return res.status(403).json({ error: "Solo administradores pueden eliminar check-ins" });
+      }
+
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.getCheckin(id);
+      if (!checkin) {
+        return res.status(404).json({ error: "Check-in no encontrado" });
+      }
+
+      // Delete associated pending_uploads and photos records first
+      await db.execute(sql`DELETE FROM pending_uploads WHERE checkin_id = ${id}`);
+      await db.delete(checkins).where(eq(checkins.id, id));
+
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Error deleting check-in:", error);
+      res.status(500).json({ error: "Error al eliminar el check-in" });
+    }
+  });
+
   // Scheduled visits endpoints
   app.get("/api/scheduled-visits", isAuthenticated, async (req, res) => {
     try {
