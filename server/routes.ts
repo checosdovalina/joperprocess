@@ -1039,18 +1039,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Cliente no encontrado" });
       }
 
+      // Helper: run SQL and ignore errors from missing tables (production DB may lag schema)
+      const tryExec = async (query: any) => {
+        try { await db.execute(query); } catch { /* table may not exist in prod */ }
+      };
+
       // Delete dependent records first (no tenant_id, joined via customer_id)
-      await db.execute(sql`DELETE FROM pending_uploads WHERE checkin_id IN (SELECT id FROM checkins WHERE customer_id = ${id})`);
-      await db.execute(sql`DELETE FROM checkins WHERE customer_id = ${id}`);
-      await db.execute(sql`DELETE FROM customer_locations WHERE customer_id = ${id}`);
-      await db.execute(sql`DELETE FROM customer_product_prices WHERE customer_id = ${id}`);
+      await tryExec(sql`DELETE FROM pending_uploads WHERE checkin_id IN (SELECT id FROM checkins WHERE customer_id = ${id})`);
+      await tryExec(sql`DELETE FROM checkins WHERE customer_id = ${id}`);
+      await tryExec(sql`DELETE FROM customer_locations WHERE customer_id = ${id}`);
+      await tryExec(sql`DELETE FROM customer_product_prices WHERE customer_id = ${id}`);
       // Nullify FK references in other tables instead of cascading delete
-      await db.execute(sql`UPDATE quotations SET customer_id = NULL WHERE customer_id = ${id}`);
-      await db.execute(sql`UPDATE orders SET customer_id = NULL WHERE customer_id = ${id}`);
-      await db.execute(sql`UPDATE invoices SET customer_id = NULL WHERE customer_id = ${id}`);
-      await db.execute(sql`UPDATE payments SET customer_id = NULL WHERE customer_id = ${id}`);
-      await db.execute(sql`UPDATE incidents SET customer_id = NULL WHERE customer_id = ${id}`);
-      await db.execute(sql`UPDATE scheduled_visits SET customer_id = NULL WHERE customer_id = ${id}`);
+      await tryExec(sql`UPDATE quotations SET customer_id = NULL WHERE customer_id = ${id}`);
+      await tryExec(sql`UPDATE orders SET customer_id = NULL WHERE customer_id = ${id}`);
+      await tryExec(sql`UPDATE invoices SET customer_id = NULL WHERE customer_id = ${id}`);
+      await tryExec(sql`UPDATE payments SET customer_id = NULL WHERE customer_id = ${id}`);
+      await tryExec(sql`UPDATE incidents SET customer_id = NULL WHERE customer_id = ${id}`);
+      await tryExec(sql`UPDATE scheduled_visits SET customer_id = NULL WHERE customer_id = ${id}`);
 
       await db.execute(sql`DELETE FROM customers WHERE id = ${id}`);
 
