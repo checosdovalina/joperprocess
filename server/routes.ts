@@ -1209,10 +1209,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/checkins", isAuthenticated, async (req, res) => {
     try {
       const scopedStorage = createTenantScopedStorage(req);
-      const validated = insertCheckinSchema.parse({
+
+      // Sanitize: empty strings for decimal columns must become undefined, not ""
+      const body = {
         ...req.body,
         userId: req.user!.id,
-      });
+        latitude:  req.body.latitude  === "" ? undefined : req.body.latitude,
+        longitude: req.body.longitude === "" ? undefined : req.body.longitude,
+      };
+
+      const validated = insertCheckinSchema.parse(body);
 
       // Validate that customerLocationId belongs to the specified customerId
       if (validated.customerLocationId) {
@@ -1228,8 +1234,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const checkin = await scopedStorage.createCheckin(validated);
       res.status(201).json(checkin);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error("Error creating checkin:", error);
-      res.status(400).json({ error: "Error creating checkin" });
+      res.status(400).json({ error: "Error creating checkin", detail: message });
     }
   });
 
