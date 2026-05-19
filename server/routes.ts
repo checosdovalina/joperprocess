@@ -61,7 +61,7 @@ import {
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable } from "drizzle-orm";
+import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc } from "drizzle-orm";
 import type { Request } from "express";
 
 // Helper to get effective tenantId for data filtering
