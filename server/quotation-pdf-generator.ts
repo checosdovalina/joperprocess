@@ -356,6 +356,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     const TOTALS_ROW_H = 16;
 
+    const isMexicoCustomer = !customer.country ||
+      ["mx", "mexico", "méxico", "mex"].includes(customer.country.toLowerCase().trim());
+
     const drawTotalsBox = (
       bx: number, by: number, bw: number,
       label: string, labelColor: string,
@@ -365,7 +368,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const rows: [string, string][] = [
         ["Subtotal:", fmtFn(sub)],
         ...(disc > 0 ? [[`Desc. (${discountPct}%):`, `-${fmtFn(disc)}`] as [string, string]] : []),
-        ["IVA (16%):", fmtFn(tax)],
+        ...(isMexicoCustomer ? [["IVA (16%):", fmtFn(tax)] as [string, string]] : []),
       ];
       const boxH = rows.length * TOTALS_ROW_H + 22 + 26;
 
@@ -409,14 +412,10 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const singleH = drawTotalsBox(TOTALS_X, currentY, TOTALS_W, quoteLabel, quoteColor,
         subtotalVal, discountAmt, taxVal, totalVal, fmtQuote);
 
-      const noteY = currentY + 8;
-      doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#777");
-      const currencyNote = quoteCurrency === "USD" ? "USD (Dólares Americanos)" : "MXN (Pesos Mexicanos)";
-      doc.text(`Precios expresados en ${currencyNote}.`, MARGIN, noteY, { width: TOTALS_X - MARGIN - 10 });
       if (hasItemsInForeignCurrency) {
-        doc.text(`Tipo de cambio aplicado: $${exRate.toFixed(4)} MXN/USD`, MARGIN, noteY + 10, { width: TOTALS_X - MARGIN - 10 });
-      } else {
-        doc.text("Los precios incluyen IVA 16%.", MARGIN, noteY + 10, { width: TOTALS_X - MARGIN - 10 });
+        const noteY = currentY + 8;
+        doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#777");
+        doc.text(`Tipo de cambio aplicado: $${exRate.toFixed(4)} MXN/USD`, MARGIN, noteY, { width: TOTALS_X - MARGIN - 10 });
       }
 
       currentY += singleH + 20;
