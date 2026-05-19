@@ -13,6 +13,50 @@ interface CheckinPhotoUploaderProps {
   onUploadSuccess?: () => void;
 }
 
+const MAX_DIMENSION = 1920;
+const COMPRESS_QUALITY = 0.75;
+const COMPRESS_THRESHOLD = 1.5 * 1024 * 1024; // 1.5 MB
+
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size < COMPRESS_THRESHOLD) {
+    return file;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+            type: "image/jpeg",
+            lastModified: Date.now(),
+          });
+          console.log(`Compressed ${file.name}: ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`);
+          resolve(compressed);
+        },
+        "image/jpeg",
+        COMPRESS_QUALITY
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 export function CheckinPhotoUploader({
   checkinId,
   currentPhotoCount,
@@ -30,20 +74,18 @@ export function CheckinPhotoUploader({
   toastRef.current = toast;
   onUploadSuccessRef.current = onUploadSuccess;
 
-  // Update restrictions when remainingSlots changes without recreating Uppy
   useEffect(() => {
     if (uppyRef.current) {
       uppyRef.current.setOptions({
         restrictions: {
           maxNumberOfFiles: Math.max(0, remainingSlots),
           allowedFileTypes: ["image/*"],
-          maxFileSize: 5 * 1024 * 1024,
+          maxFileSize: 10 * 1024 * 1024,
         },
       });
     }
   }, [remainingSlots]);
 
-  // Create Uppy instance once per checkinId
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;
@@ -52,13 +94,30 @@ export function CheckinPhotoUploader({
       restrictions: {
         maxNumberOfFiles: Math.max(0, remainingSlots),
         allowedFileTypes: ["image/*"],
-        maxFileSize: 5 * 1024 * 1024,
+        maxFileSize: 10 * 1024 * 1024,
       },
       autoProceed: false,
     });
 
     uppyInstance.on("file-added", async (file) => {
       try {
+        // Compress large images before uploading
+        if (file.data instanceof File || file.data instanceof Blob) {
+          const originalFile = file.data instanceof File
+            ? file.data
+            : new File([file.data], file.name || "photo.jpg", { type: file.type || "image/jpeg" });
+
+          const compressed = await compressImage(originalFile);
+          if (compressed !== originalFile) {
+            uppyInstance.setFileState(file.id, {
+              data: compressed,
+              size: compressed.size,
+              type: compressed.type,
+            });
+          }
+        }
+
+        // Fetch presigned URL
         const response = await fetch("/api/objects/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -71,11 +130,11 @@ export function CheckinPhotoUploader({
           entityId: data.entityId,
         });
       } catch (error) {
-        console.error("Error getting upload URL:", error);
+        console.error("Error preparing file for upload:", error);
         toastRef.current({
           variant: "destructive",
           title: "Error",
-          description: "No se pudo obtener URL de carga",
+          description: "No se pudo preparar el archivo para carga",
         });
         uppyInstance.removeFile(file.id);
       }
@@ -85,6 +144,7 @@ export function CheckinPhotoUploader({
       method: "PUT",
       formData: false,
       withCredentials: true,
+      timeout: 60000,
       endpoint: (file) => {
         if (Array.isArray(file)) throw new Error("Bundle mode not supported");
         const uploadURL = file.meta?.uploadURL as string;
@@ -132,7 +192,7 @@ export function CheckinPhotoUploader({
       toastRef.current({
         variant: "destructive",
         title: "Error al cargar",
-        description: `No se pudo cargar ${file.name}`,
+        description: `No se pudo cargar ${file.name}. Verifica tu conexión e intenta de nuevo.`,
       });
     });
 
@@ -141,7 +201,7 @@ export function CheckinPhotoUploader({
       inline: true,
       height: 300,
       proudlyDisplayPoweredByUppy: false,
-      note: `Máximo 6 fotos (hasta 5MB cada una)`,
+      note: "Máximo 6 fotos. Las fotos grandes se comprimen automáticamente.",
     });
 
     uppyRef.current = uppyInstance;
