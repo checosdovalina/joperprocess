@@ -412,12 +412,6 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const singleH = drawTotalsBox(TOTALS_X, currentY, TOTALS_W, quoteLabel, quoteColor,
         subtotalVal, discountAmt, taxVal, totalVal, fmtQuote);
 
-      if (hasItemsInForeignCurrency) {
-        const noteY = currentY + 8;
-        doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#777");
-        doc.text(`Tipo de cambio aplicado: $${exRate.toFixed(4)} MXN/USD`, MARGIN, noteY, { width: TOTALS_X - MARGIN - 10 });
-      }
-
       currentY += singleH + 20;
     }
 
