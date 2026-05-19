@@ -238,89 +238,91 @@ export default function CheckinsPage() {
               Nuevo Check-in
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Nuevo Check-in</DialogTitle>
               <DialogDescription>
                 Registra una visita al cliente
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="customer">Cliente *</Label>
-                <CustomerCombobox
-                  customers={customers || []}
-                  value={formData.customerId || ""}
-                  onValueChange={(value) => setFormData({ ...formData, customerId: value })}
-                  placeholder="Buscar cliente..."
-                  data-testid="select-checkin-customer"
-                />
-              </div>
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                <div className="space-y-2">
+                  <Label htmlFor="customer">Cliente *</Label>
+                  <CustomerCombobox
+                    customers={customers || []}
+                    value={formData.customerId || ""}
+                    onValueChange={(value) => setFormData({ ...formData, customerId: value })}
+                    placeholder="Buscar cliente..."
+                    data-testid="select-checkin-customer"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="meetingType">Tipo de Reunión *</Label>
-                <Select
-                  value={formData.meetingType}
-                  onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
-                >
-                  <SelectTrigger id="meetingType" data-testid="select-meeting-type">
-                    <SelectValue placeholder="Selecciona tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
-                    <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
-                    <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meetingType">Tipo de Reunión *</Label>
+                  <Select
+                    value={formData.meetingType}
+                    onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
+                  >
+                    <SelectTrigger id="meetingType" data-testid="select-meeting-type">
+                      <SelectValue placeholder="Selecciona tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
+                      <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
+                      <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label>Ubicación GPS</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={getLocation}
-                  disabled={gettingLocation}
-                  data-testid="button-get-location"
-                >
-                  {gettingLocation ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Obteniendo ubicación...
-                    </>
-                  ) : location ? (
-                    <>
-                      <MapPin className="mr-2 h-4 w-4 text-green-600" />
-                      Ubicación capturada
-                    </>
-                  ) : (
-                    <>
-                      <MapPin className="mr-2 h-4 w-4" />
-                      Capturar Ubicación
-                    </>
+                <div className="space-y-2">
+                  <Label>Ubicación GPS</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={getLocation}
+                    disabled={gettingLocation}
+                    data-testid="button-get-location"
+                  >
+                    {gettingLocation ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Obteniendo ubicación...
+                      </>
+                    ) : location ? (
+                      <>
+                        <MapPin className="mr-2 h-4 w-4 text-green-600" />
+                        Ubicación capturada
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="mr-2 h-4 w-4" />
+                        Capturar Ubicación
+                      </>
+                    )}
+                  </Button>
+                  {location && (
+                    <p className="text-xs text-muted-foreground">
+                      Lat: {location.lat.toFixed(6)}, Lng: {location.lng.toFixed(6)}
+                    </p>
                   )}
-                </Button>
-                {location && (
-                  <p className="text-xs text-muted-foreground">
-                    Lat: {location.lat.toFixed(6)}, Lng: {location.lng.toFixed(6)}
-                  </p>
-                )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notas de la Visita</Label>
+                  <Textarea
+                    id="notes"
+                    data-testid="textarea-checkin-notes"
+                    value={formData.notes ?? ""}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Describe los temas tratados en la visita..."
+                    rows={4}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notas de la Visita</Label>
-                <Textarea
-                  id="notes"
-                  data-testid="textarea-checkin-notes"
-                  value={formData.notes ?? ""}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Describe los temas tratados en la visita..."
-                  rows={4}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex justify-end gap-2 pt-4 shrink-0 border-t mt-4">
                 <Button
                   type="button"
                   variant="outline"
