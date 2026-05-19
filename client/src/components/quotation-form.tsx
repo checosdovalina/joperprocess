@@ -506,6 +506,33 @@ export function QuotationForm({
         currency: item.currency,
       }));
 
+    // Recalculate totals fresh at submit time using the actual submitted exchange rate
+    // (avoids stale closure from render-time form.watch())
+    const submitExRate = Math.max(parseFloat(data.exchangeRate) || 18, 0.0001);
+    const submitCurrency = data.currency || "MXN";
+    const globalDiscountPercent = parseFloat(data.globalDiscount) || 0;
+    const toQuoteSubmit = (amount: number, itemCurrency: string) => {
+      if (itemCurrency === submitCurrency) return amount;
+      if (itemCurrency === "USD" && submitCurrency === "MXN") return amount * submitExRate;
+      if (itemCurrency === "MXN" && submitCurrency === "USD") return amount / submitExRate;
+      return amount;
+    };
+    const validItems = lineItems.filter(i => i.productName);
+    const submitSubtotalBefore = validItems.reduce((s, i) => s + toQuoteSubmit(parseFloat(i.subtotal), i.currency), 0);
+    const submitTotalTax = validItems.reduce((s, i) => s + toQuoteSubmit(parseFloat(i.taxAmount), i.currency), 0);
+    const submitGlobalDiscAmt = submitSubtotalBefore * (globalDiscountPercent / 100);
+    const submitAdjustedTax = submitTotalTax * (1 - globalDiscountPercent / 100);
+    const submitTotal = (submitSubtotalBefore - submitGlobalDiscAmt) + submitAdjustedTax;
+    const submitTotalSavings = validItems.reduce((s, i) =>
+      s + toQuoteSubmit(parseFloat(i.quantity) * parseFloat(i.discountAmount), i.currency), 0) + submitGlobalDiscAmt;
+
+    const freshTotals = {
+      subtotal: submitSubtotalBefore.toFixed(2),
+      tax: submitAdjustedTax.toFixed(2),
+      total: submitTotal.toFixed(2),
+      totalSavings: submitTotalSavings.toFixed(2),
+    };
+
     // Determine if requires approval (either for discounts or free shipping by Joper)
     const requiresFreeShippingApproval = data.shippingHandledByJoper;
     const requiresAnyApproval = hasExceedingDiscounts || requiresFreeShippingApproval;
@@ -529,11 +556,11 @@ export function QuotationForm({
       paymentTerms: data.paymentTerms || null,
       deliveryTime: data.deliveryTime || null,
       validUntil: data.validUntil ? new Date(data.validUntil + "T12:00:00") : null,
-      subtotal: totals.subtotal,
+      subtotal: freshTotals.subtotal,
       globalDiscount: data.globalDiscount,
-      tax: totals.tax,
-      total: totals.total,
-      totalSavings: totals.totalSavings,
+      tax: freshTotals.tax,
+      total: freshTotals.total,
+      totalSavings: freshTotals.totalSavings,
       notes: data.notes || null,
       conditions: data.conditions || null,
       requiresApproval: !saveAsDraftRef.current && requiresAnyApproval,
