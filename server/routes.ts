@@ -7,6 +7,16 @@ import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { localStorageService, LocalStorageService } from "./localStorage";
 
+// Parse a potentially multi-value email field (values separated by ; or ,)
+// Returns an array of trimmed, non-empty, valid-looking email addresses.
+function parseEmailList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[;,]/)
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+}
+
 // Helper to determine if we should use server-side direct upload (instead of GCS presigned URL).
 // In development, always use direct upload (GCS presigned URLs are blocked/CORS-restricted).
 function useLocalStorage(): boolean {
@@ -4431,7 +4441,9 @@ Proporciona tu análisis en el siguiente formato JSON:
       const recipients: { email: string; label: string }[] = [];
 
       if (user?.email) recipients.push({ email: user.email, label: `Vendedor — ${user.fullName}` });
-      if (customer?.email) recipients.push({ email: customer.email, label: `Cliente — ${customer.name}` });
+      for (const email of parseEmailList(customer?.email)) {
+        recipients.push({ email, label: `Cliente — ${customer!.name}` });
+      }
 
       const admins = await db.query.users.findMany({ where: eq(users.role, UserRole.ADMIN) });
       for (const admin of admins) {
@@ -4457,9 +4469,14 @@ Proporciona tu análisis en el siguiente formato JSON:
       const schema = z.object({
         checkoutNotes: z.string().optional(),
         internalNotes: z.string().optional(),
-        recipients: z.array(z.string().email()).optional(),
+        recipients: z.array(z.string()).optional(),
       });
-      const { checkoutNotes, internalNotes, recipients: overrideRecipients } = schema.parse(req.body);
+      const parsed = schema.parse(req.body);
+      const { checkoutNotes, internalNotes } = parsed;
+      // Sanitize recipients: split any multi-email strings and keep only valid ones
+      const overrideRecipients = parsed.recipients
+        ? parsed.recipients.flatMap((r) => parseEmailList(r)).filter((e, i, arr) => arr.indexOf(e) === i)
+        : undefined;
 
       const scopedStorage = createTenantScopedStorage(req);
       const checkin = await scopedStorage.getCheckin(checkinId);
@@ -4547,7 +4564,9 @@ Proporciona tu análisis en el siguiente formato JSON:
           // Auto-build the recipient list: salesperson + customer + admins
           recipients = [];
           if (user.email) recipients.push(user.email);
-          if (effectiveCustomer.email) recipients.push(effectiveCustomer.email);
+          for (const email of parseEmailList(effectiveCustomer.email)) {
+            if (!recipients.includes(email)) recipients.push(email);
+          }
           const adminWhere = checkin.tenantId
             ? and(eq(users.role, UserRole.ADMIN), eq(users.tenantId, checkin.tenantId))
             : eq(users.role, UserRole.ADMIN);

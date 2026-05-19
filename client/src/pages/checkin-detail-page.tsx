@@ -110,9 +110,18 @@ export default function CheckinDetailPage() {
   });
 
   // Pre-populate emailList when recipients data loads and dialog just opened
+  // Split any multi-value email strings (separated by ; or ,) before storing
   useEffect(() => {
     if (checkoutDialogOpen && recipientsData?.recipients && emailList.length === 0) {
-      setEmailList(recipientsData.recipients.map(r => r.email));
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const emails: string[] = [];
+      for (const r of recipientsData.recipients) {
+        const parts = r.email.split(/[;,]/).map((e: string) => e.trim()).filter((e: string) => emailRegex.test(e));
+        for (const e of parts) {
+          if (!emails.includes(e)) emails.push(e);
+        }
+      }
+      setEmailList(emails);
     }
   }, [checkoutDialogOpen, recipientsData]);
 
