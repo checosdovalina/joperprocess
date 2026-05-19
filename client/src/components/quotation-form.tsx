@@ -688,38 +688,33 @@ export function QuotationForm({
                             const oldCurrency = field.value || "MXN";
                             if (newCurrency !== oldCurrency) {
                               const exRate = Math.max(parseFloat(form.getValues("exchangeRate")) || 18, 0.0001);
+                              // Convert every item to the new quotation currency, from its current currency
+                              const toNew = (v: number, fromCurrency: string) => {
+                                if (fromCurrency === newCurrency) return v;
+                                if (fromCurrency === "MXN" && newCurrency === "USD") return v / exRate;
+                                if (fromCurrency === "USD" && newCurrency === "MXN") return v * exRate;
+                                return v;
+                              };
                               setLineItems(prev => prev.map(item => {
                                 const itemCurrency = item.currency || "MXN";
-                                if (itemCurrency === oldCurrency) {
-                                  // Convert listPrice and unitPrice to the new currency
-                                  const lp = parseFloat(item.listPrice) || 0;
-                                  const up = parseFloat(item.unitPrice) || 0;
-                                  const convert = (v: number) => {
-                                    if (oldCurrency === "MXN" && newCurrency === "USD") return v / exRate;
-                                    if (oldCurrency === "USD" && newCurrency === "MXN") return v * exRate;
-                                    return v;
-                                  };
-                                  const newListPrice = convert(lp).toFixed(2);
-                                  const newUnitPrice = convert(up).toFixed(2);
-                                  const qty = parseFloat(item.quantity) || 0;
-                                  const taxRate = parseFloat(item.taxRate) || 16;
-                                  const discAmt = lp > 0 ? (lp - up) / lp * 100 : parseFloat(item.discountPercent) || 0;
-                                  const newSubtotal = (qty * convert(up)).toFixed(2);
-                                  const newTaxAmount = (qty * convert(up) * taxRate / 100).toFixed(2);
-                                  const newTotal = (qty * convert(up) * (1 + taxRate / 100)).toFixed(2);
-                                  const newDiscAmt = (convert(lp) - convert(up)).toFixed(2);
-                                  return {
-                                    ...item,
-                                    currency: newCurrency,
-                                    listPrice: newListPrice,
-                                    unitPrice: newUnitPrice,
-                                    discountAmount: newDiscAmt,
-                                    subtotal: newSubtotal,
-                                    taxAmount: newTaxAmount,
-                                    total: newTotal,
-                                  };
-                                }
-                                return item;
+                                if (itemCurrency === newCurrency) return item; // already in target currency
+                                const lp = parseFloat(item.listPrice) || 0;
+                                const up = parseFloat(item.unitPrice) || 0;
+                                const qty = parseFloat(item.quantity) || 0;
+                                const taxRate = parseFloat(item.taxRate) || 16;
+                                const newUp = toNew(up, itemCurrency);
+                                const newLp = toNew(lp, itemCurrency);
+                                const newSubtotal = qty * newUp;
+                                return {
+                                  ...item,
+                                  currency: newCurrency,
+                                  listPrice: newLp.toFixed(2),
+                                  unitPrice: newUp.toFixed(2),
+                                  discountAmount: (newLp - newUp).toFixed(2),
+                                  subtotal: newSubtotal.toFixed(2),
+                                  taxAmount: (newSubtotal * taxRate / 100).toFixed(2),
+                                  total: (newSubtotal * (1 + taxRate / 100)).toFixed(2),
+                                };
                               }));
                             }
                             field.onChange(newCurrency);
