@@ -33,6 +33,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Mail,
   Send,
@@ -47,6 +50,7 @@ import {
   Link,
   Check,
   MoreVertical,
+  CalendarClock,
 } from "lucide-react";
 
 interface CustomerBalance {
@@ -94,9 +98,56 @@ export default function AccountStatementsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [linkLoadingId, setLinkLoadingId] = useState<string | null>(null);
 
+  // Schedule dialog state
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [schedEnabled, setSchedEnabled] = useState(false);
+  const [schedDaysPreset, setSchedDaysPreset] = useState<string>("1,15");
+  const [schedHour, setSchedHour] = useState<number>(9);
+  const [schedOnlyOverdue, setSchedOnlyOverdue] = useState(false);
+
   const { data: statements = [], isLoading, refetch } = useQuery<CustomerBalance[]>({
     queryKey: ["/api/account-statements"],
   });
+
+  const { data: scheduleConfig, refetch: refetchSchedule } = useQuery<{
+    id: string;
+    enabled: boolean;
+    scheduleDays: number[];
+    sendHour: number;
+    onlyOverdue: boolean;
+    lastRunAt: string | null;
+  } | null>({
+    queryKey: ["/api/account-statement-schedule"],
+  });
+
+  const saveScheduleMutation = useMutation({
+    mutationFn: (data: { enabled: boolean; scheduleDays: number[]; sendHour: number; onlyOverdue: boolean }) =>
+      apiRequest("PUT", "/api/account-statement-schedule", data),
+    onSuccess: () => {
+      toast({ title: "Programación guardada", description: "El envío automático ha sido configurado." });
+      refetchSchedule();
+      setScheduleOpen(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message ?? "No se pudo guardar la configuración.", variant: "destructive" });
+    },
+  });
+
+  function openScheduleDialog() {
+    if (scheduleConfig) {
+      setSchedEnabled(scheduleConfig.enabled);
+      const days = [...scheduleConfig.scheduleDays].sort((a, b) => a - b).join(",");
+      setSchedDaysPreset(days);
+      setSchedHour(scheduleConfig.sendHour);
+      setSchedOnlyOverdue(scheduleConfig.onlyOverdue);
+    }
+    setScheduleOpen(true);
+  }
+
+  function saveSchedule() {
+    const days = schedDaysPreset.split(",").map(Number).filter((d) => d >= 1 && d <= 31);
+    saveScheduleMutation.mutate({ enabled: schedEnabled, scheduleDays: days, sendHour: schedHour, onlyOverdue: schedOnlyOverdue });
+  }
 
   const filtered = useMemo(() => {
     let list = statements;
@@ -247,6 +298,15 @@ export default function AccountStatementsPage() {
               Enviar a seleccionados ({selected.size})
             </Button>
           )}
+          <Button
+            variant={scheduleConfig?.enabled ? "default" : "outline"}
+            size="default"
+            data-testid="button-schedule"
+            onClick={openScheduleDialog}
+          >
+            <CalendarClock className="w-4 h-4 mr-2" />
+            {scheduleConfig?.enabled ? "Envío automático activo" : "Programar envío"}
+          </Button>
           <Button
             variant="outline"
             size="default"
@@ -665,6 +725,125 @@ export default function AccountStatementsPage() {
           </div>
           <DialogFooter>
             <Button onClick={() => setResultsOpen(false)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Schedule config dialog ── */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="w-5 h-5" />
+              Envío automático de estados de cuenta
+            </DialogTitle>
+            <DialogDescription>
+              El sistema enviará los estados de cuenta por correo automáticamente en los días y hora que configures.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between rounded-md border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Envío automático</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {schedEnabled ? "Activo — se enviará según el programa" : "Desactivado"}
+                </p>
+              </div>
+              <Switch
+                data-testid="switch-schedule-enabled"
+                checked={schedEnabled}
+                onCheckedChange={setSchedEnabled}
+              />
+            </div>
+
+            {/* Days preset */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Días del mes
+              </Label>
+              <Select value={schedDaysPreset} onValueChange={setSchedDaysPreset}>
+                <SelectTrigger data-testid="select-schedule-days">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1,15">1° y 15 de cada mes</SelectItem>
+                  <SelectItem value="1,10,20">1°, 10 y 20 de cada mes</SelectItem>
+                  <SelectItem value="1,8,15,22">1°, 8, 15 y 22 de cada mes</SelectItem>
+                  <SelectItem value="1">Solo el 1° de cada mes</SelectItem>
+                  <SelectItem value="15">Solo el 15 de cada mes</SelectItem>
+                  <SelectItem value="1,10,20,28">1°, 10, 20 y 28 de cada mes</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Días seleccionados: {schedDaysPreset.split(",").join(", ")}
+              </p>
+            </div>
+
+            {/* Hour */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Hora de envío (tiempo de México)
+              </Label>
+              <Select value={String(schedHour)} onValueChange={(v) => setSchedHour(Number(v))}>
+                <SelectTrigger data-testid="select-schedule-hour">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {h === 12 ? "12:00 pm (mediodía)" : h < 12 ? `${h}:00 am` : `${h - 12}:00 pm`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Only overdue */}
+            <div className="flex items-center justify-between rounded-md border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Solo clientes con saldo vencido</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {schedOnlyOverdue
+                    ? "Solo envía a quienes tienen facturas vencidas"
+                    : "Envía a todos los clientes con saldo pendiente"}
+                </p>
+              </div>
+              <Switch
+                data-testid="switch-only-overdue"
+                checked={schedOnlyOverdue}
+                onCheckedChange={setSchedOnlyOverdue}
+              />
+            </div>
+
+            {/* Last run info */}
+            {scheduleConfig?.lastRunAt && (
+              <div className="bg-muted/50 rounded-md px-3 py-2.5 text-xs text-muted-foreground">
+                Último envío automático: {new Date(scheduleConfig.lastRunAt).toLocaleString("es-MX", {
+                  day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+                })}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 pt-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setScheduleOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              data-testid="button-save-schedule"
+              className="w-full sm:w-auto"
+              onClick={saveSchedule}
+              disabled={saveScheduleMutation.isPending}
+            >
+              {saveScheduleMutation.isPending ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
+              Guardar programación
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

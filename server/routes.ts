@@ -4101,6 +4101,69 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // GET /api/account-statement-schedule — get schedule config for current tenant
+  app.get("/api/account-statement-schedule", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant requerido" });
+      const { accountStatementSchedules } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const row = await db.query.accountStatementSchedules.findFirst({
+        where: eq(accountStatementSchedules.tenantId, tenantId),
+      });
+      res.json(row ?? null);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/account-statement-schedule — create or update schedule config
+  app.put("/api/account-statement-schedule", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant requerido" });
+
+      const { enabled, scheduleDays, sendHour, onlyOverdue } = req.body as {
+        enabled: boolean;
+        scheduleDays: number[];
+        sendHour: number;
+        onlyOverdue: boolean;
+      };
+
+      if (!Array.isArray(scheduleDays) || scheduleDays.length === 0) {
+        return res.status(400).json({ error: "scheduleDays debe ser un arreglo con al menos un día" });
+      }
+      if (typeof sendHour !== "number" || sendHour < 0 || sendHour > 23) {
+        return res.status(400).json({ error: "sendHour debe ser entre 0 y 23" });
+      }
+
+      const { accountStatementSchedules } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const existing = await db.query.accountStatementSchedules.findFirst({
+        where: eq(accountStatementSchedules.tenantId, tenantId),
+      });
+
+      const now = new Date();
+      if (existing) {
+        const [updated] = await db
+          .update(accountStatementSchedules)
+          .set({ enabled, scheduleDays, sendHour, onlyOverdue, updatedAt: now })
+          .where(eq(accountStatementSchedules.id, existing.id))
+          .returning();
+        res.json(updated);
+      } else {
+        const [created] = await db
+          .insert(accountStatementSchedules)
+          .values({ tenantId, enabled, scheduleDays, sendHour, onlyOverdue })
+          .returning();
+        res.json(created);
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /api/customers/:id/account-statement-pdf — download PDF
   app.get("/api/customers/:id/account-statement-pdf", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
     try {

@@ -10,6 +10,20 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     id: "002_add_microsip_cxc_database",
     sql: `ALTER TABLE microsip_configs ADD COLUMN IF NOT EXISTS cxc_database text`,
   },
+  {
+    id: "003_create_account_statement_schedules",
+    sql: `CREATE TABLE IF NOT EXISTS account_statement_schedules (
+      id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      tenant_id text NOT NULL REFERENCES tenants(id),
+      enabled boolean NOT NULL DEFAULT false,
+      schedule_days integer[] NOT NULL DEFAULT '{1,15}',
+      send_hour integer NOT NULL DEFAULT 9,
+      only_overdue boolean NOT NULL DEFAULT false,
+      last_run_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

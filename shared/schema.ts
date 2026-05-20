@@ -1262,6 +1262,31 @@ export type MicrosipSyncLog = typeof microsipSyncLogs.$inferSelect;
 
 // ==================== END MICROSIP INTEGRATION ====================
 
+// ==================== ACCOUNT STATEMENT SCHEDULES ====================
+
+export const accountStatementSchedules = pgTable("account_statement_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  enabled: boolean("enabled").notNull().default(false),
+  scheduleDays: integer("schedule_days").array().notNull().default([1, 15]),
+  sendHour: integer("send_hour").notNull().default(9),
+  onlyOverdue: boolean("only_overdue").notNull().default(false),
+  lastRunAt: timestamp("last_run_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertAccountStatementScheduleSchema = createInsertSchema(accountStatementSchedules).omit({
+  id: true,
+  lastRunAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertAccountStatementSchedule = z.infer<typeof insertAccountStatementScheduleSchema>;
+export type AccountStatementSchedule = typeof accountStatementSchedules.$inferSelect;
+
+// ==================== END ACCOUNT STATEMENT SCHEDULES ====================
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

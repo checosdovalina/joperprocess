@@ -5,6 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { tenantMiddleware } from "./tenant";
 import { runMigrations } from "./migrate";
 import { runScheduledSync } from "./microsip-sync";
+import { runAccountStatementScheduler } from "./account-statement-scheduler";
 
 const app = express();
 
@@ -101,4 +102,19 @@ app.use(tenantMiddleware);
     );
   }, MICROSIP_POLL_MS);
   log(`Microsip scheduler started (poll every 5 min)`);
+
+  // Account statement scheduler: check every hour if any tenant is due for auto-send.
+  const STATEMENT_POLL_MS = 60 * 60 * 1000; // 1 hour
+  setInterval(() => {
+    runAccountStatementScheduler().catch((err) =>
+      console.error("[StatementScheduler] Error:", err)
+    );
+  }, STATEMENT_POLL_MS);
+  // Also run once shortly after startup to catch any missed runs
+  setTimeout(() => {
+    runAccountStatementScheduler().catch((err) =>
+      console.error("[StatementScheduler] Startup check error:", err)
+    );
+  }, 30_000);
+  log(`Account statement scheduler started (poll every 60 min)`);
 })();
