@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { Order, Quotation, Customer, QuotationItem, Product, OrderStatus, InsertOrder } from "@shared/schema";
 
 import {
@@ -59,6 +60,7 @@ interface OrderDetails extends Order {
 }
 
 export default function OrdersPage() {
+  const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [releaseDialogOpen, setReleaseDialogOpen] = useState(false);
@@ -207,12 +209,12 @@ export default function OrdersPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
-      [OrderStatus.PENDING]: { label: "Pendiente", className: "bg-gray-100 text-gray-800" },
-      [OrderStatus.IN_PRODUCTION]: { label: "En Producción", className: "bg-blue-100 text-blue-800" },
-      [OrderStatus.READY]: { label: "Listo", className: "bg-green-100 text-green-800" },
-      [OrderStatus.PARTIALLY_RELEASED]: { label: "Parcialmente Liberado", className: "bg-yellow-100 text-yellow-800" },
-      [OrderStatus.SHIPPED]: { label: "Enviado", className: "bg-purple-100 text-purple-800" },
-      [OrderStatus.DELIVERED]: { label: "Entregado", className: "bg-green-100 text-green-800" },
+      [OrderStatus.PENDING]: { label: t("status.pending"), className: "bg-gray-100 text-gray-800" },
+      [OrderStatus.IN_PRODUCTION]: { label: t("status.in-production"), className: "bg-blue-100 text-blue-800" },
+      [OrderStatus.READY]: { label: t("status.ready"), className: "bg-green-100 text-green-800" },
+      [OrderStatus.PARTIALLY_RELEASED]: { label: t("status.partial"), className: "bg-yellow-100 text-yellow-800" },
+      [OrderStatus.SHIPPED]: { label: t("status.shipped"), className: "bg-purple-100 text-purple-800" },
+      [OrderStatus.DELIVERED]: { label: t("status.delivered"), className: "bg-green-100 text-green-800" },
     };
     const config = statusConfig[status] || statusConfig[OrderStatus.PENDING];
     return <Badge className={config.className} data-testid={`status-${status}`}>{config.label}</Badge>;
@@ -263,9 +265,9 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Pedidos y Producción</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("orders.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Seguimiento de pedidos y avances de producción
+            {t("orders.subtitle")}
           </p>
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-add-order">
@@ -277,7 +279,7 @@ export default function OrdersPage() {
       <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.pending")}</CardTitle>
             <Package className="h-4 w-4 text-gray-600" />
           </CardHeader>
           <CardContent>
@@ -288,7 +290,7 @@ export default function OrdersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">En Producción</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.in-production")}</CardTitle>
             <Package className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -299,7 +301,7 @@ export default function OrdersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Listos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.ready")}</CardTitle>
             <Package className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -310,7 +312,7 @@ export default function OrdersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Parcialmente</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.partial")}</CardTitle>
             <Truck className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
@@ -336,7 +338,7 @@ export default function OrdersPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Todos los Pedidos</CardTitle>
+              <CardTitle>{t("orders.all")}</CardTitle>
               <CardDescription>
                 {(() => {
                   const terminal = [OrderStatus.SHIPPED, OrderStatus.DELIVERED];
@@ -368,12 +370,12 @@ export default function OrdersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Folio Cotización</TableHead>
-                    <TableHead>Fecha Creación</TableHead>
-                    <TableHead>Entrega Estimada</TableHead>
-                    <TableHead>Progreso</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("orders.col.quotation-folio")}</TableHead>
+                    <TableHead>{t("orders.col.created")}</TableHead>
+                    <TableHead>{t("orders.col.delivery")}</TableHead>
+                    <TableHead>{t("orders.col.progress")}</TableHead>
+                    <TableHead>{t("label.status")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -514,7 +516,7 @@ export default function OrdersPage() {
                         <TableHead className="text-right">Cantidad</TableHead>
                         <TableHead className="text-right">Liberado</TableHead>
                         <TableHead className="text-right">Pendiente</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
+                        <TableHead className="text-right">{t("label.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

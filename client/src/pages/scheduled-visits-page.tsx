@@ -474,7 +474,7 @@ export default function ScheduledVisitsPage() {
                   <TableHead>Tipo</TableHead>
                   <TableHead data-testid="header-topics">Temas</TableHead>
                   <TableHead data-testid="header-status">Estado</TableHead>
-                  <TableHead data-testid="header-actions">Acciones</TableHead>
+                  <TableHead data-testid="header-actions">{t("label.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

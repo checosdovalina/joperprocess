@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { Order, Quotation, Customer, QuotationItem, Product, OrderStatus } from "@shared/schema";
 import {
   Table,
@@ -58,6 +59,7 @@ interface OrderDetails extends Order {
 type OrderWithQuotation = Order & { quotation: Quotation & { customer: Customer } };
 
 export default function ProductionPage() {
+  const { t } = useI18n();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [editEstimatedDelivery, setEditEstimatedDelivery] = useState("");
@@ -93,13 +95,13 @@ export default function ProductionPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Pedido actualizado", description: "La información de producción se guardó correctamente" });
+      toast({ title: t("production.updated-title"), description: t("production.updated-desc") });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedOrderId, "details"] });
       setIsEditing(false);
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo actualizar el pedido", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("production.error-update"), variant: "destructive" });
     },
   });
 
@@ -117,12 +119,12 @@ export default function ProductionPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Enviado a Embarque", description: "El pedido ha sido transferido al departamento de embarques" });
+      toast({ title: t("production.sent-to-shipping-title"), description: t("production.sent-to-shipping-desc") });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "No se pudo enviar a embarque", variant: "destructive" });
+      toast({ title: t("label.error"), description: error.message || t("production.error-ship"), variant: "destructive" });
     },
   });
 
@@ -185,12 +187,12 @@ export default function ProductionPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
-      [OrderStatus.PENDING]: { label: "Pendiente", className: "bg-gray-100 text-gray-800" },
-      [OrderStatus.IN_PRODUCTION]: { label: "En Producción", className: "bg-blue-100 text-blue-800" },
-      [OrderStatus.READY]: { label: "Listo", className: "bg-green-100 text-green-800" },
-      [OrderStatus.PARTIALLY_RELEASED]: { label: "Parcialmente Liberado", className: "bg-yellow-100 text-yellow-800" },
-      [OrderStatus.SHIPPED]: { label: "Enviado", className: "bg-purple-100 text-purple-800" },
-      [OrderStatus.DELIVERED]: { label: "Entregado", className: "bg-green-100 text-green-800" },
+      [OrderStatus.PENDING]: { label: t("status.pending"), className: "bg-gray-100 text-gray-800" },
+      [OrderStatus.IN_PRODUCTION]: { label: t("status.in-production"), className: "bg-blue-100 text-blue-800" },
+      [OrderStatus.READY]: { label: t("status.ready"), className: "bg-green-100 text-green-800" },
+      [OrderStatus.PARTIALLY_RELEASED]: { label: t("status.partial"), className: "bg-yellow-100 text-yellow-800" },
+      [OrderStatus.SHIPPED]: { label: t("status.shipped"), className: "bg-purple-100 text-purple-800" },
+      [OrderStatus.DELIVERED]: { label: t("status.delivered"), className: "bg-green-100 text-green-800" },
     };
     const config = statusConfig[status] || statusConfig[OrderStatus.PENDING];
     return <Badge className={config.className}>{config.label}</Badge>;
@@ -217,11 +219,11 @@ export default function ProductionPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Folio</TableHead>
-            <TableHead>Fecha</TableHead>
-            <TableHead>Progreso</TableHead>
-            <TableHead>Entrega Est.</TableHead>
-            <TableHead className="text-right">Acciones</TableHead>
+            <TableHead>{t("production.col.folio")}</TableHead>
+            <TableHead>{t("production.col.date")}</TableHead>
+            <TableHead>{t("production.col.progress")}</TableHead>
+            <TableHead>{t("production.col.delivery")}</TableHead>
+            <TableHead className="text-right">{t("production.col.actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -245,7 +247,7 @@ export default function ProductionPage() {
                 ) : (
                   <Badge variant="outline" className="text-orange-600 border-orange-300">
                     <AlertCircle className="h-3 w-3 mr-1" />
-                    Sin definir
+                    {t("production.undefined-delivery")}
                   </Badge>
                 )}
               </TableCell>
@@ -260,7 +262,7 @@ export default function ProductionPage() {
                       data-testid={`button-quick-ship-${order.id}`}
                     >
                       <Truck className="h-4 w-4 mr-1" />
-                      A Embarque
+                      {t("production.to-shipping")}
                     </Button>
                   )}
                   <Button 
@@ -270,7 +272,7 @@ export default function ProductionPage() {
                     data-testid={`button-view-order-${order.id}`}
                   >
                     <Eye className="h-4 w-4 mr-1" />
-                    Gestionar
+                    {t("production.manage")}
                   </Button>
                 </div>
               </TableCell>
@@ -295,8 +297,8 @@ export default function ProductionPage() {
       <div className="flex items-center gap-3">
         <Factory className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">Producción</h1>
-          <p className="text-muted-foreground">Gestión de pedidos en fábrica</p>
+          <h1 className="text-2xl font-bold">{t("production.title")}</h1>
+          <p className="text-muted-foreground">{t("production.subtitle")}</p>
         </div>
       </div>
 
@@ -305,7 +307,7 @@ export default function ProductionPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pendientes</p>
+                <p className="text-sm text-muted-foreground">{t("production.pending")}</p>
                 <p className="text-2xl font-bold">{pendingOrders.length}</p>
               </div>
               <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
@@ -318,7 +320,7 @@ export default function ProductionPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">En Producción</p>
+                <p className="text-sm text-muted-foreground">{t("production.in-production")}</p>
                 <p className="text-2xl font-bold">{inProductionOrders.length}</p>
               </div>
               <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
@@ -331,7 +333,7 @@ export default function ProductionPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Listos</p>
+                <p className="text-sm text-muted-foreground">{t("production.ready")}</p>
                 <p className="text-2xl font-bold">{readyOrders.length}</p>
               </div>
               <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -344,7 +346,7 @@ export default function ProductionPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Activos</p>
+                <p className="text-sm text-muted-foreground">{t("production.total-active")}</p>
                 <p className="text-2xl font-bold">{(orders?.length || 0)}</p>
               </div>
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -358,27 +360,27 @@ export default function ProductionPage() {
       <Tabs defaultValue="pending" className="w-full">
         <TabsList>
           <TabsTrigger value="pending" data-testid="tab-pending">
-            Pendientes ({pendingOrders.length})
+            {t("production.pending")} ({pendingOrders.length})
           </TabsTrigger>
           <TabsTrigger value="in-production" data-testid="tab-in-production">
-            En Producción ({inProductionOrders.length})
+            {t("production.in-production")} ({inProductionOrders.length})
           </TabsTrigger>
           <TabsTrigger value="ready" data-testid="tab-ready">
-            Listos ({readyOrders.length})
+            {t("production.ready")} ({readyOrders.length})
           </TabsTrigger>
           <TabsTrigger value="all" data-testid="tab-all">
-            Todos ({orders?.length || 0})
+            {t("production.tab.all")} ({orders?.length || 0})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending">
           <Card>
             <CardHeader>
-              <CardTitle>Pedidos Pendientes</CardTitle>
-              <CardDescription>Pedidos que aún no han iniciado producción</CardDescription>
+              <CardTitle>{t("production.card.pending")}</CardTitle>
+              <CardDescription>{t("production.card.pending-desc")}</CardDescription>
             </CardHeader>
             <CardContent>
-              {renderOrdersTable(pendingOrders, "No hay pedidos pendientes")}
+              {renderOrdersTable(pendingOrders, t("production.no-orders-pending"))}
             </CardContent>
           </Card>
         </TabsContent>
@@ -386,11 +388,11 @@ export default function ProductionPage() {
         <TabsContent value="in-production">
           <Card>
             <CardHeader>
-              <CardTitle>En Producción</CardTitle>
-              <CardDescription>Pedidos actualmente en proceso de fabricación</CardDescription>
+              <CardTitle>{t("production.card.in-production")}</CardTitle>
+              <CardDescription>{t("production.card.in-production-desc")}</CardDescription>
             </CardHeader>
             <CardContent>
-              {renderOrdersTable(inProductionOrders, "No hay pedidos en producción")}
+              {renderOrdersTable(inProductionOrders, t("production.no-orders-in-production"))}
             </CardContent>
           </Card>
         </TabsContent>
@@ -398,11 +400,11 @@ export default function ProductionPage() {
         <TabsContent value="ready">
           <Card>
             <CardHeader>
-              <CardTitle>Listos para Embarque</CardTitle>
-              <CardDescription>Pedidos completados listos para enviar</CardDescription>
+              <CardTitle>{t("production.card.ready")}</CardTitle>
+              <CardDescription>{t("production.card.ready-desc")}</CardDescription>
             </CardHeader>
             <CardContent>
-              {renderOrdersTable(readyOrders, "No hay pedidos listos")}
+              {renderOrdersTable(readyOrders, t("production.no-orders-ready"))}
             </CardContent>
           </Card>
         </TabsContent>
@@ -412,22 +414,22 @@ export default function ProductionPage() {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>Todos los Pedidos</CardTitle>
+                  <CardTitle>{t("production.card.all")}</CardTitle>
                   <CardDescription>
                     {(() => {
                       const terminal = [OrderStatus.SHIPPED, OrderStatus.DELIVERED];
                       const closedCount = orders?.filter(o => terminal.includes(o.status as any)).length ?? 0;
                       const visible = hideDelivered ? (orders?.filter(o => !terminal.includes(o.status as any)).length ?? 0) : (orders?.length ?? 0);
                       return <>
-                        {visible} de {orders?.length || 0} pedidos
-                        {hideDelivered && closedCount > 0 && <span className="ml-1">({closedCount} cerrado{closedCount !== 1 ? "s" : ""} oculto{closedCount !== 1 ? "s" : ""})</span>}
+                        {visible} {t("production.of")} {orders?.length || 0} {t("production.orders")}
+                        {hideDelivered && closedCount > 0 && <span className="ml-1">({closedCount} {closedCount !== 1 ? t("production.closed-hidden-pl") : t("production.closed-hidden")} {closedCount !== 1 ? t("production.hidden-pl") : t("production.hidden")})</span>}
                       </>;
                     })()}
                   </CardDescription>
                 </div>
                 {(orders?.filter(o => o.status === OrderStatus.SHIPPED || o.status === OrderStatus.DELIVERED).length ?? 0) > 0 && (
                   <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
-                    {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar enviados/entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar enviados/entregados</>}
+                    {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />{t("btn.show-shipped")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("btn.hide-shipped")}</>}
                   </Button>
                 )}
               </div>
@@ -437,7 +439,7 @@ export default function ProductionPage() {
                 hideDelivered
                   ? (orders || []).filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED)
                   : (orders || []),
-                "No hay pedidos"
+                t("production.no-orders")
               )}
             </CardContent>
           </Card>
@@ -449,7 +451,7 @@ export default function ProductionPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Factory className="h-5 w-5" />
-              Gestión de Producción
+              {t("production.dialog-title")}
             </DialogTitle>
             <DialogDescription>
               {orderDetails?.quotation.folio}
@@ -467,12 +469,12 @@ export default function ProductionPage() {
                 <div className="flex items-center gap-2">
                   {getStatusBadge(orderDetails.status)}
                   <span className="text-sm text-muted-foreground">
-                    Creado: {format(new Date(orderDetails.createdAt), "PPP", { locale: es })}
+                    {t("production.created")}: {format(new Date(orderDetails.createdAt), "PPP", { locale: es })}
                   </span>
                 </div>
                 {!isEditing && (
                   <Button onClick={startEditing} variant="outline" data-testid="button-edit-production">
-                    Editar Información
+                    {t("btn.edit-info")}
                   </Button>
                 )}
               </div>
@@ -483,7 +485,7 @@ export default function ProductionPage() {
                 <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="estimatedDelivery">Fecha Estimada de Entrega</Label>
+                      <Label htmlFor="estimatedDelivery">{t("production.est-delivery")}</Label>
                       <div className="flex gap-2">
                         <Input
                           id="estimatedDelivery"
@@ -499,12 +501,12 @@ export default function ProductionPage() {
                           data-testid="button-no-delivery-time"
                         >
                           <AlertCircle className="h-4 w-4 mr-1" />
-                          Sin tiempo
+                          {t("btn.no-time")}
                         </Button>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Progreso de Producción: {editProgress}%</Label>
+                      <Label>{t("production.progress-label")}: {editProgress}%</Label>
                       <Slider
                         value={[editProgress]}
                         onValueChange={(value) => setEditProgress(value[0])}
@@ -517,12 +519,12 @@ export default function ProductionPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="factoryNotes">Notas de Producción</Label>
+                    <Label htmlFor="factoryNotes">{t("production.notes-label")}</Label>
                     <Textarea
                       id="factoryNotes"
                       value={editFactoryNotes}
                       onChange={(e) => setEditFactoryNotes(e.target.value)}
-                      placeholder="Notas internas de producción..."
+                      placeholder={t("production.notes-placeholder")}
                       rows={4}
                       data-testid="input-factory-notes"
                     />
@@ -531,7 +533,7 @@ export default function ProductionPage() {
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={cancelEditing} data-testid="button-cancel-edit">
                       <X className="h-4 w-4 mr-1" />
-                      Cancelar
+                      {t("btn.cancel")}
                     </Button>
                     <Button 
                       onClick={handleSave} 
@@ -539,31 +541,31 @@ export default function ProductionPage() {
                       data-testid="button-save-production"
                     >
                       <Save className="h-4 w-4 mr-1" />
-                      Guardar
+                      {updateOrderMutation.isPending ? t("btn.saving") : t("btn.save")}
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Fecha Estimada de Entrega</Label>
+                    <Label className="text-xs text-muted-foreground">{t("production.est-delivery")}</Label>
                     <div className="text-sm font-medium mt-1">
                       {orderDetails.estimatedDelivery
                         ? format(new Date(orderDetails.estimatedDelivery), "PPP", { locale: es })
-                        : <span className="text-orange-600">No definida</span>}
+                        : <span className="text-orange-600">{t("production.no-delivery")}</span>}
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Progreso</Label>
+                    <Label className="text-xs text-muted-foreground">{t("production.col.progress")}</Label>
                     <div className="mt-1 flex items-center gap-2">
                       <Progress value={orderDetails.productionProgress} className="h-2 flex-1" />
                       <span className="text-sm font-medium">{orderDetails.productionProgress}%</span>
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Notas</Label>
+                    <Label className="text-xs text-muted-foreground">{t("production.notes-label")}</Label>
                     <div className="text-sm mt-1">
-                      {orderDetails.factoryNotes || <span className="text-muted-foreground">Sin notas</span>}
+                      {orderDetails.factoryNotes || <span className="text-muted-foreground">{t("production.no-notes")}</span>}
                     </div>
                   </div>
                 </div>
@@ -572,15 +574,15 @@ export default function ProductionPage() {
               <Separator />
 
               <div>
-                <h3 className="font-semibold mb-3">Productos del Pedido</h3>
+                <h3 className="font-semibold mb-3">{t("production.products")}</h3>
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Código</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead className="text-right">Cantidad</TableHead>
-                        <TableHead className="text-right">Unidad</TableHead>
+                        <TableHead>{t("production.col.code")}</TableHead>
+                        <TableHead>{t("production.col.product")}</TableHead>
+                        <TableHead className="text-right">{t("production.col.qty")}</TableHead>
+                        <TableHead className="text-right">{t("production.col.unit")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -601,7 +603,7 @@ export default function ProductionPage() {
 
               <div className="flex justify-between items-center">
                 <div className="text-sm text-muted-foreground">
-                  Acciones rápidas de estado
+                  {t("production.status-actions")}
                 </div>
                 <div className="flex gap-2">
                   {orderDetails.status === OrderStatus.PENDING && (
@@ -611,7 +613,7 @@ export default function ProductionPage() {
                       data-testid="button-mark-in-production"
                     >
                       <Factory className="h-4 w-4 mr-1" />
-                      Iniciar Producción
+                      {t("btn.start-production")}
                     </Button>
                   )}
                   {orderDetails.status === OrderStatus.IN_PRODUCTION && (
@@ -622,7 +624,7 @@ export default function ProductionPage() {
                       data-testid="button-mark-ready"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-1" />
-                      Marcar como Listo
+                      {t("btn.mark-ready")}
                     </Button>
                   )}
                   {orderDetails.status === OrderStatus.READY && (
@@ -633,7 +635,7 @@ export default function ProductionPage() {
                       data-testid="button-send-to-shipping"
                     >
                       <Truck className="h-4 w-4 mr-1" />
-                      Enviar a Embarque
+                      {t("btn.send-to-shipping")}
                     </Button>
                   )}
                 </div>
@@ -643,7 +645,7 @@ export default function ProductionPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-              Cerrar
+              {t("btn.close")}
             </Button>
           </DialogFooter>
         </DialogContent>

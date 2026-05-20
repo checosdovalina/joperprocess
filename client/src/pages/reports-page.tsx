@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -293,7 +294,7 @@ export default function ReportsPage() {
         <div className="flex items-center gap-3">
           <FileBarChart2 className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-xl font-bold">Reportes</h1>
+            <h1 className="text-xl font-bold">{t("reports.title")}</h1>
             <p className="text-sm text-muted-foreground">Genera y visualiza reportes de pedidos</p>
           </div>
         </div>
@@ -315,7 +316,7 @@ export default function ReportsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <Filter className="h-4 w-4" />
-            Filtros del Reporte — Pedidos
+            {t("reports.filters")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -408,7 +409,7 @@ export default function ReportsPage() {
           <div className="flex flex-wrap gap-2 mt-4">
             <Button onClick={handleApply} data-testid="button-apply-filters">
               <Search className="h-4 w-4 mr-2" />
-              Generar Reporte
+              {t("reports.generate")}
             </Button>
             {hasFilters && (
               <Button variant="outline" onClick={handleClear} data-testid="button-clear-filters">
@@ -424,7 +425,7 @@ export default function ReportsPage() {
       {!applied && (
         <div className="text-center py-16 text-muted-foreground">
           <FileBarChart2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Configura los filtros y haz clic en <strong>Generar Reporte</strong></p>
+          <p className="text-sm">{t("reports.configure-hint")}</p>
         </div>
       )}
 

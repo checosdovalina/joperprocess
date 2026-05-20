@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useI18n } from "@/hooks/use-i18n";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -91,6 +92,7 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
 // ─── Seller Dashboard ─────────────────────────────────────────────────────────
 
 function SellerDashboard({ userName }: { userName: string }) {
+  const { t } = useI18n();
   const { data: stats, isLoading } = useQuery<SellerStats>({
     queryKey: ["/api/dashboard/seller-stats"],
     refetchInterval: 60_000,
@@ -105,31 +107,31 @@ function SellerDashboard({ userName }: { userName: string }) {
 
   const kpis = [
     {
-      title: "Mis Cotizaciones",
+      title: t("dashboard.my-quotations"),
       value: stats?.myPendingQuotations ?? 0,
       icon: FileText,
-      description: "En borrador o enviadas",
+      description: t("dashboard.draft-sent"),
       color: "text-blue-600",
     },
     {
-      title: "Check-ins Hoy",
+      title: t("dashboard.checkins-today"),
       value: stats?.myTodayCheckins ?? 0,
       icon: Users,
-      description: "Visitas realizadas hoy",
+      description: t("dashboard.visits-today"),
       color: "text-green-600",
     },
     {
-      title: "Pedidos por Entregar",
+      title: t("dashboard.orders-to-deliver"),
       value: stats?.myOrdersReady ?? 0,
       icon: Truck,
-      description: "Listos para despacho",
+      description: t("dashboard.ready-dispatch"),
       color: "text-emerald-600",
     },
     {
-      title: "Ventas del Mes",
+      title: t("dashboard.month-sales"),
       value: `$${((stats?.myMonthlySales ?? 0) / 1000).toLocaleString("es-MX", { maximumFractionDigits: 1 })}K`,
       icon: TrendingUp,
-      description: `Cotizaciones aprobadas — ${format(new Date(), "MMMM yyyy", { locale: es })}`,
+      description: `${format(new Date(), "MMMM yyyy", { locale: es })}`,
       color: "text-indigo-600",
     },
   ];
@@ -137,9 +139,9 @@ function SellerDashboard({ userName }: { userName: string }) {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Panel del Vendedor</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.seller-panel")}</h1>
         <p className="text-muted-foreground mt-2">
-          Bienvenido, {userName}. Aquí están tus actividades del mes.
+          {t("dashboard.welcome").replace("{name}", userName)}
         </p>
       </div>
 
@@ -179,8 +181,8 @@ function SellerDashboard({ userName }: { userName: string }) {
           <CardHeader className="flex flex-row items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
             <div>
-              <CardTitle>Visitas Recientes</CardTitle>
-              <CardDescription>Últimos check-ins a clientes</CardDescription>
+              <CardTitle>{t("dashboard.recent-visits")}</CardTitle>
+              <CardDescription>{t("dashboard.last-checkins")}</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
@@ -223,7 +225,7 @@ function SellerDashboard({ userName }: { userName: string }) {
                 ))
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No hay visitas recientes
+                  {t("dashboard.no-visits")}
                 </p>
               )}
             </div>
@@ -235,8 +237,8 @@ function SellerDashboard({ userName }: { userName: string }) {
           <CardHeader className="flex flex-row items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
             <div>
-              <CardTitle>Mis Cotizaciones Recientes</CardTitle>
-              <CardDescription>Últimas 5 cotizaciones</CardDescription>
+              <CardTitle>{t("dashboard.recent-quotations")}</CardTitle>
+              <CardDescription>{t("dashboard.last-quotations")}</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
@@ -270,7 +272,7 @@ function SellerDashboard({ userName }: { userName: string }) {
                 ))
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No hay cotizaciones registradas
+                  {t("dashboard.no-quotations")}
                 </p>
               )}
             </div>
@@ -284,6 +286,7 @@ function SellerDashboard({ userName }: { userName: string }) {
 // ─── Admin / Other Roles Dashboard ───────────────────────────────────────────
 
 function GeneralDashboard({ userName, role }: { userName: string; role: string }) {
+  const { t } = useI18n();
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
     refetchInterval: 60_000,
@@ -308,86 +311,86 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
 
   const getRoleTitle = (r: string) => {
     const titles: Record<string, string> = {
-      admin: "Panel de Administrador",
-      credito_cobranza: "Panel de Crédito y Cobranza",
-      ventas_logistica: "Panel de Ventas y Logística",
-      fabrica: "Panel de Fábrica",
-      embarques: "Panel de Embarques",
-      facturacion: "Panel de Facturación",
+      admin: t("dashboard.admin-panel"),
+      credito_cobranza: t("dashboard.credit-panel"),
+      ventas_logistica: t("dashboard.logistics-panel"),
+      fabrica: t("dashboard.factory-panel"),
+      embarques: t("dashboard.shipping-panel"),
+      facturacion: t("dashboard.billing-panel"),
     };
-    return titles[r] || "Dashboard";
+    return titles[r] || t("page.dashboard");
   };
 
   const allMetrics = [
     {
-      title: "Cotizaciones Pendientes",
+      title: t("dashboard.pending-quotations"),
       value: stats?.pendingQuotations ?? 0,
       icon: FileText,
-      description: "Requieren seguimiento",
+      description: t("dashboard.need-followup"),
       color: "text-blue-600",
       roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA],
     },
     {
-      title: "Check-ins Hoy",
+      title: t("dashboard.checkins-today"),
       value: stats?.todayCheckins ?? 0,
       icon: Users,
-      description: "Visitas realizadas",
+      description: t("dashboard.visits-done"),
       color: "text-green-600",
       roles: [UserRole.ADMIN],
     },
     {
-      title: "Autorizaciones Pendientes",
+      title: t("dashboard.pending-auth"),
       value: stats?.pendingCreditAuth ?? 0,
       icon: AlertCircle,
-      description: "Requieren aprobación",
+      description: t("dashboard.need-approval"),
       color: "text-orange-600",
       roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA],
     },
     {
-      title: "Pedidos Activos",
+      title: t("dashboard.active-orders"),
       value: stats?.activeOrders ?? 0,
       icon: Package,
-      description: "En producción",
+      description: t("dashboard.in-production"),
       color: "text-purple-600",
       roles: [UserRole.ADMIN, UserRole.FABRICA, UserRole.VENTAS_LOGISTICA],
     },
     {
-      title: "Embarques Pendientes",
+      title: t("dashboard.pending-shipments"),
       value: stats?.pendingShipments ?? 0,
       icon: Clock,
-      description: "Por despachar",
+      description: t("dashboard.to-dispatch"),
       color: "text-indigo-600",
       roles: [UserRole.ADMIN, UserRole.EMBARQUES, UserRole.VENTAS_LOGISTICA],
     },
     {
-      title: "Facturas Vencidas",
+      title: t("dashboard.overdue-invoices"),
       value: stats?.overdueInvoices ?? 0,
       icon: AlertCircle,
-      description: "Requieren cobranza",
+      description: t("dashboard.need-collection"),
       color: "text-red-600",
       roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA],
     },
     {
-      title: "Ingresos del Mes",
+      title: t("dashboard.month-revenue"),
       value: `$${(stats?.totalRevenue ?? 0).toLocaleString("es-MX")}`,
       icon: DollarSign,
-      description: "Total facturado",
+      description: t("dashboard.total-billed"),
       color: "text-green-600",
       roles: [UserRole.ADMIN, UserRole.FACTURACION, UserRole.CREDITO_COBRANZA],
     },
     {
-      title: "Pedidos por Entregar",
+      title: t("dashboard.orders-to-deliver"),
       value: stats?.ordersReadyToDeliver ?? 0,
       icon: Truck,
-      description: "Listos para despacho",
+      description: t("dashboard.ready-dispatch"),
       color: "text-emerald-600",
       roles: [UserRole.ADMIN, UserRole.EMBARQUES, UserRole.VENTAS_LOGISTICA],
     },
     {
-      title: "Ventas Anuales",
+      title: t("dashboard.annual-sales"),
       value: `$${((stats?.annualSales ?? 0) / 1000).toLocaleString("es-MX", { maximumFractionDigits: 0 })}K`,
       icon: TrendingUp,
-      description: `Año ${new Date().getFullYear()}`,
+      description: `${t("label.year")} ${new Date().getFullYear()}`,
       color: "text-blue-600",
       roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA],
     },
@@ -400,7 +403,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{getRoleTitle(role)}</h1>
         <p className="text-muted-foreground mt-2">
-          Bienvenido, {userName}. Aquí está el resumen de actividades.
+          {t("dashboard.welcome-admin").replace("{name}", userName)}
         </p>
       </div>
 
@@ -440,8 +443,8 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
             <CardHeader className="flex flex-row items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
               <div>
-                <CardTitle>Contactos Recientes</CardTitle>
-                <CardDescription>Últimas visitas a clientes</CardDescription>
+                <CardTitle>{t("dashboard.recent-contacts")}</CardTitle>
+                <CardDescription>{t("dashboard.last-visits")}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -485,7 +488,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No hay visitas recientes</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">{t("dashboard.no-visits")}</p>
                 )}
               </div>
             </CardContent>
@@ -495,8 +498,8 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
               <div>
-                <CardTitle>Ventas por Línea</CardTitle>
-                <CardDescription>Distribución por categoría (año actual)</CardDescription>
+                <CardTitle>{t("dashboard.sales-by-line")}</CardTitle>
+                <CardDescription>{t("dashboard.distribution")}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -536,7 +539,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
                       });
                   })()
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No hay datos de ventas</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">{t("dashboard.no-sales-data")}</p>
                 )}
               </div>
             </CardContent>

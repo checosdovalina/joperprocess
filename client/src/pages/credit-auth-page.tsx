@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { CreditAuthorization, Quotation, Customer, User, CreditAuthorizationComment } from "@shared/schema";
 import {
@@ -93,6 +94,7 @@ type AnalysisContext = {
 };
 
 export default function CreditAuthPage() {
+  const { t } = useI18n();
   const [selectedAuth, setSelectedAuth] = useState<CreditAuthWithDetails | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [rulesAnalysis, setRulesAnalysis] = useState<AIAnalysis | null>(null);
@@ -136,14 +138,14 @@ export default function CreditAuthPage() {
       refetchComments();
       setNewComment("");
       toast({
-        title: "Comentario agregado",
-        description: "El comentario se ha guardado correctamente.",
+        title: t("credit.comment-added"),
+        description: t("label.saved-ok"),
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "No se pudo agregar el comentario.",
+        title: t("label.error"),
+        description: t("label.error-save"),
         variant: "destructive",
       });
     },
@@ -176,14 +178,14 @@ export default function CreditAuthPage() {
       setAiAnalysis(null);
       setAnalysisContext(null);
       toast({
-        title: "Actualizado",
-        description: "La autorización ha sido actualizada correctamente.",
+        title: t("credit.updated"),
+        description: t("label.saved-ok"),
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "No se pudo actualizar la autorización.",
+        title: t("label.error"),
+        description: t("label.error-save"),
         variant: "destructive",
       });
     },
@@ -224,14 +226,14 @@ export default function CreditAuthPage() {
         setAiAnalysis(data.analysis);
         setAnalysisContext(data.context);
         toast({
-          title: "Análisis IA completado",
-          description: "El análisis avanzado con IA está listo.",
+          title: t("credit.ai-completed"),
+          description: t("credit.ai-completed-desc"),
         });
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudo realizar el análisis de IA.",
+        title: t("label.error"),
+        description: t("credit.ai-error"),
         variant: "destructive",
       });
     } finally {
@@ -305,8 +307,8 @@ export default function CreditAuthPage() {
     if (!selectedAuth) return;
     if (!approvalSignature) {
       toast({
-        title: "Firma requerida",
-        description: "Por favor, firme en el recuadro antes de aprobar.",
+        title: t("credit.signature-required"),
+        description: t("credit.signature-required-desc"),
         variant: "destructive",
       });
       return;
@@ -314,7 +316,7 @@ export default function CreditAuthPage() {
     updateMutation.mutate({ 
       id: selectedAuth.id, 
       status: "approved",
-      notes: currentAnalysis ? `Análisis: ${currentAnalysis.summary}` : undefined,
+      notes: currentAnalysis ? `${t("credit.analysis-prefix")}: ${currentAnalysis.summary}` : undefined,
       approvalSignature,
     });
   };
@@ -324,56 +326,64 @@ export default function CreditAuthPage() {
     updateMutation.mutate({ 
       id: selectedAuth.id, 
       status: "rejected",
-      notes: currentAnalysis ? `Análisis: ${currentAnalysis.summary}` : undefined,
+      notes: currentAnalysis ? `${t("credit.analysis-prefix")}: ${currentAnalysis.summary}` : undefined,
       rejectionNotes: rejectionNotes || undefined,
     });
   };
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
-      pending: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-      approved: { label: "Aprobada", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-      rejected: { label: "Rechazada", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
+      pending: { label: t("status.pending"), className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
+      approved: { label: t("status.approved"), className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
+      rejected: { label: t("status.rejected"), className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
     };
     const config = statusConfig[status] || statusConfig.pending;
     return <Badge className={config.className} data-testid={`status-${status}`}>{config.label}</Badge>;
   };
 
   const getRiskBadge = (riskLevel: string) => {
-    const config: Record<string, { label: string; className: string }> = {
-      bajo: { label: "Riesgo Bajo", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-      medio: { label: "Riesgo Medio", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-      alto: { label: "Riesgo Alto", className: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" },
-      muy_alto: { label: "Riesgo Muy Alto", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
+    const labels: Record<string, string> = {
+      bajo: t("credit.risk.low"), medio: t("credit.risk.medium"),
+      alto: t("credit.risk.high"), muy_alto: t("credit.risk.very-high"),
     };
-    const c = config[riskLevel] || { label: riskLevel, className: "bg-gray-100 text-gray-800" };
-    return <Badge className={c.className}>{c.label}</Badge>;
+    const classes: Record<string, string> = {
+      bajo: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      medio: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+      alto: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+      muy_alto: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    };
+    return <Badge className={classes[riskLevel] || "bg-gray-100 text-gray-800"}>{labels[riskLevel] || riskLevel}</Badge>;
   };
 
   const getRecommendationBadge = (rec: string) => {
-    const config: Record<string, { label: string; className: string }> = {
-      aprobar: { label: "Aprobar", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-      aprobar_con_condiciones: { label: "Aprobar con Condiciones", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-      rechazar: { label: "Rechazar", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
-      revisar_manualmente: { label: "Revisar Manualmente", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
+    const labels: Record<string, string> = {
+      aprobar: t("credit.decision.aprobar"),
+      aprobar_con_condiciones: t("credit.decision.aprobar_con_condiciones"),
+      rechazar: t("credit.decision.rechazar"),
+      revisar_manualmente: t("credit.risk.review-manually"),
     };
-    const c = config[rec] || { label: rec, className: "bg-gray-100 text-gray-800" };
-    return <Badge className={c.className}>{c.label}</Badge>;
+    const classes: Record<string, string> = {
+      aprobar: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      aprobar_con_condiciones: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+      rechazar: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+      revisar_manualmente: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    };
+    return <Badge className={classes[rec] || "bg-gray-100 text-gray-800"}>{labels[rec] || rec}</Badge>;
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Autorización de Crédito</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("credit.page-title")}</h1>
         <p className="text-muted-foreground mt-1">
-          Revisa y autoriza cotizaciones según límites de crédito
+          {t("credit.page-subtitle")}
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("credit.pending")}</CardTitle>
             <ClipboardCheck className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
@@ -381,13 +391,13 @@ export default function CreditAuthPage() {
               {authorizations?.filter((a) => a.status === "pending").length || 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Requieren revisión
+              {t("credit.stat.requires-review")}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Aprobadas</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("credit.approved")}</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -395,13 +405,13 @@ export default function CreditAuthPage() {
               {authorizations?.filter((a) => a.status === "approved").length || 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Este mes
+              {t("credit.stat.this-month")}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rechazadas</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("credit.rejected")}</CardTitle>
             <XCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -409,7 +419,7 @@ export default function CreditAuthPage() {
               {authorizations?.filter((a) => a.status === "rejected").length || 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Este mes
+              {t("credit.stat.this-month")}
             </p>
           </CardContent>
         </Card>
@@ -419,21 +429,21 @@ export default function CreditAuthPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Solicitudes de Autorización</CardTitle>
+              <CardTitle>{t("credit.requests-title")}</CardTitle>
               <CardDescription>
                 {(() => {
                   const resolved = authorizations?.filter(a => a.status === "approved" || a.status === "rejected").length ?? 0;
                   const visible = hideResolved ? (authorizations?.filter(a => a.status === "pending").length ?? 0) : (authorizations?.length ?? 0);
                   return <>
-                    {visible} de {authorizations?.length || 0} solicitudes
-                    {hideResolved && resolved > 0 && <span className="ml-1">({resolved} resuelta{resolved !== 1 ? "s" : ""} oculta{resolved !== 1 ? "s" : ""})</span>}
+                    {visible} {t("credit.requests-desc-of")} {authorizations?.length || 0} {t("credit.requests-desc-noun")}
+                    {hideResolved && resolved > 0 && <span className="ml-1">({resolved} {resolved !== 1 ? t("credit.resolved-pl") : t("credit.resolved")} {resolved !== 1 ? t("credit.hidden-pl") : t("credit.hidden")})</span>}
                   </>;
                 })()}
               </CardDescription>
             </div>
             {(authorizations?.filter(a => a.status === "approved" || a.status === "rejected").length ?? 0) > 0 && (
               <Button variant="outline" size="sm" onClick={() => setHideResolved(v => !v)} data-testid="button-toggle-resolved">
-                {hideResolved ? <><Eye className="h-4 w-4 mr-2" />Mostrar resueltas</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar resueltas</>}
+                {hideResolved ? <><Eye className="h-4 w-4 mr-2" />{t("credit.show-resolved")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("credit.hide-resolved")}</>}
               </Button>
             )}
           </div>
@@ -450,13 +460,13 @@ export default function CreditAuthPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Folio Cotización</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="text-right">Crédito Disponible</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("credit.col.date")}</TableHead>
+                    <TableHead>{t("credit.col.customer")}</TableHead>
+                    <TableHead>{t("credit.col.folio")}</TableHead>
+                    <TableHead className="text-right">{t("credit.col.amount")}</TableHead>
+                    <TableHead className="text-right">{t("credit.col.credit-available")}</TableHead>
+                    <TableHead>{t("credit.col.status")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -500,7 +510,7 @@ export default function CreditAuthPage() {
                             data-testid={`button-view-${auth.id}`}
                           >
                             <Eye className="h-4 w-4 mr-1" />
-                            Ver Detalle
+                            {t("credit.btn.view")}
                           </Button>
                         </div>
                       </TableCell>
@@ -512,7 +522,7 @@ export default function CreditAuthPage() {
           ) : (
             <div className="text-center py-12">
               <ClipboardCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay solicitudes de autorización</p>
+              <p className="text-muted-foreground">{t("credit.no-requests")}</p>
             </div>
           )}
         </CardContent>
@@ -524,10 +534,10 @@ export default function CreditAuthPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Autorización de Crédito - {selectedAuth?.quotation.folio}
+              {t("credit.page-title")} - {selectedAuth?.quotation.folio}
             </DialogTitle>
             <DialogDescription>
-              Revisa los detalles y realiza un análisis con IA antes de autorizar
+              {t("credit.dialog.subtitle")}
             </DialogDescription>
           </DialogHeader>
 
@@ -539,12 +549,12 @@ export default function CreditAuthPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <Building2 className="h-4 w-4" />
-                      Información del Cliente
+                      {t("credit.customer-info")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Nombre:</span>
+                      <span className="text-muted-foreground">{t("label.name")}:</span>
                       <span className="font-medium">{selectedAuth?.quotation.customer.name}</span>
                     </div>
                     <div className="flex justify-between">
@@ -552,7 +562,7 @@ export default function CreditAuthPage() {
                       <span className="font-mono">{selectedAuth?.quotation.customer.rfc}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Límite de Crédito:</span>
+                      <span className="text-muted-foreground">{t("credit.credit-limit")}:</span>
                       <span className="font-medium">
                         ${parseFloat(selectedAuth?.quotation.customer.creditLimit || "0").toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                       </span>
@@ -564,30 +574,30 @@ export default function CreditAuthPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <CircleDollarSign className="h-4 w-4" />
-                      Información de Crédito
+                      {t("credit.credit-info")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Monto Cotización:</span>
+                      <span className="text-muted-foreground">{t("credit.quotation-amount")}:</span>
                       <span className="font-medium text-primary">
                         ${parseFloat(selectedAuth?.quotation.total || "0").toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Crédito Disponible:</span>
+                      <span className="text-muted-foreground">{t("credit.col.credit-available")}:</span>
                       <span className="font-medium">
                         ${parseFloat(selectedAuth?.creditAvailable || "0").toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Crédito Utilizado:</span>
+                      <span className="text-muted-foreground">{t("credit.credit-used")}:</span>
                       <span>
                         ${parseFloat(selectedAuth?.creditUsed || "0").toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estado:</span>
+                      <span className="text-muted-foreground">{t("label.status")}:</span>
                       {selectedAuth && getStatusBadge(selectedAuth.status)}
                     </div>
                   </CardContent>
@@ -601,9 +611,9 @@ export default function CreditAuthPage() {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="font-semibold flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-purple-500" />
-                    Análisis de Crédito
+                    {t("credit.dialog.title")}
                     {aiAnalysis && <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">IA</Badge>}
-                    {rulesAnalysis && !aiAnalysis && <Badge variant="outline">Automático</Badge>}
+                    {rulesAnalysis && !aiAnalysis && <Badge variant="outline">{t("credit.auto-badge")}</Badge>}
                   </h3>
                   {!aiAnalysis && (
                     <Button 
@@ -616,12 +626,12 @@ export default function CreditAuthPage() {
                       {isAnalyzingAI ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Analizando...
+                          {t("credit.analyzing")}
                         </>
                       ) : (
                         <>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Análisis IA (Avanzado)
+                          {t("btn.run-ai")}
                         </>
                       )}
                     </Button>
@@ -633,7 +643,7 @@ export default function CreditAuthPage() {
                     <CardContent className="py-8">
                       <div className="flex flex-col items-center gap-4">
                         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <p className="text-muted-foreground">Analizando información del cliente...</p>
+                        <p className="text-muted-foreground">{t("credit.analyzing-customer")}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -646,16 +656,16 @@ export default function CreditAuthPage() {
                       <CardContent className="pt-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="text-center">
-                            <p className="text-sm text-muted-foreground mb-2">Score de Crédito</p>
+                            <p className="text-sm text-muted-foreground mb-2">{t("credit.score")}</p>
                             <div className="text-4xl font-bold text-primary">{currentAnalysis.score}</div>
                             <Progress value={currentAnalysis.score} className="mt-2" />
                           </div>
                           <div className="text-center">
-                            <p className="text-sm text-muted-foreground mb-2">Nivel de Riesgo</p>
+                            <p className="text-sm text-muted-foreground mb-2">{t("credit.risk-level")}</p>
                             <div className="mt-2">{getRiskBadge(currentAnalysis.riskLevel)}</div>
                           </div>
                           <div className="text-center">
-                            <p className="text-sm text-muted-foreground mb-2">Recomendación</p>
+                            <p className="text-sm text-muted-foreground mb-2">{t("credit.recommendation")}</p>
                             <div className="mt-2">{getRecommendationBadge(currentAnalysis.recommendation)}</div>
                           </div>
                         </div>
@@ -665,7 +675,7 @@ export default function CreditAuthPage() {
                     {/* Summary */}
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Resumen Ejecutivo</CardTitle>
+                        <CardTitle className="text-sm">{t("credit.executive-summary")}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm">{currentAnalysis.summary}</p>
@@ -678,7 +688,7 @@ export default function CreditAuthPage() {
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm flex items-center gap-2 text-green-600">
                             <TrendingUp className="h-4 w-4" />
-                            Factores Positivos
+                            {t("credit.positive-factors")}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -691,7 +701,7 @@ export default function CreditAuthPage() {
                                 </li>
                               ))
                             ) : (
-                              <li className="text-muted-foreground">No se identificaron factores positivos</li>
+                              <li className="text-muted-foreground">{t("credit.no-positive-factors")}</li>
                             )}
                           </ul>
                         </CardContent>
@@ -701,7 +711,7 @@ export default function CreditAuthPage() {
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm flex items-center gap-2 text-red-600">
                             <TrendingDown className="h-4 w-4" />
-                            Factores de Riesgo
+                            {t("credit.risk-factors")}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -714,7 +724,7 @@ export default function CreditAuthPage() {
                                 </li>
                               ))
                             ) : (
-                              <li className="text-muted-foreground">No se identificaron factores de riesgo</li>
+                              <li className="text-muted-foreground">{t("credit.no-risk-factors")}</li>
                             )}
                           </ul>
                         </CardContent>
@@ -727,7 +737,7 @@ export default function CreditAuthPage() {
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                            Condiciones Recomendadas
+                            {t("credit.recommended-conditions")}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -746,7 +756,7 @@ export default function CreditAuthPage() {
                     {/* Detailed Reasoning */}
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Análisis Detallado</CardTitle>
+                        <CardTitle className="text-sm">{t("credit.ai-adv-tab")}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">{currentAnalysis.reasoning}</p>
@@ -762,13 +772,13 @@ export default function CreditAuthPage() {
               <div className="space-y-4">
                 <h3 className="font-semibold flex items-center gap-2">
                   <MessageSquare className="h-5 w-5 text-blue-500" />
-                  Comentarios ({comments?.length || 0})
+                  {t("credit.comments-tab")} ({comments?.length || 0})
                 </h3>
 
                 {/* Add Comment */}
                 <div className="flex gap-2">
                   <Textarea 
-                    placeholder="Agregar un comentario..."
+                    placeholder={t("credit.comment-placeholder")}
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     className="flex-1 min-h-[60px]"
@@ -799,7 +809,7 @@ export default function CreditAuthPage() {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-medium">{comment.user?.fullName || "Usuario"}</span>
+                              <span className="text-sm font-medium">{comment.user?.fullName || t("label.user")}</span>
                               <span className="text-xs text-muted-foreground">
                                 {format(new Date(comment.createdAt), "dd/MM/yyyy HH:mm", { locale: es })}
                               </span>
@@ -811,7 +821,7 @@ export default function CreditAuthPage() {
                     ))
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      No hay comentarios aún
+                      {t("credit.no-comments")}
                     </p>
                   )}
                 </div>
@@ -830,10 +840,10 @@ export default function CreditAuthPage() {
               data-testid="button-download-pdf"
             >
               <Download className="h-4 w-4 mr-2" />
-              Descargar PDF
+              {t("btn.download-pdf")}
             </Button>
             <Button variant="outline" onClick={() => setDetailsOpen(false)}>
-              Cerrar
+              {t("btn.close")}
             </Button>
             {selectedAuth?.status === "pending" && (
               <>
@@ -844,7 +854,7 @@ export default function CreditAuthPage() {
                   data-testid="button-reject-detail"
                 >
                   <XCircle className="h-4 w-4 mr-2" />
-                  Rechazar
+                  {t("btn.reject")}
                 </Button>
                 <Button 
                   className="bg-green-600 hover:bg-green-700"
@@ -852,7 +862,7 @@ export default function CreditAuthPage() {
                   data-testid="button-approve-detail"
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Aprobar
+                  {t("btn.approve")}
                 </Button>
               </>
             )}
@@ -870,17 +880,17 @@ export default function CreditAuthPage() {
       }}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Aprobación</AlertDialogTitle>
+            <AlertDialogTitle>{t("credit.confirm-approve-title")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
                 <p>
-                  ¿Estás seguro de que deseas aprobar esta solicitud de crédito para la cotización{" "}
+                  {t("credit.confirm-approve-msg")}{" "}
                   <strong>{selectedAuth?.quotation.folio}</strong>?
                 </p>
                 {currentAnalysis && (
                   <div className="p-2 bg-muted rounded-md">
                     <p className="text-sm">
-                      <strong>Análisis:</strong> {currentAnalysis.summary}
+                      <strong>{t("credit.analysis-prefix")}:</strong> {currentAnalysis.summary}
                     </p>
                   </div>
                 )}
@@ -890,7 +900,7 @@ export default function CreditAuthPage() {
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium flex items-center gap-2">
                       <PenLine className="h-4 w-4" />
-                      Firma Digital (Requerida)
+                      {t("credit.digital-signature")}
                     </label>
                     <Button 
                       variant="ghost" 
@@ -898,7 +908,7 @@ export default function CreditAuthPage() {
                       onClick={clearSignature}
                       type="button"
                     >
-                      Limpiar
+                      {t("btn.clear")}
                     </Button>
                   </div>
                   <div className="border rounded-md overflow-hidden bg-white">
@@ -919,13 +929,13 @@ export default function CreditAuthPage() {
                   </div>
                   {!approvalSignature && (
                     <p className="text-xs text-muted-foreground">
-                      Dibuje su firma en el recuadro para confirmar la aprobación
+                      {t("credit.draw-signature")}
                     </p>
                   )}
                   {approvalSignature && (
                     <p className="text-xs text-green-600 flex items-center gap-1">
                       <CheckCircle2 className="h-3 w-3" />
-                      Firma capturada
+                      {t("credit.signature-captured")}
                     </p>
                   )}
                 </div>
@@ -933,7 +943,7 @@ export default function CreditAuthPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={updateMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={updateMutation.isPending}>{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleApprove}
               disabled={updateMutation.isPending || !approvalSignature}
@@ -942,7 +952,7 @@ export default function CreditAuthPage() {
               {updateMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "Aprobar con Firma"
+                t("btn.approve-with-sign")
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -953,17 +963,17 @@ export default function CreditAuthPage() {
       <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Rechazo</AlertDialogTitle>
+            <AlertDialogTitle>{t("credit.confirm-reject-title")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
                 <p>
-                  ¿Estás seguro de que deseas rechazar esta solicitud de crédito para la cotización{" "}
+                  {t("credit.confirm-reject-msg")}{" "}
                   <strong>{selectedAuth?.quotation.folio}</strong>?
                 </p>
                 <div>
-                  <label className="text-sm font-medium">Notas de rechazo (opcional):</label>
+                  <label className="text-sm font-medium">{t("credit.rejection-notes-label")}</label>
                   <Textarea 
-                    placeholder="Ingresa el motivo del rechazo..."
+                    placeholder={t("credit.rejection-notes-placeholder")}
                     value={rejectionNotes}
                     onChange={(e) => setRejectionNotes(e.target.value)}
                     className="mt-2"
@@ -974,7 +984,7 @@ export default function CreditAuthPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={updateMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={updateMutation.isPending}>{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleReject}
               disabled={updateMutation.isPending}
@@ -983,7 +993,7 @@ export default function CreditAuthPage() {
               {updateMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "Rechazar"
+                t("btn.reject")
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

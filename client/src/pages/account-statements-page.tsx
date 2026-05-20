@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -286,7 +287,7 @@ export default function AccountStatementsPage() {
     <div className="flex flex-col h-full">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3 px-6 py-4 border-b flex-wrap">
-        <h1 className="text-xl font-semibold">Estados de Cuenta</h1>
+        <h1 className="text-xl font-semibold">{t("statements.title")}</h1>
         <div className="flex items-center gap-2 flex-wrap">
           {selected.size > 0 && (
             <Button
@@ -565,7 +566,7 @@ export default function AccountStatementsPage() {
       <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-xl">
           <DialogHeader className="text-left">
-            <DialogTitle className="text-base">Enviar Estado de Cuenta</DialogTitle>
+            <DialogTitle className="text-base">{t("statements.send-title")}</DialogTitle>
             <DialogDescription className="font-medium text-foreground truncate">
               {singleSendCustomer?.customer.name}
             </DialogDescription>

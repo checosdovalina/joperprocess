@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Checkin, Customer, InsertCheckin, ScheduledVisit, MeetingType } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -45,6 +46,7 @@ import { CustomerCombobox } from "@/components/customer-combobox";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function CheckinsPage() {
+  const { t } = useI18n();
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -254,7 +256,7 @@ export default function CheckinsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Check-ins</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("checkins.title")}</h1>
           <p className="text-muted-foreground mt-1">
             Registra visitas a clientes con ubicación GPS
           </p>
@@ -263,7 +265,7 @@ export default function CheckinsPage() {
           <DialogTrigger asChild>
             <Button data-testid="button-add-checkin">
               <Plus className="h-4 w-4 mr-2" />
-              Nuevo Check-in
+              {t("checkins.new")}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col">
@@ -365,7 +367,7 @@ export default function CheckinsPage() {
                       Guardando...
                     </>
                   ) : (
-                    "Registrar Check-in"
+                    t("checkins.register")
                   )}
                 </Button>
               </div>
@@ -381,7 +383,7 @@ export default function CheckinsPage() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-primary" />
-                Visitas Programadas Hoy
+                {t("checkins.scheduled-today")}
               </CardTitle>
               <CardDescription>
                 {todayVisits.length} {todayVisits.length === 1 ? "visita programada" : "visitas programadas"}
@@ -442,7 +444,7 @@ export default function CheckinsPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Historial de Check-ins</CardTitle>
+              <CardTitle>{t("checkins.history")}</CardTitle>
               <CardDescription>
                 {filteredCheckins.length} de {checkins?.length || 0} visitas registradas
               </CardDescription>
@@ -465,8 +467,8 @@ export default function CheckinsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="active">En curso</SelectItem>
-                <SelectItem value="done">Finalizado</SelectItem>
+                <SelectItem value="active">{t("status.in-progress")}</SelectItem>
+                <SelectItem value="done">{t("status.done")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>
@@ -519,12 +521,12 @@ export default function CheckinsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fecha y Hora</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Ubicación</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("checkins.col.datetime")}</TableHead>
+                    <TableHead>{t("label.client")}</TableHead>
+                    <TableHead>{t("label.type")}</TableHead>
+                    <TableHead>{t("checkins.col.location")}</TableHead>
+                    <TableHead>{t("label.status")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

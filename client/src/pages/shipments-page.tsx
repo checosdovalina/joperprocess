@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Shipment, Order, Quotation, Customer, ShipmentStatus, ShipmentProductInstance, Product, QuotationItem } from "@shared/schema";
 import {
@@ -49,6 +50,7 @@ type ProductInstanceWithDetails = ShipmentProductInstance & {
 };
 
 export default function ShipmentsPage() {
+  const { t } = useI18n();
   const { toast } = useToast();
   const [selectedShipment, setSelectedShipment] = useState<ShipmentWithDetails | null>(null);
   const [serialDialogOpen, setSerialDialogOpen] = useState(false);
@@ -163,9 +165,9 @@ export default function ShipmentsPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
-      [ShipmentStatus.PENDING]: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800" },
-      [ShipmentStatus.IN_TRANSIT]: { label: "En Tránsito", className: "bg-blue-100 text-blue-800" },
-      [ShipmentStatus.DELIVERED]: { label: "Entregado", className: "bg-green-100 text-green-800" },
+      [ShipmentStatus.PENDING]: { label: t("status.pending"), className: "bg-yellow-100 text-yellow-800" },
+      [ShipmentStatus.IN_TRANSIT]: { label: t("status.in-transit"), className: "bg-blue-100 text-blue-800" },
+      [ShipmentStatus.DELIVERED]: { label: t("status.delivered"), className: "bg-green-100 text-green-800" },
     };
     const config = statusConfig[status] || statusConfig[ShipmentStatus.PENDING];
     return <Badge className={config.className} data-testid={`status-${status}`}>{config.label}</Badge>;
@@ -274,9 +276,9 @@ export default function ShipmentsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Embarques</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("shipments.title")}</h1>
         <p className="text-muted-foreground mt-1">
-          Gestiona embarques, números de serie y trazabilidad
+          {t("shipments.subtitle")}
         </p>
       </div>
 
@@ -294,7 +296,7 @@ export default function ShipmentsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">En Tránsito</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.in-transit")}</CardTitle>
             <Truck className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -305,7 +307,7 @@ export default function ShipmentsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Entregados</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.delivered")}</CardTitle>
             <Truck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -320,7 +322,7 @@ export default function ShipmentsPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Todos los Embarques</CardTitle>
+              <CardTitle>{t("shipments.all")}</CardTitle>
               <CardDescription>
                 {filteredShipments.length} de {shipments?.length || 0} embarques
                 {hideDelivered && (shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0) > 0 && (
@@ -332,7 +334,7 @@ export default function ShipmentsPage() {
             </div>
             {(shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0) > 0 && (
               <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
-                {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar entregados</>}
+                {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />{t("shipments.show-delivered")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("shipments.hide-delivered")}</>}
               </Button>
             )}
           </div>
@@ -354,8 +356,8 @@ export default function ShipmentsPage() {
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
                 <SelectItem value={ShipmentStatus.PENDING}>Pendiente</SelectItem>
-                <SelectItem value={ShipmentStatus.IN_TRANSIT}>En Tránsito</SelectItem>
-                <SelectItem value={ShipmentStatus.DELIVERED}>Entregado</SelectItem>
+                <SelectItem value={ShipmentStatus.IN_TRANSIT}>{t("status.in-transit")}</SelectItem>
+                <SelectItem value={ShipmentStatus.DELIVERED}>{t("status.delivered")}</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-1">
@@ -397,13 +399,13 @@ export default function ShipmentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Folio</TableHead>
-                    <TableHead>Transportista</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Fecha Embarque</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("label.client")}</TableHead>
+                    <TableHead>{t("label.folio")}</TableHead>
+                    <TableHead>{t("shipments.col.carrier")}</TableHead>
+                    <TableHead>{t("label.type")}</TableHead>
+                    <TableHead>{t("shipments.col.date")}</TableHead>
+                    <TableHead>{t("label.status")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -471,7 +473,7 @@ export default function ShipmentsPage() {
           ) : (
             <div className="text-center py-12">
               <Truck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay embarques registrados</p>
+              <p className="text-muted-foreground">{t("shipments.no-results")}</p>
             </div>
           )}
         </CardContent>
@@ -718,14 +720,14 @@ export default function ShipmentsPage() {
                     <p className="font-medium">
                       {selectedShipment.shippedAt 
                         ? format(new Date(selectedShipment.shippedAt), "PPP", { locale: es })
-                        : "No embarcado"}
+                        : t("status.not-shipped")}
                     </p>
                   </div>
                 </div>
               )}
 
               <div className="flex justify-between items-center pt-4 border-t">
-                <span className="text-sm text-muted-foreground">Acciones de estado</span>
+                <span className="text-sm text-muted-foreground">{t("label.status")} — {t("label.actions")}</span>
                 <div className="flex gap-2">
                   {selectedShipment.status === ShipmentStatus.PENDING && (
                     <Button onClick={handleMarkAsInTransit} disabled={updateShipmentMutation.isPending}>

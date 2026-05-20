@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery } from "@tanstack/react-query";
 import { Invoice, Customer, InvoiceStatus } from "@shared/schema";
 import {
@@ -56,16 +57,16 @@ import { Separator } from "@/components/ui/separator";
 
 type InvoiceWithDetails = Invoice & { customer: Customer };
 
-const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  [InvoiceStatus.DRAFT]: { label: "Borrador", className: "bg-gray-100 text-gray-800" },
-  [InvoiceStatus.PENDING_PAYMENT]: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800" },
-  [InvoiceStatus.PARTIALLY_PAID]: { label: "Pago Parcial", className: "bg-blue-100 text-blue-800" },
-  [InvoiceStatus.PAID]: { label: "Pagada", className: "bg-green-100 text-green-800" },
-  [InvoiceStatus.CANCELLED]: { label: "Cancelada", className: "bg-red-100 text-red-800" },
-  overdue: { label: "Vencida", className: "bg-red-100 text-red-800" },
-};
-
 export default function InvoicesPage() {
+  const { t } = useI18n();
+  const STATUS_LABELS: Record<string, { label: string; className: string }> = {
+    [InvoiceStatus.DRAFT]: { label: t("status.draft"), className: "bg-gray-100 text-gray-800" },
+    [InvoiceStatus.PENDING_PAYMENT]: { label: t("status.pending"), className: "bg-yellow-100 text-yellow-800" },
+    [InvoiceStatus.PARTIALLY_PAID]: { label: t("status.partial-pay"), className: "bg-blue-100 text-blue-800" },
+    [InvoiceStatus.PAID]: { label: t("status.paid"), className: "bg-green-100 text-green-800" },
+    [InvoiceStatus.CANCELLED]: { label: t("status.cancelled"), className: "bg-red-100 text-red-800" },
+    overdue: { label: t("status.overdue"), className: "bg-red-100 text-red-800" },
+  };
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithDetails | null>(null);
@@ -296,7 +297,7 @@ export default function InvoicesPage() {
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters">
                 <X className="h-4 w-4 mr-1" />
-                Limpiar filtros
+                {t("btn.clear-filters")}
               </Button>
             )}
           </div>
@@ -387,7 +388,7 @@ export default function InvoicesPage() {
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Saldo</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -499,7 +500,7 @@ export default function InvoicesPage() {
               </p>
               {hasActiveFilters && (
                 <Button variant="outline" className="mt-4" onClick={clearFilters}>
-                  Limpiar filtros
+                  {t("btn.clear-filters")}
                 </Button>
               )}
             </div>

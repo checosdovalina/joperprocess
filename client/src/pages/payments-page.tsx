@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery } from "@tanstack/react-query";
 import { Payment, Invoice, Customer, User } from "@shared/schema";
 import {
@@ -32,6 +33,7 @@ type PaymentWithDetails = Payment & {
 };
 
 export default function PaymentsPage() {
+  const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<PaymentWithDetails | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -93,14 +95,14 @@ export default function PaymentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Cobranza</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("payments.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Gestiona pagos, estados de cuenta y promesas de pago
+            {t("payments.subtitle")}
           </p>
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-add-payment">
           <Plus className="h-4 w-4 mr-2" />
-          Registrar Pago
+          {t("payments.register")}
         </Button>
       </div>
 
@@ -108,7 +110,7 @@ export default function PaymentsPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-            <CardTitle className="text-sm font-medium">Total Pagos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("payments.total")}</CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -120,7 +122,7 @@ export default function PaymentsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-            <CardTitle className="text-sm font-medium">Monto Total</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("payments.total-amount")}</CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -131,7 +133,7 @@ export default function PaymentsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-            <CardTitle className="text-sm font-medium">Este Mes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("payments.this-month")}</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -154,7 +156,7 @@ export default function PaymentsPage() {
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters-payments">
                 <X className="h-4 w-4 mr-1" />
-                Limpiar filtros
+                {t("btn.clear-filters")}
               </Button>
             )}
           </div>
@@ -204,7 +206,7 @@ export default function PaymentsPage() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Historial de Pagos</CardTitle>
+          <CardTitle>{t("payments.history")}</CardTitle>
           <CardDescription>
             {filteredPayments.length} pago{filteredPayments.length !== 1 ? "s" : ""}
             {hasActiveFilters ? " con los filtros aplicados" : " registrados"}
@@ -222,12 +224,12 @@ export default function PaymentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fecha Pago</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Factura</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead>Referencia</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("payments.col.date")}</TableHead>
+                    <TableHead>{t("label.client")}</TableHead>
+                    <TableHead>{t("label.invoice")}</TableHead>
+                    <TableHead className="text-right">{t("payments.col.amount")}</TableHead>
+                    <TableHead>{t("label.reference")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -248,7 +250,7 @@ export default function PaymentsPage() {
                             ? `${payment.invoice.serie}-${payment.invoice.folio}`
                             : payment.notes
                               ? payment.notes
-                              : "Sin factura"}
+                              : t("payments.no-invoice")}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -280,11 +282,11 @@ export default function PaymentsPage() {
             <div className="text-center py-12">
               <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {hasActiveFilters ? "No hay pagos con los filtros aplicados" : "No hay pagos registrados"}
+                {hasActiveFilters ? t("payments.no-match") : t("payments.no-results")}
               </p>
               {hasActiveFilters && (
                 <Button variant="outline" className="mt-4" onClick={clearFilters}>
-                  Limpiar filtros
+                  {t("btn.clear-filters")}
                 </Button>
               )}
             </div>
@@ -337,7 +339,7 @@ export default function PaymentsPage() {
                 <p className="font-mono">
                   {selectedPayment.invoice
                     ? `${selectedPayment.invoice.serie}-${selectedPayment.invoice.folio}`
-                    : selectedPayment.notes || "Sin factura vinculada"}
+                    : selectedPayment.notes || t("payments.no-invoice")}
                 </p>
               </div>
               {selectedPayment.reference && (

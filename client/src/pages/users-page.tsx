@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { User, UserRole } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -29,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function UsersPage() {
+  const { t } = useI18n();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -153,13 +155,13 @@ export default function UsersPage() {
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
-      admin: "Administrador",
-      vendedor: "Vendedor",
-      credito_cobranza: "Crédito y Cobranza",
-      ventas_logistica: "Ventas/Logística",
-      fabrica: "Fábrica",
-      embarques: "Embarques",
-      facturacion: "Facturación",
+      admin: t("role.admin"),
+      vendedor: t("role.vendedor"),
+      credito_cobranza: t("role.credito_cobranza"),
+      ventas_logistica: t("role.ventas_logistica"),
+      fabrica: t("role.fabrica"),
+      embarques: t("role.embarques"),
+      facturacion: t("role.facturacion"),
     };
     return labels[role] || role;
   };
@@ -183,16 +185,16 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Administración de Usuarios</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("users.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Gestiona usuarios, roles y permisos del sistema
+            {t("users.subtitle")}
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-create-user">
               <UserPlus className="mr-2 h-4 w-4" />
-              Crear Usuario
+              {t("users.create")}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
@@ -279,7 +281,7 @@ export default function UsersPage() {
                   disabled={createUserMutation.isPending}
                   data-testid="button-submit-create"
                 >
-                  {createUserMutation.isPending ? "Creando..." : "Crear Usuario"}
+                  {createUserMutation.isPending ? t("btn.creating") : t("users.create")}
                 </Button>
               </div>
             </form>
@@ -290,7 +292,7 @@ export default function UsersPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("users.total")}</CardTitle>
             <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -299,7 +301,7 @@ export default function UsersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Activos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("users.active")}</CardTitle>
             <UserCheck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -310,7 +312,7 @@ export default function UsersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("users.inactive")}</CardTitle>
             <UserX className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -323,7 +325,7 @@ export default function UsersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Todos los Usuarios</CardTitle>
+          <CardTitle>{t("users.all")}</CardTitle>
           <CardDescription>
             {users?.length || 0} usuarios registrados en el sistema
           </CardDescription>
@@ -340,12 +342,12 @@ export default function UsersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Usuario</TableHead>
-                    <TableHead>Nombre Completo</TableHead>
-                    <TableHead>Correo</TableHead>
-                    <TableHead>Rol</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("users.col.username")}</TableHead>
+                    <TableHead>{t("users.col.full-name")}</TableHead>
+                    <TableHead>{t("users.col.email")}</TableHead>
+                    <TableHead>{t("users.col.role")}</TableHead>
+                    <TableHead>{t("label.status")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -396,7 +398,7 @@ export default function UsersPage() {
                             disabled={toggleUserMutation.isPending}
                             data-testid={`button-toggle-user-${user.id}`}
                           >
-                            {user.active ? "Desactivar" : "Activar"}
+                            {user.active ? t("btn.deactivate") : t("btn.activate")}
                           </Button>
                         </div>
                       </TableCell>
@@ -489,7 +491,7 @@ export default function UsersPage() {
                 disabled={updateUserMutation.isPending}
                 data-testid="button-submit-edit"
               >
-                {updateUserMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+                {updateUserMutation.isPending ? t("btn.saving") : t("btn.save-changes")}
               </Button>
             </div>
           </form>

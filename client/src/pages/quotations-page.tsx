@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,6 +65,7 @@ type QuotationWithDetails = Quotation & {
 };
 
 export default function QuotationsPage() {
+  const { t } = useI18n();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -376,14 +378,14 @@ export default function QuotationsPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock }> = {
-      [QuotationStatus.DRAFT]: { label: "Borrador", variant: "secondary", icon: FileText },
-      [QuotationStatus.SENT]: { label: "Enviada", variant: "outline", icon: Send },
-      [QuotationStatus.PENDING_APPROVAL]: { label: "Pendiente Aprobación", variant: "default", icon: Clock },
-      [QuotationStatus.PENDING_AUTHORIZATION]: { label: "En Autorización", variant: "default", icon: Clock },
-      [QuotationStatus.AUTHORIZED]: { label: "Autorizada", variant: "default", icon: CheckCircle },
-      [QuotationStatus.CONVERTED]: { label: "Convertida", variant: "default", icon: ShoppingCart },
-      [QuotationStatus.REJECTED]: { label: "Rechazada", variant: "destructive", icon: XCircle },
-      [QuotationStatus.EXPIRED]: { label: "Expirada", variant: "secondary", icon: AlertTriangle },
+      [QuotationStatus.DRAFT]: { label: t("status.draft"), variant: "secondary", icon: FileText },
+      [QuotationStatus.SENT]: { label: t("status.sent"), variant: "outline", icon: Send },
+      [QuotationStatus.PENDING_APPROVAL]: { label: t("status.pending-approval"), variant: "default", icon: Clock },
+      [QuotationStatus.PENDING_AUTHORIZATION]: { label: t("status.in-auth"), variant: "default", icon: Clock },
+      [QuotationStatus.AUTHORIZED]: { label: t("status.authorized"), variant: "default", icon: CheckCircle },
+      [QuotationStatus.CONVERTED]: { label: t("status.converted"), variant: "default", icon: ShoppingCart },
+      [QuotationStatus.REJECTED]: { label: t("status.rejected"), variant: "destructive", icon: XCircle },
+      [QuotationStatus.EXPIRED]: { label: t("status.expired"), variant: "secondary", icon: AlertTriangle },
     };
     const config = statusConfig[status] || statusConfig[QuotationStatus.DRAFT];
     const Icon = config.icon;
@@ -451,14 +453,14 @@ export default function QuotationsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Cotizaciones</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("quotations.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Gestiona cotizaciones y conviértelas en pedidos
+            {t("quotations.subtitle")}
           </p>
         </div>
         <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-add-quotation">
           <Plus className="h-4 w-4 mr-2" />
-          Nueva Cotización
+          {t("quotations.new")}
         </Button>
       </div>
 
@@ -513,15 +515,15 @@ export default function QuotationsPage() {
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value={QuotationStatus.DRAFT}>Borrador</SelectItem>
-                <SelectItem value={QuotationStatus.SENT}>Enviada</SelectItem>
-                <SelectItem value={QuotationStatus.PENDING_APPROVAL}>Pend. Aprobación</SelectItem>
-                <SelectItem value={QuotationStatus.PENDING_AUTHORIZATION}>En Autorización</SelectItem>
-                <SelectItem value={QuotationStatus.AUTHORIZED}>Autorizada</SelectItem>
-                <SelectItem value={QuotationStatus.CONVERTED}>Convertida</SelectItem>
-                <SelectItem value={QuotationStatus.REJECTED}>Rechazada</SelectItem>
-                <SelectItem value={QuotationStatus.EXPIRED}>Expirada</SelectItem>
+                <SelectItem value="all">{t("quotations.all-statuses")}</SelectItem>
+                <SelectItem value={QuotationStatus.DRAFT}>{t("status.draft")}</SelectItem>
+                <SelectItem value={QuotationStatus.SENT}>{t("status.sent")}</SelectItem>
+                <SelectItem value={QuotationStatus.PENDING_APPROVAL}>{t("status.pending-approval")}</SelectItem>
+                <SelectItem value={QuotationStatus.PENDING_AUTHORIZATION}>{t("status.in-auth")}</SelectItem>
+                <SelectItem value={QuotationStatus.AUTHORIZED}>{t("status.authorized")}</SelectItem>
+                <SelectItem value={QuotationStatus.CONVERTED}>{t("status.converted")}</SelectItem>
+                <SelectItem value={QuotationStatus.REJECTED}>{t("status.rejected")}</SelectItem>
+                <SelectItem value={QuotationStatus.EXPIRED}>{t("status.expired")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterSeller} onValueChange={setFilterSeller} data-testid="select-filter-seller">
@@ -574,13 +576,13 @@ export default function QuotationsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Folio</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("label.folio")}</TableHead>
+                    <TableHead>{t("label.client")}</TableHead>
+                    <TableHead>{t("label.date")}</TableHead>
+                    <TableHead className="text-right">{t("label.total")}</TableHead>
+                    <TableHead>{t("label.status")}</TableHead>
+                    <TableHead>{t("label.items")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

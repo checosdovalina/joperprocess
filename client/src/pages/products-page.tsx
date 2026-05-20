@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { Product, ProductCategory, InsertProduct, InsertProductCategory } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 type ProductWithCategory = Product & { category?: ProductCategory | null };
 
 export default function ProductsPage() {
+  const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithCategory | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -220,9 +222,9 @@ export default function ProductsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Productos</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("products.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Catálogo de productos con precios e inventario
+            {t("products.subtitle")}
           </p>
         </div>
       </div>
@@ -264,7 +266,7 @@ export default function ProductsPage() {
                     {isAdmin && (
                       <Button onClick={() => { setEditingProduct(null); setDialogOpen(true); }} data-testid="button-add-product">
                         <Plus className="h-4 w-4 mr-2" />
-                        Nuevo Producto
+                        {t("products.new")}
                       </Button>
                     )}
                   </div>
@@ -277,7 +279,7 @@ export default function ProductsPage() {
                       <SelectValue placeholder="Categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas las categorías</SelectItem>
+                      <SelectItem value="all">{t("products.all-categories")}</SelectItem>
                       <SelectItem value="none">Sin categoría</SelectItem>
                       {categories?.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id}>
@@ -293,8 +295,8 @@ export default function ProductsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="active">Activos</SelectItem>
-                      <SelectItem value="inactive">Inactivos</SelectItem>
+                      <SelectItem value="active">{t("status.active")}</SelectItem>
+                      <SelectItem value="inactive">{t("status.inactive")}</SelectItem>
                     </SelectContent>
                   </Select>
                   
@@ -320,7 +322,7 @@ export default function ProductsPage() {
                       data-testid="button-clear-filters"
                     >
                       <X className="h-4 w-4 mr-1" />
-                      Limpiar filtros
+                      {t("btn.clear-filters")}
                     </Button>
                   )}
                 </div>
@@ -338,14 +340,14 @@ export default function ProductsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Código</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead>Categoría</TableHead>
-                        <TableHead>Marca</TableHead>
-                        <TableHead className="text-right">Precio Lista</TableHead>
-                        <TableHead className="text-right">Stock</TableHead>
-                        <TableHead>Estado</TableHead>
-                        {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
+                        <TableHead>{t("products.col.code")}</TableHead>
+                        <TableHead>{t("products.col.product")}</TableHead>
+                        <TableHead>{t("products.col.category")}</TableHead>
+                        <TableHead>{t("products.col.brand")}</TableHead>
+                        <TableHead className="text-right">{t("products.col.list-price")}</TableHead>
+                        <TableHead className="text-right">{t("products.col.stock")}</TableHead>
+                        <TableHead>{t("label.status")}</TableHead>
+                        {isAdmin && <TableHead className="text-right">{t("label.actions")}</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -401,7 +403,7 @@ export default function ProductsPage() {
               ) : (
                 <div className="text-center py-12">
                   <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No hay productos registrados</p>
+                  <p className="text-muted-foreground">{t("products.no-results")}</p>
                   {isAdmin && (
                     <Button
                       className="mt-4"

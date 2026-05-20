@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw, FileText, ShieldCheck, Package, Truck,
@@ -47,34 +48,20 @@ interface PipelineItem {
 
 // ─── Status configs ─────────────────────────────────────────────────────────────
 
-const QUOT_STATUS: Record<string, { label: string; color: string }> = {
-  draft:                 { label: "Borrador",           color: "#6b7280" },
-  sent:                  { label: "Enviada",            color: "#3b82f6" },
-  pending_approval:      { label: "Pend. Aprobación",   color: "#f59e0b" },
-  pending_authorization: { label: "Pend. Autorización", color: "#f97316" },
-  authorized:            { label: "Autorizada",         color: "#22c55e" },
-  converted:             { label: "Convertida",         color: "#14b8a6" },
-  rejected:              { label: "Rechazada",          color: "#ef4444" },
-  expired:               { label: "Vencida",            color: "#6b7280" },
+const QUOT_STATUS_COLORS: Record<string, string> = {
+  draft: "#6b7280", sent: "#3b82f6", pending_approval: "#f59e0b",
+  pending_authorization: "#f97316", authorized: "#22c55e",
+  converted: "#14b8a6", rejected: "#ef4444", expired: "#6b7280",
 };
-const AUTH_STATUS: Record<string, { label: string; color: string }> = {
-  pending:  { label: "Pendiente", color: "#f59e0b" },
-  approved: { label: "Aprobada",  color: "#22c55e" },
-  rejected: { label: "Rechazada", color: "#ef4444" },
+const AUTH_STATUS_COLORS: Record<string, string> = {
+  pending: "#f59e0b", approved: "#22c55e", rejected: "#ef4444",
 };
-const ORDER_STATUS: Record<string, { label: string; color: string }> = {
-  pending:            { label: "Pendiente",     color: "#6b7280" },
-  in_production:      { label: "En Producción", color: "#3b82f6" },
-  ready:              { label: "Listo",         color: "#22c55e" },
-  partially_released: { label: "Parcial",       color: "#f97316" },
-  released:           { label: "Liberado",      color: "#a855f7" },
-  shipped:            { label: "Embarcado",     color: "#818cf8" },
-  delivered:          { label: "Entregado",     color: "#10b981" },
+const ORDER_STATUS_COLORS: Record<string, string> = {
+  pending: "#6b7280", in_production: "#3b82f6", ready: "#22c55e",
+  partially_released: "#f97316", released: "#a855f7", shipped: "#818cf8", delivered: "#10b981",
 };
-const SHIP_STATUS: Record<string, { label: string; color: string }> = {
-  pending:    { label: "Pendiente",   color: "#6b7280" },
-  in_transit: { label: "En Tránsito", color: "#3b82f6" },
-  delivered:  { label: "Entregado",   color: "#10b981" },
+const SHIP_STATUS_COLORS: Record<string, string> = {
+  pending: "#6b7280", in_transit: "#3b82f6", delivered: "#10b981",
 };
 
 const ACTIVE_QUOT  = new Set(["draft", "sent", "pending_approval", "pending_authorization", "authorized"]);
@@ -87,7 +74,7 @@ const ACTIVE_SHIP  = new Set(["pending", "in_transit"]);
 const COLUMNS = [
   {
     key: "quotations" as const,
-    label: "Cotizaciones",
+    labelKey: "pipeline.quotations",
     icon: FileText,
     color: "#3b82f6",
     bg: "rgba(59,130,246,0.10)",
@@ -95,7 +82,7 @@ const COLUMNS = [
   },
   {
     key: "creditAuths" as const,
-    label: "Autorizaciones",
+    labelKey: "pipeline.authorizations",
     icon: ShieldCheck,
     color: "#f59e0b",
     bg: "rgba(245,158,11,0.10)",
@@ -103,7 +90,7 @@ const COLUMNS = [
   },
   {
     key: "orders" as const,
-    label: "Pedidos",
+    labelKey: "pipeline.orders",
     icon: Package,
     color: "#a855f7",
     bg: "rgba(168,85,247,0.10)",
@@ -111,7 +98,7 @@ const COLUMNS = [
   },
   {
     key: "shipments" as const,
-    label: "Embarques",
+    labelKey: "pipeline.shipments",
     icon: Truck,
     color: "#10b981",
     bg: "rgba(16,185,129,0.10)",
@@ -201,8 +188,16 @@ function ItemsList({ type, id, showPrices }: { type: string; id: string; showPri
 // ─── Quotation card ───────────────────────────────────────────────────────────
 
 function QuotCard({ q }: { q: PipelineQuotation }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const cfg = QUOT_STATUS[q.status] ?? { label: q.status, color: "#6b7280" };
+  const quotStatusKey: Record<string, string> = {
+    draft: "status.draft", sent: "status.sent",
+    pending_approval: "status.pending-approval",
+    pending_authorization: "status.pending-authorization",
+    authorized: "status.authorized", converted: "status.converted",
+    rejected: "status.rejected", expired: "status.expired",
+  };
+  const cfg = { label: t(quotStatusKey[q.status] ?? q.status), color: QUOT_STATUS_COLORS[q.status] ?? "#6b7280" };
 
   return (
     <div
@@ -251,8 +246,12 @@ function QuotCard({ q }: { q: PipelineQuotation }) {
 // ─── Auth card ────────────────────────────────────────────────────────────────
 
 function AuthCard({ a }: { a: PipelineCreditAuth }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const cfg = AUTH_STATUS[a.status] ?? { label: a.status, color: "#6b7280" };
+  const authStatusKey: Record<string, string> = {
+    pending: "status.pending", approved: "status.approved", rejected: "status.rejected",
+  };
+  const cfg = { label: t(authStatusKey[a.status] ?? a.status), color: AUTH_STATUS_COLORS[a.status] ?? "#6b7280" };
 
   return (
     <div
@@ -301,8 +300,14 @@ function AuthCard({ a }: { a: PipelineCreditAuth }) {
 // ─── Order card ───────────────────────────────────────────────────────────────
 
 function OrderCard({ o }: { o: PipelineOrder }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const cfg = ORDER_STATUS[o.status] ?? { label: o.status, color: "#6b7280" };
+  const orderStatusKey: Record<string, string> = {
+    pending: "status.pending", in_production: "status.in-production", ready: "status.ready",
+    partially_released: "status.partial", released: "status.released",
+    shipped: "status.shipped", delivered: "status.delivered",
+  };
+  const cfg = { label: t(orderStatusKey[o.status] ?? o.status), color: ORDER_STATUS_COLORS[o.status] ?? "#6b7280" };
 
   return (
     <div
@@ -329,7 +334,7 @@ function OrderCard({ o }: { o: PipelineOrder }) {
       {o.status === "in_production" && (
         <div style={{ marginBottom: 7 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontWeight: 600 }}>PRODUCCIÓN</span>
+            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontWeight: 600 }}>{t("pipeline.production-label")}</span>
             <span style={{ color: "#a855f7", fontSize: 10, fontWeight: 700 }}>{o.productionProgress}%</span>
           </div>
           <div style={{ height: 5, background: "rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
@@ -368,8 +373,12 @@ function OrderCard({ o }: { o: PipelineOrder }) {
 // ─── Shipment card ────────────────────────────────────────────────────────────
 
 function ShipmentCard({ s }: { s: PipelineShipment }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const cfg = SHIP_STATUS[s.status] ?? { label: s.status, color: "#6b7280" };
+  const shipStatusKey: Record<string, string> = {
+    pending: "status.pending", in_transit: "status.in-transit", delivered: "status.delivered",
+  };
+  const cfg = { label: t(shipStatusKey[s.status] ?? s.status), color: SHIP_STATUS_COLORS[s.status] ?? "#6b7280" };
 
   return (
     <div
@@ -421,6 +430,7 @@ function ShipmentCard({ s }: { s: PipelineShipment }) {
 
 function Column({ col, count, total, children, isLoading, isFullscreen }:
   { col: typeof COLUMNS[0]; count: number; total: number; children: React.ReactNode; isLoading: boolean; isFullscreen: boolean }) {
+  const { t } = useI18n();
   const Icon = col.icon;
   const maxH = isFullscreen ? "calc(100vh - 140px)" : "calc(100vh - 260px)";
   return (
@@ -436,7 +446,7 @@ function Column({ col, count, total, children, isLoading, isFullscreen }:
       }}>
         <Icon size={13} style={{ color: col.color, flexShrink: 0 }} />
         <span style={{ color: col.color, fontWeight: 700, fontSize: 12, letterSpacing: "0.03em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {col.label}
+          {t(col.labelKey)}
         </span>
         <span style={{ background: col.border, color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
           {count}
@@ -475,6 +485,7 @@ function Column({ col, count, total, children, isLoading, isFullscreen }:
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function PipelinePage() {
+  const { t } = useI18n();
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -569,7 +580,7 @@ export default function PipelinePage() {
           <Radio size={22} style={{ color: "#3b82f6" }} />
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "0.03em", color: "#fff" }}>
-              Tablero de Operaciones
+              {t("pipeline.board-title")}
             </div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 1 }}>
               Nexxo — Sistema Comercial
@@ -580,10 +591,10 @@ export default function PipelinePage() {
         {/* Center: KPIs */}
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
           {[
-            { label: "COTIZACIONES",  value: allQuots.length,  color: "#3b82f6" },
-            { label: "AUTORIZACIONES",value: allAuths.length,  color: "#f59e0b" },
-            { label: "PEDIDOS",       value: allOrds.length,   color: "#a855f7" },
-            { label: "EMBARQUES",     value: allShips.length,  color: "#10b981" },
+            { label: t("pipeline.quotations").toUpperCase(),      value: allQuots.length, color: "#3b82f6" },
+            { label: t("pipeline.authorizations").toUpperCase(),  value: allAuths.length, color: "#f59e0b" },
+            { label: t("pipeline.orders").toUpperCase(),          value: allOrds.length,  color: "#a855f7" },
+            { label: t("pipeline.shipments").toUpperCase(),       value: allShips.length, color: "#10b981" },
           ].map(stat => (
             <div key={stat.label} style={{ textAlign: "center" }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: stat.color, lineHeight: 1.1 }}>{stat.value}</div>
@@ -595,27 +606,27 @@ export default function PipelinePage() {
         {/* Right: controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", textAlign: "right" }}>
-            <div>Actualizado {format(lastUpdated, "HH:mm:ss")}</div>
+            <div>{t("pipeline.updated")} {format(lastUpdated, "HH:mm:ss")}</div>
             <div style={{ color: countdown <= 8 ? "#f59e0b" : "rgba(255,255,255,0.3)" }}>
-              Refresco en {countdown}s
+              {t("pipeline.refresh-in")} {countdown}s
             </div>
           </div>
 
-          <button onClick={handleManualRefresh} title="Actualizar ahora" style={btnBase} data-testid="button-refresh">
+          <button onClick={handleManualRefresh} title={t("pipeline.refresh")} style={btnBase} data-testid="button-refresh">
             <RefreshCw size={13} style={{ animation: isFetching ? "spin 1s linear infinite" : "none" }} />
-            <span>Actualizar</span>
+            <span>{t("pipeline.refresh")}</span>
           </button>
 
           <button
             onClick={() => setShowActive(!showActive)}
-            title="Filtrar activos / todos"
+            title={`${t("pipeline.active")} / ${t("pipeline.all")}`}
             style={{ ...btnBase, background: showActive ? "rgba(59,130,246,0.22)" : "rgba(255,255,255,0.07)", border: showActive ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.14)" }}
             data-testid="button-filter-active"
           >
-            <span style={{ fontSize: 11 }}>{showActive ? "Activos" : "Todos"}</span>
+            <span style={{ fontSize: 11 }}>{showActive ? t("pipeline.active") : t("pipeline.all")}</span>
           </button>
 
-          <button onClick={toggleFullscreen} title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"} style={btnBase} data-testid="button-fullscreen">
+          <button onClick={toggleFullscreen} title={isFullscreen ? t("btn.exit-fullscreen") : t("btn.fullscreen")} style={btnBase} data-testid="button-fullscreen">
             {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
         </div>
@@ -629,18 +640,18 @@ export default function PipelinePage() {
         flexShrink: 0, flexWrap: "wrap", alignItems: "center",
       }}>
         {[
-          { color: "#3b82f6",  label: "Cotizaciones" },
-          { color: "#f59e0b",  label: "Autorizaciones" },
-          { color: "#a855f7",  label: "Pedidos" },
-          { color: "#10b981",  label: "Embarques" },
+          { color: "#3b82f6",  labelKey: "pipeline.quotations" },
+          { color: "#f59e0b",  labelKey: "pipeline.authorizations" },
+          { color: "#a855f7",  labelKey: "pipeline.orders" },
+          { color: "#10b981",  labelKey: "pipeline.shipments" },
         ].map(l => (
-          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+          <div key={l.labelKey} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
-            {l.label}
+            {t(l.labelKey)}
           </div>
         ))}
         <div style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.2)" }}>
-          Haz clic en una tarjeta para ver los artículos
+          {t("pipeline.click-hint")}
         </div>
       </div>
 

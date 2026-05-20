@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { Customer, InsertCustomer } from "@shared/schema";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
 import { useMutation } from "@tanstack/react-query";
@@ -46,6 +47,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 export default function CustomersPage() {
+  const { t } = useI18n();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [formOpen, setFormOpen] = useState(false);
@@ -180,21 +182,21 @@ export default function CustomersPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("customers.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Gestiona la información de tus clientes y expedientes digitales
+            {t("customers.subtitle")}
           </p>
         </div>
         <Button onClick={() => setFormOpen(true)} data-testid="button-add-customer">
           <Plus className="h-4 w-4 mr-2" />
-          Nuevo Cliente
+          {t("customers.new")}
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("customers.total")}</CardTitle>
             <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -205,7 +207,7 @@ export default function CustomersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Activos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("customers.active")}</CardTitle>
             <UserCheck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -216,7 +218,7 @@ export default function CustomersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bloqueados</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("customers.blocked")}</CardTitle>
             <UserX className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -231,11 +233,11 @@ export default function CustomersPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <CardTitle>Todos los Clientes</CardTitle>
+              <CardTitle>{t("customers.all")}</CardTitle>
               <CardDescription>
                 {hasActiveFilters 
-                  ? `${filteredCustomers.length} de ${customers?.length || 0} clientes`
-                  : `${customers?.length || 0} clientes registrados`}
+                  ? `${filteredCustomers.length} / ${customers?.length || 0}`
+                  : `${customers?.length || 0}`}
               </CardDescription>
             </div>
           </div>
@@ -257,9 +259,9 @@ export default function CustomersPage() {
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="active">Activos</SelectItem>
-                <SelectItem value="blocked">Bloqueados</SelectItem>
+                <SelectItem value="all">{t("label.all")}</SelectItem>
+                <SelectItem value="active">{t("status.active")}</SelectItem>
+                <SelectItem value="blocked">{t("status.blocked")}</SelectItem>
               </SelectContent>
             </Select>
             {uniqueCities.length > 0 && (
@@ -278,7 +280,7 @@ export default function CustomersPage() {
             {hasActiveFilters && (
               <Button variant="outline" onClick={clearFilters} data-testid="button-clear-filters">
                 <X className="h-4 w-4 mr-2" />
-                Limpiar
+                {t("btn.clear")}
               </Button>
             )}
           </div>
@@ -295,13 +297,13 @@ export default function CustomersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>RFC</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead>Ubicación</TableHead>
-                    <TableHead className="text-right">Crédito</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("customers.col.client")}</TableHead>
+                    <TableHead>{t("customers.col.rfc")}</TableHead>
+                    <TableHead>{t("customers.col.contact")}</TableHead>
+                    <TableHead>{t("customers.col.location")}</TableHead>
+                    <TableHead className="text-right">{t("customers.col.credit")}</TableHead>
+                    <TableHead>{t("customers.col.status")}</TableHead>
+                    <TableHead className="text-right">{t("customers.col.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -351,11 +353,11 @@ export default function CustomersPage() {
                       <TableCell>
                         {customer.blocked ? (
                           <Badge variant="destructive" data-testid={`status-blocked-${customer.id}`}>
-                            Bloqueado
+                            {t("status.blocked")}
                           </Badge>
                         ) : (
                           <Badge className="bg-green-100 text-green-800" data-testid={`status-active-${customer.id}`}>
-                            Activo
+                            {t("status.active")}
                           </Badge>
                         )}
                       </TableCell>
@@ -390,7 +392,7 @@ export default function CustomersPage() {
           ) : hasActiveFilters ? (
             <div className="text-center py-12">
               <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No se encontraron clientes con los filtros actuales</p>
+              <p className="text-muted-foreground">{t("customers.no-results")}</p>
               <Button
                 variant="outline"
                 className="mt-4"
@@ -398,20 +400,20 @@ export default function CustomersPage() {
                 data-testid="button-clear-filters-empty"
               >
                 <X className="h-4 w-4 mr-2" />
-                Limpiar Filtros
+                {t("btn.clear-filters")}
               </Button>
             </div>
           ) : (
             <div className="text-center py-12">
               <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay clientes registrados</p>
+              <p className="text-muted-foreground">{t("label.no-results")}</p>
               <Button
                 className="mt-4"
                 onClick={() => setFormOpen(true)}
                 data-testid="button-add-first-customer"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Crear Primer Cliente
+                {t("customers.create-first")}
               </Button>
             </div>
           )}
@@ -429,20 +431,20 @@ export default function CustomersPage() {
       <AlertDialog open={!!customerToDelete} onOpenChange={(open) => { if (!open) setCustomerToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar cliente</AlertDialogTitle>
+            <AlertDialogTitle>{t("btn.delete")}</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Eliminar a <strong>{customerToDelete?.name}</strong>? Esta acción no se puede deshacer. Se eliminarán también sus check-ins y ubicaciones asociadas. Las cotizaciones, pedidos y facturas quedarán sin cliente asignado.
+              <strong>{customerToDelete?.name}</strong>? {t("customers.delete-confirm")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete-customer">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete-customer">{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground"
               onClick={() => customerToDelete && deleteCustomerMutation.mutate(customerToDelete.id)}
               disabled={deleteCustomerMutation.isPending}
               data-testid="button-confirm-delete-customer"
             >
-              {deleteCustomerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Eliminar"}
+              {deleteCustomerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("btn.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -455,9 +457,9 @@ export default function CustomersPage() {
             <DialogTitle className="text-xl">{viewingCustomer?.name}</DialogTitle>
             <div className="flex items-center gap-2 pt-2">
               {viewingCustomer?.blocked ? (
-                <Badge variant="destructive">Bloqueado</Badge>
+                <Badge variant="destructive">{t("status.blocked")}</Badge>
               ) : (
-                <Badge className="bg-green-100 text-green-800">Activo</Badge>
+                <Badge className="bg-green-100 text-green-800">{t("status.active")}</Badge>
               )}
               {viewingCustomer?.microsipCode && (
                 <Badge variant="outline">Microsip: {viewingCustomer.microsipCode}</Badge>
@@ -468,7 +470,7 @@ export default function CustomersPage() {
           <div className="space-y-6 pt-4">
             {/* Contact Info */}
             <div>
-              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Información de Contacto</h4>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3">{t("customers.contact-info")}</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {viewingCustomer?.contactName && (
                   <div className="flex items-start gap-3">
@@ -513,7 +515,7 @@ export default function CustomersPage() {
 
             {/* Address */}
             <div>
-              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Dirección</h4>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3">{t("label.address")}</h4>
               <div className="flex items-start gap-3">
                 <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div className="text-sm">
@@ -532,12 +534,12 @@ export default function CustomersPage() {
 
             {/* Credit Info */}
             <div>
-              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Información de Crédito</h4>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-3">{t("customers.credit-info")}</h4>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-start gap-3">
                   <CreditCard className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium">Límite de Crédito</p>
+                    <p className="text-sm font-medium">{t("label.credit-limit")}</p>
                     <p className="text-lg font-semibold">
                       ${parseFloat(viewingCustomer?.creditLimit || "0").toLocaleString("es-MX", {
                         minimumFractionDigits: 2,
@@ -548,7 +550,7 @@ export default function CustomersPage() {
                 <div className="flex items-start gap-3">
                   <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium">Días de Crédito</p>
+                    <p className="text-sm font-medium">{t("label.credit-days")}</p>
                     <p className="text-lg font-semibold">{viewingCustomer?.creditDays || 0} días</p>
                   </div>
                 </div>
@@ -558,7 +560,7 @@ export default function CustomersPage() {
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="outline" onClick={() => setViewingCustomer(null)}>
-                Cerrar
+                {t("btn.close")}
               </Button>
               <Button onClick={() => {
                 if (viewingCustomer) {
@@ -567,7 +569,7 @@ export default function CustomersPage() {
                 }
               }}>
                 <Pencil className="h-4 w-4 mr-2" />
-                Editar
+                {t("btn.edit")}
               </Button>
             </div>
           </div>

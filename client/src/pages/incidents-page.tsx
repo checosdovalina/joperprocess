@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Incident, Customer, User, IncidentType, IncidentStatus, IncidentUrgency, ShipmentProductInstance, Product } from "@shared/schema";
 import {
@@ -310,22 +311,22 @@ export default function IncidentsPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
             <AlertTriangle className="h-6 w-6" />
-            Incidentes
+            {t("incidents.title")}
           </h1>
           <p className="text-muted-foreground">
-            Gestión de garantías, retrabajos, quejas y consultas de clientes
+            {t("incidents.subtitle")}
           </p>
         </div>
         <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-incident">
           <Plus className="h-4 w-4 mr-2" />
-          Nuevo Incidente
+          {t("incidents.new")}
         </Button>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <CardTitle className="text-lg">Lista de Incidentes</CardTitle>
+            <CardTitle className="text-lg">{t("incidents.list")}</CardTitle>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -413,22 +414,22 @@ export default function IncidentsPage() {
           ) : !incidents || incidents.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No hay incidentes {hasActiveFilters ? "que coincidan con los filtros" : "registrados"}</p>
+              <p>{hasActiveFilters ? t("incidents.no-results-filter") : t("incidents.no-results")}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Ticket</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Asunto</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Urgencia</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Asignado</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>{t("label.ticket")}</TableHead>
+                    <TableHead>{t("label.client")}</TableHead>
+                    <TableHead>{t("label.subject")}</TableHead>
+                    <TableHead>{t("label.type")}</TableHead>
+                    <TableHead>{t("label.urgency")}</TableHead>
+                    <TableHead>{t("label.status")}</TableHead>
+                    <TableHead>{t("label.assigned-to")}</TableHead>
+                    <TableHead>{t("label.date")}</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -513,7 +514,7 @@ export default function IncidentsPage() {
               </SheetHeader>
               <div className="mt-6 space-y-6">
                 <div>
-                  <h3 className="font-medium mb-2">Asunto</h3>
+                  <h3 className="font-medium mb-2">{t("label.subject")}</h3>
                   <p className="text-muted-foreground">{previewIncident.subject}</p>
                 </div>
 
@@ -523,7 +524,7 @@ export default function IncidentsPage() {
                     <div className="mt-1">{getTypeBadge(previewIncident.type)}</div>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">Urgencia</Label>
+                    <Label className="text-muted-foreground text-xs">{t("label.urgency")}</Label>
                     <div className="mt-1">{getUrgencyBadge(previewIncident.urgency)}</div>
                   </div>
                 </div>
@@ -586,7 +587,7 @@ export default function IncidentsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />
-              Nuevo Incidente
+              {t("incidents.new")}
             </DialogTitle>
           </DialogHeader>
 
@@ -691,7 +692,7 @@ export default function IncidentsPage() {
                   name="urgency"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Urgencia</FormLabel>
+                      <FormLabel>{t("label.urgency")}</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-urgency">
@@ -715,7 +716,7 @@ export default function IncidentsPage() {
                 name="subject"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Asunto</FormLabel>
+                    <FormLabel>{t("label.subject")}</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Breve descripción del problema" data-testid="input-subject" />
                     </FormControl>

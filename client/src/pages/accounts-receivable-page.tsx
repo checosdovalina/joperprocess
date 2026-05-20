@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { Invoice, Customer, InvoiceStatus } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,16 +38,16 @@ import { Separator } from "@/components/ui/separator";
 
 type InvoiceWithCustomer = Invoice & { customer: Customer };
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  [InvoiceStatus.DRAFT]: { label: "Borrador", className: "bg-gray-100 text-gray-800" },
-  [InvoiceStatus.PENDING_PAYMENT]: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800" },
-  [InvoiceStatus.PARTIALLY_PAID]: { label: "Pago Parcial", className: "bg-blue-100 text-blue-800" },
-  [InvoiceStatus.PAID]: { label: "Pagada", className: "bg-green-100 text-green-800" },
-  [InvoiceStatus.CANCELLED]: { label: "Cancelada", className: "bg-gray-100 text-gray-600" },
-  overdue: { label: "Vencida", className: "bg-red-100 text-red-800" },
-};
-
 export default function AccountsReceivablePage() {
+  const { t } = useI18n();
+  const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+    [InvoiceStatus.DRAFT]: { label: t("status.draft"), className: "bg-gray-100 text-gray-800" },
+    [InvoiceStatus.PENDING_PAYMENT]: { label: t("status.pending"), className: "bg-yellow-100 text-yellow-800" },
+    [InvoiceStatus.PARTIALLY_PAID]: { label: t("status.partial-pay"), className: "bg-blue-100 text-blue-800" },
+    [InvoiceStatus.PAID]: { label: t("status.paid"), className: "bg-green-100 text-green-800" },
+    [InvoiceStatus.CANCELLED]: { label: t("status.cancelled"), className: "bg-gray-100 text-gray-600" },
+    overdue: { label: t("status.overdue"), className: "bg-red-100 text-red-800" },
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithCustomer | null>(null);
   const { user } = useAuth();
@@ -130,14 +131,14 @@ export default function AccountsReceivablePage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Facturación</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("invoices.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Gestiona facturas por cobrar y pagos de clientes
+            {t("invoices.subtitle")}
           </p>
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-add-invoice">
           <Plus className="h-4 w-4 mr-2" />
-          Nueva Factura
+          {t("invoices.new")}
         </Button>
       </div>
 
@@ -145,7 +146,7 @@ export default function AccountsReceivablePage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Facturas</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("invoices.total")}</CardTitle>
             <FileText className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -157,7 +158,7 @@ export default function AccountsReceivablePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vencidas</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.overdue")}</CardTitle>
             <AlertCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -166,7 +167,7 @@ export default function AccountsReceivablePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.pending")}</CardTitle>
             <FileText className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
@@ -175,7 +176,7 @@ export default function AccountsReceivablePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Pendiente</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("invoices.pending-balance")}</CardTitle>
             <FileText className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -200,7 +201,7 @@ export default function AccountsReceivablePage() {
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters-ar">
                 <X className="h-4 w-4 mr-1" />
-                Limpiar filtros
+                {t("btn.clear-filters")}
               </Button>
             )}
           </div>
@@ -291,7 +292,7 @@ export default function AccountsReceivablePage() {
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Saldo</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -366,11 +367,11 @@ export default function AccountsReceivablePage() {
             <div className="text-center py-12">
               <FileText className="h-12 w-12 mx-auto text-muted-foreground/50" />
               <h3 className="mt-4 text-lg font-medium">
-                {hasActiveFilters ? "No hay facturas con los filtros aplicados" : "No hay facturas registradas"}
+                {hasActiveFilters ? t("invoices.no-match") : t("invoices.no-results")}
               </h3>
               {hasActiveFilters ? (
                 <Button variant="outline" className="mt-4" onClick={clearFilters}>
-                  Limpiar filtros
+                  {t("btn.clear-filters")}
                 </Button>
               ) : (
                 <p className="text-sm text-muted-foreground mt-2">
