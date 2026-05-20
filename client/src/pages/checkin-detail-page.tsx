@@ -624,7 +624,7 @@ export default function CheckinDetailPage() {
                   onChange={(e) => setCheckoutNotes(e.target.value)}
                   className="min-h-[110px] text-sm"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs font-medium text-destructive">
                   Esta información aparecerá en la minuta PDF que se envía al cliente.
                 </p>
               </>
@@ -826,7 +826,7 @@ export default function CheckinDetailPage() {
                 onChange={(e) => setCheckoutNotes(e.target.value)}
                 className="min-h-[100px]"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs font-medium text-destructive">
                 Esta información aparecerá en la minuta PDF que se envía al cliente.
               </p>
             </div>
