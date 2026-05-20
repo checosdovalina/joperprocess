@@ -768,11 +768,14 @@ export default function AccountStatementsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="5,25">5 y 25 de cada mes</SelectItem>
                   <SelectItem value="1,15">1° y 15 de cada mes</SelectItem>
                   <SelectItem value="1,10,20">1°, 10 y 20 de cada mes</SelectItem>
                   <SelectItem value="1,8,15,22">1°, 8, 15 y 22 de cada mes</SelectItem>
                   <SelectItem value="1">Solo el 1° de cada mes</SelectItem>
                   <SelectItem value="15">Solo el 15 de cada mes</SelectItem>
+                  <SelectItem value="5">Solo el 5 de cada mes</SelectItem>
+                  <SelectItem value="25">Solo el 25 de cada mes</SelectItem>
                   <SelectItem value="1,10,20,28">1°, 10, 20 y 28 de cada mes</SelectItem>
                 </SelectContent>
               </Select>
