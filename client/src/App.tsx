@@ -30,6 +30,7 @@ import CompanySettingsPage from "@/pages/company-settings-page";
 import MicrosipSettingsPage from "@/pages/microsip-settings-page";
 import IncidentDetailPage from "@/pages/incident-detail-page";
 import PublicQuotationApproval from "@/pages/public-quotation-approval";
+import PublicAccountStatementPage from "@/pages/public-account-statement-page";
 import PublicIncidentPortal from "@/pages/public-incident-portal";
 import PublicSupportPage from "@/pages/public-support-page";
 import PublicTicketPage from "@/pages/public-ticket-page";
@@ -196,6 +197,7 @@ export default function App() {
                   <Route path="/forgot-password" component={ForgotPasswordPage} />
                   <Route path="/reset-password" component={ResetPasswordPage} />
                   <Route path="/aprobar-cotizacion/:token" component={PublicQuotationApproval} />
+                  <Route path="/estado-cuenta/:token" component={PublicAccountStatementPage} />
                   <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
                   <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
                   <Route path="/soporte" component={PublicSupportPage} />

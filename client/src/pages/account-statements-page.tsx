@@ -36,6 +36,10 @@ import {
   Users,
   RefreshCw,
   Building2,
+  Download,
+  Link,
+  Copy,
+  Check,
 } from "lucide-react";
 
 interface CustomerBalance {
@@ -79,6 +83,9 @@ export default function AccountStatementsPage() {
   const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [filterOverdue, setFilterOverdue] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [linkLoadingId, setLinkLoadingId] = useState<string | null>(null);
 
   const { data: statements = [], isLoading, refetch } = useQuery<CustomerBalance[]>({
     queryKey: ["/api/account-statements"],
@@ -161,6 +168,43 @@ export default function AccountStatementsPage() {
     setSingleSendCustomer(s);
     setAdditionalEmail("");
     setSendDialogOpen(true);
+  }
+
+  async function handleDownloadPDF(customerId: string, customerName: string) {
+    setDownloadingId(customerId);
+    try {
+      const res = await fetch(`/api/customers/${customerId}/account-statement-pdf`);
+      if (!res.ok) throw new Error("Error al generar PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `estado-cuenta-${customerName.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 40)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Error", description: "No se pudo descargar el PDF.", variant: "destructive" });
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  async function handleCopyLink(customerId: string) {
+    setLinkLoadingId(customerId);
+    try {
+      const res = await fetch(`/api/customers/${customerId}/account-statement-link`);
+      if (!res.ok) throw new Error("Error al generar enlace");
+      const data = await res.json();
+      const url = `${window.location.origin}/estado-cuenta/${data.token}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedId(customerId);
+      toast({ title: "Enlace copiado", description: "Válido por 7 días." });
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch {
+      toast({ title: "Error", description: "No se pudo generar el enlace.", variant: "destructive" });
+    } finally {
+      setLinkLoadingId(null);
+    }
   }
 
   function handleSingleSend() {
@@ -341,16 +385,48 @@ export default function AccountStatementsPage() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        <Button
-                          size="default"
-                          variant="outline"
-                          data-testid={`button-send-${s.customer.id}`}
-                          onClick={() => openSingleSend(s)}
-                          disabled={singleSendMutation.isPending}
-                        >
-                          <Mail className="w-4 h-4 mr-1" />
-                          Enviar
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            data-testid={`button-download-${s.customer.id}`}
+                            title="Descargar PDF"
+                            onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)}
+                            disabled={downloadingId === s.customer.id}
+                          >
+                            {downloadingId === s.customer.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            data-testid={`button-link-${s.customer.id}`}
+                            title="Copiar enlace compartible (7 días)"
+                            onClick={() => handleCopyLink(s.customer.id)}
+                            disabled={linkLoadingId === s.customer.id}
+                          >
+                            {linkLoadingId === s.customer.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : copiedId === s.customer.id ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <Link className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            size="default"
+                            variant="outline"
+                            data-testid={`button-send-${s.customer.id}`}
+                            onClick={() => openSingleSend(s)}
+                            disabled={singleSendMutation.isPending}
+                          >
+                            <Mail className="w-4 h-4 mr-1" />
+                            Enviar
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -4091,6 +4091,97 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // GET /api/customers/:id/account-statement-pdf — download PDF
+  app.get("/api/customers/:id/account-statement-pdf", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { id } = req.params;
+      const customer = await scopedStorage.getCustomer(id);
+      if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
+
+      const [custInvoices, custPayments] = await Promise.all([
+        scopedStorage.getInvoicesByCustomer(id),
+        scopedStorage.getPaymentsByCustomer(id),
+      ]);
+
+      const tenantId = getEffectiveTenantId(req);
+      let tenant = null;
+      if (tenantId) tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+
+      const { generateAccountStatementPDF } = await import("./account-statement-pdf-generator");
+      const pdfStream = await generateAccountStatementPDF({ customer, invoices: custInvoices, payments: custPayments, tenant });
+
+      const safeName = customer.name.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 40);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="estado-cuenta-${safeName}.pdf"`);
+      pdfStream.pipe(res);
+    } catch (error: any) {
+      console.error("Error generating account statement PDF:", error);
+      res.status(500).json({ error: error.message ?? "Error al generar PDF" });
+    }
+  });
+
+  // GET /api/customers/:id/account-statement-link — generate shareable signed link (7 days)
+  app.get("/api/customers/:id/account-statement-link", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { id } = req.params;
+      const customer = await scopedStorage.getCustomer(id);
+      if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
+
+      const tenantId = getEffectiveTenantId(req);
+      const { createHmac } = await import("crypto");
+      const secret = process.env.SESSION_SECRET || "nexxo-secret";
+      const payload = Buffer.from(JSON.stringify({
+        customerId: id,
+        tenantId,
+        exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      })).toString("base64url");
+      const sig = createHmac("sha256", secret).update(payload).digest("hex");
+      const token = `${payload}.${sig}`;
+
+      res.json({ token, customerName: customer.name });
+    } catch (error: any) {
+      console.error("Error generating account statement link:", error);
+      res.status(500).json({ error: error.message ?? "Error al generar enlace" });
+    }
+  });
+
+  // GET /api/public/account-statement/:token — public endpoint, no auth required
+  app.get("/api/public/account-statement/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const parts = token.split(".");
+      if (parts.length < 2) return res.status(400).json({ error: "Token inválido" });
+
+      const sig = parts.pop()!;
+      const payload = parts.join(".");
+      const { createHmac } = await import("crypto");
+      const secret = process.env.SESSION_SECRET || "nexxo-secret";
+      const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
+      if (sig !== expectedSig) return res.status(403).json({ error: "Token inválido o expirado" });
+
+      const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+      if (data.exp < Date.now()) return res.status(403).json({ error: "El enlace ha expirado" });
+
+      const { customerId, tenantId } = data;
+      const customer = await db.query.customers.findFirst({ where: eq(customers.id, customerId) });
+      if (!customer || customer.tenantId !== tenantId) return res.status(404).json({ error: "No encontrado" });
+
+      const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+
+      const [custInvoices, custPayments] = await Promise.all([
+        db.select().from(invoices).where(eq(invoices.customerId, customerId)).orderBy(desc(invoices.issuedAt)),
+        db.select().from(payments).where(eq(payments.customerId, customerId)).orderBy(desc(payments.paymentDate)),
+      ]);
+
+      res.json({ customer, invoices: custInvoices, payments: custPayments, tenant: tenant ?? null });
+    } catch (error: any) {
+      console.error("Error fetching public account statement:", error);
+      res.status(500).json({ error: "Error al obtener estado de cuenta" });
+    }
+  });
+
   // ─── END ACCOUNT STATEMENTS ─────────────────────────────────────────────────
 
   // Accounts Receivable endpoints (facturas por cobrar)
