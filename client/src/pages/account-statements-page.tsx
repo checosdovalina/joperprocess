@@ -27,6 +27,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Mail,
   Send,
   Search,
@@ -38,8 +45,8 @@ import {
   Building2,
   Download,
   Link,
-  Copy,
   Check,
+  MoreVertical,
 } from "lucide-react";
 
 interface CustomerBalance {
@@ -385,48 +392,53 @@ export default function AccountStatementsPage() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            data-testid={`button-download-${s.customer.id}`}
-                            title="Descargar PDF"
-                            onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)}
-                            disabled={downloadingId === s.customer.id}
-                          >
-                            {downloadingId === s.customer.id ? (
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                            ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              data-testid={`button-actions-${s.customer.id}`}
+                              disabled={downloadingId === s.customer.id || linkLoadingId === s.customer.id}
+                            >
+                              {(downloadingId === s.customer.id || linkLoadingId === s.customer.id) ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <MoreVertical className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem
+                              data-testid={`button-send-${s.customer.id}`}
+                              onClick={() => openSingleSend(s)}
+                              className="gap-2"
+                            >
+                              <Mail className="w-4 h-4" />
+                              Enviar por correo
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              data-testid={`button-download-${s.customer.id}`}
+                              onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)}
+                              className="gap-2"
+                            >
                               <Download className="w-4 h-4" />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            data-testid={`button-link-${s.customer.id}`}
-                            title="Copiar enlace compartible (7 días)"
-                            onClick={() => handleCopyLink(s.customer.id)}
-                            disabled={linkLoadingId === s.customer.id}
-                          >
-                            {linkLoadingId === s.customer.id ? (
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                            ) : copiedId === s.customer.id ? (
-                              <Check className="w-4 h-4 text-green-600" />
-                            ) : (
-                              <Link className="w-4 h-4" />
-                            )}
-                          </Button>
-                          <Button
-                            size="default"
-                            variant="outline"
-                            data-testid={`button-send-${s.customer.id}`}
-                            onClick={() => openSingleSend(s)}
-                            disabled={singleSendMutation.isPending}
-                          >
-                            <Mail className="w-4 h-4 mr-1" />
-                            Enviar
-                          </Button>
-                        </div>
+                              Descargar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              data-testid={`button-link-${s.customer.id}`}
+                              onClick={() => handleCopyLink(s.customer.id)}
+                              className="gap-2"
+                            >
+                              {copiedId === s.customer.id ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <Link className="w-4 h-4" />
+                              )}
+                              {copiedId === s.customer.id ? "¡Enlace copiado!" : "Copiar enlace (7 días)"}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
@@ -439,52 +451,75 @@ export default function AccountStatementsPage() {
 
       {/* ── Single send dialog ── */}
       <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Enviar Estado de Cuenta</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-xl">
+          <DialogHeader className="text-left">
+            <DialogTitle className="text-base">Enviar Estado de Cuenta</DialogTitle>
+            <DialogDescription className="font-medium text-foreground truncate">
               {singleSendCustomer?.customer.name}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 pt-1">
+            {/* Destinatario */}
             <div>
-              <p className="text-sm font-medium mb-1">Destinatario principal</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                Destinatario principal
+              </p>
               {singleSendCustomer?.customer.email ? (
-                <p className="text-sm text-muted-foreground bg-muted rounded-md px-3 py-2">
-                  {singleSendCustomer.customer.email}
-                </p>
+                <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-2.5">
+                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm text-muted-foreground truncate">
+                    {singleSendCustomer.customer.email}
+                  </span>
+                </div>
               ) : (
-                <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
-                  Este cliente no tiene correo registrado. Usa el campo de abajo.
-                </p>
+                <div className="flex items-center gap-2 bg-destructive/10 rounded-md px-3 py-2.5">
+                  <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                  <span className="text-sm text-destructive">Sin correo registrado</span>
+                </div>
               )}
             </div>
+
+            {/* Correos adicionales */}
             <div>
-              <p className="text-sm font-medium mb-1">Correos adicionales (opcional)</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                Correos adicionales <span className="font-normal normal-case">(opcional)</span>
+              </p>
               <Input
                 data-testid="input-additional-emails"
-                placeholder="correo1@empresa.com, correo2@empresa.com"
+                placeholder="otro@empresa.com, mas@correo.com"
                 value={additionalEmail}
                 onChange={(e) => setAdditionalEmail(e.target.value)}
+                className="text-sm"
+                inputMode="email"
+                autoComplete="off"
               />
-              <p className="text-xs text-muted-foreground mt-1">Separa múltiples correos con coma o punto y coma</p>
+              <p className="text-xs text-muted-foreground mt-1.5">Separa múltiples correos con coma</p>
             </div>
+
             <Separator />
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>El estado de cuenta incluirá:</p>
-              <ul className="list-disc pl-4 space-y-1">
-                <li>Todas las facturas pendientes y con pago parcial</li>
-                <li>Saldo total y saldo vencido</li>
-                <li>Historial de pagos recientes</li>
+
+            {/* Contenido */}
+            <div className="bg-muted/50 rounded-md px-3 py-2.5 space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">El correo incluirá</p>
+              <ul className="text-xs text-muted-foreground space-y-0.5 mt-1">
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> Facturas pendientes y con pago parcial</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> Saldo total y saldo vencido</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> Historial de pagos recientes</li>
               </ul>
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setSendDialogOpen(false)}>
+
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setSendDialogOpen(false)}
+            >
               Cancelar
             </Button>
             <Button
               data-testid="button-confirm-send"
+              className="w-full sm:w-auto"
               onClick={handleSingleSend}
               disabled={
                 singleSendMutation.isPending ||
