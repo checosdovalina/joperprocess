@@ -281,21 +281,18 @@ export default function AccountStatementsPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b">
                 <tr>
-                  <th className="w-10 px-4 py-3">
+                  <th className="w-10 px-3 py-3">
                     <Checkbox
                       data-testid="checkbox-all"
                       checked={allSelected}
                       onCheckedChange={toggleAll}
                     />
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Cliente</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground hidden sm:table-cell">RFC</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">Correo</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Saldo</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground hidden sm:table-cell">Vencido</th>
-                  <th className="px-4 py-3 text-center font-semibold text-muted-foreground hidden lg:table-cell">Facturas</th>
-                  <th className="px-4 py-3 text-center font-semibold text-muted-foreground hidden lg:table-cell">Más antigua</th>
-                  <th className="px-4 py-3"></th>
+                  <th className="px-3 py-3 text-left font-semibold text-muted-foreground">Cliente</th>
+                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Saldo Total</th>
+                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Vencido</th>
+                  <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">Correo</th>
+                  <th className="px-3 py-3 w-28"></th>
                 </tr>
               </thead>
               <tbody>
@@ -308,46 +305,42 @@ export default function AccountStatementsPage() {
                       data-testid={`row-customer-${s.customer.id}`}
                       className={`border-b last:border-0 transition-colors ${isSelected ? "bg-muted/30" : "hover:bg-muted/20"}`}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <Checkbox
                           data-testid={`checkbox-customer-${s.customer.id}`}
                           checked={isSelected}
                           onCheckedChange={() => toggleOne(s.customer.id)}
                         />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <p className="font-medium" data-testid={`text-customer-name-${s.customer.id}`}>{s.customer.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{s.customer.rfc ?? ""}</p>
                         {isOverdue && (
                           <Badge variant="destructive" className="mt-1 text-xs">Vencido</Badge>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
-                        {s.customer.rfc ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        {s.customer.email ? (
-                          <span className="text-muted-foreground text-xs">{s.customer.email}</span>
-                        ) : (
-                          <span className="text-muted-foreground/50 text-xs italic">Sin correo</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
+                      <td className="px-3 py-3 text-right font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
                         {fmt(s.totalBalance)}
+                        <p className="text-xs text-muted-foreground font-normal">{s.invoiceCount} factura(s)</p>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums hidden sm:table-cell">
+                      <td className="px-3 py-3 text-right tabular-nums">
                         {s.overdueBalance > 0 ? (
                           <span className="text-destructive font-semibold">{fmt(s.overdueBalance)}</span>
                         ) : (
-                          <span className="text-muted-foreground/50">—</span>
+                          <span className="text-muted-foreground/40">—</span>
+                        )}
+                        {s.oldestDueDate && (
+                          <p className="text-xs text-muted-foreground font-normal">{fmtDate(s.oldestDueDate)}</p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center hidden lg:table-cell">
-                        <Badge variant="secondary">{s.invoiceCount}</Badge>
+                      <td className="px-3 py-3 hidden md:table-cell">
+                        {s.customer.email ? (
+                          <span className="text-muted-foreground text-xs">{s.customer.email}</span>
+                        ) : (
+                          <span className="text-muted-foreground/40 text-xs italic">Sin correo</span>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-center text-muted-foreground text-xs hidden lg:table-cell">
-                        {fmtDate(s.oldestDueDate)}
-                      </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 text-right">
                         <Button
                           size="default"
                           variant="outline"
