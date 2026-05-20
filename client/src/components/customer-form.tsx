@@ -10,9 +10,11 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { EntityFormDialog } from "@/components/entity-form-dialog";
 
@@ -38,6 +40,7 @@ const defaultFormValues = {
   creditLimit: "0",
   creditDays: 30,
   blocked: false,
+  skipStatementEmail: false,
   contactName: "",
 };
 
@@ -79,6 +82,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
           creditLimit: customer.creditLimit || "0",
           creditDays: customer.creditDays,
           blocked: customer.blocked,
+          skipStatementEmail: customer.skipStatementEmail ?? false,
           contactName: customer.contactName || "",
         });
       } else {
@@ -93,9 +97,10 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
     // tenantId is added by the backend
     const transformedData: Omit<InsertCustomer, 'tenantId'> = {
       ...data,
-      creditLimit: data.creditLimit,  // Already validated and transformed by schema
+      creditLimit: data.creditLimit,
       creditDays: data.creditDays,
       blocked: data.blocked || false,
+      skipStatementEmail: data.skipStatementEmail || false,
     };
     onSubmit(transformedData);
     // Don't reset form here - let parent handle it on success
@@ -345,6 +350,28 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="skipStatementEmail"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel>No enviar estado de cuenta automático</FormLabel>
+                    <FormDescription className="text-xs text-muted-foreground">
+                      Al activar esto, el cliente no recibirá estados de cuenta por correo en los envíos automáticos programados.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value ?? false}
+                      onCheckedChange={field.onChange}
+                      data-testid="switch-skip-statement-email"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
             <div className="flex justify-end gap-2 pt-4">
               <Button

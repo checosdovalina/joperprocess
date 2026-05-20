@@ -243,6 +243,7 @@ export const customers = pgTable("customers", {
   creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
   creditDays: integer("credit_days").notNull().default(30),
   blocked: boolean("blocked").notNull().default(false),
+  skipStatementEmail: boolean("skip_statement_email").notNull().default(false),
   contactName: text("contact_name"),
   // Microsip integration fields
   microsipId: integer("microsip_id"), // CLIENTE_ID from Microsip CLIENTES table

@@ -68,6 +68,7 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
       .map((e) => e.trim())
       .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
 
+    if (customer.skipStatementEmail) { skipped++; continue; }
     if (emails.length === 0) { skipped++; continue; }
 
     const [custInvoices, custPayments] = await Promise.all([
