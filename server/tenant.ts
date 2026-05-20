@@ -11,6 +11,8 @@ export interface TenantContext {
   primaryColor: string | null;
   secondaryColor: string | null;
   active: boolean;
+  timezone: string | null;
+  locale: string | null;
 }
 
 declare global {
@@ -55,6 +57,8 @@ export async function tenantMiddleware(req: Request, res: Response, next: NextFu
         primaryColor: tenants.primaryColor,
         secondaryColor: tenants.secondaryColor,
         active: tenants.active,
+        timezone: tenants.timezone,
+        locale: tenants.locale,
       })
       .from(tenants)
       .where(eq(tenants.subdomain, subdomain))
@@ -99,6 +103,8 @@ export async function getTenantBySubdomain(subdomain: string): Promise<TenantCon
       primaryColor: tenants.primaryColor,
       secondaryColor: tenants.secondaryColor,
       active: tenants.active,
+      timezone: tenants.timezone,
+      locale: tenants.locale,
     })
     .from(tenants)
     .where(eq(tenants.subdomain, subdomain))
