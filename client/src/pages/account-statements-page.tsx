@@ -340,10 +340,10 @@ export default function AccountStatementsPage() {
                     />
                   </th>
                   <th className="px-3 py-3 text-left font-semibold text-muted-foreground">Cliente</th>
-                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Saldo Total</th>
-                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Vencido</th>
+                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Saldo</th>
+                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground hidden sm:table-cell">Vencido</th>
                   <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">Correo</th>
-                  <th className="px-3 py-3 w-28"></th>
+                  <th className="px-3 py-3 w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -373,8 +373,14 @@ export default function AccountStatementsPage() {
                       <td className="px-3 py-3 text-right font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
                         {fmt(s.totalBalance)}
                         <p className="text-xs text-muted-foreground font-normal">{s.invoiceCount} factura(s)</p>
+                        {/* Show overdue inline on mobile only */}
+                        {isOverdue && (
+                          <p className="text-xs text-destructive font-semibold sm:hidden mt-0.5">
+                            {fmt(s.overdueBalance)} vencido
+                          </p>
+                        )}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums">
+                      <td className="px-3 py-3 text-right tabular-nums hidden sm:table-cell">
                         {s.overdueBalance > 0 ? (
                           <span className="text-destructive font-semibold">{fmt(s.overdueBalance)}</span>
                         ) : (
