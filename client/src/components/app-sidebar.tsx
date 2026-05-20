@@ -20,6 +20,7 @@ import {
   MonitorPlay,
   CreditCard,
   LayoutGrid,
+  Mail,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -105,6 +106,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { title: "Facturación", url: "/accounts-receivable", icon: FileSpreadsheet, roles: [UserRole.ADMIN, UserRole.FACTURACION] },
       { title: "Cobranza", url: "/payments", icon: DollarSign, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA] },
+      { title: "Estados de Cuenta", url: "/account-statements", icon: Mail, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION] },
     ],
   },
   {

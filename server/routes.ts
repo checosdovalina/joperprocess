@@ -3923,6 +3923,176 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // ─── ACCOUNT STATEMENTS ────────────────────────────────────────────────────
+
+  // GET /api/account-statements — returns all customers with their outstanding balance summary
+  app.get("/api/account-statements", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant no encontrado" });
+
+      // Fetch all non-cancelled invoices with customer
+      const allInvoices = await db.query.invoices.findMany({
+        where: and(
+          eq(invoices.tenantId, tenantId),
+          or(
+            eq(invoices.status, "pending_payment"),
+            eq(invoices.status, "partially_paid")
+          )
+        ),
+        with: { customer: true },
+        orderBy: (invoices, { desc }) => [desc(invoices.issuedAt)],
+      });
+
+      // Group by customer
+      const byCustomer = new Map<string, {
+        customer: any;
+        totalBalance: number;
+        overdueBalance: number;
+        invoiceCount: number;
+        oldestDueDate: Date | null;
+      }>();
+
+      const now = new Date();
+      for (const inv of allInvoices) {
+        const bal = parseFloat(inv.balanceDue ?? inv.total ?? "0");
+        if (!Number.isFinite(bal) || bal <= 0) continue;
+        const existing = byCustomer.get(inv.customerId) ?? {
+          customer: inv.customer,
+          totalBalance: 0,
+          overdueBalance: 0,
+          invoiceCount: 0,
+          oldestDueDate: null,
+        };
+        existing.totalBalance += bal;
+        existing.invoiceCount += 1;
+        if (inv.dueDate && new Date(inv.dueDate) < now) {
+          existing.overdueBalance += bal;
+          const d = new Date(inv.dueDate);
+          if (!existing.oldestDueDate || d < existing.oldestDueDate) existing.oldestDueDate = d;
+        }
+        byCustomer.set(inv.customerId, existing);
+      }
+
+      const result = Array.from(byCustomer.values()).sort((a, b) => b.overdueBalance - a.overdueBalance || b.totalBalance - a.totalBalance);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching account statements:", error);
+      res.status(500).json({ error: "Error al obtener estados de cuenta" });
+    }
+  });
+
+  // POST /api/customers/:id/send-account-statement — send statement to a single customer
+  app.post("/api/customers/:id/send-account-statement", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { id } = req.params;
+      const { additionalEmails = [] } = req.body;
+
+      const customer = await scopedStorage.getCustomer(id);
+      if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
+
+      const recipientEmails: string[] = [];
+      if (customer.email) {
+        for (const e of customer.email.split(/[;,]/).map((s: string) => s.trim()).filter(Boolean)) {
+          if (e.includes("@")) recipientEmails.push(e.toLowerCase());
+        }
+      }
+      for (const e of additionalEmails) {
+        if (e && typeof e === "string" && e.includes("@") && !recipientEmails.includes(e.toLowerCase())) {
+          recipientEmails.push(e.toLowerCase());
+        }
+      }
+
+      if (recipientEmails.length === 0) {
+        return res.status(400).json({ error: "El cliente no tiene correo electrónico configurado" });
+      }
+
+      const [custInvoices, custPayments] = await Promise.all([
+        scopedStorage.getInvoicesByCustomer(id),
+        scopedStorage.getPaymentsByCustomer(id),
+      ]);
+
+      // Fetch tenant name for branding
+      const tenantId = getEffectiveTenantId(req);
+      let tenantName = "Nexxo";
+      if (tenantId) {
+        const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+        if (tenant?.name) tenantName = tenant.name;
+      }
+
+      const { sendAccountStatementEmail } = await import("./account-statement-email-service");
+      await sendAccountStatementEmail({
+        customer,
+        invoices: custInvoices,
+        payments: custPayments,
+        recipientEmails,
+        tenantName,
+      });
+
+      res.json({ success: true, message: `Estado de cuenta enviado a ${recipientEmails.join(", ")}` });
+    } catch (error: any) {
+      console.error("Error sending account statement:", error);
+      res.status(500).json({ error: error.message ?? "Error al enviar estado de cuenta" });
+    }
+  });
+
+  // POST /api/account-statements/send-bulk — send statement to multiple customers
+  app.post("/api/account-statements/send-bulk", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { customerIds = [] } = req.body as { customerIds: string[] };
+      if (!Array.isArray(customerIds) || customerIds.length === 0) {
+        return res.status(400).json({ error: "Se requiere al menos un cliente" });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      let tenantName = "Nexxo";
+      if (tenantId) {
+        const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+        if (tenant?.name) tenantName = tenant.name;
+      }
+
+      const { sendAccountStatementEmail } = await import("./account-statement-email-service");
+      const results: { customerId: string; name: string; success: boolean; error?: string }[] = [];
+
+      for (const custId of customerIds) {
+        try {
+          const customer = await scopedStorage.getCustomer(custId);
+          if (!customer) { results.push({ customerId: custId, name: "?", success: false, error: "No encontrado" }); continue; }
+
+          const recipientEmails: string[] = (customer.email ?? "")
+            .split(/[;,]/).map((s: string) => s.trim()).filter((e: string) => e.includes("@"))
+            .map((e: string) => e.toLowerCase());
+
+          if (recipientEmails.length === 0) {
+            results.push({ customerId: custId, name: customer.name, success: false, error: "Sin correo" });
+            continue;
+          }
+
+          const [custInvoices, custPayments] = await Promise.all([
+            scopedStorage.getInvoicesByCustomer(custId),
+            scopedStorage.getPaymentsByCustomer(custId),
+          ]);
+
+          await sendAccountStatementEmail({ customer, invoices: custInvoices, payments: custPayments, recipientEmails, tenantName });
+          results.push({ customerId: custId, name: customer.name, success: true });
+        } catch (e: any) {
+          const c = await scopedStorage.getCustomer(custId).catch(() => null);
+          results.push({ customerId: custId, name: c?.name ?? custId, success: false, error: e.message });
+        }
+      }
+
+      const sent = results.filter((r) => r.success).length;
+      res.json({ sent, failed: results.length - sent, results });
+    } catch (error: any) {
+      console.error("Error bulk sending account statements:", error);
+      res.status(500).json({ error: error.message ?? "Error al enviar estados de cuenta" });
+    }
+  });
+
+  // ─── END ACCOUNT STATEMENTS ─────────────────────────────────────────────────
+
   // Accounts Receivable endpoints (facturas por cobrar)
   app.get("/api/accounts-receivable", isAuthenticated, async (req, res) => {
     try {

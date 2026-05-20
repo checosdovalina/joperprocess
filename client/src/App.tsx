@@ -21,6 +21,7 @@ import OrdersPage from "@/pages/orders-page";
 import ShipmentsPage from "@/pages/shipments-page";
 import InvoicesPage from "@/pages/invoices-page";
 import AccountsReceivablePage from "@/pages/accounts-receivable-page";
+import AccountStatementsPage from "@/pages/account-statements-page";
 import PaymentsPage from "@/pages/payments-page";
 import UsersPage from "@/pages/users-page";
 import ProductsPage from "@/pages/products-page";
@@ -123,6 +124,7 @@ function Router() {
       <ProtectedRoute path="/shipments" component={ShipmentsPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
       <ProtectedRoute path="/accounts-receivable" component={AccountsReceivablePage} />
+      <ProtectedRoute path="/account-statements" component={AccountStatementsPage} allowedRoles={[UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION]} />
       <ProtectedRoute path="/payments" component={PaymentsPage} />
       <ProtectedRoute path="/users" component={UsersPage} />
       <ProtectedRoute path="/products" component={ProductsPage} />

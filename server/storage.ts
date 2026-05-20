@@ -133,6 +133,7 @@ export interface IStorage {
   // Payments
   getPayment(id: string): Promise<Payment | undefined>;
   getAllPayments(): Promise<Payment[]>;
+  getPaymentsByCustomer(customerId: string): Promise<Payment[]>;
   createPayment(payment: InsertPayment): Promise<Payment>;
 
   // Product Categories
@@ -470,6 +471,12 @@ export class DatabaseStorage implements IStorage {
 
   async getAllPayments(): Promise<Payment[]> {
     return await db.select().from(payments).orderBy(desc(payments.createdAt));
+  }
+
+  async getPaymentsByCustomer(customerId: string): Promise<Payment[]> {
+    return await db.select().from(payments)
+      .where(eq(payments.customerId, customerId))
+      .orderBy(desc(payments.paymentDate));
   }
 
   async createPayment(insertPayment: InsertPayment): Promise<Payment> {
@@ -966,6 +973,15 @@ export class TenantScopedStorage {
     if (!payment) return undefined;
     if (!this.ctx.allowGlobal && payment.tenantId !== this.ctx.tenantId) return undefined;
     return payment;
+  }
+
+  async getPaymentsByCustomer(customerId: string): Promise<Payment[]> {
+    const customer = await this.getCustomer(customerId);
+    if (!customer) return [];
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(payments)
+      .where(and(eq(payments.customerId, customerId), eq(payments.tenantId, this.ctx.tenantId)))
+      .orderBy(desc(payments.paymentDate));
   }
   
   // Product with ownership verification
