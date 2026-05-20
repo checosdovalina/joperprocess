@@ -328,129 +328,175 @@ export default function AccountStatementsPage() {
             <p>{statements.length === 0 ? "No hay clientes con saldo pendiente." : "Sin resultados para la búsqueda."}</p>
           </div>
         ) : (
-          <div className="rounded-md border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="w-10 px-3 py-3">
+          <div className="space-y-0">
+            {/* ── Mobile list (< sm) ── */}
+            <div className="sm:hidden rounded-md border divide-y">
+              {filtered.map((s) => {
+                const isSelected = selected.has(s.customer.id);
+                const isOverdue = s.overdueBalance > 0;
+                return (
+                  <div
+                    key={s.customer.id}
+                    data-testid={`row-customer-${s.customer.id}`}
+                    className={`flex items-center gap-3 px-3 py-3 ${isSelected ? "bg-muted/30" : ""}`}
+                  >
                     <Checkbox
-                      data-testid="checkbox-all"
-                      checked={allSelected}
-                      onCheckedChange={toggleAll}
+                      data-testid={`checkbox-customer-${s.customer.id}`}
+                      checked={isSelected}
+                      onCheckedChange={() => toggleOne(s.customer.id)}
+                      className="shrink-0"
                     />
-                  </th>
-                  <th className="px-3 py-3 text-left font-semibold text-muted-foreground">Cliente</th>
-                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Saldo</th>
-                  <th className="px-3 py-3 text-right font-semibold text-muted-foreground hidden sm:table-cell">Vencido</th>
-                  <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">Correo</th>
-                  <th className="px-3 py-3 w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((s) => {
-                  const isSelected = selected.has(s.customer.id);
-                  const isOverdue = s.overdueBalance > 0;
-                  return (
-                    <tr
-                      key={s.customer.id}
-                      data-testid={`row-customer-${s.customer.id}`}
-                      className={`border-b last:border-0 transition-colors ${isSelected ? "bg-muted/30" : "hover:bg-muted/20"}`}
-                    >
-                      <td className="px-3 py-3">
-                        <Checkbox
-                          data-testid={`checkbox-customer-${s.customer.id}`}
-                          checked={isSelected}
-                          onCheckedChange={() => toggleOne(s.customer.id)}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <p className="font-medium" data-testid={`text-customer-name-${s.customer.id}`}>{s.customer.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{s.customer.rfc ?? ""}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate" data-testid={`text-customer-name-${s.customer.id}`}>
+                        {s.customer.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{s.customer.rfc ?? ""}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-sm font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
+                          {fmt(s.totalBalance)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{s.invoiceCount} fact.</span>
                         {isOverdue && (
-                          <Badge variant="destructive" className="mt-1 text-xs">Vencido</Badge>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-right font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
-                        {fmt(s.totalBalance)}
-                        <p className="text-xs text-muted-foreground font-normal">{s.invoiceCount} factura(s)</p>
-                        {/* Show overdue inline on mobile only */}
-                        {isOverdue && (
-                          <p className="text-xs text-destructive font-semibold sm:hidden mt-0.5">
+                          <span className="text-xs text-destructive font-semibold">
                             {fmt(s.overdueBalance)} vencido
-                          </p>
+                          </span>
                         )}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums hidden sm:table-cell">
-                        {s.overdueBalance > 0 ? (
-                          <span className="text-destructive font-semibold">{fmt(s.overdueBalance)}</span>
-                        ) : (
-                          <span className="text-muted-foreground/40">—</span>
-                        )}
-                        {s.oldestDueDate && (
-                          <p className="text-xs text-muted-foreground font-normal">{fmtDate(s.oldestDueDate)}</p>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 hidden md:table-cell">
-                        {s.customer.email ? (
-                          <span className="text-muted-foreground text-xs">{s.customer.email}</span>
-                        ) : (
-                          <span className="text-muted-foreground/40 text-xs italic">Sin correo</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              data-testid={`button-actions-${s.customer.id}`}
-                              disabled={downloadingId === s.customer.id || linkLoadingId === s.customer.id}
-                            >
-                              {(downloadingId === s.customer.id || linkLoadingId === s.customer.id) ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <MoreVertical className="w-4 h-4" />
-                              )}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem
-                              data-testid={`button-send-${s.customer.id}`}
-                              onClick={() => openSingleSend(s)}
-                              className="gap-2"
-                            >
-                              <Mail className="w-4 h-4" />
-                              Enviar por correo
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              data-testid={`button-download-${s.customer.id}`}
-                              onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)}
-                              className="gap-2"
-                            >
-                              <Download className="w-4 h-4" />
-                              Descargar PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              data-testid={`button-link-${s.customer.id}`}
-                              onClick={() => handleCopyLink(s.customer.id)}
-                              className="gap-2"
-                            >
-                              {copiedId === s.customer.id ? (
-                                <Check className="w-4 h-4 text-green-600" />
-                              ) : (
-                                <Link className="w-4 h-4" />
-                              )}
-                              {copiedId === s.customer.id ? "¡Enlace copiado!" : "Copiar enlace (7 días)"}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          data-testid={`button-actions-${s.customer.id}`}
+                          className="shrink-0"
+                          disabled={downloadingId === s.customer.id || linkLoadingId === s.customer.id}
+                        >
+                          {(downloadingId === s.customer.id || linkLoadingId === s.customer.id) ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <MoreVertical className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem onClick={() => openSingleSend(s)} className="gap-2">
+                          <Mail className="w-4 h-4" /> Enviar por correo
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)} className="gap-2">
+                          <Download className="w-4 h-4" /> Descargar PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCopyLink(s.customer.id)} className="gap-2">
+                          {copiedId === s.customer.id ? <Check className="w-4 h-4 text-green-600" /> : <Link className="w-4 h-4" />}
+                          {copiedId === s.customer.id ? "¡Enlace copiado!" : "Copiar enlace (7 días)"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Desktop table (≥ sm) ── */}
+            <div className="hidden sm:block rounded-md border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b">
+                  <tr>
+                    <th className="w-10 px-3 py-3">
+                      <Checkbox
+                        data-testid="checkbox-all"
+                        checked={allSelected}
+                        onCheckedChange={toggleAll}
+                      />
+                    </th>
+                    <th className="px-3 py-3 text-left font-semibold text-muted-foreground">Cliente</th>
+                    <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Saldo Total</th>
+                    <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Vencido</th>
+                    <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">Correo</th>
+                    <th className="px-3 py-3 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((s) => {
+                    const isSelected = selected.has(s.customer.id);
+                    const isOverdue = s.overdueBalance > 0;
+                    return (
+                      <tr
+                        key={s.customer.id}
+                        data-testid={`row-customer-${s.customer.id}`}
+                        className={`border-b last:border-0 transition-colors ${isSelected ? "bg-muted/30" : "hover:bg-muted/20"}`}
+                      >
+                        <td className="px-3 py-3">
+                          <Checkbox
+                            data-testid={`checkbox-customer-${s.customer.id}`}
+                            checked={isSelected}
+                            onCheckedChange={() => toggleOne(s.customer.id)}
+                          />
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="font-medium" data-testid={`text-customer-name-${s.customer.id}`}>{s.customer.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{s.customer.rfc ?? ""}</p>
+                          {isOverdue && <Badge variant="destructive" className="mt-1 text-xs">Vencido</Badge>}
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
+                          {fmt(s.totalBalance)}
+                          <p className="text-xs text-muted-foreground font-normal">{s.invoiceCount} factura(s)</p>
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">
+                          {s.overdueBalance > 0 ? (
+                            <span className="text-destructive font-semibold">{fmt(s.overdueBalance)}</span>
+                          ) : (
+                            <span className="text-muted-foreground/40">—</span>
+                          )}
+                          {s.oldestDueDate && (
+                            <p className="text-xs text-muted-foreground font-normal">{fmtDate(s.oldestDueDate)}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 hidden md:table-cell">
+                          {s.customer.email ? (
+                            <span className="text-muted-foreground text-xs">{s.customer.email}</span>
+                          ) : (
+                            <span className="text-muted-foreground/40 text-xs italic">Sin correo</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                data-testid={`button-actions-${s.customer.id}`}
+                                disabled={downloadingId === s.customer.id || linkLoadingId === s.customer.id}
+                              >
+                                {(downloadingId === s.customer.id || linkLoadingId === s.customer.id) ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <MoreVertical className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={() => openSingleSend(s)} className="gap-2">
+                                <Mail className="w-4 h-4" /> Enviar por correo
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)} className="gap-2">
+                                <Download className="w-4 h-4" /> Descargar PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleCopyLink(s.customer.id)} className="gap-2">
+                                {copiedId === s.customer.id ? <Check className="w-4 h-4 text-green-600" /> : <Link className="w-4 h-4" />}
+                                {copiedId === s.customer.id ? "¡Enlace copiado!" : "Copiar enlace (7 días)"}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
