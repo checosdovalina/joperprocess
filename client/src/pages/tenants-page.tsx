@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Building2, Globe, Palette, Settings, Users, Loader2, ExternalLink } from "lucide-react";
+import { Plus, Building2, Globe, Palette, Settings, Users, Loader2, ExternalLink, Languages } from "lucide-react";
+import { LOCALE_LABELS, type Locale } from "@/lib/i18n";
 
 interface Tenant {
   id: string;
@@ -24,6 +25,7 @@ interface Tenant {
   phone: string | null;
   plan: string | null;
   maxUsers: number | null;
+  locale: string | null;
   createdAt: string;
 }
 
@@ -43,6 +45,7 @@ export default function TenantsPage() {
     active: true,
     plan: "basic",
     maxUsers: 10,
+    locale: "es" as Locale,
   });
 
   const { data: tenantsList = [], isLoading } = useQuery<Tenant[]>({
@@ -94,6 +97,7 @@ export default function TenantsPage() {
       active: true,
       plan: "basic",
       maxUsers: 10,
+      locale: "es" as Locale,
     });
   };
 
@@ -109,6 +113,7 @@ export default function TenantsPage() {
       active: tenant.active,
       plan: tenant.plan || "basic",
       maxUsers: tenant.maxUsers || 10,
+      locale: (tenant.locale as Locale) || "es",
     });
     setIsDialogOpen(true);
   };
@@ -294,6 +299,21 @@ export default function TenantsPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="locale">Idioma de la Interfaz</Label>
+                <select
+                  id="locale"
+                  value={formData.locale}
+                  onChange={(e) => setFormData({ ...formData, locale: e.target.value as Locale })}
+                  className="w-full h-10 px-3 rounded-md border bg-background"
+                  data-testid="select-locale"
+                >
+                  {(Object.entries(LOCALE_LABELS) as [Locale, string][]).map(([code, label]) => (
+                    <option key={code} value={code}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="active"
@@ -381,6 +401,15 @@ export default function TenantsPage() {
                   </span>
                   <Badge variant="outline" className="capitalize">
                     {tenant.plan || "basic"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Languages className="h-3 w-3" />
+                    Idioma
+                  </span>
+                  <Badge variant="outline">
+                    {LOCALE_LABELS[(tenant.locale as Locale) || "es"] || "Español"}
                   </Badge>
                 </div>
               </div>

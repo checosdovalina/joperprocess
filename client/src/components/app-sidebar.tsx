@@ -39,6 +39,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useTenant } from "@/hooks/use-tenant";
+import { useI18n } from "@/hooks/use-i18n";
 import { UserRole } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -58,88 +59,78 @@ interface Tenant {
 }
 
 type MenuItem = {
-  title: string;
+  titleKey: string;
   url: string;
   icon: React.ElementType;
   roles: string[];
 };
 
 type MenuGroup = {
-  label: string;
+  labelKey: string;
   items: MenuItem[];
 };
 
 const menuGroups: MenuGroup[] = [
   {
-    label: "Principal",
+    labelKey: "nav.group.principal",
     items: [
-      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: Object.values(UserRole) },
-      { title: "Tablero Operaciones", url: "/pipeline", icon: LayoutGrid, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA] },
+      { titleKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard, roles: Object.values(UserRole) },
+      { titleKey: "nav.pipeline", url: "/pipeline", icon: LayoutGrid, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA] },
     ],
   },
   {
-    label: "Clientes",
+    labelKey: "nav.group.clientes",
     items: [
-      { title: "Clientes", url: "/customers", icon: Building2, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA] },
-      { title: "Check-ins", url: "/checkins", icon: MapPin, roles: [UserRole.ADMIN, UserRole.VENDEDOR] },
-      { title: "Visitas Programadas", url: "/scheduled-visits", icon: Calendar, roles: [UserRole.ADMIN, UserRole.VENDEDOR] },
+      { titleKey: "nav.customers", url: "/customers", icon: Building2, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA] },
+      { titleKey: "nav.checkins", url: "/checkins", icon: MapPin, roles: [UserRole.ADMIN, UserRole.VENDEDOR] },
+      { titleKey: "nav.scheduled-visits", url: "/scheduled-visits", icon: Calendar, roles: [UserRole.ADMIN, UserRole.VENDEDOR] },
     ],
   },
   {
-    label: "Ventas",
+    labelKey: "nav.group.ventas",
     items: [
-      { title: "Cotizaciones", url: "/quotations", icon: FileText, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA] },
-      { title: "Autorización Crédito", url: "/credit-auth", icon: ClipboardCheck, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA] },
-      { title: "Pedidos", url: "/orders", icon: Package, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA] },
+      { titleKey: "nav.quotations", url: "/quotations", icon: FileText, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA] },
+      { titleKey: "nav.credit-auth", url: "/credit-auth", icon: ClipboardCheck, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA] },
+      { titleKey: "nav.orders", url: "/orders", icon: Package, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA] },
     ],
   },
   {
-    label: "Operaciones",
+    labelKey: "nav.group.operaciones",
     items: [
-      { title: "Producción", url: "/production", icon: Factory, roles: [UserRole.ADMIN, UserRole.FABRICA] },
-      { title: "Tablero", url: "/board", icon: MonitorPlay, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.FABRICA, UserRole.EMBARQUES] },
-      { title: "Embarques", url: "/shipments", icon: Truck, roles: [UserRole.ADMIN, UserRole.EMBARQUES, UserRole.VENTAS_LOGISTICA] },
+      { titleKey: "nav.production", url: "/production", icon: Factory, roles: [UserRole.ADMIN, UserRole.FABRICA] },
+      { titleKey: "nav.board", url: "/board", icon: MonitorPlay, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.FABRICA, UserRole.EMBARQUES] },
+      { titleKey: "nav.shipments", url: "/shipments", icon: Truck, roles: [UserRole.ADMIN, UserRole.EMBARQUES, UserRole.VENTAS_LOGISTICA] },
     ],
   },
   {
-    label: "Finanzas",
+    labelKey: "nav.group.finanzas",
     items: [
-      { title: "Facturación", url: "/accounts-receivable", icon: FileSpreadsheet, roles: [UserRole.ADMIN, UserRole.FACTURACION] },
-      { title: "Cobranza", url: "/payments", icon: DollarSign, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA] },
-      { title: "Estados de Cuenta", url: "/account-statements", icon: Mail, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION] },
+      { titleKey: "nav.accounts-receivable", url: "/accounts-receivable", icon: FileSpreadsheet, roles: [UserRole.ADMIN, UserRole.FACTURACION] },
+      { titleKey: "nav.payments", url: "/payments", icon: DollarSign, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA] },
+      { titleKey: "nav.account-statements", url: "/account-statements", icon: Mail, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION] },
     ],
   },
   {
-    label: "Análisis",
+    labelKey: "nav.group.analisis",
     items: [
-      { title: "Reportes", url: "/reports", icon: FileBarChart2, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA] },
-      { title: "Incidentes", url: "/incidents", icon: AlertTriangle, roles: [UserRole.ADMIN, UserRole.SERVICIO_CLIENTE, UserRole.SERVICIO_TECNICO] },
+      { titleKey: "nav.reports", url: "/reports", icon: FileBarChart2, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA] },
+      { titleKey: "nav.incidents", url: "/incidents", icon: AlertTriangle, roles: [UserRole.ADMIN, UserRole.SERVICIO_CLIENTE, UserRole.SERVICIO_TECNICO] },
     ],
   },
   {
-    label: "Administración",
+    labelKey: "nav.group.administracion",
     items: [
-      { title: "Productos", url: "/products", icon: Package, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA] },
-      { title: "Usuarios", url: "/users", icon: Users, roles: [UserRole.ADMIN] },
-      { title: "Configuración", url: "/company-settings", icon: Settings, roles: [UserRole.ADMIN] },
-      { title: "Microsip", url: "/microsip", icon: Database, roles: [UserRole.ADMIN] },
+      { titleKey: "nav.products", url: "/products", icon: Package, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA] },
+      { titleKey: "nav.users", url: "/users", icon: Users, roles: [UserRole.ADMIN] },
+      { titleKey: "nav.company-settings", url: "/company-settings", icon: Settings, roles: [UserRole.ADMIN] },
+      { titleKey: "nav.microsip", url: "/microsip", icon: Database, roles: [UserRole.ADMIN] },
     ],
   },
 ];
 
-const getRoleLabel = (role: string) => {
-  const labels: Record<string, string> = {
-    admin: "Administrador",
-    vendedor: "Vendedor",
-    credito_cobranza: "Crédito y Cobranza",
-    ventas_logistica: "Ventas / Logística",
-    fabrica: "Fábrica",
-    embarques: "Embarques",
-    facturacion: "Facturación",
-    servicio_cliente: "Servicio al Cliente",
-    servicio_tecnico: "Servicio Técnico",
-  };
-  return labels[role] || role;
+const getRoleLabel = (role: string, t: (k: string) => string) => {
+  const key = `role.${role}`;
+  return t(key) !== key ? t(key) : role;
 };
 
 const getInitials = (name: string) =>
@@ -150,6 +141,7 @@ export function AppSidebar() {
   const { user, logoutMutation } = useAuth();
   const { tenant, selectedTenantId, setSelectedTenantId } = useTenant();
   const { isMobile, setOpenMobile } = useSidebar();
+  const { t } = useI18n();
 
   const handleNavClick = () => {
     if (isMobile) setOpenMobile(false);
@@ -187,9 +179,9 @@ export function AppSidebar() {
 
       <SidebarContent className="py-2">
         {visibleGroups.map((group) => (
-          <SidebarGroup key={group.label} className="py-1">
+          <SidebarGroup key={group.labelKey} className="py-1">
             <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 py-1">
-              {group.label}
+              {t(group.labelKey)}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -203,7 +195,7 @@ export function AppSidebar() {
                     >
                       <Link href={item.url} onClick={handleNavClick}>
                         <item.icon className="h-5 w-5 shrink-0" />
-                        <span className="text-sm">{item.title}</span>
+                        <span className="text-sm">{t(item.titleKey)}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -216,22 +208,22 @@ export function AppSidebar() {
         {user.isSuperAdmin && isOnMainDomain && (
           <SidebarGroup className="py-1">
             <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 py-1">
-              Plataforma
+              {t("nav.group.plataforma")}
             </SidebarGroupLabel>
             <SidebarGroupContent className="space-y-2">
               <div className="px-2">
-                <label className="text-xs text-muted-foreground mb-1 block">Trabajando en:</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t("nav.working-in")}</label>
                 <Select
                   value={selectedTenantId || ""}
                   onValueChange={(value) => setSelectedTenantId(value || null)}
                 >
                   <SelectTrigger className="w-full" data-testid="select-tenant">
-                    <SelectValue placeholder="Seleccionar empresa..." />
+                    <SelectValue placeholder={t("nav.select-company")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {tenants.map((t) => (
-                      <SelectItem key={t.id} value={t.id} data-testid={`select-tenant-${t.subdomain}`}>
-                        {t.name}
+                    {tenants.map((ten) => (
+                      <SelectItem key={ten.id} value={ten.id} data-testid={`select-tenant-${ten.subdomain}`}>
+                        {ten.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -247,7 +239,7 @@ export function AppSidebar() {
                   >
                     <Link href="/tenants" onClick={handleNavClick}>
                       <Globe className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Gestionar Empresas</span>
+                      <span className="text-sm">{t("nav.tenants")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -267,7 +259,7 @@ export function AppSidebar() {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate leading-tight">{user.fullName}</p>
             <p className="text-[11px] text-muted-foreground truncate">
-              {getRoleLabel(user.role)}
+              {getRoleLabel(user.role, t)}
             </p>
           </div>
         </div>
@@ -280,7 +272,7 @@ export function AppSidebar() {
           data-testid="button-logout"
         >
           <LogOut className="h-4 w-4 mr-2" />
-          Cerrar Sesión
+          {t("nav.logout")}
         </Button>
       </SidebarFooter>
     </Sidebar>

@@ -11,6 +11,10 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     sql: `ALTER TABLE microsip_configs ADD COLUMN IF NOT EXISTS cxc_database text`,
   },
   {
+    id: "003b_add_locale_to_tenants",
+    sql: `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locale text DEFAULT 'es'`,
+  },
+  {
     id: "003_create_account_statement_schedules",
     sql: `CREATE TABLE IF NOT EXISTS account_statement_schedules (
       id text PRIMARY KEY DEFAULT gen_random_uuid()::text,

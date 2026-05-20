@@ -9,6 +9,7 @@ export interface TenantConfig {
   primaryColor: string | null;
   secondaryColor: string | null;
   timezone: string | null;
+  locale: string | null;
 }
 
 interface TenantContextType {

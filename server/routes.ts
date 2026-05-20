@@ -146,6 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       primaryColor: req.tenant.primaryColor,
       secondaryColor: req.tenant.secondaryColor,
       timezone: (req.tenant as any).timezone || "America/Mexico_City",
+      locale: (req.tenant as any).locale || "es",
     });
   });
 
