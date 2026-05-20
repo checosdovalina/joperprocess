@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2 } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, Save, EyeOff } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType } from "@shared/schema";
 import { Link } from "wouter";
@@ -128,6 +128,30 @@ export default function CheckinDetailPage() {
   const { data: summary, isLoading: summaryLoading, error: summaryError } = useQuery<CustomerSummary>({
     queryKey: [`/api/customers/${checkin?.customerId}/summary`],
     enabled: !!checkin?.customerId,
+  });
+
+  // Sync draft notes from loaded checkin data (only on first load)
+  useEffect(() => {
+    if (checkin) {
+      setCheckoutNotes(checkin.checkoutNotes ?? "");
+      setInternalNotes(checkin.internalNotes ?? "");
+    }
+  }, [checkin?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveNotesMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("PATCH", `/api/checkins/${id}`, {
+        checkoutNotes: checkoutNotes,
+        internalNotes: internalNotes,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
+      toast({ title: "Notas guardadas", description: "Los acuerdos se guardaron correctamente." });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo guardar" });
+    },
   });
 
   const checkoutMutation = useMutation({
@@ -544,6 +568,104 @@ export default function CheckinDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Acuerdos y Comentarios ── */}
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4 flex-wrap">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <NotebookPen className="h-5 w-5 text-blue-600" />
+              Acuerdos y Comentarios
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {checkin.checkoutAt
+                ? "Notas registradas durante la visita"
+                : "Agrega los acuerdos y comentarios antes de finalizar la visita"}
+            </CardDescription>
+          </div>
+          {!checkin.checkoutAt && (
+            <Button
+              data-testid="button-save-notes"
+              onClick={() => saveNotesMutation.mutate()}
+              disabled={saveNotesMutation.isPending}
+              size="default"
+            >
+              {saveNotesMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Guardar notas
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Acuerdos para el cliente */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 text-sm font-semibold">
+              <FileText className="h-3.5 w-3.5 text-blue-600" />
+              Acuerdos y Comentarios
+              <span className="text-xs font-normal text-muted-foreground ml-1">— van en la minuta PDF al cliente</span>
+            </Label>
+            {checkin.checkoutAt ? (
+              checkin.checkoutNotes ? (
+                <div className="text-sm rounded-md bg-muted/50 px-3 py-3 whitespace-pre-wrap leading-relaxed">
+                  {checkin.checkoutNotes}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Sin acuerdos registrados.</p>
+              )
+            ) : (
+              <>
+                <Textarea
+                  data-testid="textarea-notes-agreements"
+                  placeholder="Ej: Se acordó revisar cotización la próxima semana. El cliente solicitó descuento en pedido mayor a $50,000..."
+                  value={checkoutNotes}
+                  onChange={(e) => setCheckoutNotes(e.target.value)}
+                  className="min-h-[110px] text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Esta información aparecerá en la minuta PDF que se envía al cliente.
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Notas internas */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 text-sm font-semibold">
+              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+              Notas Internas
+              <span className="text-xs font-normal text-muted-foreground ml-1">— no se envían al cliente</span>
+            </Label>
+            {checkin.checkoutAt ? (
+              checkin.internalNotes ? (
+                <div className="text-sm rounded-md bg-muted/30 border border-dashed px-3 py-3 whitespace-pre-wrap leading-relaxed text-muted-foreground">
+                  <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-2">
+                    <Lock className="h-3 w-3" /> Solo visible internamente
+                  </div>
+                  {checkin.internalNotes}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Sin notas internas.</p>
+              )
+            ) : (
+              <>
+                <Textarea
+                  data-testid="textarea-notes-internal"
+                  placeholder="Ej: El cliente mencionó estar evaluando otro proveedor. Seguimiento urgente..."
+                  value={internalNotes}
+                  onChange={(e) => setInternalNotes(e.target.value)}
+                  className="min-h-[80px] text-sm border-dashed"
+                />
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Lock className="h-3 w-3" /> Estas notas son privadas y NO se incluyen en la minuta al cliente.
+                </p>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

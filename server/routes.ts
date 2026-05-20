@@ -1291,15 +1291,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Validate request body with Zod schema
       const updateCheckinSchema = z.object({
-        meetingType: z.enum([MeetingType.LLAMADA, MeetingType.VISITA, MeetingType.VIDEOLLAMADA]),
+        meetingType: z.enum([MeetingType.LLAMADA, MeetingType.VISITA, MeetingType.VIDEOLLAMADA]).optional(),
+        checkoutNotes: z.string().optional(),
+        internalNotes: z.string().optional(),
+      }).refine(d => d.meetingType !== undefined || d.checkoutNotes !== undefined || d.internalNotes !== undefined, {
+        message: "Se requiere al menos un campo para actualizar",
       });
 
       const validationResult = updateCheckinSchema.safeParse(req.body);
       if (!validationResult.success) {
-        return res.status(400).json({ error: "Tipo de reunión inválido" });
+        return res.status(400).json({ error: "Datos inválidos", details: validationResult.error.flatten() });
       }
 
-      const { meetingType } = validationResult.data;
+      const { meetingType, checkoutNotes, internalNotes } = validationResult.data;
 
       // Fetch the existing check-in
       const existingCheckin = await db.query.checkins.findFirst({
@@ -1322,10 +1326,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No se puede editar un check-in ya finalizado" });
       }
 
+      // Build update payload (only fields present in request)
+      const updatePayload: Record<string, unknown> = {};
+      if (meetingType !== undefined) updatePayload.meetingType = meetingType;
+      if (checkoutNotes !== undefined) updatePayload.checkoutNotes = checkoutNotes;
+      if (internalNotes !== undefined) updatePayload.internalNotes = internalNotes;
+
       // Update the check-in
       const [updated] = await db
         .update(checkins)
-        .set({ meetingType })
+        .set(updatePayload)
         .where(eq(checkins.id, id))
         .returning();
 
