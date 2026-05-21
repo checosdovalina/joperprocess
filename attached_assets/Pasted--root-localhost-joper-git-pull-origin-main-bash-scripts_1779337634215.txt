@@ -1,0 +1,44 @@
+[root@localhost joper]# git pull origin main
+bash scripts/vps-deploy.sh
+remote: Enumerating objects: 27, done.
+remote: Counting objects: 100% (27/27), done.
+remote: Compressing objects: 100% (13/13), done.
+remote: Total 23 (delta 10), reused 23 (delta 10), pack-reused 0 (from 0)
+Unpacking objects: 100% (23/23), 2.81 MiB | 9.73 MiB/s, done.
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+   6ccfbbc..551fef9  main       -> origin/main
+Updating 6ccfbbc..551fef9
+Fast-forward
+ ...6-05-20_a_la(s)_10.15.57_p.m._1779337094077.png | Bin 0 -> 906895 bytes
+ ...6-05-20_a_la(s)_10.16.00_p.m._1779337094077.png | Bin 0 -> 625211 bytes
+ ...6-05-20_a_la(s)_10.16.07_p.m._1779337094078.png | Bin 0 -> 468623 bytes
+ ...6-05-20_a_la(s)_10.16.12_p.m._1779337094077.png | Bin 0 -> 479701 bytes
+ ...6-05-20_a_la(s)_10.16.15_p.m._1779337094087.png | Bin 0 -> 464136 bytes
+ ...6-05-20_a_la(s)_10.16.17_p.m._1779337094086.png | Bin 0 -> 463541 bytes
+ ...26-05-20_a_la(s)_4.39.46_p.m._1779337045379.png | Bin 0 -> 497997 bytes
+ ...pull-origin-main-bash-scripts_1779337396875.txt |  74 +++++++++++++++++++++
+ scripts/vps-backup.sh                              |  42 ++++++++++++
+ scripts/vps-crontab.txt                            |  34 ++++++++++
+ scripts/vps-deploy.sh                              |  63 ++++++++++++------
+ 11 files changed, 191 insertions(+), 22 deletions(-)
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-20_a_la(s)_10.15.57_p.m._1779337094077.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-20_a_la(s)_10.16.00_p.m._1779337094077.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-20_a_la(s)_10.16.07_p.m._1779337094078.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-20_a_la(s)_10.16.12_p.m._1779337094077.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-20_a_la(s)_10.16.15_p.m._1779337094087.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-20_a_la(s)_10.16.17_p.m._1779337094086.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-05-20_a_la(s)_4.39.46_p.m._1779337045379.png
+ create mode 100644 attached_assets/Pasted--root-localhost-joper-git-pull-origin-main-bash-scripts_1779337396875.txt
+ create mode 100755 scripts/vps-backup.sh
+ create mode 100644 scripts/vps-crontab.txt
+ mode change 100644 => 100755 scripts/vps-deploy.sh
+
+=========================================
+  NEXXO - Despliegue Seguro VPS
+=========================================
+
+ERROR: No se encontró DATABASE_URL.
+Exporta la variable antes de correr este script:
+  export DATABASE_URL='postgresql://...'
+[root@localhost joper]# 

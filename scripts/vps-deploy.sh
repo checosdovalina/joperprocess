@@ -20,7 +20,7 @@ echo ""
 # Cargar DATABASE_URL desde ecosystem.config.js si no está en el entorno
 if [ -z "$DATABASE_URL" ]; then
   if [ -f "$ECOSYSTEM" ]; then
-    DATABASE_URL=$(node -e "const c=require('$ECOSYSTEM'); console.log(c.apps[0].env.DATABASE_URL||'')" 2>/dev/null)
+    DATABASE_URL=$(grep -oP "DATABASE_URL:\s*['\"]?\K[^'\"']+" "$ECOSYSTEM" | head -1)
   fi
 fi
 
@@ -57,7 +57,7 @@ echo "  Schema actualizado correctamente."
 
 # 6. Reiniciar con PM2
 echo "[6/6] Reiniciando servidor..."
-PM2_APP=$(node -e "const c=require('$ECOSYSTEM'); console.log(c.apps[0].name)" 2>/dev/null || echo "")
+PM2_APP=$(grep -oP "name:\s*['\"]?\K[^'\"',]+" "$ECOSYSTEM" 2>/dev/null | head -1 || echo "")
 if [ -n "$PM2_APP" ] && command -v pm2 &> /dev/null; then
   pm2 restart "$PM2_APP"
 elif command -v systemctl &> /dev/null; then
