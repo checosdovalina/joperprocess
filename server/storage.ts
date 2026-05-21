@@ -286,43 +286,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuotation(insertQuotation: InsertQuotation): Promise<Quotation> {
-    // Get customer country to generate country-based folio prefix
-    let countryPrefix = 'COT'; // Default prefix
-    
+    const FOREIGN_RFC = 'XEXX010101000';
+    let countryPrefix = 'COT';
+
     if (insertQuotation.customerId) {
       const customer = await this.getCustomer(insertQuotation.customerId);
-      if (customer?.country) {
-        // Map country names to prefixes
-        const countryPrefixes: Record<string, string> = {
-          'México': 'MEX',
-          'Mexico': 'MEX',
-          'MX': 'MEX',
-          'Estados Unidos': 'USA',
-          'United States': 'USA',
-          'US': 'USA',
-          'USA': 'USA',
-          'Canadá': 'CAN',
-          'Canada': 'CAN',
-          'CA': 'CAN',
-          'Guatemala': 'GTM',
-          'GT': 'GTM',
-          'Colombia': 'COL',
-          'CO': 'COL',
-          'Brasil': 'BRA',
-          'Brazil': 'BRA',
-          'BR': 'BRA',
-          'Argentina': 'ARG',
-          'AR': 'ARG',
-          'Chile': 'CHL',
-          'CL': 'CHL',
-          'Perú': 'PER',
-          'Peru': 'PER',
-          'PE': 'PER',
-          'España': 'ESP',
-          'Spain': 'ESP',
-          'ES': 'ESP',
-        };
-        countryPrefix = countryPrefixes[customer.country] || customer.country.substring(0, 3).toUpperCase();
+      if (customer) {
+        if (customer.rfc === FOREIGN_RFC) {
+          countryPrefix = 'EXT';
+        } else if (customer.country) {
+          const countryPrefixes: Record<string, string> = {
+            'México': 'MEX',
+            'Mexico': 'MEX',
+            'MX': 'MEX',
+            'Estados Unidos': 'USA',
+            'United States': 'USA',
+            'US': 'USA',
+            'USA': 'USA',
+            'Canadá': 'CAN',
+            'Canada': 'CAN',
+            'CA': 'CAN',
+            'Guatemala': 'GTM',
+            'GT': 'GTM',
+            'Colombia': 'COL',
+            'CO': 'COL',
+            'Brasil': 'BRA',
+            'Brazil': 'BRA',
+            'BR': 'BRA',
+            'Argentina': 'ARG',
+            'AR': 'ARG',
+            'Chile': 'CHL',
+            'CL': 'CHL',
+            'Perú': 'PER',
+            'Peru': 'PER',
+            'PE': 'PER',
+            'España': 'ESP',
+            'Spain': 'ESP',
+            'ES': 'ESP',
+          };
+          countryPrefix = countryPrefixes[customer.country] || customer.country.substring(0, 3).toUpperCase();
+        }
       }
     }
     
