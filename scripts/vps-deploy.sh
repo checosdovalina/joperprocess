@@ -20,7 +20,7 @@ echo ""
 # Cargar DATABASE_URL desde ecosystem.config.js si no está en el entorno
 if [ -z "$DATABASE_URL" ]; then
   if [ -f "$ECOSYSTEM" ]; then
-    DATABASE_URL=$(grep 'DATABASE_URL' "$ECOSYSTEM" | sed "s/.*DATABASE_URL[^'\"]*['\"]//;s/['\"].*//")
+    DATABASE_URL=$(awk -F"'" '/DATABASE_URL/{print $2}' "$ECOSYSTEM")
   fi
 fi
 
