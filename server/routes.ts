@@ -3351,7 +3351,10 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (createInvoice) {
         const unitPrice = Number(quotationItem.unitPrice);
         const subtotal = unitPrice * quantityToRelease;
-        const tax = subtotal * 0.16;
+        const customerRfc = order.quotation.customer?.rfc ?? "";
+        const isForeignCustomer = customerRfc === "XEXX010101000";
+        const itemTaxRate = isForeignCustomer ? 0 : Number(quotationItem.taxRate ?? 16) / 100;
+        const tax = subtotal * itemTaxRate;
         const total = subtotal + tax;
 
         const invoice = await scopedStorage.createInvoice({

@@ -100,6 +100,8 @@ const DELIVERY_TIMES = [
   { value: "por_confirmar", label: "Por confirmar" },
 ];
 
+const FOREIGN_RFC = "XEXX010101000";
+
 const CURRENCIES = [
   { value: "MXN", label: "MXN - Peso Mexicano" },
   { value: "USD", label: "USD - Dólar Americano" },
@@ -202,6 +204,13 @@ export function QuotationForm({
       shippingCostStatus: "confirmed",
     },
   });
+
+  const watchedCustomerId = form.watch("customerId");
+  const isForeignCustomer = useMemo(() => {
+    const c = customers.find(c => c.id === watchedCustomerId);
+    return c?.rfc === FOREIGN_RFC;
+  }, [customers, watchedCustomerId]);
+  const prevCustomerIdRef = useRef<string>("");
 
   useEffect(() => {
     if (isEditing && initialData && open && !initialized && products !== undefined) {
@@ -319,6 +328,19 @@ export function QuotationForm({
     };
   }, []);
 
+  // When customer changes, update taxRates on all line items
+  useEffect(() => {
+    const prevId = prevCustomerIdRef.current;
+    prevCustomerIdRef.current = watchedCustomerId;
+    // Only update if there was already a customer selected before (avoids overwriting on initial load)
+    if (!prevId || prevId === watchedCustomerId) return;
+    setLineItems(prev => prev.map(item => {
+      const newTaxRate = isForeignCustomer ? "0" : "16";
+      const newItem = { ...item, taxRate: newTaxRate };
+      return calculateLineItem(newItem, "discountPercent");
+    }));
+  }, [watchedCustomerId, isForeignCustomer, calculateLineItem]);
+
   const normalizeDecimal = (value: string) => value.replace(',', '.');
   const normalizeDecimal2 = (value: string) => {
     const clean = value.replace(',', '.');
@@ -351,7 +373,7 @@ export function QuotationForm({
     const unitPrice = listPrice - discountAmount;
     const quantity = 1;
     const subtotal = unitPrice * quantity;
-    const taxRate = parseFloat(product.taxRate);
+    const taxRate = isForeignCustomer ? 0 : parseFloat(product.taxRate);
     const taxAmount = subtotal * (taxRate / 100);
     const total = subtotal + taxAmount;
     const exceedsMaxDiscount = maxDiscount > 0 && discountPercent > maxDiscount;
@@ -368,7 +390,7 @@ export function QuotationForm({
       discountPercent: discountPercent.toString(),
       discountAmount: discountAmount.toFixed(2),
       subtotal: subtotal.toFixed(2),
-      taxRate: product.taxRate,
+      taxRate: isForeignCustomer ? "0" : product.taxRate,
       taxAmount: taxAmount.toFixed(2),
       total: total.toFixed(2),
       exceedsMaxDiscount,
@@ -384,7 +406,7 @@ export function QuotationForm({
     });
     setProductSearchOpen(null);
     setSearchQuery("");
-  }, []);
+  }, [isForeignCustomer]);
 
   const addNewLine = useCallback(() => {
     setLineItems(prev => [...prev, createEmptyLineItem(prev.length)]);
@@ -673,6 +695,13 @@ export function QuotationForm({
                     )}
                   />
                 </div>
+
+                {isForeignCustomer && (
+                  <div className="flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                    <span>Cliente extranjero (RFC: {FOREIGN_RFC}) — IVA no aplica. Los productos se cotizarán sin IVA.</span>
+                  </div>
+                )}
 
                 {/* ── Moneda y Tipo de Cambio ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

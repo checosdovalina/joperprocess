@@ -131,7 +131,8 @@ export default function PublicQuotationApproval() {
     const sub = currItems.reduce((s, i) => s + parseFloat(i.subtotal), 0);
     const disc = discountPct > 0 ? sub * (discountPct / 100) : 0;
     const afterDisc = sub - disc;
-    const tax = afterDisc * 0.16;
+    const baseTax = currItems.reduce((s, i) => s + parseFloat(i.taxAmount || "0"), 0);
+    const tax = baseTax * (1 - discountPct / 100);
     return { subtotal: sub, discount: disc, afterDisc, tax, total: afterDisc + tax };
   };
 
@@ -355,7 +356,7 @@ export default function PublicQuotationApproval() {
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">IVA (16%):</span>
+                      <span className="text-muted-foreground">IVA:</span>
                       <span>{formatMXN(mxnTotals.tax)}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t font-bold text-base">
@@ -381,7 +382,7 @@ export default function PublicQuotationApproval() {
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">IVA (16%):</span>
+                      <span className="text-muted-foreground">IVA:</span>
                       <span>{formatUSD(usdTotals.tax)}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t font-bold text-base">
@@ -411,7 +412,7 @@ export default function PublicQuotationApproval() {
                   </div>
                 )}
                 <div className="flex justify-between w-full max-w-xs text-sm">
-                  <span className="text-muted-foreground">IVA (16%):</span>
+                  <span className="text-muted-foreground">IVA:</span>
                   <span>{formatCurrency(quotation.tax)}</span>
                 </div>
                 <div className="flex justify-between w-full max-w-xs pt-2 border-t text-lg font-bold">

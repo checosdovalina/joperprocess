@@ -908,7 +908,9 @@ export default function QuotationsPage() {
                     const sub = its.reduce((s, i) => s + parseFloat(i.subtotal), 0);
                     const disc = discPct > 0 ? sub * (discPct / 100) : 0;
                     const after = sub - disc;
-                    return { sub, disc, tax: after * 0.16, total: after * 1.16 };
+                    const baseTax = its.reduce((s, i) => s + parseFloat(i.taxAmount || "0"), 0);
+                    const tax = baseTax * (1 - discPct / 100);
+                    return { sub, disc, tax, total: after + tax };
                   };
                   const mxnT = calcT(mxnItems);
                   const usdT = calcT(usdItems);
@@ -971,7 +973,7 @@ export default function QuotationsPage() {
                             <div className="p-3 space-y-1.5">
                               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span><span>{fmtMXN2(mxnT.sub)}</span></div>
                               {mxnT.disc > 0 && <div className="flex justify-between text-sm text-red-600"><span>Desc. ({discPct}%):</span><span>-{fmtMXN2(mxnT.disc)}</span></div>}
-                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">IVA (16%):</span><span>{fmtMXN2(mxnT.tax)}</span></div>
+                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">IVA:</span><span>{fmtMXN2(mxnT.tax)}</span></div>
                               <Separator />
                               <div className="flex justify-between font-bold"><span>Total MXN:</span><span>{fmtMXN2(mxnT.total)}</span></div>
                             </div>
@@ -984,7 +986,7 @@ export default function QuotationsPage() {
                             <div className="p-3 space-y-1.5">
                               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span><span>{fmtUSD2(usdT.sub)}</span></div>
                               {usdT.disc > 0 && <div className="flex justify-between text-sm text-red-600"><span>Desc. ({discPct}%):</span><span>-{fmtUSD2(usdT.disc)}</span></div>}
-                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">IVA (16%):</span><span>{fmtUSD2(usdT.tax)}</span></div>
+                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">IVA:</span><span>{fmtUSD2(usdT.tax)}</span></div>
                               <Separator />
                               <div className="flex justify-between font-bold"><span>Total USD:</span><span>{fmtUSD2(usdT.total)}</span></div>
                             </div>
