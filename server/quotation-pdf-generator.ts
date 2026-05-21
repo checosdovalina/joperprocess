@@ -210,13 +210,15 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       customerRows.push(["Ciudad:", [customer.city, customer.state].filter(Boolean).join(", ")]);
     }
 
-    const LABEL_W = 68;
+    const LABEL_W = 72;
+    const ROW_H = 13;
     const VALUE_X_L = MARGIN + 6 + LABEL_W;
-    const VALUE_W_L = COL_W - LABEL_W - 10;
+    const VALUE_W_L = COL_W - LABEL_W - 12;
+    const textOpts = (w: number) => ({ width: w, height: ROW_H, lineBreak: false, ellipsis: true } as const);
     for (const [label, value] of customerRows) {
-      doc.font("Helvetica-Bold").fillColor("#555555").text(label, MARGIN + 6, leftY, { width: LABEL_W, lineBreak: false });
-      doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_L, leftY, { width: VALUE_W_L, lineBreak: false });
-      leftY += 12;
+      doc.font("Helvetica-Bold").fillColor("#555555").text(label, MARGIN + 6, leftY, textOpts(LABEL_W));
+      doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_L, leftY, textOpts(VALUE_W_L));
+      leftY += ROW_H;
     }
 
     // Quotation info
@@ -231,11 +233,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     if (quotation.deliveryTime) quotationRows.push(["T. Entrega:", DELIVERY_TIME_LABELS[quotation.deliveryTime] || quotation.deliveryTime]);
 
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
-    const VALUE_W_R = COL_W - LABEL_W - 10;
+    const VALUE_W_R = COL_W - LABEL_W - 12;
     for (const [label, value] of quotationRows) {
-      doc.font("Helvetica-Bold").fillColor("#555555").text(label, COL2_X + 6, rightY, { width: LABEL_W, lineBreak: false });
-      doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_R, rightY, { width: VALUE_W_R, lineBreak: false });
-      rightY += 12;
+      doc.font("Helvetica-Bold").fillColor("#555555").text(label, COL2_X + 6, rightY, textOpts(LABEL_W));
+      doc.font("Helvetica").fillColor("#222222").text(value, VALUE_X_R, rightY, textOpts(VALUE_W_R));
+      rightY += ROW_H;
     }
 
     currentY += BOX_H + 20;
