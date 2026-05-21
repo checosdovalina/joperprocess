@@ -1,0 +1,34 @@
+# ================================================================
+# NEXXO - Configuración de Crontab para VPS
+# ================================================================
+# INSTRUCCIONES DE INSTALACIÓN:
+#
+# 1. Abre el editor de crontab:
+#      crontab -e
+#
+# 2. Agrega las siguientes líneas (ajusta la ruta del proyecto):
+# ================================================================
+
+# --- Variables de entorno (ajusta según tu servidor) ---
+DATABASE_URL=postgres://usuario:password@localhost:5432/nexxo
+
+# --- Backup diario a las 2:00 AM ---
+0 2 * * * /ruta/al/proyecto/scripts/vps-backup.sh >> /var/log/nexxo-backup.log 2>&1
+
+# --- Backup adicional a las 2:00 PM (opcional, recomendado) ---
+0 14 * * * /ruta/al/proyecto/scripts/vps-backup.sh >> /var/log/nexxo-backup.log 2>&1
+
+# ================================================================
+# CÓMO RESTAURAR UN BACKUP:
+#
+#   gunzip -c /var/backups/nexxo/nexxo_20260521_020000.sql.gz | psql $DATABASE_URL
+#
+# CÓMO VER BACKUPS DISPONIBLES:
+#
+#   ls -lh /var/backups/nexxo/
+#
+# ANTES DE CADA DEPLOY (manual):
+#
+#   bash /ruta/al/proyecto/scripts/vps-backup.sh
+#   bash /ruta/al/proyecto/scripts/vps-deploy.sh
+# ================================================================

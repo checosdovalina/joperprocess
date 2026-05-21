@@ -4,8 +4,12 @@
 # ================================================================
 # USO: bash scripts/vps-deploy.sh
 #
-# Este script despliega la aplicación SIN borrar datos.
-# NUNCA usa "drizzle-kit push" en producción.
+# Este script:
+#   1. Hace backup de la BD ANTES de cualquier cambio
+#   2. Descarga el código nuevo
+#   3. Instala dependencias y compila
+#   4. Aplica SOLO columnas nuevas (nunca borra datos)
+#   5. Reinicia el servidor
 # ================================================================
 
 set -e
@@ -16,29 +20,37 @@ echo "  NEXXO - Despliegue Seguro VPS"
 echo "========================================="
 echo ""
 
-# 1. Obtener cambios del repositorio
-echo "[1/5] Descargando cambios del repositorio..."
-git pull origin main
-
-# 2. Instalar dependencias nuevas (si las hay)
-echo "[2/5] Instalando dependencias..."
-npm install --production=false
-
-# 3. Compilar el proyecto
-echo "[3/5] Compilando..."
-npm run build
-
-# 4. Aplicar SOLO columnas nuevas (seguro, no borra datos)
-echo "[4/5] Aplicando cambios de schema de forma segura..."
+# Verificar DATABASE_URL
 if [ -z "$DATABASE_URL" ]; then
   echo "ERROR: La variable DATABASE_URL no está configurada."
   exit 1
 fi
-psql "$DATABASE_URL" -f scripts/vps-schema-changes.sql
+
+# 1. Backup ANTES de todo
+echo "[1/6] Creando backup de seguridad..."
+bash "$(dirname "$0")/vps-backup.sh"
+echo "  Backup completado. Continuando con el despliegue..."
+echo ""
+
+# 2. Obtener cambios del repositorio
+echo "[2/6] Descargando cambios del repositorio..."
+git pull origin main
+
+# 3. Instalar dependencias nuevas (si las hay)
+echo "[3/6] Instalando dependencias..."
+npm install --production=false
+
+# 4. Compilar el proyecto
+echo "[4/6] Compilando..."
+npm run build
+
+# 5. Aplicar SOLO columnas nuevas (seguro, no borra datos)
+echo "[5/6] Aplicando cambios de schema de forma segura..."
+psql "$DATABASE_URL" -f "$(dirname "$0")/vps-schema-changes.sql"
 echo "  Schema actualizado correctamente."
 
-# 5. Reiniciar el servidor (ajusta según tu proceso manager)
-echo "[5/5] Reiniciando servidor..."
+# 6. Reiniciar el servidor
+echo "[6/6] Reiniciando servidor..."
 if command -v pm2 &> /dev/null; then
   pm2 restart nexxo
 elif command -v systemctl &> /dev/null; then
