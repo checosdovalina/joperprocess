@@ -1,0 +1,77 @@
+[root@localhost joper]# git pull origin main
+bash scripts/vps-deploy.sh
+remote: Enumerating objects: 10, done.
+remote: Counting objects: 100% (10/10), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 6 (delta 4), reused 6 (delta 4), pack-reused 0 (from 0)
+Unpacking objects: 100% (6/6), 2.18 KiB | 744.00 KiB/s, done.
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+   56839dd..13dff4a  main       -> origin/main
+Updating 56839dd..13dff4a
+Fast-forward
+ ...pull-origin-main-bash-scripts_1779337835602.txt | 66 ++++++++++++++++++++++
+ scripts/vps-deploy.sh                              |  2 +-
+ 2 files changed, 67 insertions(+), 1 deletion(-)
+ create mode 100644 attached_assets/Pasted--root-localhost-joper-git-pull-origin-main-bash-scripts_1779337835602.txt
+
+=========================================
+  NEXXO - Despliegue Seguro VPS
+=========================================
+
+[1/6] Creando backup de seguridad...
+[04:31:42] Iniciando backup...
+pg_dump: error: could not translate host name "..." to address: Name or service not known
+[04:31:42] Backup guardado: /var/backups/nexxo/nexxo_20260521_043142.sql.gz (4.0K)
+[04:31:42] Backup completado exitosamente.
+
+[2/6] Descargando cambios del repositorio...
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+[3/6] Instalando dependencias...
+npm warn config production Use `--omit=dev` instead.
+
+up to date, audited 636 packages in 2s
+
+90 packages are looking for funding
+  run `npm fund` for details
+
+28 vulnerabilities (7 low, 11 moderate, 9 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[4/6] Compilando...
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+vite v5.4.20 building for production...
+transforming (3) src/main.tsxBrowserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+transforming (4) src/App.tsx
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+✓ 2933 modules transformed.
+../dist/public/index.html                                       0.99 kB │ gzip:   0.52 kB
+../dist/public/assets/nexxo_tech_company_logo-PtiaNbSL.png    762.60 kB
+../dist/public/assets/index-Crz_RM9S.css                      159.52 kB │ gzip:  25.36 kB
+../dist/public/assets/index-BrtgWkRW.js                     1,471.16 kB │ gzip: 391.69 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 8.34s
+
+  dist/index.js  490.1kb
+
+⚡ Done in 30ms
+[5/6] Aplicando cambios de schema...
+psql: error: could not translate host name "..." to address: Name or service not known
+[root@localhost joper]# 
