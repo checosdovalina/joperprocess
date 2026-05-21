@@ -356,8 +356,12 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     const TOTALS_ROW_H = 16;
 
-    const isMexicoCustomer = !customer.country ||
-      ["mx", "mexico", "méxico", "mex"].includes(customer.country.toLowerCase().trim());
+    const FOREIGN_RFC = "XEXX010101000";
+    const isForeignCustomer = customer.rfc === FOREIGN_RFC;
+    const isMexicoCustomer = !isForeignCustomer && (
+      !customer.country ||
+      ["mx", "mexico", "méxico", "mex"].includes(customer.country.toLowerCase().trim())
+    );
 
     const drawTotalsBox = (
       bx: number, by: number, bw: number,
@@ -402,9 +406,14 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const TOTALS_W = 200;
       const TOTALS_X = PAGE_W - MARGIN - TOTALS_W;
       const subtotalVal = parseFloat(String(quotation.subtotal));
-      const taxVal      = parseFloat(String(quotation.tax));
-      const totalVal    = parseFloat(String(quotation.total));
       const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
+      // For foreign customers, recalculate tax from stored item taxAmounts (overriding any legacy stored value)
+      const taxVal = isForeignCustomer
+        ? 0
+        : parseFloat(String(quotation.tax));
+      const totalVal = isForeignCustomer
+        ? subtotalVal - discountAmt
+        : parseFloat(String(quotation.total));
 
       const quoteLabel = quoteCurrency === "USD" ? "DÓLARES AMERICANOS (USD)" : "PESOS MEXICANOS (MXN)";
       const quoteColor = quoteCurrency === "USD" ? "#1a6b3a" : primaryColor;

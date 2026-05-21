@@ -898,6 +898,8 @@ export default function QuotationsPage() {
 
                 {/* Products Table */}
                 {(() => {
+                  const FOREIGN_RFC = "XEXX010101000";
+                  const isCustomerForeign = selectedQuotation.customer?.rfc === FOREIGN_RFC;
                   const items = selectedQuotation.items ?? [];
                   const mxnItems = items.filter(i => (i.currency || "MXN") === "MXN");
                   const usdItems = items.filter(i => i.currency === "USD");
@@ -908,7 +910,9 @@ export default function QuotationsPage() {
                     const sub = its.reduce((s, i) => s + parseFloat(i.subtotal), 0);
                     const disc = discPct > 0 ? sub * (discPct / 100) : 0;
                     const after = sub - disc;
-                    const baseTax = its.reduce((s, i) => s + parseFloat(i.taxAmount || "0"), 0);
+                    const baseTax = isCustomerForeign
+                      ? 0
+                      : its.reduce((s, i) => s + parseFloat(i.taxAmount || "0"), 0);
                     const tax = baseTax * (1 - discPct / 100);
                     return { sub, disc, tax, total: after + tax };
                   };
@@ -1008,14 +1012,21 @@ export default function QuotationsPage() {
                                 <span>-{formatCurrency(parseFloat(selectedQuotation.subtotal) * (parseFloat(selectedQuotation.globalDiscount || "0") / 100), selectedQuotation.currency || "MXN")}</span>
                               </div>
                             )}
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">IVA:</span>
-                              <span>{formatCurrency(selectedQuotation.tax, selectedQuotation.currency || "MXN")}</span>
-                            </div>
+                            {!isCustomerForeign && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">IVA:</span>
+                                <span>{formatCurrency(selectedQuotation.tax, selectedQuotation.currency || "MXN")}</span>
+                              </div>
+                            )}
                             <Separator />
                             <div className="flex justify-between font-bold text-lg">
                               <span>Total:</span>
-                              <span>{formatCurrency(selectedQuotation.total, selectedQuotation.currency || "MXN")}</span>
+                              <span>{formatCurrency(
+                                isCustomerForeign
+                                  ? parseFloat(selectedQuotation.subtotal) * (1 - parseFloat(selectedQuotation.globalDiscount || "0") / 100)
+                                  : selectedQuotation.total,
+                                selectedQuotation.currency || "MXN"
+                              )}</span>
                             </div>
                             {parseFloat(selectedQuotation.totalSavings || "0") > 0 && (
                               <div className="flex justify-between text-sm text-green-600">
