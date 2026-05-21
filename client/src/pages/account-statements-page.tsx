@@ -85,6 +85,7 @@ function fmtDate(d: string | null) {
 }
 
 export default function AccountStatementsPage() {
+  const { t } = useI18n();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
