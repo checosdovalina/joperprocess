@@ -3,16 +3,13 @@
 # NEXXO - Script de Despliegue Seguro para VPS
 # ================================================================
 # USO: bash scripts/vps-deploy.sh
-#
-# Este script:
-#   1. Hace backup de la BD ANTES de cualquier cambio
-#   2. Descarga el código nuevo
-#   3. Instala dependencias y compila
-#   4. Aplica SOLO columnas nuevas (nunca borra datos)
-#   5. Reinicia el servidor
 # ================================================================
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+ECOSYSTEM="$PROJECT_DIR/ecosystem.config.js"
 
 echo ""
 echo "========================================="
@@ -20,39 +17,49 @@ echo "  NEXXO - Despliegue Seguro VPS"
 echo "========================================="
 echo ""
 
-# Verificar DATABASE_URL
+# Cargar DATABASE_URL desde ecosystem.config.js si no está en el entorno
 if [ -z "$DATABASE_URL" ]; then
-  echo "ERROR: La variable DATABASE_URL no está configurada."
+  if [ -f "$ECOSYSTEM" ]; then
+    DATABASE_URL=$(node -e "const c=require('$ECOSYSTEM'); console.log(c.apps[0].env.DATABASE_URL||'')" 2>/dev/null)
+  fi
+fi
+
+if [ -z "$DATABASE_URL" ]; then
+  echo "ERROR: No se encontró DATABASE_URL."
+  echo "Exporta la variable antes de correr este script:"
+  echo "  export DATABASE_URL='postgresql://...'"
   exit 1
 fi
 
+export DATABASE_URL
+
 # 1. Backup ANTES de todo
 echo "[1/6] Creando backup de seguridad..."
-bash "$(dirname "$0")/vps-backup.sh"
-echo "  Backup completado. Continuando con el despliegue..."
+bash "$SCRIPT_DIR/vps-backup.sh"
 echo ""
 
 # 2. Obtener cambios del repositorio
 echo "[2/6] Descargando cambios del repositorio..."
-git pull origin main
+git -C "$PROJECT_DIR" pull origin main
 
-# 3. Instalar dependencias nuevas (si las hay)
+# 3. Instalar dependencias
 echo "[3/6] Instalando dependencias..."
-npm install --production=false
+npm --prefix "$PROJECT_DIR" install --production=false
 
-# 4. Compilar el proyecto
+# 4. Compilar
 echo "[4/6] Compilando..."
-npm run build
+npm --prefix "$PROJECT_DIR" run build
 
-# 5. Aplicar SOLO columnas nuevas (seguro, no borra datos)
-echo "[5/6] Aplicando cambios de schema de forma segura..."
-psql "$DATABASE_URL" -f "$(dirname "$0")/vps-schema-changes.sql"
+# 5. Aplicar columnas nuevas de forma segura
+echo "[5/6] Aplicando cambios de schema..."
+psql "$DATABASE_URL" -f "$SCRIPT_DIR/vps-schema-changes.sql"
 echo "  Schema actualizado correctamente."
 
-# 6. Reiniciar el servidor
+# 6. Reiniciar con PM2
 echo "[6/6] Reiniciando servidor..."
-if command -v pm2 &> /dev/null; then
-  pm2 restart nexxo
+PM2_APP=$(node -e "const c=require('$ECOSYSTEM'); console.log(c.apps[0].name)" 2>/dev/null || echo "")
+if [ -n "$PM2_APP" ] && command -v pm2 &> /dev/null; then
+  pm2 restart "$PM2_APP"
 elif command -v systemctl &> /dev/null; then
   systemctl restart nexxo
 else
