@@ -133,11 +133,6 @@ function OrderCard({ order }: { order: BoardOrder }) {
               </span>
             )}
           </div>
-          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
-            <User size={11} style={{ flexShrink: 0 }} />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.customerName}</span>
-            {order.customerCity && <span style={{ color: "rgba(255,255,255,0.35)" }}>· {order.customerCity}</span>}
-          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
           {daysBadge(order.daysRemaining, order.status)}
