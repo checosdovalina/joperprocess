@@ -151,7 +151,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.text(customer.name, MARGIN + 8, currentY + 22, { width: COL_W - 16, lineBreak: false });
   doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
   if (customer.rfc) doc.text(`RFC: ${customer.rfc}`, MARGIN + 8, currentY + 36, { width: COL_W - 16 });
-  if (customer.email) doc.text(customer.email, MARGIN + 8, currentY + 48, { width: COL_W - 16 });
+  if (customer.email) doc.text(customer.email, MARGIN + 8, currentY + 48, { width: COL_W - 16, lineBreak: false, ellipsis: true });
   if (customer.phone) doc.text(`Tel: ${customer.phone}`, MARGIN + 8, currentY + 60, { width: COL_W - 16 });
 
   // Summary box
