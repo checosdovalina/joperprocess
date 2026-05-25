@@ -10,7 +10,7 @@ import {
   microsipSyncLogs,
   InvoiceStatus
 } from '@shared/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm';
 
 interface FirebirdConnection {
   query: (query: string, params: any[], callback: (err: Error | null, result: any[]) => void) => void;
@@ -700,8 +700,9 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
       
-      // Query invoices - filter by TIPO_DOCTO = 'F' for invoices only
-      // Using IMPORTE_COBRO as total, PLAZOS_COND_PAG.DIAS_PLAZO for credit days
+      // Query ALL open invoices (ESTATUS = 'A') — no date filter so we capture
+      // everything Microsip considers outstanding, regardless of age.
+      // ESTATUS values: 'A' = Abierto (open), 'C' = Cancelado, 'P' = Pagado, 'L' = Liquidado
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
           DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
@@ -711,12 +712,15 @@ class MicrosipSyncService {
         FROM DOCTOS_VE DV
         LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
         WHERE DV.TIPO_DOCTO = 'F'
-          AND DV.ESTATUS <> 'C'
-          AND DV.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
+          AND DV.ESTATUS = 'A'
       `);
 
-      console.log(`[Microsip] Found ${microsipInvoices.length} invoices to sync`);
-      
+      console.log(`[Microsip] Found ${microsipInvoices.length} open invoices to sync`);
+
+      // Track which DOCTO_VE_IDs Microsip currently considers open.
+      // After the loop we'll close any Nexxo invoices NOT in this set.
+      const syncedDoctoIds = new Set<number>();
+
       // Log sample credit days for debugging
       const sampleInv = microsipInvoices.slice(0, 5);
       console.log(`[Microsip] Sample invoice credit days:`, sampleInv.map(i => ({
@@ -776,7 +780,8 @@ class MicrosipSyncService {
           const dueDate = new Date(invoiceDate);
           dueDate.setDate(dueDate.getDate() + creditDays);
 
-          const invoiceData = {
+          // Base invoice data (no balanceDue — handled separately below)
+          const invoiceBaseData = {
             customerId,
             cfdiUuid: null,
             serie: 'F',
@@ -784,7 +789,6 @@ class MicrosipSyncService {
             subtotal: String(subtotal),
             tax: String(tax),
             total: String(total),
-            balanceDue: String(total),
             status,
             paymentMethod: null,
             paymentForm: null,
@@ -796,21 +800,56 @@ class MicrosipSyncService {
           };
 
           if (existing) {
+            // On UPDATE: preserve the existing balanceDue so payment sync keeps it accurate.
+            // Only update non-balance fields (total, dates, status header, etc.)
             await db.update(invoices)
-              .set(invoiceData)
+              .set(invoiceBaseData)
               .where(eq(invoices.id, existing.id));
+            syncedDoctoIds.add(msInvoice.DOCTO_VE_ID);
             stats.updated++;
           } else {
+            // On INSERT: initialize balanceDue to total (no payments applied yet)
             await db.insert(invoices).values({
-              ...invoiceData,
+              ...invoiceBaseData,
+              balanceDue: String(total),
               tenantId: this.tenantId,
             });
+            syncedDoctoIds.add(msInvoice.DOCTO_VE_ID);
             stats.created++;
           }
         } catch (err) {
           console.error(`[Microsip] Error syncing invoice ${msInvoice.DOCTO_VE_ID}:`, err);
           stats.skipped++;
         }
+      }
+
+      // Close invoices that are no longer open in Microsip (paid/cancelled since last sync)
+      // Any Nexxo invoice with a microsipDoctoId NOT returned by Microsip's ESTATUS='A' query
+      // must have been settled — mark it as paid so it disappears from statements.
+      const allTenantInvoices = await db
+        .select({ id: invoices.id, microsipDoctoId: invoices.microsipDoctoId, status: invoices.status })
+        .from(invoices)
+        .where(and(
+          eq(invoices.tenantId, this.tenantId),
+          isNotNull(invoices.microsipDoctoId),
+        ));
+
+      let closedCount = 0;
+      for (const inv of allTenantInvoices) {
+        if (
+          inv.microsipDoctoId &&
+          !syncedDoctoIds.has(Number(inv.microsipDoctoId)) &&
+          inv.status !== InvoiceStatus.PAID &&
+          inv.status !== InvoiceStatus.CANCELLED
+        ) {
+          await db.update(invoices)
+            .set({ status: InvoiceStatus.PAID, balanceDue: '0.00', paidAt: new Date() })
+            .where(eq(invoices.id, inv.id));
+          closedCount++;
+        }
+      }
+      if (closedCount > 0) {
+        console.log(`[Microsip] Closed ${closedCount} invoices no longer open in Microsip`);
       }
 
       await db.update(microsipConfigs)
@@ -883,7 +922,7 @@ class MicrosipSyncService {
         LEFT JOIN DOCTOS_VE DV ON DV.DOCTO_VE_ID = DES.DOCTO_FTE_ID
         WHERE P.NATURALEZA_CONCEPTO = 'R'
           AND P.CANCELADO = 'N'
-          AND P.FECHA >= DATEADD(-90 DAY TO CURRENT_DATE)
+          AND P.FECHA >= DATEADD(-730 DAY TO CURRENT_DATE)
       `);
 
       console.log(`[Microsip] Found ${microsipPayments.length} payments to sync`);
