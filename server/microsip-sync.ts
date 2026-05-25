@@ -695,12 +695,33 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
       
-      // Query outstanding invoice balances from the CXC module (DOCTOS_CC).
-      // This is more reliable than DOCTOS_VE.IMPORTE_COBRO which can be 0 even when
-      // there is still a real outstanding balance tracked in CXC (e.g. when partial
-      // payments have been applied but the VE record was not updated).
-      // The true balance = CC.IMPORTE (original charge) - SUM(payments applied via IMPORTES_DOCTOS_CC).
+      // Query A: invoices with IMPORTE_COBRO > 0 directly in DOCTOS_VE.
+      // This is the primary source — IMPORTE_COBRO is updated by Microsip when
+      // payments are registered against an invoice.
+      // Query B: invoices linked via CXC (DOCTOS_CC → DOCTOS_ENTRE_SIS → DOCTOS_VE)
+      // where the CXC net balance > 0. Catches invoices whose DOCTOS_VE.IMPORTE_COBRO
+      // was not updated but still have an outstanding CXC charge.
+      // We UNION both and deduplicate by DOCTO_VE_ID, keeping the higher balance.
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
+        SELECT
+          DV.DOCTO_VE_ID,
+          DV.FOLIO,
+          DV.CLIENTE_ID,
+          DV.FECHA,
+          DV.IMPORTE_NETO,
+          DV.TOTAL_IMPUESTOS AS IMPUESTO,
+          DV.IMPORTE_COBRO,
+          DV.IMPORTE_COBRO AS SALDO_CXC,
+          PCP.DIAS_PLAZO AS DIAS_PPAG
+        FROM DOCTOS_VE DV
+        LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
+        WHERE DV.TIPO_DOCTO = 'F'
+          AND DV.ESTATUS <> 'C'
+          AND DV.ESTATUS <> 'L'
+          AND DV.IMPORTE_COBRO > 0
+
+        UNION
+
         SELECT
           DV.DOCTO_VE_ID,
           DV.FOLIO,
@@ -719,6 +740,7 @@ class MicrosipSyncService {
         WHERE CC.CANCELADO = 'N'
           AND DV.TIPO_DOCTO = 'F'
           AND DV.ESTATUS <> 'C'
+          AND DV.IMPORTE_COBRO = 0
         GROUP BY DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
                  DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS, CC.IMPORTE, PCP.DIAS_PLAZO
         HAVING CC.IMPORTE - COALESCE(SUM(IMP.IMPORTE), 0) > 0
