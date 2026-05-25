@@ -141,23 +141,15 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   const COL_W = CONTENT_W / 2 - 8;
   const COL2_X = MARGIN + COL_W + 16;
 
-  // Split multiple emails (separated by ; or ,) so each shows on its own line
+  // Split multiple emails (separated by ; or ,) — each on its own line
   const customerEmails = customer.email
     ? customer.email.split(/[;,]/).map((e: string) => e.trim()).filter(Boolean)
     : [];
-  const EMAIL_LINE_H = 13; // pt spacing between email lines (8pt font needs ~10-12pt leading)
-  const ITEM_GAP = 13;     // pt between distinct items (name→RFC, RFC→emails, emails→phone)
-
-  // Layout: header(16) + name(9pt~13) + gap + RFC(8pt~11) + gap + emails + gap + phone(8pt~11) + bottom padding(8)
-  const emailsH = customerEmails.length > 0 ? customerEmails.length * EMAIL_LINE_H : 0;
-  const phoneH = customer.phone ? ITEM_GAP : 0;
-  const BOX_H = 16 + ITEM_GAP + 13 + ITEM_GAP + 11 + (emailsH > 0 ? ITEM_GAP + emailsH : 0) + phoneH + 8;
-
-  // Compute Y positions for each element
-  const nameY = currentY + 16 + ITEM_GAP;
-  const rfcY = nameY + 13 + 4;
-  const emailsStartY = customer.rfc ? rfcY + 11 + 4 : nameY + 13 + 4;
-  const phoneY = emailsStartY + (customerEmails.length > 0 ? customerEmails.length * EMAIL_LINE_H + 4 : 0);
+  // 13pt line height for 8pt font gives enough breathing room between lines
+  const EMAIL_LINE_H = 13;
+  // Original single-email box was 76pt; grow by EMAIL_LINE_H for each extra email
+  const extraEmailH = Math.max(0, customerEmails.length - 1) * EMAIL_LINE_H;
+  const BOX_H = 76 + extraEmailH;
 
   doc.rect(MARGIN, currentY, COL_W, BOX_H).fill(lightColor);
   doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
@@ -165,14 +157,16 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.text("CLIENTE", MARGIN + 8, currentY + 4, { width: COL_W - 16 });
 
   doc.fontSize(9).font("Helvetica-Bold").fillColor("#111827");
-  doc.text(customer.name, MARGIN + 8, nameY, { width: COL_W - 16, lineBreak: false, ellipsis: true });
+  doc.text(customer.name, MARGIN + 8, currentY + 22, { width: COL_W - 16, lineBreak: false, ellipsis: true });
   doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
-  if (customer.rfc) doc.text(`RFC: ${customer.rfc}`, MARGIN + 8, rfcY, { width: COL_W - 16 });
+  if (customer.rfc) doc.text(`RFC: ${customer.rfc}`, MARGIN + 8, currentY + 36, { width: COL_W - 16 });
   customerEmails.forEach((email: string, idx: number) => {
-    doc.text(email, MARGIN + 8, emailsStartY + idx * EMAIL_LINE_H, { width: COL_W - 16, lineBreak: false, ellipsis: true });
+    doc.text(email, MARGIN + 8, currentY + 48 + idx * EMAIL_LINE_H, { width: COL_W - 16, lineBreak: false, ellipsis: true });
   });
   if (customer.phone) {
-    doc.text(`Tel: ${customer.phone}`, MARGIN + 8, phoneY, { width: COL_W - 16 });
+    // Phone goes after the last email row (or at the original offset if no emails)
+    const phoneOffY = 48 + Math.max(customerEmails.length, 1) * EMAIL_LINE_H;
+    doc.text(`Tel: ${customer.phone}`, MARGIN + 8, currentY + phoneOffY, { width: COL_W - 16 });
   }
 
   // Summary box — same height as customer box so they align

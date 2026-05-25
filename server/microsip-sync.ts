@@ -695,33 +695,6 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
 
-      // === DIAGNOSTIC: find pure-CXC charges with outstanding balance ===
-      try {
-        // Look for CXC charges (C) for MAQUINARIA MK with remaining IMPORTE_COBRO > 0
-        // These are charges that exist only in CXC, not linked to DOCTOS_VE
-        const mkCxcPending = await this.query<any>(fbDb,
-          `SELECT FIRST 10 DOCTO_CC_ID, FOLIO, NATURALEZA_CONCEPTO, FECHA, IMPORTE_COBRO, APLICADO, CANCELADO, DESCRIPCION
-           FROM DOCTOS_CC
-           WHERE CLIENTE_ID = 48142
-             AND NATURALEZA_CONCEPTO = 'C'
-             AND CANCELADO = 'N'
-             AND IMPORTE_COBRO > 0
-           ORDER BY DOCTO_CC_ID DESC`
-        );
-        console.log('[Microsip DIAG] MK CXC charges with IMPORTE_COBRO > 0:', JSON.stringify(mkCxcPending));
-
-        // Also check how many CXC charges exist total for MK (regardless of balance)
-        const mkCxcTotal = await this.query<any>(fbDb,
-          `SELECT COUNT(*) AS TOTAL, SUM(IMPORTE_COBRO) AS SALDO_TOTAL
-           FROM DOCTOS_CC
-           WHERE CLIENTE_ID = 48142 AND NATURALEZA_CONCEPTO = 'C' AND CANCELADO = 'N'`
-        );
-        console.log('[Microsip DIAG] MK CXC total charges:', JSON.stringify(mkCxcTotal));
-      } catch (diagErr) {
-        console.log('[Microsip DIAG] Diagnostic query error:', (diagErr as Error).message);
-      }
-      // === END DIAGNOSTIC ===
-
       // Query invoices with an outstanding balance directly from DOCTOS_VE.
       // IMPORTE_COBRO is the remaining balance Microsip maintains on each invoice
       // as payments are applied. This is the most reliable source available.
