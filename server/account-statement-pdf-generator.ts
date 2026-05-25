@@ -140,7 +140,14 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   // ── CUSTOMER INFO ─────────────────────────────────────────
   const COL_W = CONTENT_W / 2 - 8;
   const COL2_X = MARGIN + COL_W + 16;
-  const BOX_H = 76;
+
+  // Split multiple emails (separated by ; or ,) so each shows on its own line
+  const customerEmails = customer.email
+    ? customer.email.split(/[;,]/).map((e: string) => e.trim()).filter(Boolean)
+    : [];
+  const EMAIL_LINE_H = 11;
+  const extraEmailH = Math.max(0, (customerEmails.length - 1) * EMAIL_LINE_H);
+  const BOX_H = 76 + extraEmailH;
 
   doc.rect(MARGIN, currentY, COL_W, BOX_H).fill(lightColor);
   doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
@@ -151,29 +158,41 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.text(customer.name, MARGIN + 8, currentY + 22, { width: COL_W - 16, lineBreak: false });
   doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
   if (customer.rfc) doc.text(`RFC: ${customer.rfc}`, MARGIN + 8, currentY + 36, { width: COL_W - 16 });
-  if (customer.email) doc.text(customer.email, MARGIN + 8, currentY + 48, { width: COL_W - 16, lineBreak: false, ellipsis: true });
-  if (customer.phone) doc.text(`Tel: ${customer.phone}`, MARGIN + 8, currentY + 60, { width: COL_W - 16 });
+  customerEmails.forEach((email: string, idx: number) => {
+    doc.text(email, MARGIN + 8, currentY + 48 + idx * EMAIL_LINE_H, { width: COL_W - 16, lineBreak: false, ellipsis: true });
+  });
+  if (customer.phone) {
+    const phoneY = currentY + 48 + Math.max(customerEmails.length, 1) * EMAIL_LINE_H;
+    doc.text(`Tel: ${customer.phone}`, MARGIN + 8, phoneY, { width: COL_W - 16 });
+  }
 
-  // Summary box
+  // Summary box — same height as customer box so they align
   doc.rect(COL2_X, currentY, COL_W, BOX_H).fill(lightColor);
   doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
   doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text("RESUMEN", COL2_X + 8, currentY + 4, { width: COL_W - 16 });
 
+  // Distribute 3 summary rows evenly within the content area (below the 16px header)
+  const summaryContentH = BOX_H - 16;
+  const summaryRowStep = summaryContentH / 3;
+  const s1Y = currentY + 16 + summaryRowStep * 0 + 6;
+  const s2Y = currentY + 16 + summaryRowStep * 1 + 6;
+  const s3Y = currentY + 16 + summaryRowStep * 2 + 6;
+
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Saldo Total por Cobrar:", COL2_X + 8, currentY + 22, { width: COL_W / 2, continued: false });
+  doc.text("Saldo Total por Cobrar:", COL2_X + 8, s1Y, { width: COL_W / 2, continued: false });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#dc2626");
-  doc.text(fmt(totalBalance), COL2_X + COL_W / 2, currentY + 20, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(fmt(totalBalance), COL2_X + COL_W / 2, s1Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Saldo Vencido:", COL2_X + 8, currentY + 38, { width: COL_W / 2 });
+  doc.text("Saldo Vencido:", COL2_X + 8, s2Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor(totalOverdue > 0 ? "#ea580c" : "#374151");
-  doc.text(fmt(totalOverdue), COL2_X + COL_W / 2, currentY + 36, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(fmt(totalOverdue), COL2_X + COL_W / 2, s2Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Facturas Activas:", COL2_X + 8, currentY + 54, { width: COL_W / 2 });
+  doc.text("Facturas Activas:", COL2_X + 8, s3Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#374151");
-  doc.text(`${activeInvoices.length}`, COL2_X + COL_W / 2, currentY + 52, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(`${activeInvoices.length}`, COL2_X + COL_W / 2, s3Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   currentY += BOX_H + 20;
 
