@@ -65,8 +65,9 @@ interface MicrosipInvoice {
   FECHA: Date;
   IMPORTE_NETO: number;
   IMPUESTO: number;
-  IMPORTE_COBRO: number;  // amount pending to collect (used as balanceDue)
-  ESTATUS: string;
+  IMPORTE_COBRO: number;  // original charge amount in CXC
+  SALDO_CXC: number;      // true outstanding balance from CXC (cargo - pagos aplicados)
+  DIAS_PPAG: number;
 }
 
 interface MicrosipPayment {
@@ -694,22 +695,33 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
       
-      // Query only invoices with IMPORTE_COBRO > 0 (pending amount to collect).
-      // In Microsip, IMPORTE_COBRO represents the amount still owed on the invoice.
-      // This avoids pulling the entire 25-year history when most old records are settled.
-      // We also exclude 'C' (Cancelado) and 'L' (Liquidado) explicitly for safety.
+      // Query outstanding invoice balances from the CXC module (DOCTOS_CC).
+      // This is more reliable than DOCTOS_VE.IMPORTE_COBRO which can be 0 even when
+      // there is still a real outstanding balance tracked in CXC (e.g. when partial
+      // payments have been applied but the VE record was not updated).
+      // The true balance = CC.IMPORTE (original charge) - SUM(payments applied via IMPORTES_DOCTOS_CC).
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
-        SELECT 
-          DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
-          DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS AS IMPUESTO, 
-          DV.IMPORTE_COBRO, DV.ESTATUS,
+        SELECT
+          DV.DOCTO_VE_ID,
+          DV.FOLIO,
+          DV.CLIENTE_ID,
+          DV.FECHA,
+          DV.IMPORTE_NETO,
+          DV.TOTAL_IMPUESTOS AS IMPUESTO,
+          CC.IMPORTE AS IMPORTE_COBRO,
+          CC.IMPORTE - COALESCE(SUM(IMP.IMPORTE), 0) AS SALDO_CXC,
           PCP.DIAS_PLAZO AS DIAS_PPAG
-        FROM DOCTOS_VE DV
+        FROM DOCTOS_CC CC
+        JOIN DOCTOS_ENTRE_SIS DES ON DES.DOCTO_DEST_ID = CC.DOCTO_CC_ID
+        JOIN DOCTOS_VE DV ON DV.DOCTO_VE_ID = DES.DOCTO_FTE_ID
+        LEFT JOIN IMPORTES_DOCTOS_CC IMP ON IMP.DOCTO_CC_ACR_ID = CC.DOCTO_CC_ID
         LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
-        WHERE DV.TIPO_DOCTO = 'F'
+        WHERE CC.CANCELADO = 'N'
+          AND DV.TIPO_DOCTO = 'F'
           AND DV.ESTATUS <> 'C'
-          AND DV.ESTATUS <> 'L'
-          AND DV.IMPORTE_COBRO > 0
+        GROUP BY DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
+                 DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS, CC.IMPORTE, PCP.DIAS_PLAZO
+        HAVING CC.IMPORTE - COALESCE(SUM(IMP.IMPORTE), 0) > 0
       `);
 
       console.log(`[Microsip] Found ${microsipInvoices.length} invoices with outstanding balance`);
@@ -747,20 +759,22 @@ class MicrosipSyncService {
 
           const subtotal = msInvoice.IMPORTE_NETO || 0;
           const tax = msInvoice.IMPUESTO || 0;
-          // IMPORTE_COBRO is the amount pending to collect (cobrar) — both total and balanceDue.
-          // Invoices with IMPORTE_COBRO = 0 were excluded by the query filter, so all records
-          // here have an outstanding balance.
-          const total = (msInvoice as any).IMPORTE_COBRO || (subtotal + tax);
+          // IMPORTE_COBRO = original CXC charge amount (invoice total in CXC)
+          // SALDO_CXC = true outstanding balance = IMPORTE_COBRO - sum of applied payments
+          const total = msInvoice.IMPORTE_COBRO || (subtotal + tax);
+          const balanceDue = msInvoice.SALDO_CXC || total;
 
-          // Since we filter IMPORTE_COBRO > 0, all invoices here are pending payment
-          const status: string = InvoiceStatus.PENDING_PAYMENT;
+          // Determine status from CXC balance
+          const status: string = balanceDue >= total
+            ? InvoiceStatus.PENDING_PAYMENT
+            : InvoiceStatus.PARTIALLY_PAID;
 
           const invoiceDate = msInvoice.FECHA || new Date();
-          const creditDays = (msInvoice as any).DIAS_PPAG || 0;
+          const creditDays = msInvoice.DIAS_PPAG || 0;
           const dueDate = new Date(invoiceDate);
           dueDate.setDate(dueDate.getDate() + creditDays);
 
-          // Base invoice data — balanceDue = IMPORTE_COBRO (pending amount per Microsip)
+          // Base invoice data — balanceDue = SALDO_CXC (true outstanding per CXC module)
           const invoiceBaseData = {
             customerId,
             cfdiUuid: null,
@@ -769,7 +783,7 @@ class MicrosipSyncService {
             subtotal: String(subtotal),
             tax: String(tax),
             total: String(total),
-            balanceDue: String(total),
+            balanceDue: String(balanceDue),
             status,
             paymentMethod: null,
             paymentForm: null,
