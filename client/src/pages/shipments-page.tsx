@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff, RotateCcw, FileDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -726,8 +726,18 @@ export default function ShipmentsPage() {
                 </div>
               )}
 
-              <div className="flex justify-between items-center pt-4 border-t">
-                <span className="text-sm text-muted-foreground">{t("label.status")} — {t("label.actions")}</span>
+              <div className="flex justify-between items-center pt-4 border-t gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    window.open(`/api/shipments/${selectedShipment.id}/remision`, "_blank");
+                  }}
+                  data-testid={`button-remision-${selectedShipment.id}`}
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Remisión de Salida
+                </Button>
                 <div className="flex gap-2">
                   {selectedShipment.status === ShipmentStatus.PENDING && (
                     <Button onClick={handleMarkAsInTransit} disabled={updateShipmentMutation.isPending}>

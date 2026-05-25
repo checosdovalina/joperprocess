@@ -3717,6 +3717,87 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Shipment Remisión de Salida PDF
+  app.get("/api/shipments/:id/remision", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantId = getEffectiveTenantId(req);
+
+      // Load shipment with full relations
+      const shipment = await db.query.shipments.findFirst({
+        where: eq(shipments.id, id),
+        with: {
+          productInstances: { with: { product: true } },
+        },
+      });
+      if (!shipment) return res.status(404).json({ error: "Embarque no encontrado" });
+
+      // Load order → quotation → items → customer
+      const order = await db.query.orders.findFirst({
+        where: eq(orders.id, shipment.orderId),
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+              items: { with: { product: true } },
+            },
+          },
+        },
+      });
+      if (!order) return res.status(404).json({ error: "Pedido no encontrado" });
+
+      const customer = order.quotation.customer;
+
+      // Load tenant branding
+      let tenantBranding = null;
+      if (tenantId) {
+        tenantBranding = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+      }
+
+      // Build products list grouped by productId, attaching serial numbers from productInstances
+      const instancesByProduct: Record<string, string[]> = {};
+      for (const inst of shipment.productInstances ?? []) {
+        if (!instancesByProduct[inst.productId]) instancesByProduct[inst.productId] = [];
+        instancesByProduct[inst.productId].push(inst.serialNumber);
+      }
+
+      const remisionProducts = order.quotation.items.map(item => ({
+        name: item.product?.name ?? item.description ?? "Producto",
+        quantity: parseFloat(item.quantity ?? "1"),
+        unitOfMeasure: item.product?.unitOfMeasure ?? "Unidades",
+        desde: tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almacén/Salida",
+        serialNumbers: instancesByProduct[item.productId ?? ""] ?? [],
+      }));
+
+      const { generateShipmentRemisionPDF } = await import("./shipment-remision-pdf-generator.js");
+
+      const stream = await generateShipmentRemisionPDF({
+        folio: order.quotation.folio,
+        orderStatus: order.status,
+        scheduledDate: order.estimatedDelivery ? order.estimatedDelivery.toString() : null,
+        customerName: customer.name,
+        customerAddress: [customer.city, customer.state].filter(Boolean).join(", ") || null,
+        transporter: shipment.transporter,
+        transportType: shipment.transportType,
+        driverName: shipment.driverName,
+        vehiclePlates: shipment.vehiclePlates,
+        trackingNumber: shipment.trackingNumber,
+        shippedAt: shipment.shippedAt ? shipment.shippedAt.toString() : null,
+        products: remisionProducts,
+        tenant: tenantBranding,
+      });
+
+      const safeCustomer = customer.name.replace(/[^a-zA-Z0-9_\-]/g, "_").substring(0, 30);
+      const safeOrder = order.quotation.folio.replace(/[^a-zA-Z0-9_\-]/g, "_");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="remision-${safeOrder}-${safeCustomer}.pdf"`);
+      stream.pipe(res);
+    } catch (error) {
+      console.error("Error generating shipment remision PDF:", error);
+      res.status(500).json({ error: "Error al generar la remisión" });
+    }
+  });
+
   // Product Instances (Serial Numbers) endpoints
   app.get("/api/product-instances", isAuthenticated, async (req, res) => {
     try {
