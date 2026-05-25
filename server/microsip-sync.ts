@@ -63,6 +63,7 @@ interface MicrosipInvoice {
   FOLIO: string;
   CLIENTE_ID: number;
   FECHA: Date;
+  FECHA_VENCE: Date | null;  // explicit due date from Microsip
   IMPORTE_NETO: number;
   IMPUESTO: number;
   IMPORTE_COBRO: number;  // original charge amount in CXC
@@ -704,6 +705,7 @@ class MicrosipSyncService {
           DV.FOLIO,
           DV.CLIENTE_ID,
           DV.FECHA,
+          DV.FECHA_VENCE,
           DV.IMPORTE_NETO,
           DV.TOTAL_IMPUESTOS AS IMPUESTO,
           DV.IMPORTE_COBRO,
@@ -763,9 +765,16 @@ class MicrosipSyncService {
             : InvoiceStatus.PARTIALLY_PAID;
 
           const invoiceDate = msInvoice.FECHA || new Date();
-          const creditDays = msInvoice.DIAS_PPAG || 0;
-          const dueDate = new Date(invoiceDate);
-          dueDate.setDate(dueDate.getDate() + creditDays);
+          // Use FECHA_VENCE directly when available (explicit due date from Microsip).
+          // Only fall back to FECHA + DIAS_PPAG calculation when FECHA_VENCE is absent.
+          let dueDate: Date;
+          if (msInvoice.FECHA_VENCE) {
+            dueDate = new Date(msInvoice.FECHA_VENCE);
+          } else {
+            const creditDays = msInvoice.DIAS_PPAG || 0;
+            dueDate = new Date(invoiceDate);
+            dueDate.setDate(dueDate.getDate() + creditDays);
+          }
 
           // Base invoice data — balanceDue = SALDO_CXC (true outstanding per CXC module)
           const invoiceBaseData = {
