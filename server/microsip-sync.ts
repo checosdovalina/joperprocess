@@ -695,13 +695,9 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
       
-      // Query A: invoices with IMPORTE_COBRO > 0 directly in DOCTOS_VE.
-      // This is the primary source — IMPORTE_COBRO is updated by Microsip when
-      // payments are registered against an invoice.
-      // Query B: invoices linked via CXC (DOCTOS_CC → DOCTOS_ENTRE_SIS → DOCTOS_VE)
-      // where the CXC net balance > 0. Catches invoices whose DOCTOS_VE.IMPORTE_COBRO
-      // was not updated but still have an outstanding CXC charge.
-      // We UNION both and deduplicate by DOCTO_VE_ID, keeping the higher balance.
+      // Query invoices with an outstanding balance directly from DOCTOS_VE.
+      // IMPORTE_COBRO is the remaining balance Microsip maintains on each invoice
+      // as payments are applied. This is the most reliable source available.
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT
           DV.DOCTO_VE_ID,
@@ -719,31 +715,6 @@ class MicrosipSyncService {
           AND DV.ESTATUS <> 'C'
           AND DV.ESTATUS <> 'L'
           AND DV.IMPORTE_COBRO > 0
-
-        UNION
-
-        SELECT
-          DV.DOCTO_VE_ID,
-          DV.FOLIO,
-          DV.CLIENTE_ID,
-          DV.FECHA,
-          DV.IMPORTE_NETO,
-          DV.TOTAL_IMPUESTOS AS IMPUESTO,
-          CC.IMPORTE AS IMPORTE_COBRO,
-          CC.IMPORTE - COALESCE(SUM(IMP.IMPORTE), 0) AS SALDO_CXC,
-          PCP.DIAS_PLAZO AS DIAS_PPAG
-        FROM DOCTOS_CC CC
-        JOIN DOCTOS_ENTRE_SIS DES ON DES.DOCTO_DEST_ID = CC.DOCTO_CC_ID
-        JOIN DOCTOS_VE DV ON DV.DOCTO_VE_ID = DES.DOCTO_FTE_ID
-        LEFT JOIN IMPORTES_DOCTOS_CC IMP ON IMP.DOCTO_CC_ACR_ID = CC.DOCTO_CC_ID
-        LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
-        WHERE CC.CANCELADO = 'N'
-          AND DV.TIPO_DOCTO = 'F'
-          AND DV.ESTATUS <> 'C'
-          AND DV.IMPORTE_COBRO = 0
-        GROUP BY DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
-                 DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS, CC.IMPORTE, PCP.DIAS_PLAZO
-        HAVING CC.IMPORTE - COALESCE(SUM(IMP.IMPORTE), 0) > 0
       `);
 
       console.log(`[Microsip] Found ${microsipInvoices.length} invoices with outstanding balance`);
