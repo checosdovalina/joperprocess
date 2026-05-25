@@ -947,46 +947,12 @@ class MicrosipSyncService {
         ));
       }
 
-      // --- Update invoice balances in bulk ---
-      // Aggregate total paid per invoice in a single SQL query
-      if (affectedInvoiceIds.size > 0) {
-        const invoiceIdList = Array.from(affectedInvoiceIds);
-        const totalsResult = await db
-          .select({
-            invoiceId: payments.invoiceId,
-            totalPaid: sql<string>`COALESCE(SUM(${payments.amount}::numeric), 0)`,
-          })
-          .from(payments)
-          .where(and(
-            eq(payments.tenantId, this.tenantId),
-            inArray(payments.invoiceId, invoiceIdList)
-          ))
-          .groupBy(payments.invoiceId);
-
-        const paidByInvoice = new Map(totalsResult.map(r => [r.invoiceId!, parseFloat(r.totalPaid)]));
-
-        const affectedInvoices = await db
-          .select()
-          .from(invoices)
-          .where(inArray(invoices.id, invoiceIdList));
-
-        await Promise.all(affectedInvoices.map(invoice => {
-          const totalPaid = paidByInvoice.get(invoice.id) ?? 0;
-          const invoiceTotal = parseFloat(invoice.total || '0');
-          const newBalance = Math.max(0, invoiceTotal - totalPaid);
-          const newStatus = newBalance === 0
-            ? InvoiceStatus.PAID
-            : totalPaid > 0
-              ? InvoiceStatus.PARTIALLY_PAID
-              : InvoiceStatus.PENDING_PAYMENT;
-
-          return db.update(invoices)
-            .set({ balanceDue: newBalance.toFixed(2), status: newStatus, paidAt: newBalance === 0 ? new Date() : null })
-            .where(eq(invoices.id, invoice.id));
-        }));
-      }
-
-      console.log(`[Microsip] Updated balances for ${affectedInvoiceIds.size} invoices`);
+      // NOTE: Invoice balances (balanceDue / status) are intentionally NOT updated here.
+      // The invoice sync sets balanceDue = IMPORTE_COBRO directly from Microsip, which already
+      // reflects the outstanding balance after all payments. Recalculating here would double-count
+      // payments (subtracting them again from an already-reduced balance) and incorrectly mark
+      // invoices as PAID. Run the invoice sync to refresh balances.
+      console.log(`[Microsip] Payment records synced. Run invoice sync to refresh balances.`);
 
       await db.update(microsipConfigs)
         .set({ 
