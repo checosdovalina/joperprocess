@@ -700,33 +700,26 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
       
-      // Query invoices — no date filter so we get everything Microsip considers outstanding.
-      // We exclude only 'C' (Cancelado). 'L' (Liquidado/Pagado) invoices are also excluded
-      // so we don't import paid ones; status mapping below handles the rest.
-      // NOTE: do NOT filter by ESTATUS = 'A' — different Microsip installations use different
-      // values for "open" (some use empty string, 'N', or other codes).
+      // Query only invoices with an outstanding SALDO (remaining balance > 0) in Microsip.
+      // SALDO is updated by Microsip as payments are applied — it represents what is still owed.
+      // IMPORTE_COBRO is the original invoice amount and does NOT decrease with payments.
+      // Filtering SALDO > 0 avoids pulling the entire history (e.g. 38k+ records since 2001)
+      // and gives us only genuinely open invoices.
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
           DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
           DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS AS IMPUESTO, 
-          DV.IMPORTE_COBRO, DV.ESTATUS,
+          DV.IMPORTE_COBRO, DV.SALDO, DV.ESTATUS,
           PCP.DIAS_PLAZO AS DIAS_PPAG
         FROM DOCTOS_VE DV
         LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
         WHERE DV.TIPO_DOCTO = 'F'
           AND DV.ESTATUS <> 'C'
           AND DV.ESTATUS <> 'L'
+          AND DV.SALDO > 0
       `);
 
-      console.log(`[Microsip] Found ${microsipInvoices.length} open invoices to sync`);
-
-      // Log sample credit days for debugging
-      const sampleInv = microsipInvoices.slice(0, 5);
-      console.log(`[Microsip] Sample invoice credit days:`, sampleInv.map(i => ({
-        folio: i.FOLIO,
-        fecha: i.FECHA,
-        diasPpag: (i as any).DIAS_PPAG
-      })));
+      console.log(`[Microsip] Found ${microsipInvoices.length} invoices with outstanding balance`);
 
       const customerMap = new Map<number, string>();
       const tenantCustomers = await db
@@ -759,27 +752,22 @@ class MicrosipSyncService {
               eq(invoices.microsipDoctoId, msInvoice.DOCTO_VE_ID)
             ));
 
-          let status: string = InvoiceStatus.PENDING_PAYMENT;
           const subtotal = msInvoice.IMPORTE_NETO || 0;
           const tax = msInvoice.IMPUESTO || 0;
-          // Use IMPORTE_COBRO as total if available, otherwise calculate
+          // IMPORTE_COBRO is the original invoice total (does not decrease with payments)
           const total = (msInvoice as any).IMPORTE_COBRO || (subtotal + tax);
-          
-          if (msInvoice.ESTATUS === 'C') {
-            status = InvoiceStatus.CANCELLED;
-          } else if (msInvoice.ESTATUS === 'A') {
-            status = InvoiceStatus.PENDING_PAYMENT;
-          }
+          // SALDO is the actual remaining balance after payments — use it directly as balanceDue
+          const saldo = msInvoice.SALDO || 0;
+
+          // Since we filter SALDO > 0, all invoices here are pending payment
+          const status: string = InvoiceStatus.PENDING_PAYMENT;
 
           const invoiceDate = msInvoice.FECHA || new Date();
-          
-          // Calculate due date from invoice date + credit days
-          // If creditDays is 0 (cash payment), due date is same as invoice date
           const creditDays = (msInvoice as any).DIAS_PPAG || 0;
           const dueDate = new Date(invoiceDate);
           dueDate.setDate(dueDate.getDate() + creditDays);
 
-          // Base invoice data (no balanceDue — handled separately below)
+          // Base invoice data — balanceDue comes from Microsip's SALDO (ground truth)
           const invoiceBaseData = {
             customerId,
             cfdiUuid: null,
@@ -788,6 +776,7 @@ class MicrosipSyncService {
             subtotal: String(subtotal),
             tax: String(tax),
             total: String(total),
+            balanceDue: String(saldo),
             status,
             paymentMethod: null,
             paymentForm: null,
@@ -799,27 +788,13 @@ class MicrosipSyncService {
           };
 
           if (existing) {
-            // On UPDATE: preserve existing balanceDue UNLESS the invoice was previously
-            // marked as paid (could happen by erroneous closure). In that case, reset
-            // balanceDue to total so the invoice reappears; payment sync will refine it.
-            const restoreBalance =
-              existing.status === InvoiceStatus.PAID ||
-              existing.status === InvoiceStatus.CANCELLED;
-
             await db.update(invoices)
-              .set({
-                ...invoiceBaseData,
-                ...(restoreBalance
-                  ? { balanceDue: String(total), paidAt: null }
-                  : { paidAt: null }),  // always clear paidAt when reopening
-              })
+              .set(invoiceBaseData)
               .where(eq(invoices.id, existing.id));
             stats.updated++;
           } else {
-            // On INSERT: initialize balanceDue to total (no payments applied yet)
             await db.insert(invoices).values({
               ...invoiceBaseData,
-              balanceDue: String(total),
               tenantId: this.tenantId,
             });
             stats.created++;
