@@ -10,7 +10,7 @@ import {
   microsipSyncLogs,
   InvoiceStatus
 } from '@shared/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
 
 interface FirebirdConnection {
   query: (query: string, params: any[], callback: (err: Error | null, result: any[]) => void) => void;
@@ -878,130 +878,112 @@ class MicrosipSyncService {
 
       console.log(`[Microsip] Found ${microsipPayments.length} payments to sync`);
 
+      // --- Pre-load all lookup data in bulk (3 queries total, not 3711) ---
       const customerMap = new Map<number, string>();
-      const tenantCustomers = await db
-        .select()
-        .from(customers)
-        .where(eq(customers.tenantId, this.tenantId));
-      
-      for (const cust of tenantCustomers) {
-        if (cust.microsipId) {
-          customerMap.set(cust.microsipId, cust.id);
-        }
+      for (const cust of await db.select({ id: customers.id, microsipId: customers.microsipId })
+          .from(customers).where(eq(customers.tenantId, this.tenantId))) {
+        if (cust.microsipId) customerMap.set(cust.microsipId, cust.id);
       }
 
-      // Map invoices by their DOCTO_CC_ID (cargo in cuentas por cobrar)
       const invoiceMap = new Map<number, string>();
-      const tenantInvoices = await db
-        .select()
-        .from(invoices)
-        .where(eq(invoices.tenantId, this.tenantId));
-      
-      for (const inv of tenantInvoices) {
-        if (inv.microsipDoctoId) {
-          invoiceMap.set(Number(inv.microsipDoctoId), inv.id);
-        }
+      for (const inv of await db.select({ id: invoices.id, microsipDoctoId: invoices.microsipDoctoId })
+          .from(invoices).where(eq(invoices.tenantId, this.tenantId))) {
+        if (inv.microsipDoctoId) invoiceMap.set(Number(inv.microsipDoctoId), inv.id);
       }
+
+      // Pre-load all existing payments keyed by microsipDoctoCoId
+      const existingPaymentMap = new Map<number, string>(); // microsipDoctoCoId → payment.id
+      for (const p of await db.select({ id: payments.id, microsipDoctoCoId: payments.microsipDoctoCoId })
+          .from(payments).where(eq(payments.tenantId, this.tenantId))) {
+        if (p.microsipDoctoCoId != null) existingPaymentMap.set(p.microsipDoctoCoId, p.id);
+      }
+
+      // --- Build insert/update batches ---
+      const toInsert: (typeof payments.$inferInsert)[] = [];
+      const toUpdate: { id: string; data: Partial<typeof payments.$inferInsert> }[] = [];
 
       for (const msPayment of microsipPayments) {
         stats.processed++;
-        
-        try {
-          const customerId = customerMap.get(msPayment.CLIENTE_ID);
-          if (!customerId) {
-            console.log(`[Microsip] Skipping payment ${msPayment.DOCTO_CO_ID}: customer ${msPayment.CLIENTE_ID} not found`);
-            stats.skipped++;
-            continue;
-          }
-
-          const [existing] = await db
-            .select()
-            .from(payments)
-            .where(and(
-              eq(payments.tenantId, this.tenantId),
-              eq(payments.microsipDoctoCoId, msPayment.DOCTO_CO_ID)
-            ));
-
-          // Link payment to invoice using DOCTO_VE_ID (from DOCTOS_ENTRE_SIS → DOCTOS_VE)
-          // invoiceMap is keyed by microsipDoctoId which is DOCTO_VE_ID
-          const invoiceId = msPayment.DOCTO_VE_ID
-            ? invoiceMap.get(msPayment.DOCTO_VE_ID) || null
-            : null;
-
-          const paymentData = {
-            customerId,
-            invoiceId,
-            amount: String(msPayment.IMPORTE || 0),
-            paymentDate: msPayment.FECHA || new Date(),
-            reference: msPayment.FOLIO_PAGO || null,
-            notes: msPayment.FOLIO_FACTURA ? `Factura: ${msPayment.FOLIO_FACTURA.trim()}` : null,
-            microsipDoctoCoId: msPayment.DOCTO_CO_ID,
-            microsipSyncedAt: new Date(),
-          };
-
-          if (existing) {
-            await db.update(payments)
-              .set(paymentData)
-              .where(eq(payments.id, existing.id));
-            stats.updated++;
-          } else {
-            await db.insert(payments).values({
-              ...paymentData,
-              tenantId: this.tenantId,
-            });
-            stats.created++;
-          }
-
-          // Track invoice to update balance later
-          if (invoiceId) {
-            affectedInvoiceIds.add(invoiceId);
-          }
-        } catch (err) {
-          console.error(`[Microsip] Error syncing payment ${msPayment.DOCTO_CO_ID}:`, err);
+        const customerId = customerMap.get(msPayment.CLIENTE_ID);
+        if (!customerId) {
+          console.log(`[Microsip] Skipping payment ${msPayment.DOCTO_CO_ID}: customer ${msPayment.CLIENTE_ID} not found`);
           stats.skipped++;
+          continue;
         }
+
+        const invoiceId = msPayment.DOCTO_VE_ID ? invoiceMap.get(msPayment.DOCTO_VE_ID) || null : null;
+        const paymentData = {
+          customerId,
+          invoiceId,
+          amount: String(msPayment.IMPORTE || 0),
+          paymentDate: msPayment.FECHA || new Date(),
+          reference: msPayment.FOLIO_PAGO || null,
+          notes: msPayment.FOLIO_FACTURA ? `Factura: ${msPayment.FOLIO_FACTURA.trim()}` : null,
+          microsipDoctoCoId: msPayment.DOCTO_CO_ID,
+          microsipSyncedAt: new Date(),
+        };
+
+        const existingId = existingPaymentMap.get(msPayment.DOCTO_CO_ID);
+        if (existingId) {
+          toUpdate.push({ id: existingId, data: paymentData });
+          stats.updated++;
+        } else {
+          toInsert.push({ ...paymentData, tenantId: this.tenantId });
+          stats.created++;
+        }
+
+        if (invoiceId) affectedInvoiceIds.add(invoiceId);
       }
 
-      // Update invoice balances for all affected invoices
-      for (const invoiceId of affectedInvoiceIds) {
-        try {
-          const invoice = await db.query.invoices.findFirst({
-            where: eq(invoices.id, invoiceId),
-          });
-          if (!invoice) continue;
+      // --- Execute in batches of 500 ---
+      const BATCH = 500;
+      for (let i = 0; i < toInsert.length; i += BATCH) {
+        await db.insert(payments).values(toInsert.slice(i, i + BATCH));
+      }
+      for (let i = 0; i < toUpdate.length; i += BATCH) {
+        const batch = toUpdate.slice(i, i + BATCH);
+        await Promise.all(batch.map(({ id, data }) =>
+          db.update(payments).set(data).where(eq(payments.id, id))
+        ));
+      }
 
-          // Sum all payments linked to this invoice
-          const [result] = await db
-            .select({ totalPaid: sql<string>`COALESCE(SUM(${payments.amount}), 0)` })
-            .from(payments)
-            .where(and(
-              eq(payments.invoiceId, invoiceId),
-              eq(payments.tenantId, this.tenantId)
-            ));
+      // --- Update invoice balances in bulk ---
+      // Aggregate total paid per invoice in a single SQL query
+      if (affectedInvoiceIds.size > 0) {
+        const invoiceIdList = Array.from(affectedInvoiceIds);
+        const totalsResult = await db
+          .select({
+            invoiceId: payments.invoiceId,
+            totalPaid: sql<string>`COALESCE(SUM(${payments.amount}::numeric), 0)`,
+          })
+          .from(payments)
+          .where(and(
+            eq(payments.tenantId, this.tenantId),
+            inArray(payments.invoiceId, invoiceIdList)
+          ))
+          .groupBy(payments.invoiceId);
 
-          const totalPaid = parseFloat(result?.totalPaid || '0');
+        const paidByInvoice = new Map(totalsResult.map(r => [r.invoiceId!, parseFloat(r.totalPaid)]));
+
+        const affectedInvoices = await db
+          .select()
+          .from(invoices)
+          .where(inArray(invoices.id, invoiceIdList));
+
+        await Promise.all(affectedInvoices.map(invoice => {
+          const totalPaid = paidByInvoice.get(invoice.id) ?? 0;
           const invoiceTotal = parseFloat(invoice.total || '0');
           const newBalance = Math.max(0, invoiceTotal - totalPaid);
+          const newStatus = newBalance === 0
+            ? InvoiceStatus.PAID
+            : totalPaid > 0
+              ? InvoiceStatus.PARTIALLY_PAID
+              : InvoiceStatus.PENDING_PAYMENT;
 
-          let newStatus = invoice.status;
-          if (newBalance === 0) {
-            newStatus = InvoiceStatus.PAID;
-          } else if (totalPaid > 0) {
-            newStatus = InvoiceStatus.PARTIALLY_PAID;
-          } else {
-            newStatus = InvoiceStatus.PENDING_PAYMENT;
-          }
-
-          await db.update(invoices)
-            .set({
-              balanceDue: newBalance.toFixed(2),
-              status: newStatus,
-              paidAt: newBalance === 0 ? new Date() : null,
-            })
-            .where(eq(invoices.id, invoiceId));
-        } catch (err) {
-          console.error(`[Microsip] Error updating invoice balance for ${invoiceId}:`, err);
-        }
+          return db.update(invoices)
+            .set({ balanceDue: newBalance.toFixed(2), status: newStatus, paidAt: newBalance === 0 ? new Date() : null })
+            .where(eq(invoices.id, invoice.id));
+        }));
       }
 
       console.log(`[Microsip] Updated balances for ${affectedInvoiceIds.size} invoices`);
