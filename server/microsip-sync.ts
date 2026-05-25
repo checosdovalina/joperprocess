@@ -694,7 +694,28 @@ class MicrosipSyncService {
     try {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
-      
+
+      // === DIAGNOSTIC: log DOCTOS_CC columns and MAQUINARIA MK CXC records ===
+      try {
+        const cxcCols = await this.query<any>(fbDb,
+          `SELECT RDB$FIELD_NAME FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'DOCTOS_CC' ORDER BY RDB$FIELD_POSITION`
+        );
+        console.log('[Microsip DIAG] DOCTOS_CC columns:', cxcCols.map((r: any) => r.RDB$FIELD_NAME?.trim()).join(', '));
+
+        const mkCxc = await this.query<any>(fbDb,
+          `SELECT FIRST 5 * FROM DOCTOS_CC WHERE CLIENTE_ID = 48142 AND CANCELADO = 'N' ORDER BY DOCTO_CC_ID DESC`
+        );
+        console.log('[Microsip DIAG] MAQUINARIA MK DOCTOS_CC rows:', JSON.stringify(mkCxc));
+
+        const mkVe = await this.query<any>(fbDb,
+          `SELECT FIRST 5 DOCTO_VE_ID, FOLIO, IMPORTE_COBRO, ESTATUS FROM DOCTOS_VE WHERE CLIENTE_ID = 48142 AND TIPO_DOCTO = 'F' AND ESTATUS <> 'C' ORDER BY DOCTO_VE_ID DESC`
+        );
+        console.log('[Microsip DIAG] MAQUINARIA MK DOCTOS_VE (pending):', JSON.stringify(mkVe));
+      } catch (diagErr) {
+        console.log('[Microsip DIAG] Diagnostic query error:', (diagErr as Error).message);
+      }
+      // === END DIAGNOSTIC ===
+
       // Query invoices with an outstanding balance directly from DOCTOS_VE.
       // IMPORTE_COBRO is the remaining balance Microsip maintains on each invoice
       // as payments are applied. This is the most reliable source available.
