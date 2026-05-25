@@ -61,6 +61,12 @@ export default function MicrosipSettingsPage() {
 
   const { data: logs, isLoading: isLoadingLogs, refetch: refetchLogs } = useQuery<MicrosipSyncLog[]>({
     queryKey: ["/api/microsip/logs"],
+    // Poll every 3 seconds while any sync is still running; stop when all done
+    refetchInterval: (query) => {
+      const data = query.state.data as MicrosipSyncLog[] | undefined;
+      if (data?.some(log => log.status === "started")) return 3000;
+      return false;
+    },
   });
 
   useEffect(() => {
@@ -139,31 +145,12 @@ export default function MicrosipSettingsPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/microsip/logs"] });
       if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ["/api/microsip/logs"] });
-        const result = data.result;
-        const errors: string[] = [];
-        if (result && typeof result === "object") {
-          const labels: Record<string, string> = {
-            categories: "Categorías", customers: "Clientes",
-            products: "Productos", invoices: "Facturas", payments: "Pagos",
-          };
-          for (const key of Object.keys(labels)) {
-            if (result[key]?.error) errors.push(`${labels[key]}: ${result[key].error}`);
-          }
-        }
-        if (errors.length > 0) {
-          toast({
-            title: "Sincronización parcial",
-            description: `Algunas entidades fallaron: ${errors.join("; ")}`,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Sincronización completada",
-            description: "Los datos han sido sincronizados correctamente.",
-          });
-        }
+        toast({
+          title: "Sincronización iniciada",
+          description: data.message || "Revisa el historial para ver el resultado.",
+        });
       } else {
         toast({
           title: "Error en sincronización",
