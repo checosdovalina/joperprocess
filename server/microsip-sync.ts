@@ -700,9 +700,11 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
       
-      // Query ALL open invoices (ESTATUS = 'A') — no date filter so we capture
-      // everything Microsip considers outstanding, regardless of age.
-      // ESTATUS values: 'A' = Abierto (open), 'C' = Cancelado, 'P' = Pagado, 'L' = Liquidado
+      // Query invoices — no date filter so we get everything Microsip considers outstanding.
+      // We exclude only 'C' (Cancelado). 'L' (Liquidado/Pagado) invoices are also excluded
+      // so we don't import paid ones; status mapping below handles the rest.
+      // NOTE: do NOT filter by ESTATUS = 'A' — different Microsip installations use different
+      // values for "open" (some use empty string, 'N', or other codes).
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
           DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
@@ -712,7 +714,8 @@ class MicrosipSyncService {
         FROM DOCTOS_VE DV
         LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
         WHERE DV.TIPO_DOCTO = 'F'
-          AND DV.ESTATUS = 'A'
+          AND DV.ESTATUS <> 'C'
+          AND DV.ESTATUS <> 'L'
       `);
 
       console.log(`[Microsip] Found ${microsipInvoices.length} open invoices to sync`);
@@ -800,10 +803,20 @@ class MicrosipSyncService {
           };
 
           if (existing) {
-            // On UPDATE: preserve the existing balanceDue so payment sync keeps it accurate.
-            // Only update non-balance fields (total, dates, status header, etc.)
+            // On UPDATE: preserve existing balanceDue UNLESS the invoice was previously
+            // marked as paid (could happen by erroneous closure). In that case, reset
+            // balanceDue to total so the invoice reappears; payment sync will refine it.
+            const restoreBalance =
+              existing.status === InvoiceStatus.PAID ||
+              existing.status === InvoiceStatus.CANCELLED;
+
             await db.update(invoices)
-              .set(invoiceBaseData)
+              .set({
+                ...invoiceBaseData,
+                ...(restoreBalance
+                  ? { balanceDue: String(total), paidAt: null }
+                  : { paidAt: null }),  // always clear paidAt when reopening
+              })
               .where(eq(invoices.id, existing.id));
             syncedDoctoIds.add(msInvoice.DOCTO_VE_ID);
             stats.updated++;
@@ -823,33 +836,38 @@ class MicrosipSyncService {
         }
       }
 
-      // Close invoices that are no longer open in Microsip (paid/cancelled since last sync)
-      // Any Nexxo invoice with a microsipDoctoId NOT returned by Microsip's ESTATUS='A' query
-      // must have been settled — mark it as paid so it disappears from statements.
-      const allTenantInvoices = await db
-        .select({ id: invoices.id, microsipDoctoId: invoices.microsipDoctoId, status: invoices.status })
-        .from(invoices)
-        .where(and(
-          eq(invoices.tenantId, this.tenantId),
-          isNotNull(invoices.microsipDoctoId),
-        ));
+      // Close invoices that are no longer open in Microsip (paid/cancelled since last sync).
+      // SAFETY: only run this if Microsip returned at least some open invoices.
+      // If microsipInvoices.length === 0, we cannot distinguish "all paid" from
+      // "Microsip unreachable / empty test DB" — so we skip closure to avoid data loss.
+      if (syncedDoctoIds.size > 0) {
+        const allTenantInvoices = await db
+          .select({ id: invoices.id, microsipDoctoId: invoices.microsipDoctoId, status: invoices.status })
+          .from(invoices)
+          .where(and(
+            eq(invoices.tenantId, this.tenantId),
+            isNotNull(invoices.microsipDoctoId),
+          ));
 
-      let closedCount = 0;
-      for (const inv of allTenantInvoices) {
-        if (
-          inv.microsipDoctoId &&
-          !syncedDoctoIds.has(Number(inv.microsipDoctoId)) &&
-          inv.status !== InvoiceStatus.PAID &&
-          inv.status !== InvoiceStatus.CANCELLED
-        ) {
-          await db.update(invoices)
-            .set({ status: InvoiceStatus.PAID, balanceDue: '0.00', paidAt: new Date() })
-            .where(eq(invoices.id, inv.id));
-          closedCount++;
+        let closedCount = 0;
+        for (const inv of allTenantInvoices) {
+          if (
+            inv.microsipDoctoId &&
+            !syncedDoctoIds.has(Number(inv.microsipDoctoId)) &&
+            inv.status !== InvoiceStatus.PAID &&
+            inv.status !== InvoiceStatus.CANCELLED
+          ) {
+            await db.update(invoices)
+              .set({ status: InvoiceStatus.PAID, balanceDue: '0.00', paidAt: new Date() })
+              .where(eq(invoices.id, inv.id));
+            closedCount++;
+          }
         }
-      }
-      if (closedCount > 0) {
-        console.log(`[Microsip] Closed ${closedCount} invoices no longer open in Microsip`);
+        if (closedCount > 0) {
+          console.log(`[Microsip] Closed ${closedCount} invoices no longer open in Microsip`);
+        }
+      } else {
+        console.log('[Microsip] Skipping invoice closure — Microsip returned 0 open invoices (safety guard)');
       }
 
       await db.update(microsipConfigs)
