@@ -4,7 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { tenantMiddleware } from "./tenant";
 import { runMigrations } from "./migrate";
-import { runScheduledSync } from "./microsip-sync";
+import { runScheduledSync, cleanupOrphanedSyncLogs } from "./microsip-sync";
 import { runAccountStatementScheduler } from "./account-statement-scheduler";
 
 const app = express();
@@ -91,6 +91,11 @@ app.use(tenantMiddleware);
   }, () => {
     log(`serving on port ${port}`);
   });
+
+  // Clean up orphaned "started" sync logs from any previous crashed/restarted run
+  cleanupOrphanedSyncLogs().catch(err =>
+    console.error("[Microsip] Startup cleanup error:", err)
+  );
 
   // Microsip auto-sync: check every 5 minutes if any tenant is due for sync.
   // The runScheduledSync function compares last sync times against each

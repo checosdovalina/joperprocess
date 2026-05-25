@@ -60,19 +60,13 @@ interface MicrosipCategory {
 
 interface MicrosipInvoice {
   DOCTO_VE_ID: number;
-  CLAVE: string;
   FOLIO: string;
   CLIENTE_ID: number;
   FECHA: Date;
-  FECHA_VENCIMIENTO: Date;
   IMPORTE_NETO: number;
   IMPUESTO: number;
-  TOTAL: number;
-  SALDO: number;
+  IMPORTE_COBRO: number;  // amount pending to collect (used as balanceDue)
   ESTATUS: string;
-  UUID: string;
-  FORMA_COBRO: string;
-  CONDICION_PAGO: string;
 }
 
 interface MicrosipPayment {
@@ -700,23 +694,22 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
       
-      // Query only invoices with an outstanding SALDO (remaining balance > 0) in Microsip.
-      // SALDO is updated by Microsip as payments are applied — it represents what is still owed.
-      // IMPORTE_COBRO is the original invoice amount and does NOT decrease with payments.
-      // Filtering SALDO > 0 avoids pulling the entire history (e.g. 38k+ records since 2001)
-      // and gives us only genuinely open invoices.
+      // Query only invoices with IMPORTE_COBRO > 0 (pending amount to collect).
+      // In Microsip, IMPORTE_COBRO represents the amount still owed on the invoice.
+      // This avoids pulling the entire 25-year history when most old records are settled.
+      // We also exclude 'C' (Cancelado) and 'L' (Liquidado) explicitly for safety.
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT 
           DV.DOCTO_VE_ID, DV.FOLIO, DV.CLIENTE_ID, DV.FECHA,
           DV.IMPORTE_NETO, DV.TOTAL_IMPUESTOS AS IMPUESTO, 
-          DV.IMPORTE_COBRO, DV.SALDO, DV.ESTATUS,
+          DV.IMPORTE_COBRO, DV.ESTATUS,
           PCP.DIAS_PLAZO AS DIAS_PPAG
         FROM DOCTOS_VE DV
         LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
         WHERE DV.TIPO_DOCTO = 'F'
           AND DV.ESTATUS <> 'C'
           AND DV.ESTATUS <> 'L'
-          AND DV.SALDO > 0
+          AND DV.IMPORTE_COBRO > 0
       `);
 
       console.log(`[Microsip] Found ${microsipInvoices.length} invoices with outstanding balance`);
@@ -754,12 +747,12 @@ class MicrosipSyncService {
 
           const subtotal = msInvoice.IMPORTE_NETO || 0;
           const tax = msInvoice.IMPUESTO || 0;
-          // IMPORTE_COBRO is the original invoice total (does not decrease with payments)
+          // IMPORTE_COBRO is the amount pending to collect (cobrar) — both total and balanceDue.
+          // Invoices with IMPORTE_COBRO = 0 were excluded by the query filter, so all records
+          // here have an outstanding balance.
           const total = (msInvoice as any).IMPORTE_COBRO || (subtotal + tax);
-          // SALDO is the actual remaining balance after payments — use it directly as balanceDue
-          const saldo = msInvoice.SALDO || 0;
 
-          // Since we filter SALDO > 0, all invoices here are pending payment
+          // Since we filter IMPORTE_COBRO > 0, all invoices here are pending payment
           const status: string = InvoiceStatus.PENDING_PAYMENT;
 
           const invoiceDate = msInvoice.FECHA || new Date();
@@ -767,7 +760,7 @@ class MicrosipSyncService {
           const dueDate = new Date(invoiceDate);
           dueDate.setDate(dueDate.getDate() + creditDays);
 
-          // Base invoice data — balanceDue comes from Microsip's SALDO (ground truth)
+          // Base invoice data — balanceDue = IMPORTE_COBRO (pending amount per Microsip)
           const invoiceBaseData = {
             customerId,
             cfdiUuid: null,
@@ -776,7 +769,7 @@ class MicrosipSyncService {
             subtotal: String(subtotal),
             tax: String(tax),
             total: String(total),
-            balanceDue: String(saldo),
+            balanceDue: String(total),
             status,
             paymentMethod: null,
             paymentForm: null,
@@ -1179,3 +1172,27 @@ export async function runScheduledSync(): Promise<void> {
 }
 
 export { MicrosipSyncService };
+
+/**
+ * On startup, mark any sync log entries still in "started" state as "error".
+ * These are orphaned entries from a previous server run that was killed mid-sync.
+ */
+export async function cleanupOrphanedSyncLogs(): Promise<void> {
+  try {
+    const updated = await db
+      .update(microsipSyncLogs)
+      .set({
+        status: 'error',
+        errorMessage: 'Sincronización interrumpida (servidor reiniciado)',
+        completedAt: new Date(),
+      })
+      .where(eq(microsipSyncLogs.status, 'started'))
+      .returning({ id: microsipSyncLogs.id });
+
+    if (updated.length > 0) {
+      console.log(`[Microsip] Cleaned up ${updated.length} orphaned sync log(s) from previous run`);
+    }
+  } catch (err) {
+    console.error('[Microsip] Error cleaning up orphaned sync logs:', err);
+  }
+}
