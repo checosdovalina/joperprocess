@@ -6521,33 +6521,29 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const tenantId = requireTenantId(req);
       const { type } = req.body; // 'all', 'customers', 'products', 'categories', 'invoices', 'payments'
-      
+
       const service = await createMicrosipSyncService(tenantId);
-      
-      let result;
-      switch (type) {
-        case 'customers':
-          result = { customers: await service.syncCustomers() };
-          break;
-        case 'products':
-          result = { products: await service.syncProducts() };
-          break;
-        case 'categories':
-          result = { categories: await service.syncCategories() };
-          break;
-        case 'invoices':
-          result = { invoices: await service.syncInvoices() };
-          break;
-        case 'payments':
-          result = { payments: await service.syncPayments() };
-          break;
-        case 'all':
-        default:
-          result = await service.syncAll();
-          break;
-      }
-      
-      res.json({ success: true, result });
+
+      // Respond immediately so the browser doesn't time out on large syncs
+      // (e.g. 3000+ payments). The actual work runs in the background.
+      res.json({ success: true, message: "Sincronización iniciada en segundo plano. Revisa el historial para ver el resultado." });
+
+      // Fire-and-forget — errors are logged but not sent to client
+      (async () => {
+        try {
+          switch (type) {
+            case 'customers':   await service.syncCustomers();   break;
+            case 'products':    await service.syncProducts();    break;
+            case 'categories':  await service.syncCategories();  break;
+            case 'invoices':    await service.syncInvoices();    break;
+            case 'payments':    await service.syncPayments();    break;
+            case 'all':
+            default:            await service.syncAll();         break;
+          }
+        } catch (bgErr) {
+          console.error("[Microsip] Background sync error:", (bgErr as Error).message);
+        }
+      })();
     } catch (error) {
       console.error("Error during Microsip sync:", error);
       res.status(500).json({ success: false, error: (error as Error).message });

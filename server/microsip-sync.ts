@@ -10,7 +10,7 @@ import {
   microsipSyncLogs,
   InvoiceStatus
 } from '@shared/schema';
-import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 
 interface FirebirdConnection {
   query: (query: string, params: any[], callback: (err: Error | null, result: any[]) => void) => void;
@@ -720,10 +720,6 @@ class MicrosipSyncService {
 
       console.log(`[Microsip] Found ${microsipInvoices.length} open invoices to sync`);
 
-      // Track which DOCTO_VE_IDs Microsip currently considers open.
-      // After the loop we'll close any Nexxo invoices NOT in this set.
-      const syncedDoctoIds = new Set<number>();
-
       // Log sample credit days for debugging
       const sampleInv = microsipInvoices.slice(0, 5);
       console.log(`[Microsip] Sample invoice credit days:`, sampleInv.map(i => ({
@@ -818,7 +814,6 @@ class MicrosipSyncService {
                   : { paidAt: null }),  // always clear paidAt when reopening
               })
               .where(eq(invoices.id, existing.id));
-            syncedDoctoIds.add(msInvoice.DOCTO_VE_ID);
             stats.updated++;
           } else {
             // On INSERT: initialize balanceDue to total (no payments applied yet)
@@ -827,7 +822,6 @@ class MicrosipSyncService {
               balanceDue: String(total),
               tenantId: this.tenantId,
             });
-            syncedDoctoIds.add(msInvoice.DOCTO_VE_ID);
             stats.created++;
           }
         } catch (err) {
@@ -836,39 +830,10 @@ class MicrosipSyncService {
         }
       }
 
-      // Close invoices that are no longer open in Microsip (paid/cancelled since last sync).
-      // SAFETY: only run this if Microsip returned at least some open invoices.
-      // If microsipInvoices.length === 0, we cannot distinguish "all paid" from
-      // "Microsip unreachable / empty test DB" — so we skip closure to avoid data loss.
-      if (syncedDoctoIds.size > 0) {
-        const allTenantInvoices = await db
-          .select({ id: invoices.id, microsipDoctoId: invoices.microsipDoctoId, status: invoices.status })
-          .from(invoices)
-          .where(and(
-            eq(invoices.tenantId, this.tenantId),
-            isNotNull(invoices.microsipDoctoId),
-          ));
-
-        let closedCount = 0;
-        for (const inv of allTenantInvoices) {
-          if (
-            inv.microsipDoctoId &&
-            !syncedDoctoIds.has(Number(inv.microsipDoctoId)) &&
-            inv.status !== InvoiceStatus.PAID &&
-            inv.status !== InvoiceStatus.CANCELLED
-          ) {
-            await db.update(invoices)
-              .set({ status: InvoiceStatus.PAID, balanceDue: '0.00', paidAt: new Date() })
-              .where(eq(invoices.id, inv.id));
-            closedCount++;
-          }
-        }
-        if (closedCount > 0) {
-          console.log(`[Microsip] Closed ${closedCount} invoices no longer open in Microsip`);
-        }
-      } else {
-        console.log('[Microsip] Skipping invoice closure — Microsip returned 0 open invoices (safety guard)');
-      }
+      // NOTE: Automatic closure of invoices not in the sync result has been intentionally
+      // removed. It was too prone to false positives (e.g. when Microsip returns fewer
+      // records than expected due to DB partitioning or connection issues).
+      // Invoices get marked PAID naturally when the payment sync sets balanceDue = 0.
 
       await db.update(microsipConfigs)
         .set({ 
