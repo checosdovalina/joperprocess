@@ -52,6 +52,8 @@ import {
   Check,
   MoreVertical,
   CalendarClock,
+  Calendar,
+  X,
 } from "lucide-react";
 
 interface CustomerBalance {
@@ -96,6 +98,8 @@ export default function AccountStatementsPage() {
   const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [filterOverdue, setFilterOverdue] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [linkLoadingId, setLinkLoadingId] = useState<string | null>(null);
@@ -163,8 +167,19 @@ export default function AccountStatementsPage() {
           (s.customer.email ?? "").toLowerCase().includes(q)
       );
     }
+    if (dateFrom) {
+      const from = new Date(dateFrom + "T00:00:00");
+      list = list.filter((s) => s.oldestDueDate && new Date(s.oldestDueDate) >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo + "T23:59:59");
+      list = list.filter((s) => s.oldestDueDate && new Date(s.oldestDueDate) <= to);
+    }
     return list;
-  }, [statements, search, filterOverdue]);
+  }, [statements, search, filterOverdue, dateFrom, dateTo]);
+
+  const hasDateFilter = dateFrom || dateTo;
+  function clearDates() { setDateFrom(""); setDateTo(""); }
 
   const allSelected = filtered.length > 0 && filtered.every((s) => selected.has(s.customer.id));
 
@@ -358,26 +373,71 @@ export default function AccountStatementsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 px-6 pb-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            data-testid="input-search"
-            placeholder="Buscar cliente, RFC o correo..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="flex flex-col gap-2 px-6 pb-3">
+        {/* Row 1: search + overdue toggle */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              data-testid="input-search"
+              placeholder="Buscar cliente, RFC o correo..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button
+            variant={filterOverdue ? "default" : "outline"}
+            size="default"
+            data-testid="button-filter-overdue"
+            onClick={() => setFilterOverdue((v) => !v)}
+          >
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Solo vencidos
+          </Button>
         </div>
-        <Button
-          variant={filterOverdue ? "default" : "outline"}
-          size="default"
-          data-testid="button-filter-overdue"
-          onClick={() => setFilterOverdue((v) => !v)}
-        >
-          <AlertTriangle className="w-4 h-4 mr-2" />
-          Solo vencidos
-        </Button>
+
+        {/* Row 2: date range filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground shrink-0">Vencimiento:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="date-from" className="text-xs text-muted-foreground shrink-0">Desde</Label>
+              <Input
+                id="date-from"
+                data-testid="input-date-from"
+                type="date"
+                className="w-[160px] text-sm"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="date-to" className="text-xs text-muted-foreground shrink-0">Hasta</Label>
+              <Input
+                id="date-to"
+                data-testid="input-date-to"
+                type="date"
+                className="w-[160px] text-sm"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+            {hasDateFilter && (
+              <Button
+                variant="ghost"
+                size="default"
+                data-testid="button-clear-dates"
+                onClick={clearDates}
+                className="text-muted-foreground"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Limpiar
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Table */}
