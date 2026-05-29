@@ -6681,6 +6681,22 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Temporary diagnostic endpoint – inspect raw Firebird CXC rows for a customer
+  app.get("/api/microsip/debug-cxc/:clienteId", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const clienteId = parseInt(req.params.clienteId);
+      if (isNaN(clienteId)) return res.status(400).json({ error: "clienteId must be numeric" });
+
+      const service = await createMicrosipSyncService(tenantId);
+      const result = await service.debugCxcCustomer(clienteId);
+      res.json(result);
+    } catch (err) {
+      console.error("[debug-cxc] error:", err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // ==================== END MICROSIP INTEGRATION ====================
 
   const httpServer = createServer(app);

@@ -1096,6 +1096,7 @@ class MicrosipSyncService {
             SUM(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0)) AS CREDITO_APLICADO
           FROM IMPORTES_DOCTOS_CC I
           WHERE I.DOCTO_CC_ACR_ID IS NOT NULL
+            AND I.TIPO_IMPTE IN ('R', 'A')
           GROUP BY I.DOCTO_CC_ACR_ID
         )
         SELECT
@@ -1187,6 +1188,7 @@ class MicrosipSyncService {
                  SUM(IC.IMPORTE + COALESCE(IC.DSCTO_PPAG,0)) AS CREDITO_APLICADO
           FROM IMPORTES_DOCTOS_CC IC
           WHERE IC.DOCTO_CC_ACR_ID IS NOT NULL
+            AND IC.TIPO_IMPTE IN ('R', 'A')
           GROUP BY IC.DOCTO_CC_ACR_ID
         ) CR ON CR.DOCTO_CC_ACR_ID = D.DOCTO_CC_ID
         WHERE D.CANCELADO <> 'S'
@@ -1221,6 +1223,116 @@ class MicrosipSyncService {
       `);
 
       return { invoices, payments };
+    } finally {
+      if (fbDb) fbDb.detach();
+    }
+  }
+
+  /**
+   * Diagnostic: inspect raw Firebird CXC rows for a single customer to
+   * understand what TIPO_IMPTE values and DOCTO_CC_ACR_ID links exist.
+   */
+  async debugCxcCustomer(clienteId: number): Promise<object> {
+    if (!await this.loadConfig(false)) {
+      throw new Error('Configuración de Microsip no encontrada');
+    }
+    let fbDb: FirebirdConnection | null = null;
+    try {
+      fbDb = await this.connect(true);
+
+      // 1. All charge docs for this customer
+      const chargeDocs = await this.query<any>(fbDb, `
+        SELECT FIRST 20
+          D.DOCTO_CC_ID, D.FOLIO, D.FECHA, D.NATURALEZA_CONCEPTO, D.CANCELADO
+        FROM DOCTOS_CC D
+        WHERE D.CLIENTE_ID = ${clienteId}
+          AND D.NATURALEZA_CONCEPTO = 'C'
+          AND D.CANCELADO <> 'S'
+        ORDER BY D.FECHA DESC
+      `);
+
+      // 2. IMPORTES for the first charge doc (to see which TIPO_IMPTE values exist on charge docs)
+      let chargeImportes: any[] = [];
+      if (chargeDocs.length > 0) {
+        const docId = chargeDocs[0].DOCTO_CC_ID;
+        chargeImportes = await this.query<any>(fbDb, `
+          SELECT I.DOCTO_CC_ID, I.TIPO_IMPTE, I.IMPORTE, I.IMPUESTO,
+                 I.DOCTO_CC_ACR_ID, I.DSCTO_PPAG
+          FROM IMPORTES_DOCTOS_CC I
+          WHERE I.DOCTO_CC_ID = ${docId}
+        `);
+      }
+
+      // 3. Payment docs for this customer (last 2 years)
+      const paymentDocs = await this.query<any>(fbDb, `
+        SELECT FIRST 20
+          D.DOCTO_CC_ID, D.FOLIO, D.FECHA, D.NATURALEZA_CONCEPTO
+        FROM DOCTOS_CC D
+        WHERE D.CLIENTE_ID = ${clienteId}
+          AND D.NATURALEZA_CONCEPTO = 'R'
+          AND D.CANCELADO <> 'S'
+          AND D.FECHA >= DATEADD(-730 DAY TO CURRENT_DATE)
+        ORDER BY D.FECHA DESC
+      `);
+
+      // 4. IMPORTES for the first payment doc
+      let paymentImportes: any[] = [];
+      if (paymentDocs.length > 0) {
+        const docId = paymentDocs[0].DOCTO_CC_ID;
+        paymentImportes = await this.query<any>(fbDb, `
+          SELECT I.DOCTO_CC_ID, I.TIPO_IMPTE, I.IMPORTE, I.IMPUESTO,
+                 I.DOCTO_CC_ACR_ID, I.DSCTO_PPAG
+          FROM IMPORTES_DOCTOS_CC I
+          WHERE I.DOCTO_CC_ID = ${docId}
+        `);
+      }
+
+      // 5. Total distinct TIPO_IMPTE values across ALL importes for this customer's docs
+      const tipoImpteStats = await this.query<any>(fbDb, `
+        SELECT I.TIPO_IMPTE, COUNT(*) AS CNT, SUM(I.IMPORTE) AS TOTAL,
+               COUNT(I.DOCTO_CC_ACR_ID) AS ACR_ID_COUNT
+        FROM IMPORTES_DOCTOS_CC I
+        JOIN DOCTOS_CC D ON D.DOCTO_CC_ID = I.DOCTO_CC_ID
+        WHERE D.CLIENTE_ID = ${clienteId} AND D.CANCELADO <> 'S'
+        GROUP BY I.TIPO_IMPTE
+      `);
+
+      // 6. Credits linked to this customer's charge docs (via DOCTO_CC_ACR_ID)
+      const linkedCredits = await this.query<any>(fbDb, `
+        SELECT FIRST 20
+          I.DOCTO_CC_ID AS PAGO_DOC_ID, I.DOCTO_CC_ACR_ID AS CARGO_DOC_ID,
+          I.TIPO_IMPTE, I.IMPORTE, I.DSCTO_PPAG,
+          C.FOLIO AS CARGO_FOLIO
+        FROM IMPORTES_DOCTOS_CC I
+        JOIN DOCTOS_CC C ON I.DOCTO_CC_ACR_ID = C.DOCTO_CC_ID
+        WHERE C.CLIENTE_ID = ${clienteId}
+          AND C.NATURALEZA_CONCEPTO = 'C'
+          AND C.CANCELADO <> 'S'
+        ORDER BY I.DOCTO_CC_ID DESC
+      `);
+
+      // 7. Simple balance check: old approach vs net approach
+      const balanceCheck = await this.query<any>(fbDb, `
+        SELECT
+          SUM(CASE WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO ELSE 0 END) AS GROSS_CHARGES,
+          SUM(CASE WHEN I.TIPO_IMPTE = 'R' THEN I.IMPORTE ELSE 0 END) AS TIPO_R_TOTAL,
+          SUM(CASE WHEN I.TIPO_IMPTE = 'A' THEN I.IMPORTE ELSE 0 END) AS TIPO_A_TOTAL,
+          COUNT(DISTINCT D.DOCTO_CC_ID) AS DOC_COUNT
+        FROM DOCTOS_CC D
+        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID
+        WHERE D.CLIENTE_ID = ${clienteId} AND D.CANCELADO <> 'S'
+      `);
+
+      return {
+        clienteId,
+        chargeDocs: chargeDocs.slice(0, 5),
+        chargeImportes_firstDoc: chargeImportes,
+        paymentDocs: paymentDocs.slice(0, 5),
+        paymentImportes_firstDoc: paymentImportes,
+        tipoImpteStats,
+        linkedCredits_viaDOCTO_CC_ACR_ID: linkedCredits,
+        balanceCheck: balanceCheck[0] ?? {},
+      };
     } finally {
       if (fbDb) fbDb.detach();
     }
