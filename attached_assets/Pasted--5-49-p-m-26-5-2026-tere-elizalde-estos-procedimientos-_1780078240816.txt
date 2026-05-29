@@ -1,0 +1,106 @@
+[5:49 p.m., 26/5/2026] tere elizalde: estos procedimientos que pueden ayudar a sacar los estados de cuenta
+[5:49 p.m., 26/5/2026] tere elizalde: */
+  /* CorrecciÃƒÂ³n:
+     - Se cambian los nombres de las variables internas, asÃƒÂ­ como  
+       las descripciones que hacen referencia a los anticipos para ahora 
+       llamarlos saldo por acreditar.
+     - Se ajustan las llamadas a la tabla Saldos_Cc para ahora hacer referencia 
+       a las  columnas de saldo por acreditar. 
+  */ 
+  /* Primero eliminamos todos los saldos del cliente */
+  DELETE FROM SALDOS_CC
+  WHERE CLIENTE_ID = :V_CLIENTE_ID;
+  /* Obtenemos los movtos del cliente en orden de fecha
+     y vamos haciendo cortes por aÃƒÂ±o+mes grabando en saldos */
+  ANO_ACT = 0;
+  MES_ACT = 0;
+  ULT_CONCEP_ID = 0; /* para evitar lecturas innecesarias del concepto */
+  FOR SELECT A.CONCEPTO_CC_ID, A.FECHA, A.ESTATUS,
+      B.TIPO_IMPTE, B.IMPORTE+B.IMPUESTO-B.IVA_RETENIDO-B.ISR_RETENIDO, 
+      B.DSCTO_PPAG
+      FROM DOCTOS_CC A
+      JOIN IMPORTES_DOCTOS_CC B 
+      ON (A.CLIENTE_ID = :V_CLIENTE_ID 
+          AND A.CANCELADO <> 'S'
+          AND A.DOCTO_CC_ID = B.DOCTO_CC_ID)
+      ORDER BY A.CLIENTE_ID, A.FECHA
+      INTO CONCEPTO_CC_ID, FECHA, ESTATUS_DOCTO, TIPO_IMPTE, IMPORTE, DSCTO_PPAG
+  DO
+  BEGIN
+    EXECUTE PROCEDURE DECODIF_FECHA FECHA
+    RETURNING_VALUES DIA, MES, ANO;
+    IF (ANO <> ANO_ACT OR MES <> MES_ACT) THEN
+    BEGIN
+      IF (ANO_ACT <> 0) THEN /* traemos acumulados, grabar el corte */
+        INSERT INTO SALDOS_CC
+        (CLIENTE_ID, ANO, MES, ULTIMO_DIA, CARGOS_CXC, CARGOS_XACR,
+         CREDITOS_CXC, CREDITOS_XACR,
+         CREDITOS_CXC_XLIB, CREDITOS_XACR_XLIB)
+        VALUES (:V_CLIENTE_ID, :ANO_ACT, :MES_ACT, :ULT_DIA,
+                :TOT_CARGOS_CXC, :TOT_CARGOS_XACR,
+                :TOT_CREDITOS_CXC, :TOT_CREDITOS_XACR,
+                :TOT_CREDITOS_CXC_XLIB, :TOT_CREDITOS_XACR_XLIB);
+      /* Inicializar los acumulados */
+      TOT_CARGOS_CXC  = 0;
+      TOT_CARGOS_XACR  = 0;
+      TOT_CREDITOS_CXC_XLIB  = 0;
+      TOT_CREDITOS_XACR_XLIB  = 0;
+      TOT_CREDITOS_CXC = 0;
+      TOT_CREDITOS_XACR = 0;
+      /* Valores del nuevo grupo */
+      ANO_ACT = ANO;
+      MES_ACT = MES;
+    END /* if corte */
+    /* Acumular el movto leido */
+    /* Obtenemos los datos necesarios del Concepto del docto. padre */
+    IF (CONCEPTO_CC_ID <> ULT_CONCEP_ID) THEN
+    BEGIN
+      SELECT TIPO, ID_INTERNO
+      FROM CONCEPTOS_CC
+      WHERE (CONCEPTO_CC_ID = :CONCEPTO_CC_ID)
+      INTO TIPO_CONCEP, ID_INTERNO_CONCEP;
+      ULT_CONCEP_ID = CONCEPTO_CC_ID;
+    END /* if */
+    
+    /* Para los cargos no se toma en cuenta el ESTATUS del docto ya que sÃƒÂ³lo
+       puede haber Normales (ESTATUS = 'N'). */
+    IF (TIPO_IMPTE = 'C') THEN /* es un cargo */
+    BEGIN
+      IF (TIPO_CONCEP = 'N') THEN /* devoluciÃƒÂ³n de saldo por acreditar */
+        TOT_CARGOS_XACR = TOT_CARGOS_XACR + IMPORTE;
+      ELSE /* es cargo normal */
+        TOT_CARGOS_CXC = TOT_CARGOS_CXC + IMPORTE;
+    END /* IF TIPO_IMPTE = 'C' */
+    ELSE
+      IF (TIPO_IMPTE = 'R') THEN /* es un crÃƒÂ©dito */
+      BEGIN
+        /* En base al estatus del documento acumular el crÃƒÂ©dito. */
+        IF (ESTATUS_DOCTO = 'N') THEN
+          TOT_CREDITOS_CXC = TOT_CREDITOS_CXC + IMPORTE + DSCTO_PPAG;
+        ELSE
+          TOT_CREDITOS_CXC_XLIB = TOT_CREDITOS_CXC_XLIB + IMPORTE + DSCTO_PPAG; 
+        /* No puede haber saldo por acreditar aplicados por liberar por lo que no se
+           toma en cuenta el estatus del documento. */ 
+        IF (ID_INTERNO_CONCEP = 'L') THEN /* aplicaciÃƒÂ³n de saldo por acreditar */
+          TOT_CARGOS_XACR = TOT_CARGOS_XACR + IMPORTE;
+      END /* IF TIPO_IMPTE = 'R' */
+      ELSE
+        IF (TIPO_IMPTE = 'A') THEN /* es saldo por acreditar */
+          /* En base al estatus del documento acumular el saldo por acreditar. */
+          IF (ESTATUS_DOCTO = 'N') THEN
+            TOT_CREDITOS_XACR = TOT_CREDITOS_XACR + IMPORTE;
+          ELSE
+            TOT_CREDITOS_XACR_XLIB = TOT_CREDITOS_XACR_XLIB + IMPORTE;
+    ULT_DIA = DIA;
+  END /* for de movtos del cliente */
+  /* Grabamos el ÃƒÂºltimo corte que se quedÃƒÂ³ pendiente */
+  IF (ANO_ACT <> 0) THEN
+    INSERT INTO SALDOS_CC
+    (CLIENTE_ID, ANO, MES, ULTIMO_DIA, CARGOS_CXC, CARGOS_XACR,
+     CREDITOS_CXC, CREDITOS_XACR,
+     CREDITOS_CXC_XLIB, CREDITOS_XACR_XLIB)
+    VALUES (:V_CLIENTE_ID, :ANO_ACT, :MES_ACT, :ULT_DIA,
+            :TOT_CARGOS_CXC, :TOT_CARGOS_XACR,
+            :TOT_CREDITOS_CXC, :TOT_CREDITOS_XACR,
+            :TOT_CREDITOS_CXC_XLIB, :TOT_CREDITOS_XACR_XLIB);
+END
