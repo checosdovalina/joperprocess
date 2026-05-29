@@ -1061,6 +1061,15 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect(true); // use CXC DB if separately configured
 
+      // Correct approach: credits/payments are stored in IMPORTES_DOCTOS_CC rows
+      // on the PAYMENT document, not on the charge document itself.
+      // IMPORTES.DOCTO_CC_ACR_ID = the charge being credited.
+      // We must join credits back to charges via that foreign key.
+      //
+      // CTE 1 – CARGOS: gross amount per invoice (only TIPO_IMPTE='C' on charge docs)
+      // CTE 2 – CREDITOS: total credits applied per invoice (TIPO_IMPTE='R'/'A' anywhere,
+      //         linked via DOCTO_CC_ACR_ID)
+      // Final SELECT: net = CARGO_BRUTO - CREDITO_APLICADO; sum per customer
       const rows = await this.query<{
         CLIENTE_ID: number;
         SALDO_TOTAL: number;
@@ -1068,57 +1077,55 @@ class MicrosipSyncService {
         OLDEST_DUE: Date | null;
         INVOICE_COUNT: number;
       }>(fbDb, `
+        WITH
+        CARGOS AS (
+          SELECT
+            D.CLIENTE_ID,
+            D.DOCTO_CC_ID,
+            D.FECHA,
+            D.COND_PAGO_ID,
+            SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)) AS CARGO_BRUTO
+          FROM DOCTOS_CC D
+          JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID AND I.TIPO_IMPTE = 'C'
+          WHERE D.CANCELADO <> 'S' AND D.NATURALEZA_CONCEPTO = 'C'
+          GROUP BY D.CLIENTE_ID, D.DOCTO_CC_ID, D.FECHA, D.COND_PAGO_ID
+        ),
+        CREDITOS AS (
+          SELECT
+            I.DOCTO_CC_ACR_ID,
+            SUM(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0)) AS CREDITO_APLICADO
+          FROM IMPORTES_DOCTOS_CC I
+          WHERE I.DOCTO_CC_ACR_ID IS NOT NULL
+          GROUP BY I.DOCTO_CC_ACR_ID
+        )
         SELECT
-          D.CLIENTE_ID,
-          SUM(
-            CASE
-              WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
-              WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
-              WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
-              ELSE 0
-            END
-          ) AS SALDO_TOTAL,
-          SUM(
-            CASE
-              WHEN I.TIPO_IMPTE = 'C'
-                AND D.NATURALEZA_CONCEPTO = 'C'
-                AND D.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
-                AND D.FECHA + COALESCE(P.DIAS_PLAZO, 0) < CURRENT_DATE
-              THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
-              ELSE 0
-            END
-          ) AS SALDO_VENCIDO,
-          MIN(
-            CASE
-              WHEN I.TIPO_IMPTE = 'C'
-                AND D.NATURALEZA_CONCEPTO = 'C'
-                AND D.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
-                AND D.FECHA + COALESCE(P.DIAS_PLAZO, 0) < CURRENT_DATE
-              THEN D.FECHA + COALESCE(P.DIAS_PLAZO, 0)
-              ELSE NULL
-            END
-          ) AS OLDEST_DUE,
-          COUNT(DISTINCT
-            CASE
-              WHEN I.TIPO_IMPTE = 'C' AND D.NATURALEZA_CONCEPTO = 'C'
-                AND D.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
-              THEN D.DOCTO_CC_ID
-              ELSE NULL
-            END
-          ) AS INVOICE_COUNT
-        FROM DOCTOS_CC D
-        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID
-        LEFT JOIN PLAZOS_COND_PAG P ON D.COND_PAGO_ID = P.COND_PAGO_ID
-        WHERE D.CANCELADO <> 'S'
-        GROUP BY D.CLIENTE_ID
-        HAVING SUM(
-          CASE
-            WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
-            WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
-            WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
+          CA.CLIENTE_ID,
+          SUM(CA.CARGO_BRUTO - COALESCE(CR.CREDITO_APLICADO, 0)) AS SALDO_TOTAL,
+          SUM(CASE
+            WHEN CA.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
+              AND CA.FECHA + COALESCE(PCP.DIAS_PLAZO, 0) < CURRENT_DATE
+              AND (CA.CARGO_BRUTO - COALESCE(CR.CREDITO_APLICADO, 0)) > 0
+            THEN CA.CARGO_BRUTO - COALESCE(CR.CREDITO_APLICADO, 0)
             ELSE 0
-          END
-        ) > 0
+          END) AS SALDO_VENCIDO,
+          MIN(CASE
+            WHEN CA.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
+              AND CA.FECHA + COALESCE(PCP.DIAS_PLAZO, 0) < CURRENT_DATE
+              AND (CA.CARGO_BRUTO - COALESCE(CR.CREDITO_APLICADO, 0)) > 0
+            THEN CA.FECHA + COALESCE(PCP.DIAS_PLAZO, 0)
+            ELSE NULL
+          END) AS OLDEST_DUE,
+          COUNT(DISTINCT CASE
+            WHEN CA.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
+              AND (CA.CARGO_BRUTO - COALESCE(CR.CREDITO_APLICADO, 0)) > 0
+            THEN CA.DOCTO_CC_ID
+            ELSE NULL
+          END) AS INVOICE_COUNT
+        FROM CARGOS CA
+        LEFT JOIN CREDITOS CR ON CR.DOCTO_CC_ACR_ID = CA.DOCTO_CC_ID
+        LEFT JOIN PLAZOS_COND_PAG PCP ON CA.COND_PAGO_ID = PCP.COND_PAGO_ID
+        GROUP BY CA.CLIENTE_ID
+        HAVING SUM(CA.CARGO_BRUTO - COALESCE(CR.CREDITO_APLICADO, 0)) > 0
       `);
 
       console.log(`[Microsip] queryLiveAccountStatements: ${rows.length} customers with balance`);
@@ -1155,6 +1162,9 @@ class MicrosipSyncService {
     try {
       fbDb = await this.connect(true);
 
+      // Credits applied to each invoice live on PAYMENT documents' IMPORTES_DOCTOS_CC
+      // rows (TIPO_IMPTE='R'/'A', DOCTO_CC_ACR_ID = charge DOCTO_CC_ID).
+      // Join them via a derived table to get the correct per-invoice net balance.
       const invoices = await this.query<{
         FOLIO: string;
         FECHA: Date;
@@ -1166,30 +1176,25 @@ class MicrosipSyncService {
           D.FOLIO,
           D.FECHA,
           D.FECHA + COALESCE(PCP.DIAS_PLAZO, 0) AS FECHA_VEN,
-          SUM(CASE WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0) ELSE 0 END) AS IMPORTE_TOTAL,
-          SUM(
-            CASE
-              WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
-              WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
-              WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
-              ELSE 0
-            END
-          ) AS SALDO
+          SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)) AS IMPORTE_TOTAL,
+          SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0))
+            - COALESCE(CR.CREDITO_APLICADO, 0) AS SALDO
         FROM DOCTOS_CC D
-        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID
+        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID AND I.TIPO_IMPTE = 'C'
         LEFT JOIN PLAZOS_COND_PAG PCP ON D.COND_PAGO_ID = PCP.COND_PAGO_ID
+        LEFT JOIN (
+          SELECT IC.DOCTO_CC_ACR_ID,
+                 SUM(IC.IMPORTE + COALESCE(IC.DSCTO_PPAG,0)) AS CREDITO_APLICADO
+          FROM IMPORTES_DOCTOS_CC IC
+          WHERE IC.DOCTO_CC_ACR_ID IS NOT NULL
+          GROUP BY IC.DOCTO_CC_ACR_ID
+        ) CR ON CR.DOCTO_CC_ACR_ID = D.DOCTO_CC_ID
         WHERE D.CANCELADO <> 'S'
           AND D.NATURALEZA_CONCEPTO = 'C'
           AND D.CLIENTE_ID = ${microsipClienteId}
-        GROUP BY D.DOCTO_CC_ID, D.FOLIO, D.FECHA, PCP.DIAS_PLAZO
-        HAVING SUM(
-          CASE
-            WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
-            WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
-            WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
-            ELSE 0
-          END
-        ) > 0.005
+        GROUP BY D.DOCTO_CC_ID, D.FOLIO, D.FECHA, PCP.DIAS_PLAZO, CR.CREDITO_APLICADO
+        HAVING SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0))
+               - COALESCE(CR.CREDITO_APLICADO, 0) > 0.005
         ORDER BY D.FECHA
       `);
 
