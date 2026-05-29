@@ -705,7 +705,7 @@ class MicrosipSyncService {
           DV.FOLIO,
           DV.CLIENTE_ID,
           DV.FECHA,
-          DV.FECHA_VENCE,
+          DV.FECHA + COALESCE(PCP.DIAS_PLAZO, 0) AS FECHA_VENCE,
           DV.IMPORTE_NETO,
           DV.TOTAL_IMPUESTOS AS IMPUESTO,
           DV.IMPORTE_COBRO,
