@@ -4026,7 +4026,56 @@ Proporciona tu análisis en el siguiente formato JSON:
       const tenantId = getEffectiveTenantId(req);
       if (!tenantId) return res.status(400).json({ error: "Tenant no encontrado" });
 
-      // Fetch all non-cancelled invoices with customer
+      // --- Live Microsip CXC path ---
+      // If the tenant has Microsip configured, query DOCTOS_CC directly from Firebird.
+      // This uses the CXC (accounts receivable) module which correctly reflects credits
+      // and payments applied in Microsip. Old pre-lookback debt is included in the
+      // total balance but is NOT individually flagged as overdue (it becomes saldo anterior).
+      const microsipCfg = await db.select().from(microsipConfigs).where(eq(microsipConfigs.tenantId, tenantId)).limit(1);
+      if (microsipCfg.length > 0) {
+        try {
+          const service = await createMicrosipSyncService(tenantId);
+          const cxcBalances = await service.queryLiveAccountStatements(3);
+
+          // Build a map from Microsip CLIENTE_ID → Nexxo customer
+          const tenantCustomers = await db.select().from(customers).where(
+            and(eq(customers.tenantId, tenantId), isNotNull(customers.microsipId))
+          );
+          const customerByMicrosipId = new Map<number, typeof tenantCustomers[0]>();
+          for (const c of tenantCustomers) {
+            if (c.microsipId) customerByMicrosipId.set(parseInt(c.microsipId), c);
+          }
+
+          const result = cxcBalances
+            .flatMap(bal => {
+              const customer = customerByMicrosipId.get(bal.CLIENTE_ID);
+              if (!customer) return [];
+              const totalBalance = Number(bal.SALDO_TOTAL) || 0;
+              if (totalBalance <= 0) return [];
+              return [{
+                customer: {
+                  id: customer.id,
+                  name: customer.name,
+                  email: customer.email,
+                  rfc: customer.rfc,
+                  phone: customer.phone,
+                },
+                totalBalance,
+                overdueBalance: Math.max(0, Number(bal.SALDO_VENCIDO) || 0),
+                invoiceCount: Number(bal.INVOICE_COUNT) || 0,
+                oldestDueDate: bal.OLDEST_DUE ? (bal.OLDEST_DUE instanceof Date ? bal.OLDEST_DUE.toISOString() : String(bal.OLDEST_DUE)) : null,
+              }];
+            })
+            .sort((a, b) => b.overdueBalance - a.overdueBalance || b.totalBalance - a.totalBalance);
+
+          return res.json(result);
+        } catch (msErr) {
+          console.error("[account-statements] Microsip live query failed, falling back to local DB:", msErr);
+          // Fall through to local DB path
+        }
+      }
+
+      // --- Fallback: local PostgreSQL DB ---
       const allInvoices = await db.query.invoices.findMany({
         where: and(
           eq(invoices.tenantId, tenantId),
@@ -4039,7 +4088,6 @@ Proporciona tu análisis en el siguiente formato JSON:
         orderBy: (invoices, { desc }) => [desc(invoices.issuedAt)],
       });
 
-      // Group by customer
       const byCustomer = new Map<string, {
         customer: any;
         totalBalance: number;

@@ -1036,6 +1036,98 @@ class MicrosipSyncService {
     return results;
   }
 
+  /**
+   * Query live account statement balances directly from Firebird CXC module.
+   * Uses DOCTOS_CC + IMPORTES_DOCTOS_CC (accounts receivable) instead of DOCTOS_VE (sales).
+   *
+   * - SALDO_TOTAL: full outstanding balance (all history — charges minus credits/payments)
+   * - SALDO_VENCIDO: only charges within `lookbackYears` whose due date has passed
+   *   (old pre-lookback debt is included in SALDO_TOTAL but not flagged as vencido)
+   * - OLDEST_DUE: oldest overdue date within the lookback window
+   * - INVOICE_COUNT: number of charge documents within the lookback window
+   */
+  async queryLiveAccountStatements(lookbackYears: number = 3): Promise<{
+    CLIENTE_ID: number;
+    SALDO_TOTAL: number;
+    SALDO_VENCIDO: number;
+    OLDEST_DUE: Date | null;
+    INVOICE_COUNT: number;
+  }[]> {
+    if (!await this.loadConfig(false)) {
+      throw new Error('Configuración de Microsip no encontrada');
+    }
+
+    let fbDb: FirebirdConnection | null = null;
+    try {
+      fbDb = await this.connect(true); // use CXC DB if separately configured
+
+      const rows = await this.query<{
+        CLIENTE_ID: number;
+        SALDO_TOTAL: number;
+        SALDO_VENCIDO: number;
+        OLDEST_DUE: Date | null;
+        INVOICE_COUNT: number;
+      }>(fbDb, `
+        SELECT
+          D.CLIENTE_ID,
+          SUM(
+            CASE
+              WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
+              WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
+              WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
+              ELSE 0
+            END
+          ) AS SALDO_TOTAL,
+          SUM(
+            CASE
+              WHEN I.TIPO_IMPTE = 'C'
+                AND D.NATURALEZA_CONCEPTO = 'C'
+                AND D.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
+                AND D.FECHA + COALESCE(P.DIAS_PLAZO, 0) < CURRENT_DATE
+              THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
+              ELSE 0
+            END
+          ) AS SALDO_VENCIDO,
+          MIN(
+            CASE
+              WHEN I.TIPO_IMPTE = 'C'
+                AND D.NATURALEZA_CONCEPTO = 'C'
+                AND D.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
+                AND D.FECHA + COALESCE(P.DIAS_PLAZO, 0) < CURRENT_DATE
+              THEN D.FECHA + COALESCE(P.DIAS_PLAZO, 0)
+              ELSE NULL
+            END
+          ) AS OLDEST_DUE,
+          COUNT(DISTINCT
+            CASE
+              WHEN I.TIPO_IMPTE = 'C' AND D.NATURALEZA_CONCEPTO = 'C'
+                AND D.FECHA >= DATEADD(-${lookbackYears} YEAR TO CURRENT_DATE)
+              THEN D.DOCTO_CC_ID
+              ELSE NULL
+            END
+          ) AS INVOICE_COUNT
+        FROM DOCTOS_CC D
+        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID
+        LEFT JOIN PLAZOS_COND_PAG P ON D.COND_PAGO_ID = P.COND_PAGO_ID
+        WHERE D.CANCELADO <> 'S'
+        GROUP BY D.CLIENTE_ID
+        HAVING SUM(
+          CASE
+            WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
+            WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
+            WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
+            ELSE 0
+          END
+        ) > 0
+      `);
+
+      console.log(`[Microsip] queryLiveAccountStatements: ${rows.length} customers with balance`);
+      return rows;
+    } finally {
+      if (fbDb) fbDb.detach();
+    }
+  }
+
   async testConnection(): Promise<{ success: boolean; message: string }> {
     if (!await this.loadConfig(false)) {
       return { success: false, message: 'Configuración no encontrada' };
