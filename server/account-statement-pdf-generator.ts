@@ -19,11 +19,31 @@ interface TenantBranding {
   rfc?: string | null;
 }
 
+interface CxcOpenInvoice {
+  folio: string;
+  issueDate: Date;
+  dueDate: Date | null;
+  total: number;
+  balance: number;
+}
+
+interface CxcPaymentRow {
+  reference: string;
+  date: Date;
+  amount: number;
+  invoiceFolio: string | null;
+}
+
 interface AccountStatementPDFData {
   customer: Customer;
   invoices: Invoice[];
   payments: Payment[];
   tenant?: TenantBranding | null;
+  /** When present, CXC live data overrides local invoices/payments (matches Microsip figures). */
+  cxcData?: {
+    invoices: CxcOpenInvoice[];
+    payments: CxcPaymentRow[];
+  };
 }
 
 async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
@@ -77,7 +97,7 @@ function lightenColor(hex: string, amount: number): string {
 }
 
 export async function generateAccountStatementPDF(data: AccountStatementPDFData): Promise<Readable> {
-  const { customer, invoices, payments, tenant } = data;
+  const { customer, invoices, payments, tenant, cxcData } = data;
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
@@ -91,12 +111,30 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   const CONTENT_W = PAGE_W - MARGIN * 2;
   const now = new Date();
 
-  const activeInvoices = invoices.filter(
+  // ── DATA SOURCE: CXC live (Microsip) or local PostgreSQL ────────────────
+  let totalBalance: number;
+  let totalOverdue: number;
+  let activeCount: number;
+
+  if (cxcData) {
+    totalBalance = cxcData.invoices.reduce((s, inv) => s + (Number(inv.balance) || 0), 0);
+    totalOverdue = cxcData.invoices
+      .filter((inv) => inv.dueDate && new Date(inv.dueDate) < now)
+      .reduce((s, inv) => s + (Number(inv.balance) || 0), 0);
+    activeCount = cxcData.invoices.length;
+  } else {
+    const activeInvoices = invoices.filter(
+      (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
+    );
+    totalBalance = activeInvoices.reduce((s, inv) => s + (parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0), 0);
+    const overdueInvoices = activeInvoices.filter((inv) => inv.dueDate && new Date(inv.dueDate) < now);
+    totalOverdue = overdueInvoices.reduce((s, inv) => s + (parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0), 0);
+    activeCount = activeInvoices.length;
+  }
+
+  const localActiveInvoices = cxcData ? [] : invoices.filter(
     (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
   );
-  const totalBalance = activeInvoices.reduce((s, inv) => s + (parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0), 0);
-  const overdueInvoices = activeInvoices.filter((inv) => inv.dueDate && new Date(inv.dueDate) < now);
-  const totalOverdue = overdueInvoices.reduce((s, inv) => s + (parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0), 0);
   const recentPayments = [...payments]
     .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
     .slice(0, 15);
@@ -195,7 +233,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
   doc.text("Facturas Activas:", COL2_X + 8, s3Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#374151");
-  doc.text(`${activeInvoices.length}`, COL2_X + COL_W / 2, s3Y - 2, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(`${activeCount}`, COL2_X + COL_W / 2, s3Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   currentY += BOX_H + 20;
 
@@ -204,7 +242,6 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.text("FACTURAS PENDIENTES", MARGIN, currentY);
   currentY += 16;
 
-  // Table header
   const cols = { folio: MARGIN, fecha: MARGIN + 90, venc: MARGIN + 175, total: MARGIN + 265, saldo: MARGIN + 355, estado: MARGIN + 440 };
   const ROW_H = 18;
 
@@ -218,42 +255,72 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.text("ESTADO", cols.estado + 4, currentY + 5, { width: 90 });
   currentY += ROW_H;
 
-  if (activeInvoices.length === 0) {
-    doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
-    doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
-    doc.text("Sin facturas pendientes.", MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
-    currentY += ROW_H;
-  } else {
-    activeInvoices.forEach((inv, i) => {
-      const isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
-      const bal = parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0;
-      if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
-      doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#111827");
-      doc.text(`${inv.serie}-${inv.folio}`, cols.folio + 4, currentY + 5, { width: 86 });
-      doc.font("Helvetica").fillColor("#6b7280");
-      doc.text(fmtDate(inv.issuedAt), cols.fecha + 4, currentY + 5, { width: 80 });
-      doc.fillColor(isOverdue ? "#dc2626" : "#6b7280");
-      doc.text(fmtDate(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
-      doc.fillColor("#374151");
-      doc.text(fmt(inv.total), cols.total + 4, currentY + 5, { width: 80, align: "right" });
-      doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
-      doc.text(fmt(bal), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
-      doc.font("Helvetica").fillColor("#374151");
-      doc.text(statusLabel(inv.status), cols.estado + 4, currentY + 5, { width: 90 });
+  if (cxcData) {
+    // ── CXC live path ────────────────────────────────────────
+    if (cxcData.invoices.length === 0) {
+      doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
+      doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
+      doc.text("Sin facturas pendientes.", MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
       currentY += ROW_H;
-
-      // New page if needed
-      if (currentY > 720) {
-        doc.addPage();
-        currentY = 40;
-      }
-    });
+    } else {
+      cxcData.invoices.forEach((inv, i) => {
+        const isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
+        const bal = Number(inv.balance) || 0;
+        const tot = Number(inv.total) || 0;
+        if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
+        doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#111827");
+        doc.text(inv.folio, cols.folio + 4, currentY + 5, { width: 86 });
+        doc.font("Helvetica").fillColor("#6b7280");
+        doc.text(fmtDate(inv.issueDate), cols.fecha + 4, currentY + 5, { width: 80 });
+        doc.fillColor(isOverdue ? "#dc2626" : "#6b7280");
+        doc.text(fmtDate(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
+        doc.fillColor("#374151");
+        doc.text(fmt(tot), cols.total + 4, currentY + 5, { width: 80, align: "right" });
+        doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
+        doc.text(fmt(bal), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
+        doc.font("Helvetica").fillColor(isOverdue ? "#dc2626" : "#374151");
+        doc.text(isOverdue ? "Vencido" : "Pendiente", cols.estado + 4, currentY + 5, { width: 90 });
+        currentY += ROW_H;
+        if (currentY > 720) { doc.addPage(); currentY = 40; }
+      });
+    }
+  } else {
+    // ── Local PostgreSQL path ────────────────────────────────
+    if (localActiveInvoices.length === 0) {
+      doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
+      doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
+      doc.text("Sin facturas pendientes.", MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
+      currentY += ROW_H;
+    } else {
+      localActiveInvoices.forEach((inv, i) => {
+        const isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
+        const bal = parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0;
+        if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
+        doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#111827");
+        doc.text(`${inv.serie}-${inv.folio}`, cols.folio + 4, currentY + 5, { width: 86 });
+        doc.font("Helvetica").fillColor("#6b7280");
+        doc.text(fmtDate(inv.issuedAt), cols.fecha + 4, currentY + 5, { width: 80 });
+        doc.fillColor(isOverdue ? "#dc2626" : "#6b7280");
+        doc.text(fmtDate(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
+        doc.fillColor("#374151");
+        doc.text(fmt(inv.total), cols.total + 4, currentY + 5, { width: 80, align: "right" });
+        doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
+        doc.text(fmt(bal), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
+        doc.font("Helvetica").fillColor("#374151");
+        doc.text(statusLabel(inv.status), cols.estado + 4, currentY + 5, { width: 90 });
+        currentY += ROW_H;
+        if (currentY > 720) { doc.addPage(); currentY = 40; }
+      });
+    }
   }
 
   currentY += 20;
 
   // ── PAYMENTS TABLE ────────────────────────────────────────
-  if (recentPayments.length > 0) {
+  const hasCxcPayments = cxcData && cxcData.payments.length > 0;
+  const hasLocalPayments = !cxcData && recentPayments.length > 0;
+
+  if (hasCxcPayments || hasLocalPayments) {
     if (currentY > 620) { doc.addPage(); currentY = 40; }
 
     doc.fontSize(10).font("Helvetica-Bold").fillColor(primaryColor);
@@ -269,20 +336,36 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
     doc.text("IMPORTE", pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
     currentY += ROW_H;
 
-    recentPayments.forEach((pay, i) => {
-      const inv = invoices.find((inv) => inv.id === pay.invoiceId);
-      if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
-      doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-      doc.text(fmtDate(pay.paymentDate), pcols.fecha + 4, currentY + 5, { width: 86 });
-      doc.fillColor("#374151");
-      doc.text(pay.reference ?? "—", pcols.ref + 4, currentY + 5, { width: 175 });
-      doc.fillColor("#6b7280");
-      doc.text(inv ? `${inv.serie}-${inv.folio}` : "—", pcols.factura + 4, currentY + 5, { width: 145 });
-      doc.font("Helvetica-Bold").fillColor("#16a34a");
-      doc.text(fmt(pay.amount), pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
-      currentY += ROW_H;
-      if (currentY > 720) { doc.addPage(); currentY = 40; }
-    });
+    if (cxcData) {
+      cxcData.payments.forEach((pay, i) => {
+        if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
+        doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
+        doc.text(fmtDate(pay.date), pcols.fecha + 4, currentY + 5, { width: 86 });
+        doc.fillColor("#374151");
+        doc.text(pay.reference ?? "—", pcols.ref + 4, currentY + 5, { width: 175 });
+        doc.fillColor("#6b7280");
+        doc.text(pay.invoiceFolio ?? "—", pcols.factura + 4, currentY + 5, { width: 145 });
+        doc.font("Helvetica-Bold").fillColor("#16a34a");
+        doc.text(fmt(pay.amount), pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
+        currentY += ROW_H;
+        if (currentY > 720) { doc.addPage(); currentY = 40; }
+      });
+    } else {
+      recentPayments.forEach((pay, i) => {
+        const inv = invoices.find((inv) => inv.id === pay.invoiceId);
+        if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
+        doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
+        doc.text(fmtDate(pay.paymentDate), pcols.fecha + 4, currentY + 5, { width: 86 });
+        doc.fillColor("#374151");
+        doc.text(pay.reference ?? "—", pcols.ref + 4, currentY + 5, { width: 175 });
+        doc.fillColor("#6b7280");
+        doc.text(inv ? `${inv.serie}-${inv.folio}` : "—", pcols.factura + 4, currentY + 5, { width: 145 });
+        doc.font("Helvetica-Bold").fillColor("#16a34a");
+        doc.text(fmt(pay.amount), pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
+        currentY += ROW_H;
+        if (currentY > 720) { doc.addPage(); currentY = 40; }
+      });
+    }
   }
 
   // ── FOOTER ────────────────────────────────────────────────

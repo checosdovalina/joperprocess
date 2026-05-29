@@ -1128,6 +1128,99 @@ class MicrosipSyncService {
     }
   }
 
+  /**
+   * Query open invoices and recent payments for a single customer directly from CXC.
+   * Used by the account-statement PDF endpoint so the PDF matches Microsip's own figures.
+   */
+  async queryLiveCxcStatementForCustomer(microsipClienteId: number): Promise<{
+    invoices: Array<{
+      FOLIO: string;
+      FECHA: Date;
+      FECHA_VEN: Date | null;
+      IMPORTE_TOTAL: number;
+      SALDO: number;
+    }>;
+    payments: Array<{
+      REFERENCIA: string;
+      FECHA: Date;
+      IMPORTE: number;
+      FACTURA_FOLIO: string | null;
+    }>;
+  }> {
+    if (!await this.loadConfig(false)) {
+      throw new Error('Configuración de Microsip no encontrada');
+    }
+
+    let fbDb: FirebirdConnection | null = null;
+    try {
+      fbDb = await this.connect(true);
+
+      const invoices = await this.query<{
+        FOLIO: string;
+        FECHA: Date;
+        FECHA_VEN: Date | null;
+        IMPORTE_TOTAL: number;
+        SALDO: number;
+      }>(fbDb, `
+        SELECT
+          D.FOLIO,
+          D.FECHA,
+          D.FECHA + COALESCE(PCP.DIAS_PLAZO, 0) AS FECHA_VEN,
+          SUM(CASE WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0) ELSE 0 END) AS IMPORTE_TOTAL,
+          SUM(
+            CASE
+              WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
+              WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
+              WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
+              ELSE 0
+            END
+          ) AS SALDO
+        FROM DOCTOS_CC D
+        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID
+        LEFT JOIN PLAZOS_COND_PAG PCP ON D.COND_PAGO_ID = PCP.COND_PAGO_ID
+        WHERE D.CANCELADO <> 'S'
+          AND D.NATURALEZA_CONCEPTO = 'C'
+          AND D.CLIENTE_ID = ${microsipClienteId}
+        GROUP BY D.DOCTO_CC_ID, D.FOLIO, D.FECHA, PCP.DIAS_PLAZO
+        HAVING SUM(
+          CASE
+            WHEN I.TIPO_IMPTE = 'C' THEN I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)
+            WHEN I.TIPO_IMPTE = 'R' THEN -(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0))
+            WHEN I.TIPO_IMPTE = 'A' THEN -(I.IMPORTE)
+            ELSE 0
+          END
+        ) > 0.005
+        ORDER BY D.FECHA
+      `);
+
+      const payments = await this.query<{
+        REFERENCIA: string;
+        FECHA: Date;
+        IMPORTE: number;
+        FACTURA_FOLIO: string | null;
+      }>(fbDb, `
+        SELECT FIRST 20
+          P.FOLIO AS REFERENCIA,
+          P.FECHA,
+          SUM(I.IMPORTE) AS IMPORTE,
+          MIN(C.FOLIO) AS FACTURA_FOLIO
+        FROM DOCTOS_CC P
+        JOIN IMPORTES_DOCTOS_CC I ON P.DOCTO_CC_ID = I.DOCTO_CC_ID
+        LEFT JOIN DOCTOS_CC C ON I.DOCTO_CC_ACR_ID = C.DOCTO_CC_ID
+        WHERE P.CANCELADO <> 'S'
+          AND P.NATURALEZA_CONCEPTO = 'R'
+          AND P.CLIENTE_ID = ${microsipClienteId}
+          AND P.FECHA >= DATEADD(-730 DAY TO CURRENT_DATE)
+        GROUP BY P.DOCTO_CC_ID, P.FOLIO, P.FECHA
+        ORDER BY P.FECHA DESC
+      `);
+
+      return { invoices, payments };
+    } finally {
+      if (fbDb) fbDb.detach();
+    }
+  }
+
   async testConnection(): Promise<{ success: boolean; message: string }> {
     if (!await this.loadConfig(false)) {
       return { success: false, message: 'Configuración no encontrada' };

@@ -4305,17 +4305,56 @@ Proporciona tu análisis en el siguiente formato JSON:
       const customer = await scopedStorage.getCustomer(id);
       if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
 
-      const [custInvoices, custPayments] = await Promise.all([
-        scopedStorage.getInvoicesByCustomer(id),
-        scopedStorage.getPaymentsByCustomer(id),
-      ]);
-
       const tenantId = getEffectiveTenantId(req);
       let tenant = null;
       if (tenantId) tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
 
+      // Try to use CXC live data from Microsip (matches Microsip's own figures)
+      let cxcData: { invoices: any[]; payments: any[] } | undefined;
+      if (tenantId && customer.microsipId) {
+        const microsipCfg = await db.select().from(microsipConfigs).where(eq(microsipConfigs.tenantId, tenantId)).limit(1);
+        if (microsipCfg.length > 0) {
+          try {
+            const service = await createMicrosipSyncService(tenantId);
+            const raw = await service.queryLiveCxcStatementForCustomer(parseInt(customer.microsipId));
+            const now = new Date();
+            cxcData = {
+              invoices: raw.invoices.map(inv => ({
+                folio: String(inv.FOLIO),
+                issueDate: inv.FECHA,
+                dueDate: inv.FECHA_VEN ?? null,
+                total: Number(inv.IMPORTE_TOTAL) || 0,
+                balance: Number(inv.SALDO) || 0,
+              })),
+              payments: raw.payments.map(pay => ({
+                reference: String(pay.REFERENCIA),
+                date: pay.FECHA,
+                amount: Number(pay.IMPORTE) || 0,
+                invoiceFolio: pay.FACTURA_FOLIO ? String(pay.FACTURA_FOLIO) : null,
+              })),
+            };
+          } catch (cxcErr) {
+            console.warn("[PDF] CXC live query failed, falling back to local DB:", (cxcErr as Error).message);
+          }
+        }
+      }
+
+      // Fallback: load local data (used when Microsip not configured or CXC fails)
+      const [custInvoices, custPayments] = cxcData
+        ? [[], []]
+        : await Promise.all([
+            scopedStorage.getInvoicesByCustomer(id),
+            scopedStorage.getPaymentsByCustomer(id),
+          ]);
+
       const { generateAccountStatementPDF } = await import("./account-statement-pdf-generator");
-      const pdfStream = await generateAccountStatementPDF({ customer, invoices: custInvoices, payments: custPayments, tenant });
+      const pdfStream = await generateAccountStatementPDF({
+        customer,
+        invoices: custInvoices,
+        payments: custPayments,
+        tenant,
+        cxcData,
+      });
 
       const safeName = customer.name.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 40);
       res.setHeader("Content-Type", "application/pdf");
