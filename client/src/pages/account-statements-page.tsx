@@ -575,14 +575,14 @@ export default function AccountStatementsPage() {
                             <p className="text-xs text-muted-foreground font-normal">{fmtDate(s.oldestDueDate)}</p>
                           )}
                         </td>
-                        <td className="px-3 py-3 hidden md:table-cell">
+                        <td className="px-3 py-3 hidden md:table-cell max-w-[220px]">
                           {s.customer.email ? (
-                            <span className="text-muted-foreground text-xs">{s.customer.email}</span>
+                            <span className="text-muted-foreground text-xs block truncate" title={s.customer.email}>{s.customer.email}</span>
                           ) : (
                             <span className="text-muted-foreground/40 text-xs italic">Sin correo</span>
                           )}
                         </td>
-                        <td className="px-3 py-3 text-right">
+                        <td className="px-3 py-3 text-right w-10 shrink-0">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
