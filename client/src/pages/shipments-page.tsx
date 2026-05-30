@@ -62,6 +62,7 @@ export default function ShipmentsPage() {
   const [editTrackingNumber, setEditTrackingNumber] = useState("");
   const [editDriverName, setEditDriverName] = useState("");
   const [editVehiclePlates, setEditVehiclePlates] = useState("");
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState("");
   const [hideDelivered, setHideDelivered] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -143,7 +144,7 @@ export default function ShipmentsPage() {
   });
 
   const updateShipmentMutation = useMutation({
-    mutationFn: async (data: { transporter?: string; transportType?: string; trackingNumber?: string; driverName?: string; vehiclePlates?: string; status?: string; shippedAt?: string }) => {
+    mutationFn: async (data: { transporter?: string; transportType?: string; trackingNumber?: string; driverName?: string; vehiclePlates?: string; status?: string; shippedAt?: string; invoiceNumber?: string }) => {
       if (!selectedShipment) throw new Error("No shipment selected");
       const res = await apiRequest("PATCH", `/api/shipments/${selectedShipment.id}`, data);
       if (!res.ok) throw new Error("Error al actualizar");
@@ -180,6 +181,7 @@ export default function ShipmentsPage() {
     setEditTrackingNumber(shipment.trackingNumber || "");
     setEditDriverName(shipment.driverName || "");
     setEditVehiclePlates(shipment.vehiclePlates || "");
+    setEditInvoiceNumber((shipment as any).invoiceNumber || "");
     setDetailsDialogOpen(true);
     setEditMode(false);
   };
@@ -191,6 +193,7 @@ export default function ShipmentsPage() {
       trackingNumber: editTrackingNumber || undefined,
       driverName: editDriverName || undefined,
       vehiclePlates: editVehiclePlates || undefined,
+      invoiceNumber: editInvoiceNumber || undefined,
     });
   };
 
@@ -684,6 +687,15 @@ export default function ShipmentsPage() {
                       className="w-1/2"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label>Folio de Factura</Label>
+                    <Input
+                      value={editInvoiceNumber}
+                      onChange={(e) => setEditInvoiceNumber(e.target.value)}
+                      placeholder="Ej. A-1234"
+                      data-testid="input-invoice-number"
+                    />
+                  </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setEditMode(false)}>
                       Cancelar
@@ -723,6 +735,12 @@ export default function ShipmentsPage() {
                         : t("status.not-shipped")}
                     </p>
                   </div>
+                  {(selectedShipment as any).invoiceNumber && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Folio de Factura</Label>
+                      <p className="font-medium">{(selectedShipment as any).invoiceNumber}</p>
+                    </div>
+                  )}
                 </div>
               )}
 

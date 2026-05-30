@@ -471,6 +471,7 @@ export const shipments = pgTable("shipments", {
   shippedAt: timestamp("shipped_at"),
   deliveredAt: timestamp("delivered_at"),
   cartaPortePath: text("carta_porte_path"),
+  invoiceNumber: text("invoice_number"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
