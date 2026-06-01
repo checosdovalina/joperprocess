@@ -125,16 +125,9 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
   let Y = TITLE_Y + TITLE_H + 14;
 
   // ── FOLIO + ORDER INFO ───────────────────────────────────────────────────
+  // Big title: show invoice number when present, otherwise order folio
   doc.fontSize(18).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text(data.folio, MARGIN, Y);
-  // Folio de factura alongside the big title
-  if (data.invoiceNumber) {
-    const folioTextW = doc.widthOfString(data.folio, { fontSize: 18 });
-    doc.fontSize(11).font("Helvetica").fillColor("#6b7280");
-    doc.text(`Factura: `, MARGIN + folioTextW + 12, Y + 5, { continued: true });
-    doc.font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text(data.invoiceNumber, { continued: false });
-  }
+  doc.text(data.invoiceNumber || data.folio, MARGIN, Y);
   Y += 28;
 
   const INFO_COL = CONTENT_W / 3;
