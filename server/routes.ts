@@ -3783,6 +3783,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         vehiclePlates: shipment.vehiclePlates,
         trackingNumber: shipment.trackingNumber,
         shippedAt: shipment.shippedAt ? shipment.shippedAt.toString() : null,
+        invoiceNumber: (shipment as any).invoiceNumber || null,
         products: remisionProducts,
         tenant: tenantBranding,
       });

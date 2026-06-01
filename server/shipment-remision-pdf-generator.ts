@@ -38,6 +38,7 @@ interface ShipmentRemisionData {
   vehiclePlates?: string | null;
   trackingNumber?: string | null;
   shippedAt?: string | null;
+  invoiceNumber?: string | null;
   products: RemisionProduct[];
   tenant?: TenantBranding | null;
 }
@@ -138,7 +139,19 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
   doc.text(data.folio, MARGIN, Y);
   doc.text(data.orderStatus, MARGIN + INFO_COL, Y);
   doc.text(fmtDate(data.scheduledDate), MARGIN + INFO_COL * 2, Y);
-  Y += 18;
+  Y += 14;
+
+  // Folio de factura (only shown when present)
+  if (data.invoiceNumber) {
+    doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
+    doc.text("Folio de Factura:", MARGIN, Y);
+    Y += 11;
+    doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
+    doc.text(data.invoiceNumber, MARGIN, Y);
+    Y += 14;
+  } else {
+    Y += 4;
+  }
 
   // ── CUSTOMER & TRANSPORT BOXES ───────────────────────────────────────────
   const BOX_W = CONTENT_W / 2 - 6;
