@@ -127,6 +127,14 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
   // ── FOLIO + ORDER INFO ───────────────────────────────────────────────────
   doc.fontSize(18).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text(data.folio, MARGIN, Y);
+  // Folio de factura alongside the big title
+  if (data.invoiceNumber) {
+    const folioTextW = doc.widthOfString(data.folio, { fontSize: 18 });
+    doc.fontSize(11).font("Helvetica").fillColor("#6b7280");
+    doc.text(`Factura: `, MARGIN + folioTextW + 12, Y + 5, { continued: true });
+    doc.font("Helvetica-Bold").fillColor(primaryColor);
+    doc.text(data.invoiceNumber, { continued: false });
+  }
   Y += 28;
 
   const INFO_COL = CONTENT_W / 3;
@@ -139,19 +147,7 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
   doc.text(data.folio, MARGIN, Y);
   doc.text(data.orderStatus, MARGIN + INFO_COL, Y);
   doc.text(fmtDate(data.scheduledDate), MARGIN + INFO_COL * 2, Y);
-  Y += 14;
-
-  // Folio de factura (only shown when present)
-  if (data.invoiceNumber) {
-    doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-    doc.text("Folio de Factura:", MARGIN, Y);
-    Y += 11;
-    doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
-    doc.text(data.invoiceNumber, MARGIN, Y);
-    Y += 14;
-  } else {
-    Y += 4;
-  }
+  Y += 18;
 
   // ── CUSTOMER & TRANSPORT BOXES ───────────────────────────────────────────
   const BOX_W = CONTENT_W / 2 - 6;
