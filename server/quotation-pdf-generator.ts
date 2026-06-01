@@ -245,10 +245,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     // CURRENCY SETUP
     // ═══════════════════════════════════════════════
+    // Treat legacy "AMBAS" quotations as MXN
     const rawQuoteCurrency = quotation.currency || "MXN";
-    // "AMBAS" means each item keeps its own currency — we aggregate in MXN for totals
-    const isAmbas = rawQuoteCurrency === "AMBAS";
-    const quoteCurrency = isAmbas ? "MXN" : rawQuoteCurrency as "MXN" | "USD";
+    const quoteCurrency = (rawQuoteCurrency === "AMBAS" ? "MXN" : rawQuoteCurrency) as "MXN" | "USD";
     const exRate = parseFloat(String((quotation as any).exchangeRate || "18")) || 18;
 
     const convertToQuote = (amount: number, itemCurrency: string): number => {
@@ -258,12 +257,10 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       return amount;
     };
 
-    const hasItemsInForeignCurrency = items.some(i => ((i as any).currency || "MXN") !== quoteCurrency);
-    // Show "Mon." column only when items have MIXED currencies among themselves
-    // (e.g. some MXN and some USD in the same quotation)
+    // Show "Mon." column only when items have MIXED currencies (legacy AMBAS quotations)
     const mxnItems = items.filter(i => ((i as any).currency || "MXN") === "MXN");
     const usdItems = items.filter(i => (i as any).currency === "USD");
-    const showMonColumn = isAmbas ? (mxnItems.length > 0 && usdItems.length > 0) : (mxnItems.length > 0 && usdItems.length > 0);
+    const showMonColumn = mxnItems.length > 0 && usdItems.length > 0;
 
     const discountPct = parseFloat(quotation.globalDiscount || "0");
 
@@ -314,16 +311,16 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     const fmtMXN = (v: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v);
     const fmtUSD = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
     const fmtQuote = quoteCurrency === "USD" ? fmtUSD : fmtMXN;
-    // For AMBAS: format each item in its own currency
+    // For legacy mixed-currency rows: format each item in its own currency
     const fmtItem = (v: number, cur: string) => cur === "USD" ? fmtUSD(v) : fmtMXN(v);
 
     items.forEach((item, index) => {
       const itemCurrency = (item as any).currency || "MXN";
-      // For AMBAS: display in item's own currency; otherwise convert to quote currency
-      const displayUnitPrice = isAmbas
+      // If items have mixed currencies (legacy AMBAS), display in their own currency; otherwise convert
+      const displayUnitPrice = showMonColumn
         ? (parseFloat(String(item.unitPrice)) || 0)
         : convertToQuote(parseFloat(String(item.unitPrice)) || 0, itemCurrency);
-      const displaySubtotal  = isAmbas
+      const displaySubtotal  = showMonColumn
         ? (parseFloat(String(item.subtotal)) || 0)
         : convertToQuote(parseFloat(String(item.subtotal))  || 0, itemCurrency);
 
@@ -346,7 +343,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       // Description allows wrapping
       doc.text(item.productName,   cols.desc.x + 2, rowY, { width: cols.desc.w - 4 });
       doc.text(parseFloat(item.quantity).toString(), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
-      const rowFmt = isAmbas ? (v: number) => fmtItem(v, itemCurrency) : fmtQuote;
+      const rowFmt = showMonColumn ? (v: number) => fmtItem(v, itemCurrency) : fmtQuote;
       doc.text(rowFmt(displayUnitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
       doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
       if (showMonColumn) {
