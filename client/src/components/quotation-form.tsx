@@ -103,6 +103,7 @@ const DELIVERY_TIMES = [
 const FOREIGN_RFC = "XEXX010101000";
 
 const CURRENCIES = [
+  { value: "AMBAS", label: "Ambas (MXN + USD)" },
   { value: "MXN", label: "MXN - Peso Mexicano" },
   { value: "USD", label: "USD - Dólar Americano" },
 ];
@@ -189,7 +190,7 @@ export function QuotationForm({
     resolver: zodResolver(quotationFormSchema),
     defaultValues: {
       customerId: "",
-      currency: "MXN",
+      currency: "AMBAS",
       exchangeRate: "18.00",
       paymentTerms: "",
       deliveryTime: "",
@@ -217,7 +218,7 @@ export function QuotationForm({
     if (isEditing && initialData && open && !initialized && products !== undefined) {
       form.reset({
         customerId: initialData.customerId || "",
-        currency: initialData.currency === "AMBAS" ? "MXN" : (initialData.currency || "MXN"),
+        currency: initialData.currency || "AMBAS",
         exchangeRate: initialData.exchangeRate?.toString() || "18.00",
         paymentTerms: initialData.paymentTerms || "",
         deliveryTime: initialData.deliveryTime || "",
@@ -423,14 +424,16 @@ export function QuotationForm({
 
   const calculateTotals = useCallback(() => {
     const globalDiscountPercent = parseFloat(form.watch("globalDiscount")) || 0;
-    const quoteCurrency = form.watch("currency") || "MXN";
+    const quoteCurrency = form.watch("currency") || "AMBAS";
     const exRate = Math.max(parseFloat(form.watch("exchangeRate")) || 18, 0.0001);
 
     // Convert any amount from itemCurrency to the quotation currency
+    // For AMBAS, aggregate to MXN (USD items converted to MXN)
+    const effectiveCurrency = quoteCurrency === "AMBAS" ? "MXN" : quoteCurrency;
     const toQuote = (amount: number, itemCurrency: string) => {
-      if (itemCurrency === quoteCurrency) return amount;
-      if (itemCurrency === "USD" && quoteCurrency === "MXN") return amount * exRate;
-      if (itemCurrency === "MXN" && quoteCurrency === "USD") return amount / exRate;
+      if (itemCurrency === effectiveCurrency) return amount;
+      if (itemCurrency === "USD" && effectiveCurrency === "MXN") return amount * exRate;
+      if (itemCurrency === "MXN" && effectiveCurrency === "USD") return amount / exRate;
       return amount;
     };
 
@@ -533,9 +536,14 @@ export function QuotationForm({
     // Recalculate totals fresh at submit time using the actual submitted exchange rate
     // (avoids stale closure from render-time form.watch())
     const submitExRate = Math.max(parseFloat(data.exchangeRate) || 18, 0.0001);
-    const submitCurrency = data.currency || "MXN";
+    const submitCurrency = data.currency || "AMBAS";
     const globalDiscountPercent = parseFloat(data.globalDiscount) || 0;
     const toQuoteSubmit = (amount: number, itemCurrency: string) => {
+      // AMBAS: convert everything to MXN equivalent for stored totals
+      if (submitCurrency === "AMBAS") {
+        if (itemCurrency === "USD") return amount * submitExRate;
+        return amount;
+      }
       if (itemCurrency === submitCurrency) return amount;
       if (itemCurrency === "USD" && submitCurrency === "MXN") return amount * submitExRate;
       if (itemCurrency === "MXN" && submitCurrency === "USD") return amount / submitExRate;
@@ -614,12 +622,14 @@ export function QuotationForm({
   };
 
   // Format in the quotation's currency (for totals/summary)
+  // When AMBAS, default to MXN display
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
-    const cur = form.watch("currency") || "MXN";
+    const cur = form.watch("currency") || "AMBAS";
+    const displayCur = cur === "AMBAS" ? "MXN" : cur;
     return num.toLocaleString("es-MX", {
       style: "currency",
-      currency: cur,
+      currency: displayCur,
     });
   };
 
@@ -633,9 +643,11 @@ export function QuotationForm({
   };
 
   // Convert a per-item amount to the quotation currency
-  const quoteCurrencyWatched = form.watch("currency") || "MXN";
+  const quoteCurrencyWatched = form.watch("currency") || "AMBAS";
   const exRateWatched = Math.max(parseFloat(form.watch("exchangeRate") || "18"), 0.0001);
   const convertToQuote = (amount: number, itemCurrency: string): number => {
+    // When AMBAS, each item keeps its own currency — no conversion needed
+    if (quoteCurrencyWatched === "AMBAS") return amount;
     if (itemCurrency === quoteCurrencyWatched) return amount;
     if (itemCurrency === "USD" && quoteCurrencyWatched === "MXN") return amount * exRateWatched;
     if (itemCurrency === "MXN" && quoteCurrencyWatched === "USD") return amount / exRateWatched;
@@ -732,37 +744,40 @@ export function QuotationForm({
                         <Select
                           value={field.value}
                           onValueChange={(newCurrency) => {
-                            const oldCurrency = field.value || "MXN";
+                            const oldCurrency = field.value || "AMBAS";
                             if (newCurrency !== oldCurrency) {
-                              const exRate = Math.max(parseFloat(form.getValues("exchangeRate")) || 18, 0.0001);
-                              // Convert every item that doesn't match the new currency
-                              const toNew = (v: number, fromCurrency: string) => {
-                                if (fromCurrency === newCurrency) return v;
-                                if (fromCurrency === "MXN" && newCurrency === "USD") return v / exRate;
-                                if (fromCurrency === "USD" && newCurrency === "MXN") return v * exRate;
-                                return v;
-                              };
-                              setLineItems(prev => prev.map(item => {
-                                const itemCurrency = item.currency || "MXN";
-                                if (itemCurrency === newCurrency) return item;
-                                const lp = parseFloat(item.listPrice) || 0;
-                                const up = parseFloat(item.unitPrice) || 0;
-                                const qty = parseFloat(item.quantity) || 0;
-                                const taxRate = parseFloat(item.taxRate) || 16;
-                                const newUp = toNew(up, itemCurrency);
-                                const newLp = toNew(lp, itemCurrency);
-                                const newSubtotal = qty * newUp;
-                                return {
-                                  ...item,
-                                  currency: newCurrency,
-                                  listPrice: newLp.toFixed(2),
-                                  unitPrice: newUp.toFixed(2),
-                                  discountAmount: (newLp - newUp).toFixed(2),
-                                  subtotal: newSubtotal.toFixed(2),
-                                  taxAmount: (newSubtotal * taxRate / 100).toFixed(2),
-                                  total: (newSubtotal * (1 + taxRate / 100)).toFixed(2),
+                              // When selecting AMBAS: keep items' own currencies as-is
+                              if (newCurrency !== "AMBAS") {
+                                const exRate = Math.max(parseFloat(form.getValues("exchangeRate")) || 18, 0.0001);
+                                // Convert every item to the new single currency
+                                const toNew = (v: number, fromCurrency: string) => {
+                                  if (fromCurrency === newCurrency) return v;
+                                  if (fromCurrency === "MXN" && newCurrency === "USD") return v / exRate;
+                                  if (fromCurrency === "USD" && newCurrency === "MXN") return v * exRate;
+                                  return v;
                                 };
-                              }));
+                                setLineItems(prev => prev.map(item => {
+                                  const itemCurrency = item.currency || "MXN";
+                                  if (itemCurrency === newCurrency) return item;
+                                  const lp = parseFloat(item.listPrice) || 0;
+                                  const up = parseFloat(item.unitPrice) || 0;
+                                  const qty = parseFloat(item.quantity) || 0;
+                                  const taxRate = parseFloat(item.taxRate) || 16;
+                                  const newUp = toNew(up, itemCurrency);
+                                  const newLp = toNew(lp, itemCurrency);
+                                  const newSubtotal = qty * newUp;
+                                  return {
+                                    ...item,
+                                    currency: newCurrency,
+                                    listPrice: newLp.toFixed(2),
+                                    unitPrice: newUp.toFixed(2),
+                                    discountAmount: (newLp - newUp).toFixed(2),
+                                    subtotal: newSubtotal.toFixed(2),
+                                    taxAmount: (newSubtotal * taxRate / 100).toFixed(2),
+                                    total: (newSubtotal * (1 + taxRate / 100)).toFixed(2),
+                                  };
+                                }));
+                              }
                             }
                             field.onChange(newCurrency);
                           }}
@@ -1129,9 +1144,22 @@ export function QuotationForm({
                                 </div>
                               </TableCell>
                               <TableCell className="text-center">
-                                <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono" data-testid={`badge-currency-${index}`}>
-                                  {item.currency || quoteCurrencyWatched}
-                                </Badge>
+                                {quoteCurrencyWatched === "AMBAS" ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs font-mono px-2 h-6"
+                                    data-testid={`badge-currency-${index}`}
+                                    onClick={() => updateLineItem(index, { currency: item.currency === "USD" ? "MXN" : "USD" })}
+                                  >
+                                    {item.currency || "MXN"}
+                                  </Button>
+                                ) : (
+                                  <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono" data-testid={`badge-currency-${index}`}>
+                                    {item.currency || "MXN"}
+                                  </Badge>
+                                )}
                               </TableCell>
                               <TableCell>
                                 <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(index)}
@@ -1209,9 +1237,21 @@ export function QuotationForm({
                           {/* Summary row: P.Lista info (left, shrinkable) + Subtotal + delete (right, fixed) */}
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-start gap-1.5 min-w-0 flex-1">
-                              <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono shrink-0 mt-0.5">
-                                {item.currency || quoteCurrencyWatched}
-                              </Badge>
+                              {quoteCurrencyWatched === "AMBAS" ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs font-mono px-2 h-6 shrink-0 mt-0.5"
+                                  onClick={() => updateLineItem(index, { currency: item.currency === "USD" ? "MXN" : "USD" })}
+                                >
+                                  {item.currency || "MXN"}
+                                </Button>
+                              ) : (
+                                <Badge variant={item.currency === "USD" ? "secondary" : "outline"} className="text-xs font-mono shrink-0 mt-0.5">
+                                  {item.currency || "MXN"}
+                                </Badge>
+                              )}
                               <span className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
                                 P. Lista: {formatItemCurrency(item.listPrice, item.currency)}
                               </span>
@@ -1400,7 +1440,9 @@ export function QuotationForm({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-shrink-0">
               <div className="text-xs text-muted-foreground">
                 {lineItems.filter(i => i.productName).length} producto(s)
-                {` · Total: ${formatCurrency(totals.total)}`}
+                {totals.hasMixedCurrencies
+                  ? ` · MXN equiv.: ${formatCurrency(totals.total)} (T/C ${totals.exRate.toFixed(2)})`
+                  : ` · Total: ${formatCurrency(totals.total)}`}
               </div>
               <div className="flex gap-2 flex-wrap justify-end">
                 <Button
