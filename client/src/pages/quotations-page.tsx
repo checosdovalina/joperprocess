@@ -80,6 +80,7 @@ export default function QuotationsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [quotationToDelete, setQuotationToDelete] = useState<QuotationWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"active" | "inactive">("active");
   const [hideConverted, setHideConverted] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSeller, setFilterSeller] = useState("all");
@@ -418,10 +419,19 @@ export default function QuotationsPage() {
 
   const convertedCount = quotations?.filter(q => q.status === QuotationStatus.CONVERTED).length ?? 0;
 
+  const INACTIVE_STATUSES = [QuotationStatus.SENT, QuotationStatus.REJECTED, QuotationStatus.EXPIRED];
+
+  const inactiveCount = quotations?.filter(q => INACTIVE_STATUSES.includes(q.status as any)).length ?? 0;
+
   const hasActiveFilters = filterStatus !== "all" || filterSeller !== "all" || filterDateFrom !== "" || filterDateTo !== "" || searchText !== "";
 
   const filteredQuotations = (quotations ?? []).filter(q => {
-    if (hideConverted && q.status === QuotationStatus.CONVERTED) return false;
+    // Tab split
+    const isInactive = INACTIVE_STATUSES.includes(q.status as any);
+    if (activeTab === "active" && isInactive) return false;
+    if (activeTab === "inactive" && !isInactive) return false;
+
+    if (activeTab === "active" && hideConverted && q.status === QuotationStatus.CONVERTED) return false;
     if (filterStatus !== "all" && q.status !== filterStatus) return false;
     if (filterSeller !== "all" && q.userId !== filterSeller) return false;
     if (searchText) {
@@ -474,7 +484,7 @@ export default function QuotationsPage() {
               </CardTitle>
               <CardDescription>
                 {filteredQuotations.length} de {quotations?.length || 0} cotizaciones
-                {hideConverted && convertedCount > 0 && (
+                {activeTab === "active" && hideConverted && convertedCount > 0 && (
                   <span className="ml-1">
                     ({convertedCount} convertida{convertedCount !== 1 ? "s" : ""} oculta{convertedCount !== 1 ? "s" : ""})
                   </span>
@@ -482,7 +492,7 @@ export default function QuotationsPage() {
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              {convertedCount > 0 && (
+              {activeTab === "active" && convertedCount > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -497,6 +507,40 @@ export default function QuotationsPage() {
                 </Button>
               )}
             </div>
+          </div>
+
+          {/* Tab selector */}
+          <div className="flex gap-1 border-b mt-2">
+            <button
+              onClick={() => { setActiveTab("active"); setFilterStatus("all"); }}
+              data-testid="tab-active"
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "active"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              En Proceso
+              <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
+                {(quotations ?? []).filter(q => !INACTIVE_STATUSES.includes(q.status as any)).length}
+              </span>
+            </button>
+            <button
+              onClick={() => { setActiveTab("inactive"); setFilterStatus("all"); }}
+              data-testid="tab-inactive"
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "inactive"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Enviadas / Rechazadas
+              {inactiveCount > 0 && (
+                <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
+                  {inactiveCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Filter bar */}
