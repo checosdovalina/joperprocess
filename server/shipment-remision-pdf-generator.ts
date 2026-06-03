@@ -152,11 +152,9 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
   doc.rect(MARGIN, Y, BOX_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text("CLIENTE / DESTINATARIO", MARGIN + 6, Y + 4, { width: BOX_W - 12 });
-  doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
-  doc.text(data.customerName, MARGIN + 6, Y + 20, { width: BOX_W - 12, lineBreak: false, ellipsis: true });
   if (data.customerAddress) {
     doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-    doc.text(data.customerAddress, MARGIN + 6, Y + 33, { width: BOX_W - 12, lineBreak: false, ellipsis: true });
+    doc.text(data.customerAddress, MARGIN + 6, Y + 20, { width: BOX_W - 12, lineBreak: false, ellipsis: true });
   }
 
   // Transport box
