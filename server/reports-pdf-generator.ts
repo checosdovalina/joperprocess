@@ -33,6 +33,7 @@ export interface ReportOrder {
   purchaseOrder?: string | null;
   closeDate?: Date | string | null;
   shippingDate?: Date | string | null;
+  creditReleaseDate?: Date | string | null;
   comments?: string | null;
   status: string;
   items: ReportOrderItem[];
@@ -224,16 +225,16 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         doc.text(formatDate(order.closeDate), col2X + 85, cardY, { lineBreak: false });
         cardY += 14;
 
-        // Row 2: Cliente | Fecha de Embarque
+        // Row 2: Cliente | Lib. Crédito y Cobranza
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
         doc.text("Cliente:", innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(order.customerName, innerX + 38, cardY, { width: halfW - 38, lineBreak: false });
 
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Fecha de Embarque:", col2X, cardY, { lineBreak: false });
+        doc.text("Lib. C y Cobranza:", col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(formatDate(order.shippingDate), col2X + 100, cardY, { lineBreak: false });
+        doc.text(formatDate(order.creditReleaseDate), col2X + 95, cardY, { lineBreak: false });
         cardY += 14;
 
         // Row 3: Orden de Compra | Estatus

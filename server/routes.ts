@@ -3439,7 +3439,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       // 1. Subdomain tenant, 2. User's tenantId, 3. SuperAdmin global (no filter)
       const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
       const isSuperAdminGlobal = req.user?.isSuperAdmin && !resolvedTenantId;
-      const { dateFrom, dateTo, customerId, status } = req.query as Record<string, string>;
+      const { dateFrom, dateTo, customerId, status, activeOnly } = req.query as Record<string, string>;
 
       const tenantWhere = (!isSuperAdminGlobal && resolvedTenantId)
         ? eq(orders.tenantId, resolvedTenantId)
@@ -3458,7 +3458,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         orderBy: (o, { desc }) => [desc(o.createdAt)],
       });
 
-      // Get shipments for date filtering
+      // Get shipments
       const shipmentWhere = (!isSuperAdminGlobal && resolvedTenantId)
         ? eq(shipments.tenantId, resolvedTenantId)
         : undefined;
@@ -3467,7 +3467,22 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
       const shipmentByOrder = new Map(allShipments.map(s => [s.orderId, s]));
 
+      // Get credit authorizations to show release date
+      const allCreditAuths = await db.query.creditAuthorizations.findMany({
+        where: (!isSuperAdminGlobal && resolvedTenantId)
+          ? sql`${creditAuthorizations.quotationId} IN (SELECT id FROM quotations WHERE tenant_id = ${resolvedTenantId})`
+          : undefined,
+      });
+      const creditAuthByQuotation = new Map(allCreditAuths.map(c => [c.quotationId, c]));
+
       let filtered = orderRows;
+
+      // By default only show active (non-shipped, non-delivered) orders
+      // Pass activeOnly=false to see all
+      const showActiveOnly = activeOnly !== "false";
+      if (showActiveOnly && (!status || status === "all")) {
+        filtered = filtered.filter(o => o.status !== "shipped" && o.status !== "delivered");
+      }
 
       // Filter by status
       if (status && status !== "all") {
@@ -3479,11 +3494,11 @@ Proporciona tu análisis en el siguiente formato JSON:
         filtered = filtered.filter(o => o.quotation?.customerId === customerId);
       }
 
-      // Filter by date range (using estimatedDelivery or createdAt)
+      // Filter by date range (using createdAt)
       if (dateFrom) {
         const from = new Date(dateFrom);
         filtered = filtered.filter(o => {
-          const d = o.estimatedDelivery || o.createdAt;
+          const d = o.createdAt;
           return d && new Date(d) >= from;
         });
       }
@@ -3491,21 +3506,23 @@ Proporciona tu análisis en el siguiente formato JSON:
         const to = new Date(dateTo);
         to.setHours(23, 59, 59, 999);
         filtered = filtered.filter(o => {
-          const d = o.estimatedDelivery || o.createdAt;
+          const d = o.createdAt;
           return d && new Date(d) <= to;
         });
       }
 
       const result = filtered.map(o => {
         const shipment = shipmentByOrder.get(o.id);
+        const creditAuth = creditAuthByQuotation.get(o.quotationId);
         return {
           id: o.id,
           folio: o.quotation?.folio || o.id.substring(0, 8),
           customerName: o.quotation?.customer?.name || "—",
           customerRfc: o.quotation?.customer?.rfc || null,
-          purchaseOrder: null,
-          closeDate: o.actualDelivery || o.estimatedDelivery || null,
+          purchaseOrder: o.quotation?.purchaseOrder || null,
+          closeDate: shipment?.shippedAt || o.actualDelivery || null,
           shippingDate: shipment?.shippedAt || null,
+          creditReleaseDate: creditAuth?.authorizedAt || null,
           comments: o.factoryNotes || null,
           status: o.status,
           createdAt: o.createdAt,

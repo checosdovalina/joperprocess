@@ -64,6 +64,7 @@ interface ReportOrder {
   purchaseOrder?: string | null;
   closeDate?: string | null;
   shippingDate?: string | null;
+  creditReleaseDate?: string | null;
   comments?: string | null;
   status: string;
   createdAt: string;
@@ -103,10 +104,10 @@ function OrderCard({ order }: { order: ReportOrder }) {
               <User className="h-3 w-3" />
               {order.customerName}
             </span>
-            {order.closeDate && (
+            {order.creditReleaseDate && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                Cierre: {formatDateStr(order.closeDate)}
+                Lib. C&amp;C: {formatDateStr(order.creditReleaseDate)}
               </span>
             )}
             {order.shippingDate && (
@@ -144,16 +145,16 @@ function OrderCard({ order }: { order: ReportOrder }) {
                 <span className="font-semibold">{order.folio}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-medium">Fecha de Cierre:</span>{" "}
-                <span>{formatDateStr(order.closeDate)}</span>
+                <span className="text-muted-foreground font-medium">Fecha de Embarque:</span>{" "}
+                <span>{formatDateStr(order.shippingDate)}</span>
               </div>
               <div>
                 <span className="text-muted-foreground font-medium">Orden de Compra:</span>{" "}
                 <span>{order.purchaseOrder || "—"}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-medium">Fecha de Embarque:</span>{" "}
-                <span>{formatDateStr(order.shippingDate)}</span>
+                <span className="text-muted-foreground font-medium">Lib. Crédito y Cobranza:</span>{" "}
+                <span>{formatDateStr(order.creditReleaseDate)}</span>
               </div>
               {order.customerRfc && (
                 <div>
@@ -216,6 +217,7 @@ export default function ReportsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [activeOnly, setActiveOnly] = useState(true);
   const [applied, setApplied] = useState(false);
 
   const { data: customers } = useQuery<Customer[]>({ queryKey: ["/api/customers"] });
@@ -230,6 +232,7 @@ export default function ReportsPage() {
   if (dateTo) queryParams.set("dateTo", dateTo);
   if (statusFilter && statusFilter !== "all") queryParams.set("status", statusFilter);
   if (selectedCustomerId) queryParams.set("customerId", selectedCustomerId);
+  queryParams.set("activeOnly", activeOnly ? "true" : "false");
 
   const {
     data: reportOrders,
@@ -282,10 +285,11 @@ export default function ReportsPage() {
     setStatusFilter("all");
     setCustomerSearch("");
     setSelectedCustomerId("");
+    setActiveOnly(true);
     setApplied(false);
   };
 
-  const hasFilters = dateFrom || dateTo || statusFilter !== "all" || selectedCustomerId;
+  const hasFilters = dateFrom || dateTo || statusFilter !== "all" || selectedCustomerId || !activeOnly;
 
   return (
     <div className="space-y-6">
@@ -405,8 +409,23 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          {/* Active only toggle */}
+          <div className="flex items-center gap-2 mt-4">
+            <input
+              type="checkbox"
+              id="activeOnly"
+              checked={activeOnly}
+              onChange={e => setActiveOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+              data-testid="checkbox-active-only"
+            />
+            <label htmlFor="activeOnly" className="text-sm cursor-pointer select-none">
+              Solo pedidos vigentes en producción (ocultar embarcados y entregados)
+            </label>
+          </div>
+
           {/* Action buttons */}
-          <div className="flex flex-wrap gap-2 mt-4">
+          <div className="flex flex-wrap gap-2 mt-3">
             <Button onClick={handleApply} data-testid="button-apply-filters">
               <Search className="h-4 w-4 mr-2" />
               Generar reporte
