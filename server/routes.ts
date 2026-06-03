@@ -3520,7 +3520,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           customerName: o.quotation?.customer?.name || "—",
           customerRfc: o.quotation?.customer?.rfc || null,
           purchaseOrder: o.quotation?.purchaseOrder || null,
-          closeDate: shipment?.shippedAt || o.actualDelivery || null,
+          closeDate: o.quotation?.customerApprovedAt || null,
           shippingDate: shipment?.shippedAt || null,
           creditReleaseDate: creditAuth?.authorizedAt || null,
           comments: o.factoryNotes || null,
