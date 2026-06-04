@@ -3,6 +3,34 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Component, ReactNode } from "react";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
+          <h2 className="text-xl font-semibold text-destructive">Ocurrió un error inesperado</h2>
+          <p className="text-muted-foreground text-sm max-w-md">{this.state.error?.message}</p>
+          <button
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
+            onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = "/dashboard"; }}
+          >
+            Volver al Dashboard
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
@@ -190,6 +218,7 @@ export default function App() {
         <TenantProvider>
           <AuthProvider>
             <TooltipProvider>
+              <ErrorBoundary>
               {isPublicRoute ? (
                 <Switch>
                   <Route path="/" component={SmartLandingPage} />
@@ -207,6 +236,7 @@ export default function App() {
               ) : (
                 <MainLayout />
               )}
+              </ErrorBoundary>
               <Toaster />
             </TooltipProvider>
           </AuthProvider>

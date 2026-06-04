@@ -202,6 +202,7 @@ function getUrgencyBadge(urgency: string) {
 
 export default function IncidentsPage() {
   const [, navigate] = useLocation();
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
