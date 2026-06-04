@@ -369,9 +369,10 @@ export default function QuotationsPage() {
 
   const formatCurrency = (value: string | number, currency: string = "MXN") => {
     const num = typeof value === "string" ? parseFloat(value) : value;
+    const safeCurrency = currency === "AMBAS" ? "MXN" : currency;
     return num.toLocaleString("es-MX", {
       style: "currency",
-      currency: currency,
+      currency: safeCurrency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });

@@ -410,16 +410,34 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       return boxH;
     };
 
-    // Single totals box — always in the quotation currency
-    {
+    // Totals box(es)
+    if (showMonColumn) {
+      // AMBAS / mixed currencies — show TWO boxes: one MXN, one USD
+      const mxnSub = mxnItems.reduce((s, i) => s + (parseFloat(String(i.subtotal)) || 0), 0);
+      const usdSub = usdItems.reduce((s, i) => s + (parseFloat(String(i.subtotal)) || 0), 0);
+      const mxnDisc = discountPct > 0 ? mxnSub * (discountPct / 100) : 0;
+      const usdDisc = discountPct > 0 ? usdSub * (discountPct / 100) : 0;
+      const mxnTax = isMexicoCustomer ? (mxnSub - mxnDisc) * 0.16 : 0;
+      const mxnTotal = mxnSub - mxnDisc + mxnTax;
+      const usdTotal = usdSub - usdDisc;
+
+      const TOTALS_W = 195;
+      const GAP = 10;
+      const BOX2_START = PAGE_W - MARGIN - TOTALS_W * 2 - GAP;
+
+      const mxnH = drawTotalsBox(BOX2_START, currentY, TOTALS_W, "PESOS MEXICANOS (MXN)", primaryColor,
+        mxnSub, mxnDisc, mxnTax, mxnTotal, fmtMXN);
+      const usdH = drawTotalsBox(BOX2_START + TOTALS_W + GAP, currentY, TOTALS_W, "DÓLARES AMERICANOS (USD)", "#1a6b3a",
+        usdSub, usdDisc, 0, usdTotal, fmtUSD);
+
+      currentY += Math.max(mxnH, usdH) + 20;
+    } else {
+      // Single currency totals box
       const TOTALS_W = 200;
       const TOTALS_X = PAGE_W - MARGIN - TOTALS_W;
       const subtotalVal = parseFloat(String(quotation.subtotal));
       const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
-      // For foreign customers, recalculate tax from stored item taxAmounts (overriding any legacy stored value)
-      const taxVal = isForeignCustomer
-        ? 0
-        : parseFloat(String(quotation.tax));
+      const taxVal = isForeignCustomer ? 0 : parseFloat(String(quotation.tax));
       const totalVal = isForeignCustomer
         ? subtotalVal - discountAmt
         : parseFloat(String(quotation.total));
