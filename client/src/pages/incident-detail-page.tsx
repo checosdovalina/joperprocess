@@ -378,6 +378,21 @@ export default function IncidentDetailPage() {
             <Link2 className="h-4 w-4 mr-2" />
             Copiar Enlace Cliente
           </Button>
+          {incident.accessToken && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = `/api/public/incidents/${incident.accessToken}/pdf`;
+                a.download = `Incidente-${incident.ticketNumber}.pdf`;
+                a.click();
+              }}
+              data-testid="button-download-pdf"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Descargar PDF
+            </Button>
+          )}
         </div>
       </div>
 
