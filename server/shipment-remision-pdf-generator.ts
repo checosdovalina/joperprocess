@@ -212,14 +212,16 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
   Y += ROW_H;
 
   // Expand products: one row per serial number (or one row if no serials)
+  // When multiple serials exist each one represents 1 unit, so show 1.00 per row
   let rowIndex = 0;
   for (const p of products) {
     const rows = p.serialNumbers.length > 0 ? p.serialNumbers : ["—"];
+    const qtyPerRow = p.serialNumbers.length > 1 ? 1 : p.quantity;
     for (const serial of rows) {
       if (rowIndex % 2 === 0) doc.rect(MARGIN, Y, CONTENT_W, ROW_H).fill(lightColor);
       doc.fontSize(7.5).font("Helvetica").fillColor("#111827");
       doc.text(p.name, COL.producto + 4, Y + 5, { width: 232, lineBreak: false, ellipsis: true });
-      doc.text(`${p.quantity.toFixed(2)} ${p.unitOfMeasure}`, COL.cantidad + 4, Y + 5, { width: 76 });
+      doc.text(`${qtyPerRow.toFixed(2)} ${p.unitOfMeasure}`, COL.cantidad + 4, Y + 5, { width: 76 });
       doc.text(p.desde, COL.desde + 4, Y + 5, { width: 76 });
       doc.font("Helvetica-Bold").text(serial, COL.serie + 4, Y + 5, { width: 128, lineBreak: false, ellipsis: true });
       Y += ROW_H;
