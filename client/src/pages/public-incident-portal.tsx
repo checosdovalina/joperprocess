@@ -21,6 +21,7 @@ import {
   Loader2,
   Calendar,
   FileText,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -286,11 +287,27 @@ export default function PublicIncidentPortal() {
       <div className="max-w-3xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold font-mono" data-testid="text-ticket-number">
-              {incident.ticketNumber}
-            </h1>
-            {getStatusBadge(incident.status)}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold font-mono" data-testid="text-ticket-number">
+                {incident.ticketNumber}
+              </h1>
+              {getStatusBadge(incident.status)}
+            </div>
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = `/api/public/incidents/${token}/pdf`;
+                a.download = `Incidente-${incident.ticketNumber}.pdf`;
+                a.click();
+              }}
+              data-testid="button-download-pdf"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Descargar PDF
+            </Button>
           </div>
           <p className="text-lg text-muted-foreground">{incident.subject}</p>
         </div>

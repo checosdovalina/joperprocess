@@ -5650,7 +5650,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       
       const ticketNumber = await generateTicketNumber(tenantId);
       const accessToken = randomBytes(32).toString('hex');
-      const accessTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      const accessTokenExpires = null; // no expiry
 
       const validated = insertIncidentSchema.parse({
         ...req.body,
@@ -5743,6 +5743,34 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error updating incident:", error);
       res.status(500).json({ error: "Error al actualizar el incidente" });
+    }
+  });
+
+  // Renew access token for incident (resets expiry)
+  app.post("/api/incidents/:id/renew-token", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user!;
+      const tenantId = user.tenantId;
+
+      const existing = await db.query.incidents.findFirst({
+        where: tenantId
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
+      });
+
+      if (!existing) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      const newToken = randomBytes(32).toString('hex');
+      const [updated] = await db.update(incidents)
+        .set({ accessToken: newToken, accessTokenExpires: null })
+        .where(eq(incidents.id, id))
+        .returning();
+
+      res.json({ accessToken: updated.accessToken });
+    } catch (error) {
+      console.error("Error renewing incident token:", error);
+      res.status(500).json({ error: "Error al renovar el enlace" });
     }
   });
 
@@ -5977,7 +6005,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       // Generate ticket number and access token
       const ticketNumber = await generateTicketNumber(tenantId);
       const accessToken = randomBytes(32).toString('hex');
-      const accessTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      const accessTokenExpires = null; // no expiry
 
       // Create the incident
       const [newIncident] = await db.insert(incidents).values({
@@ -6093,6 +6121,147 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error looking up incident:", error);
       res.status(500).json({ error: "Error al buscar el ticket" });
+    }
+  });
+
+  // Download incident as PDF (public)
+  app.get("/api/public/incidents/:token/pdf", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const incident = await db.query.incidents.findFirst({
+        where: eq(incidents.accessToken, token),
+        with: {
+          customer: true,
+          assignee: true,
+          comments: {
+            where: eq(incidentComments.visibility, CommentVisibility.CUSTOMER),
+            with: { user: true },
+            orderBy: (c, { asc }) => [asc(c.createdAt)],
+          },
+        },
+      });
+      if (!incident) return res.status(404).json({ error: "Incidente no encontrado" });
+      if (incident.accessTokenExpires && new Date(incident.accessTokenExpires) < new Date()) {
+        return res.status(403).json({ error: "El enlace ha expirado" });
+      }
+
+      const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, incident.tenantId) });
+
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Incidente-${incident.ticketNumber}.pdf"`);
+      doc.pipe(res);
+
+      const primaryColor = tenant?.primaryColor || "#1a365d";
+      const lighten = (hex: string, amt: number) => {
+        const c = hex.replace("#", "");
+        const r = Math.min(255, parseInt(c.substring(0,2),16) + Math.round((255-parseInt(c.substring(0,2),16))*amt));
+        const g = Math.min(255, parseInt(c.substring(2,4),16) + Math.round((255-parseInt(c.substring(2,4),16))*amt));
+        const b = Math.min(255, parseInt(c.substring(4,6),16) + Math.round((255-parseInt(c.substring(4,6),16))*amt));
+        return `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+      };
+      const lightColor = lighten(primaryColor, 0.92);
+      const mediumColor = lighten(primaryColor, 0.75);
+      const PAGE_W = 612; const MARGIN = 40; const CONTENT_W = PAGE_W - MARGIN * 2;
+
+      // Header
+      doc.rect(0, 0, PAGE_W, 90).fill(primaryColor);
+      doc.fontSize(18).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text(tenant?.legalName || tenant?.name || "Empresa", MARGIN, 18, { width: CONTENT_W });
+      doc.fontSize(10).font("Helvetica").fillColor("rgba(255,255,255,0.8)");
+      doc.text("REPORTE DE INCIDENTE / TICKET DE SERVICIO", MARGIN, 44, { width: CONTENT_W });
+      if (tenant?.rfc) doc.text(`RFC: ${tenant.rfc}`, MARGIN, 58, { width: CONTENT_W });
+
+      // Title band
+      doc.rect(0, 90, PAGE_W, 28).fill(mediumColor);
+      doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
+      doc.text(incident.ticketNumber, MARGIN, 97, { width: CONTENT_W * 0.5 });
+      doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
+      const statusMap: Record<string, string> = { nuevo:"Nuevo", asignado:"Asignado", en_proceso:"En Proceso", esperando_cliente:"Esperando Cliente", esperando_interno:"En Revisión", resuelto:"Resuelto", cerrado:"Cerrado", cancelado:"Cancelado" };
+      doc.text(`Estado: ${statusMap[incident.status] || incident.status}`, MARGIN + CONTENT_W * 0.5, 100, { width: CONTENT_W * 0.5, align: "right" });
+
+      let Y = 130;
+
+      // Info grid
+      const infoItems: [string, string][] = [
+        ["Cliente", incident.customer?.name || "—"],
+        ["Tipo", { garantia:"Garantía", retrabajo:"Retrabajo", queja:"Queja", consulta:"Consulta", administrativo:"Administrativo" }[incident.type] || incident.type],
+        ["Urgencia", { baja:"Baja", media:"Media", alta:"Alta", critica:"Crítica" }[incident.urgency] || incident.urgency],
+        ["Asignado a", incident.assignee?.fullName || "Sin asignar"],
+        ["Fecha creación", new Date(incident.createdAt).toLocaleDateString("es-MX", { day:"2-digit", month:"2-digit", year:"numeric" })],
+        ["Asunto", incident.subject],
+      ];
+      const COL_W = CONTENT_W / 2 - 6;
+      infoItems.forEach((pair, i) => {
+        const col = i % 2; const row = Math.floor(i / 2);
+        const bx = MARGIN + col * (COL_W + 12); const by = Y + row * 38;
+        doc.rect(bx, by, COL_W, 34).fill(lightColor);
+        doc.fontSize(7).font("Helvetica").fillColor("#6b7280");
+        doc.text(pair[0].toUpperCase(), bx + 6, by + 5, { width: COL_W - 12 });
+        doc.fontSize(9).font("Helvetica-Bold").fillColor("#111827");
+        doc.text(pair[1], bx + 6, by + 16, { width: COL_W - 12, lineBreak: false, ellipsis: true });
+      });
+      Y += Math.ceil(infoItems.length / 2) * 38 + 16;
+
+      // Description
+      doc.rect(MARGIN, Y, CONTENT_W, 14).fill(mediumColor);
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
+      doc.text("DESCRIPCIÓN", MARGIN + 6, Y + 3);
+      Y += 14;
+      const descH = Math.max(40, doc.heightOfString(incident.description, { width: CONTENT_W - 12 }) + 16);
+      doc.rect(MARGIN, Y, CONTENT_W, descH).fill(lightColor);
+      doc.fontSize(9).font("Helvetica").fillColor("#374151");
+      doc.text(incident.description, MARGIN + 6, Y + 8, { width: CONTENT_W - 12 });
+      Y += descH + 14;
+
+      // Resolution if present
+      if (incident.resolution) {
+        doc.rect(MARGIN, Y, CONTENT_W, 14).fill(mediumColor);
+        doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
+        doc.text("RESOLUCIÓN", MARGIN + 6, Y + 3);
+        Y += 14;
+        const resH = Math.max(40, doc.heightOfString(incident.resolution, { width: CONTENT_W - 12 }) + 16);
+        doc.rect(MARGIN, Y, CONTENT_W, resH).fill(lightColor);
+        doc.fontSize(9).font("Helvetica").fillColor("#374151");
+        doc.text(incident.resolution, MARGIN + 6, Y + 8, { width: CONTENT_W - 12 });
+        Y += resH + 14;
+      }
+
+      // Comments
+      if (incident.comments && incident.comments.length > 0) {
+        doc.rect(MARGIN, Y, CONTENT_W, 14).fill(mediumColor);
+        doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
+        doc.text("CONVERSACIÓN", MARGIN + 6, Y + 3);
+        Y += 14;
+        for (const comment of incident.comments) {
+          const who = comment.isFromCustomer ? "Cliente" : (comment.user?.fullName || "Soporte");
+          const when = new Date(comment.createdAt).toLocaleDateString("es-MX", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+          const cH = Math.max(32, doc.heightOfString(comment.content, { width: CONTENT_W - 24 }) + 20);
+          if (Y + cH > 720) { doc.addPage({ size:"LETTER", margin:0 }); Y = 40; }
+          doc.rect(MARGIN, Y, CONTENT_W, cH).fill(comment.isFromCustomer ? lighten(primaryColor, 0.85) : lightColor);
+          doc.fontSize(7).font("Helvetica-Bold").fillColor("#374151");
+          doc.text(`${who}  ·  ${when}`, MARGIN + 8, Y + 6, { width: CONTENT_W - 16 });
+          doc.fontSize(8.5).font("Helvetica").fillColor("#111827");
+          doc.text(comment.content, MARGIN + 8, Y + 17, { width: CONTENT_W - 16 });
+          Y += cH + 4;
+        }
+        Y += 10;
+      }
+
+      // Footer
+      if (Y > 720) { doc.addPage({ size:"LETTER", margin:0 }); Y = 40; }
+      doc.rect(0, 755, PAGE_W, 37).fill(primaryColor);
+      doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.8)");
+      const footerParts = [tenant?.rfc ? `RFC: ${tenant.rfc}` : null, tenant?.email, tenant?.phone].filter(Boolean) as string[];
+      doc.text(footerParts.join("   |   "), MARGIN, 763, { width: CONTENT_W, align: "center" });
+      doc.text(`Generado el ${new Date().toLocaleDateString("es-MX", { day:"2-digit", month:"long", year:"numeric" })}`, MARGIN, 775, { width: CONTENT_W, align: "center" });
+
+      doc.end();
+    } catch (error) {
+      console.error("Error generating incident PDF:", error);
+      if (!res.headersSent) res.status(500).json({ error: "Error al generar el PDF" });
     }
   });
 

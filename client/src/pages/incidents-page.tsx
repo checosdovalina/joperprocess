@@ -43,6 +43,7 @@ import {
   ExternalLink,
   Barcode,
   Package,
+  RefreshCw,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -297,6 +298,25 @@ export default function IncidentsPage() {
     });
   };
 
+  const renewTokenMutation = useMutation({
+    mutationFn: async (incidentId: string) => {
+      const response = await apiRequest("POST", `/api/incidents/${incidentId}/renew-token`, {});
+      return response.json();
+    },
+    onSuccess: (data, incidentId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
+      const url = `${window.location.origin}/public/incidents/${data.accessToken}`;
+      navigator.clipboard.writeText(url).catch(() => {});
+      toast({
+        title: "Enlace renovado",
+        description: "Se generó un nuevo enlace y se copió al portapapeles.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo renovar el enlace.", variant: "destructive" });
+    },
+  });
+
   const clearFilters = () => {
     setFilterStatus("");
     setFilterType("");
@@ -487,9 +507,27 @@ export default function IncidentsPage() {
                               e.stopPropagation();
                               copyAccessLink(incident);
                             }}
+                            title="Copiar enlace"
                             data-testid={`button-copy-link-${incident.id}`}
                           >
                             <Link2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              renewTokenMutation.mutate(incident.id);
+                            }}
+                            title="Renovar enlace"
+                            disabled={renewTokenMutation.isPending}
+                            data-testid={`button-renew-link-${incident.id}`}
+                          >
+                            {renewTokenMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
                           </Button>
                         </div>
                       </TableCell>
