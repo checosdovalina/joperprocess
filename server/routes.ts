@@ -1912,7 +1912,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(quotation);
     } catch (error) {
       console.error("Error creating quotation:", error);
-      res.status(400).json({ error: "Error creating quotation" });
+      const msg = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: `Error creating quotation: ${msg}` });
     }
   });
 
