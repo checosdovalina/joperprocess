@@ -309,6 +309,23 @@ export default function QuotationsPage() {
     }
   };
 
+  const handleResendShippingNotification = async (quotation: QuotationWithDetails) => {
+    try {
+      const response = await apiRequest("POST", `/api/quotations/${quotation.id}/resend-shipping-notification`, {});
+      const result = await response.json();
+      toast({
+        title: "Notificación enviada",
+        description: `Correo enviado a: ${result.sentTo?.join(", ") || "admins"}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error al reenviar",
+        description: error.message || "No se pudo enviar la notificación",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRejectShipping = async () => {
     if (!selectedQuotation) return;
     
@@ -771,6 +788,13 @@ export default function QuotationsPage() {
                                   >
                                     <X className="h-4 w-4 mr-2" />
                                     Rechazar Envío Gratis
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleResendShippingNotification(quotation)}
+                                    data-testid={`menu-resend-shipping-notification-${quotation.id}`}
+                                  >
+                                    <Mail className="h-4 w-4 mr-2 text-blue-500" />
+                                    Reenviar notificación a admins
                                   </DropdownMenuItem>
                                 </>
                               )}

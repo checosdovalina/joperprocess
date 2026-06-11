@@ -1910,9 +1910,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Notify admin users if shipping is handled by Joper (fire-and-forget)
-      if (quotationData.shippingHandledByJoper && quotation.tenantId) {
+      if (validated.shippingHandledByJoper && quotation.tenantId) {
         (async () => {
           try {
+            console.log(`[ShippingEmail] Quotation ${quotation.folio} requires shipping approval — looking for admins in tenant ${quotation.tenantId}`);
+
             // Find all admin users for this tenant
             const adminUsers = await db.query.users.findMany({
               where: and(
@@ -1920,39 +1922,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 eq(users.role, UserRole.ADMIN)
               ),
             });
+            console.log(`[ShippingEmail] Found ${adminUsers.length} admin user(s):`, adminUsers.map(u => u.email));
+
             const adminEmails = adminUsers
-              .filter((u) => u.email)
+              .filter((u) => u.email && u.email.includes("@"))
               .map((u) => ({ email: u.email!, name: u.fullName || u.username }));
 
-            if (adminEmails.length > 0) {
-              const tenant = await db.query.tenants.findFirst({
-                where: eq(tenants.id, quotation.tenantId),
-              });
-              const host = req.get("host") || "localhost:5000";
-              const protocol = req.protocol || "https";
-              const quotationUrl = `${protocol}://${host}/quotations`;
-
-              const customer = await db.query.customers.findFirst({
-                where: eq(customers.id, quotation.customerId),
-              });
-              const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
-              await sendShippingApprovalRequestEmail({
-                adminEmails,
-                quotationData: {
-                  folio: quotation.folio,
-                  customerName: customer?.name || quotationData.customerId,
-                  vendedorName: req.user!.fullName || req.user!.username,
-                  total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
-                  currency: quotation.currency || "MXN",
-                  itemsCount: items?.length || 0,
-                  shippingMethod: quotationData.shippingMethod || "truck",
-                },
-                quotationUrl,
-                tenantName: tenant?.name || "Nexxo",
-              });
+            if (adminEmails.length === 0) {
+              console.error(`[ShippingEmail] No admin users with email found for tenant ${quotation.tenantId} — skipping notification`);
+              return;
             }
+
+            const tenant = await db.query.tenants.findFirst({
+              where: eq(tenants.id, quotation.tenantId),
+            });
+            const customer = await db.query.customers.findFirst({
+              where: eq(customers.id, quotation.customerId),
+            });
+
+            const host = req.get("host") || "localhost:5000";
+            const protocol = req.protocol || "https";
+            const quotationUrl = `${protocol}://${host}/quotations`;
+
+            const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
+            await sendShippingApprovalRequestEmail({
+              adminEmails,
+              quotationData: {
+                folio: quotation.folio,
+                customerName: customer?.name || quotation.customerId,
+                vendedorName: req.user!.fullName || req.user!.username,
+                total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+                currency: quotation.currency || "MXN",
+                itemsCount: items?.length || 0,
+                shippingMethod: (validated as any).shippingMethod || "truck",
+              },
+              quotationUrl,
+              tenantName: tenant?.name || "Nexxo",
+            });
+            console.log(`[ShippingEmail] Notification sent to: ${adminEmails.map(a => a.email).join(", ")}`);
           } catch (emailErr: any) {
-            console.warn("Shipping approval notification email failed:", emailErr.message || emailErr);
+            console.error("[ShippingEmail] Notification failed:", emailErr.message || emailErr);
           }
         })();
       }
@@ -5792,6 +5801,67 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error updating incident:", error);
       res.status(500).json({ error: "Error al actualizar el incidente" });
+    }
+  });
+
+  // Resend shipping approval notification to admins
+  app.post("/api/quotations/:id/resend-shipping-notification", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, id),
+        with: { customer: true, user: true },
+      });
+      if (!quotation) return res.status(404).json({ error: "Cotización no encontrada" });
+      if (!quotation.shippingHandledByJoper) return res.status(400).json({ error: "Esta cotización no tiene envío por Joper" });
+
+      const apiKey = process.env.MAILERSEND_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "MAILERSEND_API_KEY no configurado en el servidor" });
+
+      const tenantId = quotation.tenantId;
+      const adminUsers = await db.query.users.findMany({
+        where: and(eq(users.tenantId, tenantId), eq(users.role, UserRole.ADMIN)),
+      });
+      console.log(`[ResendShippingEmail] Admins found (${adminUsers.length}):`, adminUsers.map(u => `${u.fullName} <${u.email}>`));
+
+      const adminEmails = adminUsers
+        .filter((u) => u.email && u.email.includes("@"))
+        .map((u) => ({ email: u.email!, name: u.fullName || u.username }));
+
+      if (adminEmails.length === 0) {
+        return res.status(400).json({ error: "No se encontraron usuarios administradores con correo en este tenant" });
+      }
+
+      const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+      const host = req.get("host") || "localhost:5000";
+      const protocol = req.protocol || "https";
+      const quotationUrl = `${protocol}://${host}/quotations`;
+
+      const items = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, id),
+      });
+
+      const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
+      await sendShippingApprovalRequestEmail({
+        adminEmails,
+        quotationData: {
+          folio: quotation.folio,
+          customerName: quotation.customer?.name || quotation.customerId,
+          vendedorName: quotation.user?.fullName || quotation.userId,
+          total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+          currency: quotation.currency || "MXN",
+          itemsCount: items.length,
+          shippingMethod: (quotation as any).shippingMethod || "truck",
+        },
+        quotationUrl,
+        tenantName: tenant?.name || "Nexxo",
+      });
+
+      console.log(`[ResendShippingEmail] Sent to: ${adminEmails.map(a => a.email).join(", ")}`);
+      res.json({ success: true, sentTo: adminEmails.map(a => a.email) });
+    } catch (error: any) {
+      console.error("[ResendShippingEmail] Error:", error.message || error);
+      res.status(500).json({ error: error.message || "Error al reenviar la notificación" });
     }
   });
 
