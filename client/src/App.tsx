@@ -86,7 +86,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/orders": "Pedidos",
   "/production": "Producción",
   "/board": "Tablero de Producción",
-  "/pipeline": "Tablero de Operaciones",
+  "/pipeline": "Tablero Ventas",
   "/shipments": "Embarques",
   "/accounts-receivable": "Facturación",
   "/payments": "Cobranza",
