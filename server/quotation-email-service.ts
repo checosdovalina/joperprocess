@@ -398,6 +398,129 @@ export async function sendShippingRejectionEmail({
   }
 }
 
+// ─── Shipping Approval Request Email (admin notification) ────────────────────
+
+interface SendShippingApprovalRequestEmailParams {
+  adminEmails: { email: string; name: string }[];
+  quotationData: {
+    folio: string;
+    customerName: string;
+    vendedorName: string;
+    total: string;
+    currency: string;
+    itemsCount: number;
+    shippingMethod?: string;
+  };
+  quotationUrl: string;
+  tenantName: string;
+}
+
+export async function sendShippingApprovalRequestEmail({
+  adminEmails,
+  quotationData,
+  quotationUrl,
+  tenantName,
+}: SendShippingApprovalRequestEmailParams): Promise<void> {
+  const apiKey = process.env.MAILERSEND_API_KEY;
+  if (!apiKey) {
+    console.warn("MAILERSEND_API_KEY not configured — skipping shipping approval request email");
+    return;
+  }
+
+  const validAdmins = adminEmails.filter((a) => a.email && a.email.includes("@"));
+  if (validAdmins.length === 0) {
+    console.warn("No admin emails for shipping approval notification — skipping");
+    return;
+  }
+
+  const ms = new MailerSend({ apiKey });
+  const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+  const subject = `Autorización requerida — Envío a cargo de empresa · ${quotationData.folio}`;
+
+  const shippingMethodLabel =
+    quotationData.shippingMethod === "parcel" ? "Paquetería" : "Camión";
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"></head>
+      <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;background:#f5f5f5;">
+        <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.08);">
+
+          <div style="background:linear-gradient(135deg,#c05621 0%,#9c4221 100%);padding:28px 32px;">
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Solicitud de Autorización de Envío</h1>
+            <p style="color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:13px;">${tenantName} — Sistema Comercial</p>
+          </div>
+
+          <div style="padding:28px 32px;">
+            <p style="font-size:15px;color:#374151;margin:0 0 20px;">
+              Se ha creado una cotización con <strong>envío sin costo a cargo de la empresa</strong>
+              que requiere tu autorización antes de enviarse al cliente.
+            </p>
+
+            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:18px 22px;margin-bottom:24px;">
+              <div style="display:flex;gap:12px;margin-bottom:8px;">
+                <span style="color:#92400e;font-size:13px;min-width:130px;font-weight:600;">Cotización:</span>
+                <span style="color:#1c1917;font-size:13px;font-weight:700;">${quotationData.folio}</span>
+              </div>
+              <div style="display:flex;gap:12px;margin-bottom:8px;">
+                <span style="color:#92400e;font-size:13px;min-width:130px;font-weight:600;">Cliente:</span>
+                <span style="color:#1c1917;font-size:13px;">${quotationData.customerName}</span>
+              </div>
+              <div style="display:flex;gap:12px;margin-bottom:8px;">
+                <span style="color:#92400e;font-size:13px;min-width:130px;font-weight:600;">Vendedor:</span>
+                <span style="color:#1c1917;font-size:13px;">${quotationData.vendedorName}</span>
+              </div>
+              <div style="display:flex;gap:12px;margin-bottom:8px;">
+                <span style="color:#92400e;font-size:13px;min-width:130px;font-weight:600;">Total:</span>
+                <span style="color:#1c1917;font-size:13px;font-weight:700;">$${quotationData.total} ${quotationData.currency}</span>
+              </div>
+              <div style="display:flex;gap:12px;margin-bottom:8px;">
+                <span style="color:#92400e;font-size:13px;min-width:130px;font-weight:600;">Método de envío:</span>
+                <span style="color:#1c1917;font-size:13px;">${shippingMethodLabel}</span>
+              </div>
+              <div style="display:flex;gap:12px;">
+                <span style="color:#92400e;font-size:13px;min-width:130px;font-weight:600;">Productos:</span>
+                <span style="color:#1c1917;font-size:13px;">${quotationData.itemsCount} partida(s)</span>
+              </div>
+            </div>
+
+            <div style="text-align:center;margin:24px 0;">
+              <a href="${quotationUrl}"
+                 style="display:inline-block;background:linear-gradient(135deg,#c05621 0%,#9c4221 100%);color:#fff;padding:14px 36px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+                Ver cotización y autorizar
+              </a>
+            </div>
+
+            <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0;">
+              Ingresa al sistema para aprobar o rechazar el envío sin costo.
+            </p>
+          </div>
+
+          <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:14px 32px;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;">${tenantName} — Mensaje automático, no respondas a este correo.</p>
+          </div>
+
+        </div>
+      </body>
+    </html>
+  `;
+
+  for (const admin of validAdmins) {
+    try {
+      const emailParams = new EmailParams()
+        .setFrom(sentFrom)
+        .setTo([new Recipient(admin.email, admin.name)])
+        .setSubject(subject)
+        .setHtml(htmlContent);
+      await ms.email.send(emailParams);
+      console.log(`✅ Shipping approval request email sent to admin: ${admin.email}`);
+    } catch (err: any) {
+      console.warn(`Failed to send shipping approval email to ${admin.email}:`, err.message || err);
+    }
+  }
+}
+
 // ─── Credit Authorization Status Email ───────────────────────────────────────
 
 interface CreditAuthEmailRecipient {

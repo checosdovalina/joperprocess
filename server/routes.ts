@@ -1909,6 +1909,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Notify admin users if shipping is handled by Joper (fire-and-forget)
+      if (quotationData.shippingHandledByJoper && quotation.tenantId) {
+        (async () => {
+          try {
+            // Find all admin users for this tenant
+            const adminUsers = await db.query.users.findMany({
+              where: and(
+                eq(users.tenantId, quotation.tenantId),
+                eq(users.role, UserRole.ADMIN)
+              ),
+            });
+            const adminEmails = adminUsers
+              .filter((u) => u.email)
+              .map((u) => ({ email: u.email!, name: u.fullName || u.username }));
+
+            if (adminEmails.length > 0) {
+              const tenant = await db.query.tenants.findFirst({
+                where: eq(tenants.id, quotation.tenantId),
+              });
+              const host = req.get("host") || "localhost:5000";
+              const protocol = req.protocol || "https";
+              const quotationUrl = `${protocol}://${host}/quotations`;
+
+              const customer = await db.query.customers.findFirst({
+                where: eq(customers.id, quotation.customerId),
+              });
+              const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
+              await sendShippingApprovalRequestEmail({
+                adminEmails,
+                quotationData: {
+                  folio: quotation.folio,
+                  customerName: customer?.name || quotationData.customerId,
+                  vendedorName: req.user!.fullName || req.user!.username,
+                  total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+                  currency: quotation.currency || "MXN",
+                  itemsCount: items?.length || 0,
+                  shippingMethod: quotationData.shippingMethod || "truck",
+                },
+                quotationUrl,
+                tenantName: tenant?.name || "Nexxo",
+              });
+            }
+          } catch (emailErr: any) {
+            console.warn("Shipping approval notification email failed:", emailErr.message || emailErr);
+          }
+        })();
+      }
+
       res.status(201).json(quotation);
     } catch (error) {
       console.error("Error creating quotation:", error);
