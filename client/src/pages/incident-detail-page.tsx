@@ -54,6 +54,10 @@ import {
   Video,
   File,
   ShieldCheck,
+  Upload,
+  X,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -249,6 +253,11 @@ export default function IncidentDetailPage() {
   const [isSendingWarrantyEmail, setIsSendingWarrantyEmail] = useState(false);
   const [ccAdmins, setCcAdmins] = useState(true);
 
+  // Attachment upload state
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const { data: incident, isLoading, dataUpdatedAt } = useQuery<IncidentWithDetails>({
     queryKey: ["/api/incidents", id],
     enabled: !!id,
@@ -304,6 +313,69 @@ export default function IncidentDetailPage() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setIsDownloadingWarranty(false);
+    }
+  };
+
+  const handleUploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !id) return;
+    setIsUploadingFiles(true);
+    let uploaded = 0;
+    const total = files.length;
+    try {
+      for (const file of Array.from(files)) {
+        setUploadProgress(`Subiendo ${uploaded + 1} de ${total}: ${file.name}`);
+        // Step 1: get upload URL
+        const urlResp = await apiRequest("POST", `/api/incidents/${id}/attachments/upload-url`, {
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+        });
+        const urlData = await urlResp.json();
+        const { uploadURL, entityId, useDirectUpload } = urlData;
+
+        // Step 2: upload the file
+        if (useDirectUpload) {
+          await fetch(uploadURL, {
+            method: "POST",
+            headers: { "Content-Type": file.type || "application/octet-stream", "X-Entity-Id": entityId },
+            body: file,
+            credentials: "include",
+          });
+        } else {
+          await fetch(uploadURL, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+          });
+        }
+
+        // Step 3: confirm
+        await apiRequest("POST", `/api/incidents/${id}/attachments/confirm`, {
+          entityId,
+          filename: entityId,
+          originalName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+        });
+        uploaded++;
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/incidents", id] });
+      toast({ title: `${uploaded} archivo(s) subido(s)`, description: "Los archivos se adjuntaron al incidente." });
+    } catch (err: any) {
+      toast({ title: "Error al subir", description: err.message, variant: "destructive" });
+    } finally {
+      setIsUploadingFiles(false);
+      setUploadProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    try {
+      await apiRequest("DELETE", `/api/incidents/${id}/attachments/${attachmentId}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/incidents", id] });
+      toast({ title: "Archivo eliminado" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar el archivo.", variant: "destructive" });
     }
   };
 
@@ -518,41 +590,121 @@ export default function IncidentDetailPage() {
                 <p className="text-sm mt-2 whitespace-pre-wrap">{incident.description}</p>
               </div>
 
-              {incident.attachments && incident.attachments.length > 0 && (
-                <>
-                  <Separator />
-                  <div>
-                    <Label className="text-muted-foreground text-xs flex items-center gap-1">
-                      <Paperclip className="h-3 w-3" />
-                      Archivos Adjuntos ({incident.attachments.length})
-                    </Label>
-                    <div className="grid gap-2 mt-2">
-                      {incident.attachments.map((attachment) => {
-                        const FileIcon = getFileIcon(attachment.mimeType);
-                        return (
+              <Separator />
+              <div>
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <Label className="text-muted-foreground text-xs flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" />
+                    Archivos Adjuntos ({incident.attachments?.length || 0})
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    {uploadProgress && (
+                      <span className="text-xs text-muted-foreground">{uploadProgress}</span>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                      className="hidden"
+                      data-testid="input-file-upload"
+                      onChange={e => handleUploadFiles(e.target.files)}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isUploadingFiles}
+                      onClick={() => fileInputRef.current?.click()}
+                      data-testid="button-upload-attachment"
+                    >
+                      {isUploadingFiles ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <Plus className="h-3 w-3 mr-1" />
+                      )}
+                      Agregar imagen
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Image gallery */}
+                {incident.attachments && incident.attachments.some(a => a.mimeType.startsWith("image/")) && (
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {incident.attachments.filter(a => a.mimeType.startsWith("image/")).map((attachment) => (
+                      <div key={attachment.id} className="relative group rounded-md overflow-hidden bg-muted aspect-square" data-testid={`img-attachment-${attachment.id}`}>
+                        <a
+                          href={`/api/incidents/${incident.id}/attachments/${attachment.id}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block w-full h-full"
+                        >
+                          <img
+                            src={`/api/incidents/${incident.id}/attachments/${attachment.id}/download`}
+                            alt={attachment.originalName}
+                            className="w-full h-full object-cover"
+                          />
+                        </a>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end justify-between p-1" style={{ visibility: "visible" }}>
+                          <span className="text-white text-xs truncate max-w-[70%] opacity-0 group-hover:opacity-100 transition-opacity drop-shadow">
+                            {attachment.originalName}
+                          </span>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded p-0.5"
+                            onClick={e => { e.preventDefault(); handleDeleteAttachment(attachment.id); }}
+                            data-testid={`button-delete-attachment-${attachment.id}`}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Non-image files list */}
+                {incident.attachments && incident.attachments.filter(a => !a.mimeType.startsWith("image/")).length > 0 && (
+                  <div className="grid gap-2">
+                    {incident.attachments.filter(a => !a.mimeType.startsWith("image/")).map((attachment) => {
+                      const FileIcon = getFileIcon(attachment.mimeType);
+                      return (
+                        <div key={attachment.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg group" data-testid={`attachment-${attachment.id}`}>
+                          <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{attachment.originalName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatFileSize(attachment.size)} · {format(new Date(attachment.createdAt), "d MMM, HH:mm", { locale: es })}
+                              {attachment.isFromCustomer && <span className="ml-1 text-blue-500">(cliente)</span>}
+                            </p>
+                          </div>
                           <a
-                            key={attachment.id}
                             href={`/api/incidents/${incident.id}/attachments/${attachment.id}/download`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
-                            data-testid={`attachment-${attachment.id}`}
                           >
-                            <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{attachment.originalName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatFileSize(attachment.size)} · {format(new Date(attachment.createdAt), "d MMM, HH:mm", { locale: es })}
-                              </p>
-                            </div>
-                            <Download className="h-4 w-4 text-muted-foreground" />
+                            <Download className="h-4 w-4 text-muted-foreground hover-elevate" />
                           </a>
-                        );
-                      })}
-                    </div>
+                          <button
+                            onClick={() => handleDeleteAttachment(attachment.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{ visibility: "visible" }}
+                            data-testid={`button-delete-file-${attachment.id}`}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
-                </>
-              )}
+                )}
+
+                {(!incident.attachments || incident.attachments.length === 0) && (
+                  <p className="text-xs text-muted-foreground py-2">
+                    No hay archivos adjuntos. Haz clic en "Agregar imagen" para subir.
+                  </p>
+                )}
+              </div>
 
               {incident.resolution && (
                 <>

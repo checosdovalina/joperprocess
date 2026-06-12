@@ -6042,6 +6042,146 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // ─── Authenticated incident attachment upload ─────────────────────────────
+
+  // Step 1: get upload URL (authenticated)
+  app.post("/api/incidents/:incidentId/attachments/upload-url", isAuthenticated, async (req, res) => {
+    try {
+      const { incidentId } = req.params;
+      const { filename, mimeType } = req.body;
+      const tenantId = req.user!.tenantId;
+
+      if (!filename || !mimeType) {
+        return res.status(400).json({ error: "Se requiere nombre de archivo y tipo MIME" });
+      }
+
+      const incident = await db.query.incidents.findFirst({
+        where: tenantId
+          ? and(eq(incidents.id, incidentId), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, incidentId),
+      });
+      if (!incident) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      if (useLocalStorage()) {
+        const ext = filename.split('.').pop() || 'bin';
+        const entityId = `incident-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const uploadURL = `${baseUrl}/api/incidents/upload-direct-auth`;
+        return res.json({ uploadURL, entityId, incidentId, useDirectUpload: true });
+      }
+
+      const objectStorage = new ObjectStorageService();
+      const { uploadURL, entityId } = await objectStorage.getObjectEntityUploadURL();
+      res.json({ uploadURL, entityId, incidentId });
+    } catch (error) {
+      console.error("Error getting authenticated upload URL:", error);
+      res.status(500).json({ error: "Error al obtener URL de subida" });
+    }
+  });
+
+  // Step 1b: direct upload for local storage (authenticated)
+  app.post("/api/incidents/upload-direct-auth", isAuthenticated, async (req, res) => {
+    try {
+      const entityId = req.headers['x-entity-id'] as string;
+      const contentType = req.headers['content-type'] || 'application/octet-stream';
+      if (!entityId) return res.status(400).json({ error: "Se requiere X-Entity-Id header" });
+
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', async () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+          const storagePath = await localStorageService.uploadIncidentAttachment(buffer, entityId, contentType);
+          res.status(200).json({ success: true, path: storagePath });
+        } catch (error) {
+          console.error("Error saving authenticated incident attachment:", error);
+          res.status(500).json({ error: "Error al guardar archivo" });
+        }
+      });
+    } catch (error) {
+      console.error("Error in direct auth upload:", error);
+      res.status(500).json({ error: "Error al subir archivo" });
+    }
+  });
+
+  // Step 2: confirm upload and save to DB (authenticated)
+  app.post("/api/incidents/:incidentId/attachments/confirm", isAuthenticated, async (req, res) => {
+    try {
+      const { incidentId } = req.params;
+      const { entityId, filename, originalName, mimeType, size } = req.body;
+      const tenantId = req.user!.tenantId;
+      const userId = req.user!.id;
+
+      if (!entityId || !filename || !originalName || !mimeType || !size) {
+        return res.status(400).json({ error: "Faltan datos del archivo" });
+      }
+
+      const incident = await db.query.incidents.findFirst({
+        where: tenantId
+          ? and(eq(incidents.id, incidentId), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, incidentId),
+      });
+      if (!incident) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      if (useLocalStorage()) {
+        const fileBuffer = await localStorageService.getFile(`incidents/${entityId}`);
+        if (!fileBuffer) return res.status(400).json({ error: "El archivo no se encontró en el almacenamiento" });
+      } else {
+        const objectStorage = new ObjectStorageService();
+        try { await objectStorage.getObjectEntityFile(entityId); } catch {
+          return res.status(400).json({ error: "El archivo no se encontró en el almacenamiento" });
+        }
+      }
+
+      const [attachment] = await db.insert(incidentAttachments).values({
+        incidentId: incident.id,
+        filename,
+        originalName,
+        mimeType,
+        size,
+        storagePath: entityId,
+        uploadedBy: userId,
+        isFromCustomer: false,
+      }).returning();
+
+      await logIncidentActivity(
+        incident.id, userId, 'attachment_added', undefined, undefined,
+        `Archivo adjuntado: ${originalName}`, false
+      );
+
+      res.status(201).json(attachment);
+    } catch (error) {
+      console.error("Error confirming attachment:", error);
+      res.status(500).json({ error: "Error al guardar el archivo" });
+    }
+  });
+
+  // Delete incident attachment (authenticated)
+  app.delete("/api/incidents/:incidentId/attachments/:attachmentId", isAuthenticated, async (req, res) => {
+    try {
+      const { incidentId, attachmentId } = req.params;
+      const tenantId = req.user!.tenantId;
+
+      const incident = await db.query.incidents.findFirst({
+        where: tenantId
+          ? and(eq(incidents.id, incidentId), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, incidentId),
+      });
+      if (!incident) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      const attachment = await db.query.incidentAttachments.findFirst({
+        where: and(eq(incidentAttachments.id, attachmentId), eq(incidentAttachments.incidentId, incidentId)),
+      });
+      if (!attachment) return res.status(404).json({ error: "Archivo no encontrado" });
+
+      await db.delete(incidentAttachments).where(eq(incidentAttachments.id, attachmentId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting attachment:", error);
+      res.status(500).json({ error: "Error al eliminar el archivo" });
+    }
+  });
+
   // ========== PUBLIC INCIDENTS (Customer Portal) ==========
 
   // Search customers for public portal (minimal info for security)
