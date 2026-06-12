@@ -6028,13 +6028,24 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Archivo no encontrado" });
       }
 
-      const objectStorageService = new ObjectStorageService();
-      const objectFile = await objectStorageService.getObjectEntityFile(attachment.storagePath);
-      
       const encodedFilename = encodeURIComponent(attachment.originalName);
       res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
       res.setHeader('Content-Type', attachment.mimeType);
-      
+
+      if (useLocalStorage()) {
+        const tryPaths = [
+          `incidents/${attachment.storagePath}`,
+          attachment.storagePath,
+        ];
+        for (const tryPath of tryPaths) {
+          const ok = await localStorageService.streamFile(tryPath, res);
+          if (ok) return;
+        }
+        return res.status(404).json({ error: "Archivo no encontrado en almacenamiento" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(attachment.storagePath);
       objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error downloading attachment:", error);
@@ -6145,7 +6156,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }).returning();
 
       await logIncidentActivity(
-        incident.id, userId, 'attachment_added', undefined, undefined,
+        incident.id, 'attachment_added', userId, undefined, undefined,
         `Archivo adjuntado: ${originalName}`, false
       );
 
