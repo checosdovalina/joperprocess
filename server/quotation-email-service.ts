@@ -644,3 +644,93 @@ export async function sendCreditAuthStatusEmail({
     }
   }
 }
+
+// ─── Warranty Sheet Email ─────────────────────────────────────────────────────
+
+export async function sendWarrantySheetEmail({
+  toEmail,
+  toName,
+  ccEmails,
+  ticketNumber,
+  customerName,
+  subject,
+  tenantName,
+  pdfBuffer,
+}: {
+  toEmail: string;
+  toName: string;
+  ccEmails: { email: string; name: string }[];
+  ticketNumber: string;
+  customerName: string;
+  subject: string;
+  tenantName: string;
+  pdfBuffer: Buffer;
+}): Promise<void> {
+  const apiKey = process.env.MAILERSEND_API_KEY;
+  if (!apiKey) throw new Error("MAILERSEND_API_KEY no configurado");
+
+  const ms = new MailerSend({ apiKey });
+  const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+  const recipients = [new Recipient(toEmail, toName)];
+  const cc = ccEmails.map(r => new Recipient(r.email, r.name));
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+          .container { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+          .header { background: linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%); padding: 28px 32px; }
+          .header h1 { color: #fff; margin: 0; font-size: 20px; font-weight: 700; }
+          .header p { color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 13px; }
+          .body { padding: 28px 32px; }
+          .info-row { display: flex; gap: 12px; margin-bottom: 8px; }
+          .info-label { color: #6b7280; font-size: 13px; min-width: 120px; }
+          .info-value { color: #111827; font-size: 13px; font-weight: 600; }
+          .note { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 14px 18px; margin-top: 20px; font-size: 13px; color: #0369a1; }
+          .footer { background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 16px 32px; text-align: center; }
+          .footer p { margin: 0; color: #9ca3af; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Hoja de Garantía — ${ticketNumber}</h1>
+            <p>${tenantName} — Sistema Comercial</p>
+          </div>
+          <div class="body">
+            <p>Estimado(a) <strong>${toName || customerName}</strong>,</p>
+            <p>Adjunto encontrará la <strong>Hoja de Garantía</strong> correspondiente a su solicitud de servicio.</p>
+            <div class="info-row"><span class="info-label">Ticket:</span><span class="info-value">${ticketNumber}</span></div>
+            <div class="info-row"><span class="info-label">Cliente:</span><span class="info-value">${customerName}</span></div>
+            <div class="info-row"><span class="info-label">Asunto:</span><span class="info-value">${subject}</span></div>
+            <div class="note">Por favor revise el documento adjunto, fírmelo y envíelo de regreso para continuar con el proceso de garantía.</div>
+          </div>
+          <div class="footer">
+            <p>${tenantName} — Este es un mensaje automático.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const attachment = new Attachment(
+    pdfBuffer.toString("base64"),
+    `Garantia-${ticketNumber}.pdf`,
+    "application/pdf"
+  );
+
+  const emailParams = new EmailParams()
+    .setFrom(sentFrom)
+    .setTo(recipients)
+    .setCc(cc)
+    .setSubject(`Hoja de Garantía — ${ticketNumber} — ${customerName}`)
+    .setHtml(htmlContent)
+    .setAttachments([attachment]);
+
+  console.log(`📧 Sending warranty sheet to: ${toEmail}${cc.length ? ` (CC: ${cc.map(c => c.email).join(", ")})` : ""}`);
+  await ms.email.send(emailParams);
+  console.log(`✅ Warranty sheet email sent for ${ticketNumber}`);
+}

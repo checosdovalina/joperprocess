@@ -6243,54 +6243,118 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
-  // Download incident Warranty Sheet PDF (authenticated)
-  app.get("/api/incidents/:id/warranty-pdf", isAuthenticated, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const tenantId = (req.user as any)?.tenantId;
-      const incident = await db.query.incidents.findFirst({
-        where: tenantId
-          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
-          : eq(incidents.id, id),
-        with: { customer: true, assignee: true, product: true, order: true, invoice: true },
-      });
-      if (!incident) return res.status(404).json({ error: "Incidente no encontrado" });
-
-      const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, incident.tenantId) });
-
-      const { generateIncidentWarrantyPDF } = await import("./incident-warranty-pdf-generator");
-      const stream = await generateIncidentWarrantyPDF({
+  // Helper: build warranty PDF data from incident + optional overrides
+  async function buildWarrantyData(incidentId: string, tenantId: string | null, overrides: Record<string, any> = {}) {
+    const incident = await db.query.incidents.findFirst({
+      where: tenantId
+        ? and(eq(incidents.id, incidentId), eq(incidents.tenantId, tenantId))
+        : eq(incidents.id, incidentId),
+      with: { customer: true, assignee: true, product: true, order: true, invoice: true },
+    });
+    if (!incident) return null;
+    const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, incident.tenantId) });
+    return {
+      incident,
+      tenant,
+      pdfData: {
         ticketNumber: incident.ticketNumber,
         type: incident.type,
         status: incident.status,
         urgency: incident.urgency,
-        subject: incident.subject,
-        description: incident.description,
+        subject: overrides.subject ?? incident.subject,
+        description: overrides.description ?? incident.description,
         createdAt: incident.createdAt,
         customerName: incident.customer?.name || "—",
         customerAddress: incident.customer?.address,
         customerCity: [incident.customer?.city, incident.customer?.state].filter(Boolean).join(", ") || null,
-        contactName: incident.contactName,
-        contactEmail: incident.contactEmail,
-        contactPhone: incident.contactPhone,
-        productName: incident.product?.name || null,
-        productSku: incident.product?.sku || null,
-        warrantySerialNumber: incident.warrantySerialNumber,
-        referenceNumber: incident.referenceNumber,
-        orderFolio: incident.order?.folio || null,
-        invoiceFolio: (incident.invoice as any)?.folio || null,
-        assigneeName: incident.assignee?.fullName || null,
+        contactName: overrides.contactName ?? incident.contactName,
+        contactEmail: overrides.contactEmail ?? incident.contactEmail,
+        contactPhone: overrides.contactPhone ?? incident.contactPhone,
+        productName: overrides.productName ?? incident.product?.name ?? null,
+        productSku: overrides.productSku ?? incident.product?.sku ?? null,
+        warrantySerialNumber: overrides.warrantySerialNumber ?? incident.warrantySerialNumber,
+        referenceNumber: overrides.referenceNumber ?? incident.referenceNumber,
+        orderFolio: incident.order?.folio ?? null,
+        invoiceFolio: (incident.invoice as any)?.folio ?? null,
+        assigneeName: incident.assignee?.fullName ?? null,
         assignedArea: incident.assignedArea,
-        resolution: incident.resolution,
+        resolution: overrides.resolution ?? incident.resolution,
+        observations: overrides.observations ?? null,
         tenant: tenant ?? null,
-      });
+      },
+    };
+  }
+
+  // Download incident Warranty Sheet PDF (authenticated, POST with overrides)
+  app.post("/api/incidents/:id/warranty-pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantId = (req.user as any)?.tenantId ?? null;
+      const result = await buildWarrantyData(id, tenantId, req.body || {});
+      if (!result) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      const { generateIncidentWarrantyPDF } = await import("./incident-warranty-pdf-generator");
+      const stream = await generateIncidentWarrantyPDF(result.pdfData);
 
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="Garantia-${incident.ticketNumber}.pdf"`);
+      res.setHeader("Content-Disposition", `attachment; filename="Garantia-${result.incident.ticketNumber}.pdf"`);
       stream.pipe(res);
     } catch (error: any) {
       console.error("Error generating warranty PDF:", error);
       res.status(500).json({ error: error.message || "Error al generar la hoja de garantía" });
+    }
+  });
+
+  // Send incident Warranty Sheet by email (authenticated)
+  app.post("/api/incidents/:id/send-warranty-email", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantId = (req.user as any)?.tenantId ?? null;
+      const { toEmail, toName, ccAdmins = true, overrides = {} } = req.body || {};
+
+      if (!toEmail) return res.status(400).json({ error: "Se requiere correo del destinatario" });
+
+      const result = await buildWarrantyData(id, tenantId, overrides);
+      if (!result) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      // Generate PDF as buffer
+      const { generateIncidentWarrantyPDF } = await import("./incident-warranty-pdf-generator");
+      const stream = await generateIncidentWarrantyPDF(result.pdfData);
+      const chunks: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+        stream.on("end", resolve);
+        stream.on("error", reject);
+      });
+      const pdfBuffer = Buffer.concat(chunks);
+
+      // Find admin CC emails
+      let ccEmails: { email: string; name: string }[] = [];
+      if (ccAdmins && tenantId) {
+        const admins = await db.query.users.findMany({
+          where: and(eq(users.tenantId, tenantId), eq(users.role, UserRole.ADMIN)),
+        });
+        ccEmails = admins
+          .filter(u => u.email && u.email.includes("@") && u.email !== toEmail)
+          .map(u => ({ email: u.email!, name: u.fullName || u.username }));
+      }
+
+      const { sendWarrantySheetEmail } = await import("./quotation-email-service");
+      await sendWarrantySheetEmail({
+        toEmail,
+        toName: toName || result.incident.customer?.name || "Cliente",
+        ccEmails,
+        ticketNumber: result.incident.ticketNumber,
+        customerName: result.incident.customer?.name || "—",
+        subject: overrides.subject || result.incident.subject,
+        tenantName: result.tenant?.name || "Nexxo",
+        pdfBuffer,
+      });
+
+      res.json({ success: true, sentTo: toEmail, cc: ccEmails.map(c => c.email) });
+    } catch (error: any) {
+      console.error("Error sending warranty email:", error);
+      res.status(500).json({ error: error.message || "Error al enviar el correo de garantía" });
     }
   });
 

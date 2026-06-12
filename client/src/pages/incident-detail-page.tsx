@@ -233,6 +233,22 @@ export default function IncidentDetailPage() {
   const [resolution, setResolution] = useState("");
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
+  // Warranty sheet form state
+  const [warrantyForm, setWarrantyForm] = useState({
+    productName: "",
+    productSku: "",
+    warrantySerialNumber: "",
+    referenceNumber: "",
+    contactName: "",
+    contactEmail: "",
+    contactPhone: "",
+    observations: "",
+  });
+  const [warrantyFormInitialized, setWarrantyFormInitialized] = useState(false);
+  const [isDownloadingWarranty, setIsDownloadingWarranty] = useState(false);
+  const [isSendingWarrantyEmail, setIsSendingWarrantyEmail] = useState(false);
+  const [ccAdmins, setCcAdmins] = useState(true);
+
   const { data: incident, isLoading, dataUpdatedAt } = useQuery<IncidentWithDetails>({
     queryKey: ["/api/incidents", id],
     enabled: !!id,
@@ -246,6 +262,75 @@ export default function IncidentDetailPage() {
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [incident?.comments?.length]);
+
+  // Pre-fill warranty form once incident loads
+  useEffect(() => {
+    if (incident && !warrantyFormInitialized) {
+      setWarrantyForm({
+        productName: (incident as any).product?.name || "",
+        productSku: (incident as any).product?.sku || "",
+        warrantySerialNumber: incident.warrantySerialNumber || "",
+        referenceNumber: incident.referenceNumber || "",
+        contactName: incident.contactName || "",
+        contactEmail: incident.contactEmail || "",
+        contactPhone: incident.contactPhone || "",
+        observations: "",
+      });
+      setWarrantyFormInitialized(true);
+    }
+  }, [incident, warrantyFormInitialized]);
+
+  const handleDownloadWarrantyPDF = async () => {
+    setIsDownloadingWarranty(true);
+    try {
+      const resp = await fetch(`/api/incidents/${id}/warranty-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(warrantyForm),
+        credentials: "include",
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || "Error al generar el PDF");
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Garantia-${incident?.ticketNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setIsDownloadingWarranty(false);
+    }
+  };
+
+  const handleSendWarrantyEmail = async () => {
+    if (!warrantyForm.contactEmail) {
+      toast({ title: "Correo requerido", description: "Ingresa el correo del destinatario", variant: "destructive" });
+      return;
+    }
+    setIsSendingWarrantyEmail(true);
+    try {
+      const resp = await apiRequest("POST", `/api/incidents/${id}/send-warranty-email`, {
+        toEmail: warrantyForm.contactEmail,
+        toName: warrantyForm.contactName || incident?.customer?.name,
+        ccAdmins,
+        overrides: warrantyForm,
+      });
+      const result = await resp.json();
+      toast({
+        title: "Correo enviado",
+        description: `Enviado a ${result.sentTo}${result.cc?.length ? ` (CC: ${result.cc.join(", ")})` : ""}`,
+      });
+    } catch (err: any) {
+      toast({ title: "Error al enviar", description: err.message, variant: "destructive" });
+    } finally {
+      setIsSendingWarrantyEmail(false);
+    }
+  };
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<Incident>) => {
@@ -394,19 +479,6 @@ export default function IncidentDetailPage() {
               Descargar PDF
             </Button>
           )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              const a = document.createElement("a");
-              a.href = `/api/incidents/${incident.id}/warranty-pdf`;
-              a.download = `Garantia-${incident.ticketNumber}.pdf`;
-              a.click();
-            }}
-            data-testid="button-download-warranty-pdf"
-          >
-            <ShieldCheck className="h-4 w-4 mr-2" />
-            Hoja de Garantía
-          </Button>
         </div>
       </div>
 
@@ -503,7 +575,7 @@ export default function IncidentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Comments & Activity Tabs */}
+          {/* Comments, Activity & Warranty Tabs */}
           <Card>
             <Tabs defaultValue="comments">
               <CardHeader className="pb-0">
@@ -516,6 +588,10 @@ export default function IncidentDetailPage() {
                   <TabsTrigger value="activity" className="gap-1" data-testid="tab-activity">
                     <Activity className="h-4 w-4" />
                     Actividad ({incident.activities?.length || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="warranty" className="gap-1" data-testid="tab-warranty">
+                    <ShieldCheck className="h-4 w-4" />
+                    Hoja de Garantía
                   </TabsTrigger>
                 </TabsList>
               </CardHeader>
@@ -651,6 +727,153 @@ export default function IncidentDetailPage() {
                       </div>
                     )}
                   </ScrollArea>
+                </TabsContent>
+
+                {/* ── Warranty Sheet Tab ─────────────────────────────────── */}
+                <TabsContent value="warranty" className="m-0">
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Completa o ajusta los datos antes de descargar o enviar la Hoja de Garantía. Los campos se pre-llenan desde el incidente.
+                    </p>
+
+                    {/* Product / Equipment */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Producto / Equipo</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Nombre del producto</Label>
+                          <Input
+                            value={warrantyForm.productName}
+                            onChange={e => setWarrantyForm(f => ({ ...f, productName: e.target.value }))}
+                            placeholder="Ej: Bomba centrífuga modelo X"
+                            data-testid="input-warranty-product-name"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">SKU / Modelo</Label>
+                          <Input
+                            value={warrantyForm.productSku}
+                            onChange={e => setWarrantyForm(f => ({ ...f, productSku: e.target.value }))}
+                            placeholder="Ej: BCX-2200"
+                            data-testid="input-warranty-product-sku"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Número de serie</Label>
+                          <Input
+                            value={warrantyForm.warrantySerialNumber}
+                            onChange={e => setWarrantyForm(f => ({ ...f, warrantySerialNumber: e.target.value }))}
+                            placeholder="Ej: SN-2024-00123"
+                            data-testid="input-warranty-serial"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Referencia / No. parte</Label>
+                          <Input
+                            value={warrantyForm.referenceNumber}
+                            onChange={e => setWarrantyForm(f => ({ ...f, referenceNumber: e.target.value }))}
+                            placeholder="Ej: REF-4567"
+                            data-testid="input-warranty-reference"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Contact */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Contacto del cliente</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Nombre contacto</Label>
+                          <Input
+                            value={warrantyForm.contactName}
+                            onChange={e => setWarrantyForm(f => ({ ...f, contactName: e.target.value }))}
+                            placeholder="Nombre"
+                            data-testid="input-warranty-contact-name"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Correo electrónico</Label>
+                          <Input
+                            type="email"
+                            value={warrantyForm.contactEmail}
+                            onChange={e => setWarrantyForm(f => ({ ...f, contactEmail: e.target.value }))}
+                            placeholder="correo@cliente.com"
+                            data-testid="input-warranty-contact-email"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Teléfono</Label>
+                          <Input
+                            value={warrantyForm.contactPhone}
+                            onChange={e => setWarrantyForm(f => ({ ...f, contactPhone: e.target.value }))}
+                            placeholder="Ej: 55 1234 5678"
+                            data-testid="input-warranty-contact-phone"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Observations */}
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observaciones / Condición del equipo</Label>
+                      <Textarea
+                        value={warrantyForm.observations}
+                        onChange={e => setWarrantyForm(f => ({ ...f, observations: e.target.value }))}
+                        placeholder="Describe el estado del equipo al momento de la recepción, daños visibles, accesorios incluidos, etc."
+                        rows={3}
+                        data-testid="input-warranty-observations"
+                      />
+                    </div>
+
+                    <Separator />
+
+                    {/* Email options */}
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="cc-admins"
+                        checked={ccAdmins}
+                        onCheckedChange={setCcAdmins}
+                        data-testid="switch-cc-admins"
+                      />
+                      <Label htmlFor="cc-admins" className="text-sm cursor-pointer">
+                        Enviar copia (CC) a administradores
+                      </Label>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        onClick={handleDownloadWarrantyPDF}
+                        disabled={isDownloadingWarranty}
+                        data-testid="button-download-warranty-pdf"
+                      >
+                        {isDownloadingWarranty ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-2" />
+                        )}
+                        Descargar PDF
+                      </Button>
+                      <Button
+                        onClick={handleSendWarrantyEmail}
+                        disabled={isSendingWarrantyEmail || !warrantyForm.contactEmail}
+                        data-testid="button-send-warranty-email"
+                      >
+                        {isSendingWarrantyEmail ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4 mr-2" />
+                        )}
+                        Enviar por correo
+                      </Button>
+                    </div>
+                  </div>
                 </TabsContent>
               </CardContent>
             </Tabs>

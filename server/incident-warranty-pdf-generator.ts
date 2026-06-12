@@ -47,6 +47,8 @@ export interface WarrantyIncidentData {
   assignedArea?: string | null;
   // Resolution (optional — if already resolved)
   resolution?: string | null;
+  // User-provided observations (editable before PDF)
+  observations?: string | null;
   // Tenant branding
   tenant?: TenantBranding | null;
 }
@@ -151,7 +153,7 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   const TITLE_H = 30;
   doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
   doc.fontSize(12).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("HOJA DE GARANTÍA / DEVOLUCIÓN", MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.65 });
+  doc.text("HOJA DE GARANTÍA", MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.65 });
   doc.fontSize(8.5).font("Helvetica").fillColor(primaryColor);
   doc.text(`Generado: ${fmtDate(now)}`, MARGIN + CONTENT_W * 0.65, TITLE_Y + 10, { width: CONTENT_W * 0.35, align: "right" });
 
@@ -275,8 +277,16 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text("OBSERVACIONES / CONDICIÓN DEL EQUIPO", MARGIN + 6, Y + 4);
   Y += 15;
-  doc.rect(MARGIN, Y, CONTENT_W, 56).stroke(mediumColor);
-  Y += 56 + 12;
+  if (data.observations) {
+    const obsH = Math.max(44, Math.min(90, Math.ceil(data.observations.length / 90) * 12 + 16));
+    doc.rect(MARGIN, Y, CONTENT_W, obsH).fill(lightColor);
+    doc.fontSize(8).font("Helvetica").fillColor("#374151");
+    doc.text(data.observations, MARGIN + 6, Y + 6, { width: CONTENT_W - 12, lineBreak: true, height: obsH - 10, ellipsis: true });
+    Y += obsH + 12;
+  } else {
+    doc.rect(MARGIN, Y, CONTENT_W, 56).stroke(mediumColor);
+    Y += 56 + 12;
+  }
 
   // ── SIGNATURE BOXES ───────────────────────────────────────────────────────
   if (Y > 630) { doc.addPage(); Y = 40; }
