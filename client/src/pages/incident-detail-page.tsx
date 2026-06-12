@@ -53,6 +53,7 @@ import {
   Image,
   Video,
   File,
+  ShieldCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -393,6 +394,19 @@ export default function IncidentDetailPage() {
               Descargar PDF
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={() => {
+              const a = document.createElement("a");
+              a.href = `/api/incidents/${incident.id}/warranty-pdf`;
+              a.download = `Garantia-${incident.ticketNumber}.pdf`;
+              a.click();
+            }}
+            data-testid="button-download-warranty-pdf"
+          >
+            <ShieldCheck className="h-4 w-4 mr-2" />
+            Hoja de Garantía
+          </Button>
         </div>
       </div>
 

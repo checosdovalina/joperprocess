@@ -6243,6 +6243,57 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Download incident Warranty Sheet PDF (authenticated)
+  app.get("/api/incidents/:id/warranty-pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantId = (req.user as any)?.tenantId;
+      const incident = await db.query.incidents.findFirst({
+        where: tenantId
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
+        with: { customer: true, assignee: true, product: true, order: true, invoice: true },
+      });
+      if (!incident) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, incident.tenantId) });
+
+      const { generateIncidentWarrantyPDF } = await import("./incident-warranty-pdf-generator");
+      const stream = await generateIncidentWarrantyPDF({
+        ticketNumber: incident.ticketNumber,
+        type: incident.type,
+        status: incident.status,
+        urgency: incident.urgency,
+        subject: incident.subject,
+        description: incident.description,
+        createdAt: incident.createdAt,
+        customerName: incident.customer?.name || "—",
+        customerAddress: incident.customer?.address,
+        customerCity: [incident.customer?.city, incident.customer?.state].filter(Boolean).join(", ") || null,
+        contactName: incident.contactName,
+        contactEmail: incident.contactEmail,
+        contactPhone: incident.contactPhone,
+        productName: incident.product?.name || null,
+        productSku: incident.product?.sku || null,
+        warrantySerialNumber: incident.warrantySerialNumber,
+        referenceNumber: incident.referenceNumber,
+        orderFolio: incident.order?.folio || null,
+        invoiceFolio: (incident.invoice as any)?.folio || null,
+        assigneeName: incident.assignee?.fullName || null,
+        assignedArea: incident.assignedArea,
+        resolution: incident.resolution,
+        tenant: tenant ?? null,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Garantia-${incident.ticketNumber}.pdf"`);
+      stream.pipe(res);
+    } catch (error: any) {
+      console.error("Error generating warranty PDF:", error);
+      res.status(500).json({ error: error.message || "Error al generar la hoja de garantía" });
+    }
+  });
+
   // Download incident as PDF (public)
   app.get("/api/public/incidents/:token/pdf", async (req, res) => {
     try {
