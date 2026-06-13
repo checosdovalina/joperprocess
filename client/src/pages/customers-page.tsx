@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Plus, Pencil, Search, X, Mail, Phone, MapPin, Building, CreditCard, Calendar, Trash2, Loader2 } from "lucide-react";
+import { Users, UserCheck, UserX, Plus, Pencil, Search, X, Mail, Phone, MapPin, Building, CreditCard, Calendar, Trash2, Loader2, FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CustomerForm } from "@/components/customer-form";
 import {
@@ -57,6 +57,7 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked">("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
+  const [downloadingStatementId, setDownloadingStatementId] = useState<string | null>(null);
 
   const { data: customers, isLoading } = useEntityQuery<Customer[]>("/api/customers");
 
@@ -176,6 +177,25 @@ export default function CustomersPage() {
   const handleCloseForm = () => {
     setFormOpen(false);
     setEditingCustomer(undefined);
+  };
+
+  const handleDownloadStatement = async (customer: Customer) => {
+    setDownloadingStatementId(customer.id);
+    try {
+      const res = await fetch(`/api/customers/${customer.id}/account-statement-pdf`);
+      if (!res.ok) throw new Error("Error al generar PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `estado-cuenta-${customer.name.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 40)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Error", description: "No se pudo generar el estado de cuenta.", variant: "destructive" });
+    } finally {
+      setDownloadingStatementId(null);
+    }
   };
 
   return (
@@ -363,6 +383,18 @@ export default function CustomersPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Descargar Estado de Cuenta"
+                            onClick={(e) => { e.stopPropagation(); handleDownloadStatement(customer); }}
+                            disabled={downloadingStatementId === customer.id}
+                            data-testid={`button-statement-customer-${customer.id}`}
+                          >
+                            {downloadingStatementId === customer.id
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <FileText className="h-4 w-4" />}
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
