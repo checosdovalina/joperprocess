@@ -1093,10 +1093,10 @@ class MicrosipSyncService {
         CREDITOS AS (
           SELECT
             I.DOCTO_CC_ACR_ID,
-            SUM(I.IMPORTE + COALESCE(I.DSCTO_PPAG,0)) AS CREDITO_APLICADO
+            SUM(I.IMPORTE + COALESCE(I.IMPUESTO,0) + COALESCE(I.DSCTO_PPAG,0)) AS CREDITO_APLICADO
           FROM IMPORTES_DOCTOS_CC I
           WHERE I.DOCTO_CC_ACR_ID IS NOT NULL
-            AND I.TIPO_IMPTE = 'R'
+            AND I.TIPO_IMPTE IN ('R', 'A')
           GROUP BY I.DOCTO_CC_ACR_ID
         )
         SELECT
@@ -1190,7 +1190,7 @@ class MicrosipSyncService {
                  SUM(IC.IMPORTE + COALESCE(IC.IMPUESTO,0) + COALESCE(IC.DSCTO_PPAG,0)) AS CREDITO_APLICADO
           FROM IMPORTES_DOCTOS_CC IC
           WHERE IC.DOCTO_CC_ACR_ID IS NOT NULL
-            AND IC.TIPO_IMPTE = 'R'
+            AND IC.TIPO_IMPTE IN ('R', 'A')
           GROUP BY IC.DOCTO_CC_ACR_ID
         ) CR ON CR.DOCTO_CC_ACR_ID = D.DOCTO_CC_ID
         WHERE D.CANCELADO <> 'S'
