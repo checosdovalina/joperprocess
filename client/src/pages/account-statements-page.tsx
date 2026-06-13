@@ -54,7 +54,10 @@ import {
   CalendarClock,
   Calendar,
   X,
+  FileText,
+  Loader2,
 } from "lucide-react";
+import { Customer } from "@shared/schema";
 
 interface CustomerBalance {
   customer: {
@@ -103,6 +106,9 @@ export default function AccountStatementsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [linkLoadingId, setLinkLoadingId] = useState<string | null>(null);
+  const [anySearch, setAnySearch] = useState("");
+  const [anySearchOpen, setAnySearchOpen] = useState(false);
+  const [downloadingAnyId, setDownloadingAnyId] = useState<string | null>(null);
 
   // Schedule dialog state
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -113,6 +119,10 @@ export default function AccountStatementsPage() {
 
   const { data: statements = [], isLoading, refetch } = useQuery<CustomerBalance[]>({
     queryKey: ["/api/account-statements"],
+  });
+
+  const { data: allCustomers = [] } = useQuery<Customer[]>({
+    queryKey: ["/api/customers"],
   });
 
   const { data: scheduleConfig, refetch: refetchSchedule } = useQuery<{
@@ -180,6 +190,41 @@ export default function AccountStatementsPage() {
 
   const hasDateFilter = dateFrom || dateTo;
   function clearDates() { setDateFrom(""); setDateTo(""); }
+
+  const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  const anyCustomerResults = useMemo(() => {
+    if (!anySearch.trim() || anySearch.length < 2) return [];
+    const q = normalize(anySearch);
+    return allCustomers
+      .filter(c =>
+        normalize(c.name).includes(q) ||
+        normalize(c.rfc ?? "").includes(q) ||
+        normalize(c.email ?? "").includes(q)
+      )
+      .slice(0, 8);
+  }, [anySearch, allCustomers]);
+
+  async function handleDownloadAny(customer: Customer) {
+    setDownloadingAnyId(customer.id);
+    try {
+      const res = await fetch(`/api/customers/${customer.id}/account-statement-pdf`);
+      if (!res.ok) throw new Error("Error al generar PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `estado-cuenta-${customer.name.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 40)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setAnySearch("");
+      setAnySearchOpen(false);
+    } catch {
+      toast({ title: "Error", description: "No se pudo generar el estado de cuenta.", variant: "destructive" });
+    } finally {
+      setDownloadingAnyId(null);
+    }
+  }
 
   const allSelected = filtered.length > 0 && filtered.every((s) => selected.has(s.customer.id));
 
@@ -437,6 +482,47 @@ export default function AccountStatementsPage() {
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Row 3: search any customer */}
+        <div className="flex items-center gap-2 pt-1 border-t">
+          <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground shrink-0 whitespace-nowrap">Estado de cuenta:</span>
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              data-testid="input-any-customer-search"
+              placeholder="Buscar cualquier cliente (nombre, RFC)…"
+              className="pl-9"
+              value={anySearch}
+              onChange={(e) => { setAnySearch(e.target.value); setAnySearchOpen(true); }}
+              onFocus={() => setAnySearchOpen(true)}
+              onBlur={() => setTimeout(() => setAnySearchOpen(false), 150)}
+            />
+            {anySearchOpen && anyCustomerResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-popover shadow-md overflow-hidden">
+                {anyCustomerResults.map((c) => (
+                  <button
+                    key={c.id}
+                    data-testid={`option-any-customer-${c.id}`}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2 text-sm hover-elevate text-left"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleDownloadAny(c)}
+                    disabled={downloadingAnyId === c.id}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{c.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">{c.rfc ?? ""}{c.rfc && c.email ? " · " : ""}{c.email ?? ""}</div>
+                    </div>
+                    {downloadingAnyId === c.id
+                      ? <Loader2 className="w-4 h-4 shrink-0 animate-spin text-muted-foreground" />
+                      : <Download className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <span className="text-xs text-muted-foreground hidden sm:inline">— genera PDF aunque no tenga saldo</span>
         </div>
       </div>
 
