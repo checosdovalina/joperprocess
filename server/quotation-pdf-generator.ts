@@ -245,10 +245,23 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     // CURRENCY SETUP
     // ═══════════════════════════════════════════════
-    // Treat legacy "AMBAS" quotations as MXN
     const rawQuoteCurrency = quotation.currency || "MXN";
-    const quoteCurrency = (rawQuoteCurrency === "AMBAS" ? "MXN" : rawQuoteCurrency) as "MXN" | "USD";
     const exRate = parseFloat(String((quotation as any).exchangeRate || "18")) || 18;
+
+    // Detect item-level currencies first so we can infer the effective quote currency
+    const mxnItems = items.filter(i => ((i as any).currency || "MXN") === "MXN");
+    const usdItems = items.filter(i => (i as any).currency === "USD");
+    const showMonColumn = mxnItems.length > 0 && usdItems.length > 0;
+
+    // For AMBAS quotations: infer effective currency from actual items
+    //   - all USD items → display as USD
+    //   - all MXN items (or mixed) → display as MXN (mixed is handled via showMonColumn path)
+    let quoteCurrency: "MXN" | "USD";
+    if (rawQuoteCurrency === "AMBAS") {
+      quoteCurrency = (usdItems.length > 0 && mxnItems.length === 0) ? "USD" : "MXN";
+    } else {
+      quoteCurrency = rawQuoteCurrency as "MXN" | "USD";
+    }
 
     const convertToQuote = (amount: number, itemCurrency: string): number => {
       if (itemCurrency === quoteCurrency) return amount;
@@ -256,11 +269,6 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       if (itemCurrency === "MXN" && quoteCurrency === "USD") return amount / exRate;
       return amount;
     };
-
-    // Show "Mon." column only when items have MIXED currencies (legacy AMBAS quotations)
-    const mxnItems = items.filter(i => ((i as any).currency || "MXN") === "MXN");
-    const usdItems = items.filter(i => (i as any).currency === "USD");
-    const showMonColumn = mxnItems.length > 0 && usdItems.length > 0;
 
     const discountPct = parseFloat(quotation.globalDiscount || "0");
 
@@ -432,15 +440,21 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
 
       currentY += Math.max(mxnH, usdH) + 20;
     } else {
-      // Single currency totals box
+      // Single currency totals box — always recalculate from line items so that
+      // AMBAS quotations where all items are USD show correct USD amounts
+      // (quotation.subtotal is stored in the aggregation currency which may differ)
       const TOTALS_W = 200;
       const TOTALS_X = PAGE_W - MARGIN - TOTALS_W;
-      const subtotalVal = parseFloat(String(quotation.subtotal));
+
+      const subtotalVal = items.reduce((s, i) => {
+        const sub = parseFloat(String(i.subtotal)) || 0;
+        const iCur = (i as any).currency || "MXN";
+        return s + convertToQuote(sub, iCur);
+      }, 0);
       const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
-      const taxVal = isForeignCustomer ? 0 : parseFloat(String(quotation.tax));
-      const totalVal = isForeignCustomer
-        ? subtotalVal - discountAmt
-        : parseFloat(String(quotation.total));
+      const subtotalAfterDisc = subtotalVal - discountAmt;
+      const taxVal = isForeignCustomer ? 0 : subtotalAfterDisc * 0.16;
+      const totalVal = subtotalAfterDisc + (isForeignCustomer ? 0 : taxVal);
 
       const quoteLabel = quoteCurrency === "USD" ? "DÓLARES AMERICANOS (USD)" : "PESOS MEXICANOS (MXN)";
       const quoteColor = quoteCurrency === "USD" ? "#1a6b3a" : primaryColor;
