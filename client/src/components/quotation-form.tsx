@@ -367,6 +367,25 @@ export function QuotationForm({
     });
   }, [calculateLineItem]);
 
+  const toggleLineCurrency = useCallback((index: number) => {
+    const exRate = Math.max(parseFloat(form.getValues("exchangeRate")) || 18, 0.0001);
+    setLineItems(prev => {
+      const newItems = [...prev];
+      const item = newItems[index];
+      const fromUSD = item.currency === "USD";
+      const newCurrency = fromUSD ? "MXN" : "USD";
+      const factor = fromUSD ? exRate : 1 / exRate;
+      const newListPrice = (parseFloat(item.listPrice) || 0) * factor;
+      const updated: QuotationLineItem = {
+        ...item,
+        currency: newCurrency,
+        listPrice: newListPrice.toFixed(2),
+      };
+      newItems[index] = calculateLineItem(updated, 'discountPercent');
+      return newItems;
+    });
+  }, [calculateLineItem, form]);
+
   const addProduct = useCallback((index: number, product: ProductWithCategory) => {
     const DEFAULT_DISCOUNT = 47;
     const listPrice = parseFloat(product.listPrice);
@@ -1151,7 +1170,7 @@ export function QuotationForm({
                                     size="sm"
                                     className="text-xs font-mono px-2 h-6"
                                     data-testid={`badge-currency-${index}`}
-                                    onClick={() => updateLineItem(index, { currency: item.currency === "USD" ? "MXN" : "USD" })}
+                                    onClick={() => toggleLineCurrency(index)}
                                   >
                                     {item.currency || "MXN"}
                                   </Button>
@@ -1243,7 +1262,7 @@ export function QuotationForm({
                                   variant="outline"
                                   size="sm"
                                   className="text-xs font-mono px-2 h-6 shrink-0 mt-0.5"
-                                  onClick={() => updateLineItem(index, { currency: item.currency === "USD" ? "MXN" : "USD" })}
+                                  onClick={() => toggleLineCurrency(index)}
                                 >
                                   {item.currency || "MXN"}
                                 </Button>
