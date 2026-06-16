@@ -39,6 +39,7 @@ import {
   ChevronRight,
   ShieldCheck,
   FileText,
+  Truck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -48,6 +49,10 @@ interface ReleaseOrderItem {
   productName: string;
   quantity: string;
   unitOfMeasure: string;
+  unitPrice: string;
+  discountPercent: string;
+  subtotal: string;
+  currency: string;
 }
 
 interface ReleaseOrder {
@@ -60,6 +65,16 @@ interface ReleaseOrder {
   purchaseOrder: string | null;
   quotationTotal: string;
   currency: string;
+  paymentTerms: string | null;
+  deliveryTime: string | null;
+  conditions: string | null;
+  subtotal: string;
+  globalDiscount: string;
+  tax: string;
+  exchangeRate: string | null;
+  shippingHandledByJoper: boolean;
+  shippingMethod: string | null;
+  shippingCost: string;
   creditReleaseDate: string | null;
   shippingDate: string | null;
   notes: string | null;
@@ -76,9 +91,16 @@ function formatDate(d: string | null | undefined) {
   return format(new Date(d), "dd/MM/yyyy", { locale: es });
 }
 
-function formatMoney(amount: string, currency: string) {
-  const num = parseFloat(amount || "0");
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: currency || "MXN" }).format(num);
+function formatMoney(amount: string | number, currency?: string) {
+  const num = typeof amount === "string" ? parseFloat(amount || "0") : amount;
+  const curr = currency && /^[A-Z]{3}$/.test(currency) ? currency : "MXN";
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency: curr }).format(num);
+}
+
+function formatPercent(val: string | null | undefined) {
+  const n = parseFloat(val || "0");
+  if (n === 0) return "—";
+  return `${n.toFixed(1)}%`;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -93,6 +115,15 @@ const STATUS_COLOR: Record<string, string> = {
   rejected: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
 };
 
+function InfoCell({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-xs text-muted-foreground font-medium">{label}</p>
+      <p className="text-sm font-semibold text-foreground">{value || "—"}</p>
+    </div>
+  );
+}
+
 function OrderCard({
   order,
   onApprove,
@@ -106,10 +137,16 @@ function OrderCard({
 }) {
   const [expanded, setExpanded] = useState(false);
 
+  const hasTax = parseFloat(order.tax || "0") > 0;
+  const hasDiscount = parseFloat(order.globalDiscount || "0") > 0;
+  const hasShipping = parseFloat(order.shippingCost || "0") > 0;
+  const isUSD = order.currency === "USD";
+
   return (
     <Card className="overflow-hidden" data-testid={`card-release-order-${order.id}`}>
+      {/* Header row — always visible */}
       <div
-        className="flex items-start gap-4 p-4 cursor-pointer select-none"
+        className="flex items-start gap-3 p-4 cursor-pointer select-none"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="mt-0.5 shrink-0 p-2 rounded-md bg-muted">
@@ -122,31 +159,20 @@ function OrderCard({
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[order.releaseStatus] || "bg-muted text-muted-foreground"}`}>
               {STATUS_LABEL[order.releaseStatus] || order.releaseStatus}
             </span>
+            {isUSD && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 font-medium">USD</span>
+            )}
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <User className="h-3 w-3" />
-              {order.vendedorName}
-            </span>
+            <span className="flex items-center gap-1"><User className="h-3 w-3" />{order.vendedorName}</span>
+            <span className="flex items-center gap-1 text-foreground font-semibold">{formatMoney(order.quotationTotal, order.currency)}</span>
             {order.creditReleaseDate && (
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                Lib. C&amp;C: {formatDate(order.creditReleaseDate)}
-              </span>
+              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Lib. C&C: {formatDate(order.creditReleaseDate)}</span>
             )}
             {order.shippingDate && (
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                Embarque: {formatDate(order.shippingDate)}
-              </span>
+              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Embarque: {formatDate(order.shippingDate)}</span>
             )}
-            <span className="font-medium text-foreground">
-              {formatMoney(order.quotationTotal, order.currency)}
-            </span>
           </div>
-          {order.notes && (
-            <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{order.notes}</p>
-          )}
           {order.releaseStatus !== "pending" && order.releasedAt && (
             <p className="mt-1 text-xs text-muted-foreground">
               {order.releaseStatus === "approved" ? "Liberado" : "Rechazado"} el {formatDate(order.releasedAt)}
@@ -166,77 +192,139 @@ function OrderCard({
       {expanded && (
         <>
           <Separator />
-          <div className="px-4 py-3 bg-muted/30 space-y-4">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-              <div>
-                <span className="text-muted-foreground font-medium">Folio:</span>{" "}
-                <span className="font-semibold">{order.folio}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground font-medium">Total:</span>{" "}
-                <span className="font-semibold">{formatMoney(order.quotationTotal, order.currency)}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground font-medium">Vendedor:</span>{" "}
-                <span>{order.vendedorName}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground font-medium">Lib. C&amp;C:</span>{" "}
-                <span>{formatDate(order.creditReleaseDate)}</span>
-              </div>
-              {order.customerRfc && (
-                <div>
-                  <span className="text-muted-foreground font-medium">RFC:</span>{" "}
-                  <span>{order.customerRfc}</span>
-                </div>
-              )}
-              {order.purchaseOrder && (
-                <div>
-                  <span className="text-muted-foreground font-medium">Orden de Compra:</span>{" "}
-                  <span>{order.purchaseOrder}</span>
-                </div>
-              )}
-              {order.notes && (
-                <div className="col-span-2">
-                  <span className="text-muted-foreground font-medium">Notas:</span>{" "}
-                  <span>{order.notes}</span>
-                </div>
-              )}
-              {order.releaseStatus === "rejected" && order.releaseNotes && (
-                <div className="col-span-2">
-                  <span className="text-muted-foreground font-medium">Motivo de rechazo:</span>{" "}
-                  <span className="text-destructive">{order.releaseNotes}</span>
-                </div>
+          <div className="space-y-5 px-4 py-4">
+
+            {/* ── Summary chips ── */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <InfoCell label="Folio" value={order.folio} />
+              <InfoCell label="Cliente" value={order.customerName} />
+              {order.customerRfc && <InfoCell label="RFC" value={order.customerRfc} />}
+              {order.purchaseOrder && <InfoCell label="Orden de Compra" value={order.purchaseOrder} />}
+              <InfoCell label="Vendedor" value={order.vendedorName} />
+              <InfoCell label="Moneda" value={order.currency === "MXN" ? "Pesos MXN" : order.currency === "USD" ? "Dólares USD" : order.currency} />
+              {order.paymentTerms && <InfoCell label="Condiciones de Pago" value={order.paymentTerms} />}
+              {order.deliveryTime && <InfoCell label="Tiempo de Entrega" value={order.deliveryTime} />}
+              {order.creditReleaseDate && <InfoCell label="Lib. Crédito" value={formatDate(order.creditReleaseDate)} />}
+              {order.shippingDate && <InfoCell label="Fecha Embarque" value={formatDate(order.shippingDate)} />}
+              {isUSD && order.exchangeRate && (
+                <InfoCell label="Tipo de Cambio" value={`$${parseFloat(order.exchangeRate).toFixed(2)} MXN/USD`} />
               )}
             </div>
 
+            {/* ── Shipping row ── */}
+            {order.shippingHandledByJoper && (
+              <div className="flex items-center gap-2 text-sm rounded-md border border-border bg-muted/40 px-3 py-2">
+                <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">
+                  Envío por cuenta de la empresa
+                  {order.shippingMethod === "parcel" ? " — Paquetería" : order.shippingMethod === "truck" ? " — Camión" : ""}
+                  {hasShipping ? ` · ${formatMoney(order.shippingCost, order.currency)}` : ""}
+                </span>
+              </div>
+            )}
+
+            {/* ── Notes / conditions ── */}
+            {(order.notes || order.conditions) && (
+              <div className="space-y-1.5">
+                {order.notes && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Notas</p>
+                    <p className="text-sm text-foreground">{order.notes}</p>
+                  </div>
+                )}
+                {order.conditions && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Condiciones</p>
+                    <p className="text-sm text-foreground">{order.conditions}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Rejection reason ── */}
+            {order.releaseStatus === "rejected" && order.releaseNotes && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+                <p className="text-xs font-medium text-destructive mb-0.5">Motivo de rechazo</p>
+                <p className="text-sm text-destructive">{order.releaseNotes}</p>
+              </div>
+            )}
+
+            {/* ── Products table ── */}
             <div className="rounded-md border overflow-hidden">
               <table className="w-full text-xs">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-24">Cantidad</th>
+                <thead>
+                  <tr className="bg-muted border-b">
                     <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Clave</th>
                     <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Descripción</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Cant.</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">P. Unitario</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Desc.</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Subtotal</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {order.items.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-3 py-3 text-center text-muted-foreground">Sin artículos</td>
+                      <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">Sin artículos</td>
                     </tr>
                   ) : order.items.map((item, i) => (
-                    <tr key={i} className="bg-background">
-                      <td className="px-3 py-2 font-medium">
+                    <tr key={i} className="bg-background hover:bg-muted/30 transition-colors">
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{item.productCode || "—"}</td>
+                      <td className="px-3 py-2 max-w-[200px]">{item.productName}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
                         {parseFloat(item.quantity).toLocaleString("es-MX", { maximumFractionDigits: 2 })} {item.unitOfMeasure}
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs">{item.productCode || "—"}</td>
-                      <td className="px-3 py-2">{item.productName}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap font-medium">
+                        {formatMoney(item.unitPrice, item.currency)}
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap text-muted-foreground">
+                        {formatPercent(item.discountPercent)}
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap font-semibold">
+                        {formatMoney(item.subtotal, item.currency)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              {/* Totals footer */}
+              <div className="border-t bg-muted/40 px-4 py-3 space-y-1.5">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>{formatMoney(order.subtotal, order.currency)}</span>
+                </div>
+                {hasDiscount && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Descuento global ({parseFloat(order.globalDiscount).toFixed(1)}%)</span>
+                    <span className="text-green-600 dark:text-green-400">
+                      -{formatMoney(
+                        (parseFloat(order.subtotal) * parseFloat(order.globalDiscount)) / 100,
+                        order.currency
+                      )}
+                    </span>
+                  </div>
+                )}
+                {hasShipping && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Flete</span>
+                    <span>{formatMoney(order.shippingCost, order.currency)}</span>
+                  </div>
+                )}
+                {hasTax && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>IVA</span>
+                    <span>{formatMoney(order.tax, order.currency)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-bold border-t pt-1.5 mt-1">
+                  <span>Total</span>
+                  <span>{formatMoney(order.quotationTotal, order.currency)}</span>
+                </div>
+              </div>
             </div>
 
+            {/* ── Action buttons ── */}
             {onApprove && onReject && order.releaseStatus === "pending" && (
               <div className="flex gap-2 pt-1">
                 <Button
@@ -312,7 +400,7 @@ export default function OrderReleasePage() {
     },
   });
 
-  const isPending = approveMutation.isPending || rejectMutation.isPending;
+  const mutating = approveMutation.isPending || rejectMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -361,7 +449,7 @@ export default function OrderReleasePage() {
                 order={order}
                 onApprove={setApproveTarget}
                 onReject={(o) => { setRejectTarget(o); setRejectNotes(""); }}
-                isPending={isPending}
+                isPending={mutating}
               />
             ))
           )}
@@ -427,11 +515,7 @@ export default function OrderReleasePage() {
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => { setRejectTarget(null); setRejectNotes(""); }}
-              disabled={rejectMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => { setRejectTarget(null); setRejectNotes(""); }} disabled={rejectMutation.isPending}>
               Cancelar
             </Button>
             <Button
