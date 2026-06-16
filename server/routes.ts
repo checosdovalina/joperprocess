@@ -2923,7 +2923,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const adminUsers = quotForRelease.tenantId
               ? await db.select({ email: users.email, fullName: users.fullName })
                   .from(users)
-                  .where(and(eq(users.tenantId, quotForRelease.tenantId), eq(users.role, UserRole.ADMIN), eq(users.active, true)))
+                  .where(and(
+                    eq(users.tenantId, quotForRelease.tenantId),
+                    sql`${users.role} IN (${UserRole.ADMIN}, ${UserRole.VENTAS_LOGISTICA})`,
+                    eq(users.active, true)
+                  ))
               : [];
 
             const rawCurrency = quotForRelease.currency;
@@ -2937,6 +2941,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               quotationTotal: totalDisplay,
               vendedorName: (quotForRelease.user as any)?.fullName || "—",
               tenantName,
+              tenantSubdomain: tenantRecord?.subdomain || undefined,
               adminRecipients: adminUsers.filter(u => u.email).map(u => ({ email: u.email!, name: u.fullName })),
             });
           } catch (err) {
@@ -3934,11 +3939,13 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!order) return res.status(404).json({ error: "Order not found" });
       if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
 
+      const { releaseNotes: approveNotes } = req.body;
       await db.update(orders).set({
         releaseStatus: OrderReleaseStatus.APPROVED,
         releasedById: req.user!.id,
         releasedAt: new Date(),
         updatedAt: new Date(),
+        ...(approveNotes?.trim() && { releaseNotes: approveNotes.trim() }),
       }).where(eq(orders.id, id));
 
       // Send email notifications (fire and forget)

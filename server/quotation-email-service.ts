@@ -763,6 +763,7 @@ interface SendOrderReleasePendingEmailParams {
   quotationTotal: string;
   vendedorName: string;
   tenantName: string;
+  tenantSubdomain?: string;
   adminRecipients: { email: string; name: string }[];
 }
 
@@ -772,6 +773,7 @@ export async function sendOrderReleasePendingEmail({
   quotationTotal,
   vendedorName,
   tenantName,
+  tenantSubdomain,
   adminRecipients,
 }: SendOrderReleasePendingEmailParams): Promise<void> {
   const apiKey = process.env.MAILERSEND_API_KEY;
@@ -783,6 +785,10 @@ export async function sendOrderReleasePendingEmail({
   const ms = new MailerSend({ apiKey });
   const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
   const subject = `Pedido pendiente de liberación — ${orderFolio}`;
+
+  const releaseUrl = tenantSubdomain
+    ? `https://${tenantSubdomain}.nexxo.com.mx/order-release`
+    : "https://nexxo.com.mx/order-release";
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -816,9 +822,14 @@ export async function sendOrderReleasePendingEmail({
                 <span style="color:#111827;font-size:13px;">${vendedorName}</span>
               </div>
             </div>
-            <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
-              <p style="margin:0;color:#92400e;font-size:13px;">
-                <strong>Siguiente paso:</strong> Ingresa al módulo <em>Liberación de Pedidos</em> para aprobar o rechazar este pedido antes de que pase a producción.
+            <div style="text-align:center;margin-bottom:24px;">
+              <a href="${releaseUrl}" style="display:inline-block;background:#1e40af;color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:8px;letter-spacing:0.3px;">
+                Ir a Liberación de Pedidos
+              </a>
+            </div>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin-bottom:8px;">
+              <p style="margin:0;color:#166534;font-size:13px;">
+                <strong>Nota:</strong> Al ingresar al sistema podrás revisar los detalles completos del pedido, agregar comentarios y decidir si lo liberas o rechazas.
               </p>
             </div>
           </div>

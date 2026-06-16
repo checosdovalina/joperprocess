@@ -360,6 +360,7 @@ function OrderCard({
 export default function OrderReleasePage() {
   const { toast } = useToast();
   const [approveTarget, setApproveTarget] = useState<ReleaseOrder | null>(null);
+  const [approveNotes, setApproveNotes] = useState("");
   const [rejectTarget, setRejectTarget] = useState<ReleaseOrder | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
 
@@ -372,13 +373,14 @@ export default function OrderReleasePage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (orderId: string) =>
-      apiRequest("POST", `/api/order-release/${orderId}/approve`),
+    mutationFn: ({ orderId, notes }: { orderId: string; notes: string }) =>
+      apiRequest("POST", `/api/order-release/${orderId}/approve`, { releaseNotes: notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
       toast({ title: "Pedido liberado", description: "Se notificó a los involucrados por correo." });
       setApproveTarget(null);
+      setApproveNotes("");
     },
     onError: () => {
       toast({ variant: "destructive", title: "Error", description: "No se pudo liberar el pedido." });
@@ -472,27 +474,40 @@ export default function OrderReleasePage() {
       </Tabs>
 
       {/* Approve Dialog */}
-      <AlertDialog open={!!approveTarget} onOpenChange={(open) => { if (!open) setApproveTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Liberar pedido {approveTarget?.folio}</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se liberará el pedido y se notificará al vendedor, Crédito &amp; Cobranza y administradores. ¿Confirmas?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={approveMutation.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => approveTarget && approveMutation.mutate(approveTarget.id)}
+      <Dialog open={!!approveTarget} onOpenChange={(open) => { if (!open) { setApproveTarget(null); setApproveNotes(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Liberar pedido {approveTarget?.folio}</DialogTitle>
+            <DialogDescription>
+              Se liberará el pedido y se notificará al vendedor, C&amp;C y administradores.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="approve-notes">Comentarios <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+            <Textarea
+              id="approve-notes"
+              placeholder="Instrucciones especiales, observaciones para producción..."
+              value={approveNotes}
+              onChange={(e) => setApproveNotes(e.target.value)}
+              rows={3}
+              data-testid="textarea-approve-notes"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setApproveTarget(null); setApproveNotes(""); }} disabled={approveMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => approveTarget && approveMutation.mutate({ orderId: approveTarget.id, notes: approveNotes })}
               disabled={approveMutation.isPending}
               data-testid="button-confirm-approve"
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-green-600"
             >
-              {approveMutation.isPending ? "Liberando..." : "Sí, liberar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              {approveMutation.isPending ? "Liberando..." : "Liberar pedido"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reject Dialog */}
       <Dialog open={!!rejectTarget} onOpenChange={(open) => { if (!open) { setRejectTarget(null); setRejectNotes(""); } }}>
