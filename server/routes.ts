@@ -3865,6 +3865,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           shippingDate: shipment?.shippedAt || null,
           creditReleaseDate: creditAuth?.authorizedAt || null,
           comments: o.factoryNotes || null,
+          notes: o.quotation?.notes || null,
           status: o.status,
           createdAt: o.createdAt,
           items: (o.quotation?.items || []).map(item => ({

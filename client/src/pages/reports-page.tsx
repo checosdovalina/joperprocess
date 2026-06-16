@@ -18,7 +18,6 @@ import {
   Download,
   Package,
   Calendar,
-  User,
   ChevronDown,
   ChevronRight,
   Search,
@@ -66,6 +65,7 @@ interface ReportOrder {
   shippingDate?: string | null;
   creditReleaseDate?: string | null;
   comments?: string | null;
+  notes?: string | null;
   status: string;
   createdAt: string;
   items: ReportOrderItem[];
@@ -100,10 +100,6 @@ function OrderCard({ order }: { order: ReportOrder }) {
             </span>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <User className="h-3 w-3" />
-              {order.customerName}
-            </span>
             {order.creditReleaseDate && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
@@ -120,8 +116,8 @@ function OrderCard({ order }: { order: ReportOrder }) {
               <span>OC: {order.purchaseOrder}</span>
             )}
           </div>
-          {order.comments && (
-            <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{order.comments}</p>
+          {order.notes && (
+            <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{order.notes}</p>
           )}
         </div>
 
@@ -166,10 +162,10 @@ function OrderCard({ order }: { order: ReportOrder }) {
                 <span className="text-muted-foreground font-medium">Estatus:</span>{" "}
                 <span>{STATUS_LABELS[order.status] || order.status}</span>
               </div>
-              {order.comments && (
+              {order.notes && (
                 <div className="col-span-2">
-                  <span className="text-muted-foreground font-medium">Comentarios:</span>{" "}
-                  <span>{order.comments}</span>
+                  <span className="text-muted-foreground font-medium">Notas:</span>{" "}
+                  <span>{order.notes}</span>
                 </div>
               )}
             </div>
