@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff, RotateCcw, FileDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -496,6 +497,27 @@ export default function ShipmentsPage() {
               Cliente: {selectedShipment?.order.quotation.customer.name}
             </DialogDescription>
           </DialogHeader>
+
+          {(() => {
+            const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + (item.quantity ?? 0), 0) ?? 0;
+            const captured = productInstances?.length ?? 0;
+            const pct = totalNeeded > 0 ? Math.round((captured / totalNeeded) * 100) : 0;
+            if (totalNeeded === 0) return null;
+            return (
+              <div className="space-y-1.5 px-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Series capturadas</span>
+                  <span className={captured >= totalNeeded ? "font-semibold text-green-600" : "font-semibold"}>
+                    {captured} de {totalNeeded}
+                  </span>
+                </div>
+                <Progress value={pct} className="h-2" />
+                {captured >= totalNeeded && (
+                  <p className="text-xs text-green-600 text-right">Todos los productos tienen serie asignada</p>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="space-y-4">
             {productInstances && productInstances.length > 0 && (
