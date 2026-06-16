@@ -35,6 +35,7 @@ export interface ReportOrder {
   shippingDate?: Date | string | null;
   creditReleaseDate?: Date | string | null;
   comments?: string | null;
+  notes?: string | null;
   status: string;
   items: ReportOrderItem[];
 }
@@ -191,7 +192,8 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
 
         // Estimate height needed for this order
         const itemsH = Math.max(order.items.length, 1) * 16 + 20;
-        const orderH = 58 + itemsH + 14;
+        const notesH = order.notes ? 14 : 0;
+        const orderH = 58 + itemsH + 14 + notesH;
 
         // Page break
         if (currentY + orderH > PAGE_H - 50) {
@@ -249,12 +251,12 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         doc.text(STATUS_LABELS[order.status] || order.status, col2X + 45, cardY, { lineBreak: false });
         cardY += 14;
 
-        // Row 4: Comentarios (if any)
-        if (order.comments) {
+        // Row 4: Notas (from quotation)
+        if (order.notes) {
           doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-          doc.text("Comentarios:", innerX, cardY, { lineBreak: false });
+          doc.text("Notas:", innerX, cardY, { lineBreak: false });
           doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-          doc.text(order.comments, innerX + 70, cardY, { width: innerW - 70, lineBreak: false });
+          doc.text(order.notes, innerX + 38, cardY, { width: innerW - 38, lineBreak: false });
           cardY += 14;
         }
 
