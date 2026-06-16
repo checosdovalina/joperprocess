@@ -3902,7 +3902,9 @@ Proporciona tu análisis en el siguiente formato JSON:
           shippingHandledByJoper: quotation?.shippingHandledByJoper || false,
           shippingMethod: quotation?.shippingMethod || null,
           shippingCost: quotation?.shippingCost || "0",
+          quotationId: o.quotationId,
           items: (quotation?.items || []).map((item: any) => ({
+            id: item.id,
             productCode: item.productCode || null,
             productName: item.productName,
             quantity: item.quantity,
@@ -4076,6 +4078,80 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error rejecting order release:", error);
       res.status(500).json({ error: "Error rejecting order release" });
+    }
+  });
+
+  app.patch("/api/order-release/:id/adjust", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { items, notes, conditions } = req.body as {
+        items?: { id: string; quantity: number; unitPrice: number; discountPercent: number }[];
+        notes?: string;
+        conditions?: string;
+      };
+
+      const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
+
+      const order = await db.query.orders.findFirst({
+        where: and(eq(orders.id, id), resolvedTenantId ? eq(orders.tenantId, resolvedTenantId) : undefined),
+        with: { quotation: { with: { items: true } } },
+      });
+
+      if (!order) return res.status(404).json({ error: "Pedido no encontrado" });
+      if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Solo se pueden ajustar pedidos pendientes de liberación" });
+
+      const quotation = order.quotation as any;
+      if (!quotation) return res.status(400).json({ error: "Cotización no encontrada" });
+
+      // Update each item
+      if (items && items.length > 0) {
+        for (const adj of items) {
+          const qty = Math.max(0.01, adj.quantity);
+          const price = Math.max(0, adj.unitPrice);
+          const disc = Math.min(100, Math.max(0, adj.discountPercent));
+          const subtotal = qty * price * (1 - disc / 100);
+          const taxRate = 16;
+          const taxAmount = subtotal * (taxRate / 100);
+          const total = subtotal + taxAmount;
+          await db.update(quotationItems).set({
+            quantity: String(qty),
+            unitPrice: String(price),
+            discountPercent: String(disc),
+            discountAmount: String(qty * price * (disc / 100)),
+            subtotal: String(subtotal),
+            taxAmount: String(taxAmount),
+            total: String(total),
+          }).where(eq(quotationItems.id, adj.id));
+        }
+      }
+
+      // Recalculate quotation totals from all current items
+      const updatedItems = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, quotation.id),
+      });
+      const newSubtotal = updatedItems.reduce((sum, i) => sum + parseFloat(i.subtotal || "0"), 0);
+      const globalDiscountPct = parseFloat(quotation.globalDiscount || "0");
+      const discountAmt = newSubtotal * (globalDiscountPct / 100);
+      const shippingCost = parseFloat(quotation.shippingCost || "0");
+      const taxableBase = newSubtotal - discountAmt;
+      const newTax = taxableBase * 0.16;
+      const newTotal = taxableBase + newTax + shippingCost;
+
+      const quotationUpdate: Record<string, any> = {
+        subtotal: String(newSubtotal),
+        tax: String(newTax),
+        total: String(newTotal),
+        updatedAt: new Date(),
+      };
+      if (notes !== undefined) quotationUpdate.notes = notes;
+      if (conditions !== undefined) quotationUpdate.conditions = conditions;
+
+      await db.update(quotations).set(quotationUpdate).where(eq(quotations.id, quotation.id));
+
+      res.json({ success: true, newTotal: String(newTotal) });
+    } catch (error) {
+      console.error("Error adjusting order:", error);
+      res.status(500).json({ error: "Error al ajustar el pedido" });
     }
   });
 
