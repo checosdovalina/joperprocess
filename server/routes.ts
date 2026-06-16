@@ -2257,6 +2257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
         : null;
 
+      const hideDiscount = req.query.hideDiscount === "1";
       const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
       const pdfStream = await generateQuotationPDFStream({
         quotation,
@@ -2264,6 +2265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customer: quotation.customer,
         user: quotation.user,
         tenant,
+        hideDiscount,
       });
 
       res.setHeader("Content-Type", "application/pdf");

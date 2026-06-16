@@ -80,6 +80,8 @@ export default function QuotationsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [quotationToDelete, setQuotationToDelete] = useState<QuotationWithDetails | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  const [quotationForPDF, setQuotationForPDF] = useState<QuotationWithDetails | null>(null);
   const [activeTab, setActiveTab] = useState<"active" | "inactive">("active");
   const [hideConverted, setHideConverted] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
@@ -199,22 +201,27 @@ export default function QuotationsPage() {
     }
   };
 
-  const handleDownloadPDF = async (quotation: QuotationWithDetails) => {
+  const handleDownloadPDF = (quotation: QuotationWithDetails) => {
+    setQuotationForPDF(quotation);
+    setPdfDialogOpen(true);
+  };
+
+  const performDownloadPDF = async (quotation: QuotationWithDetails, hideDiscount: boolean) => {
+    setPdfDialogOpen(false);
     setIsDownloading(quotation.id);
     try {
-      const response = await fetch(`/api/quotations/${quotation.id}/pdf`, {
-        credentials: "include",
-      });
+      const url = `/api/quotations/${quotation.id}/pdf${hideDiscount ? "?hideDiscount=1" : ""}`;
+      const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error("Error al generar PDF");
       
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const objectUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = objectUrl;
       a.download = `cotizacion-${quotation.folio}.pdf`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(objectUrl);
       document.body.removeChild(a);
       
       toast({
@@ -1375,6 +1382,44 @@ export default function QuotationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* PDF Download Options Dialog */}
+      <Dialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Descargar PDF
+            </DialogTitle>
+            <DialogDescription>
+              {quotationForPDF?.folio} — ¿Cómo deseas generar el PDF para el cliente?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            <Button
+              variant="outline"
+              className="justify-start gap-3 h-auto py-3"
+              onClick={() => quotationForPDF && performDownloadPDF(quotationForPDF, false)}
+              data-testid="button-pdf-with-discount"
+            >
+              <div className="flex flex-col items-start text-left">
+                <span className="font-medium">Con descuentos</span>
+                <span className="text-xs text-muted-foreground">Muestra la columna Desc% y el desglose de descuento en totales</span>
+              </div>
+            </Button>
+            <Button
+              className="justify-start gap-3 h-auto py-3"
+              onClick={() => quotationForPDF && performDownloadPDF(quotationForPDF, true)}
+              data-testid="button-pdf-no-discount"
+            >
+              <div className="flex flex-col items-start text-left">
+                <span className="font-medium">Sin descuentos</span>
+                <span className="text-xs text-primary-foreground/80">Oculta los descuentos — el cliente solo ve el precio final</span>
+              </div>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

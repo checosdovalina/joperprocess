@@ -26,6 +26,7 @@ interface QuotationPDFData {
   customer: Customer;
   user: User;
   tenant?: TenantBranding | null;
+  hideDiscount?: boolean;
 }
 
 async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
@@ -107,7 +108,7 @@ function lightenColor(hex: string, amount: number): string {
 
 export async function generateQuotationPDFStream(data: QuotationPDFData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
-  const { quotation, items, customer, user, tenant } = data;
+  const { quotation, items, customer, user, tenant, hideDiscount = false } = data;
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
   const companyName = tenant?.legalName || tenant?.name || "Empresa";
@@ -282,17 +283,19 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     currentY += 16;
 
     // Table column widths — squeeze desc slightly when showing Mon. column
+    // When hideDiscount, remove disc column (42px) and add to desc
     const MON_W = showMonColumn ? 32 : 0;
-    const DESC_W = showMonColumn ? 168 : 200;
+    const DISC_W = hideDiscount ? 0 : 42;
+    const DESC_W = showMonColumn ? (168 + (hideDiscount ? 42 : 0)) : (200 + (hideDiscount ? 42 : 0));
     const cols = {
-      num:    { x: MARGIN,                             w: 22       },
-      code:   { x: MARGIN + 22,                        w: 72       },
-      desc:   { x: MARGIN + 94,                        w: DESC_W   },
-      qty:    { x: MARGIN + 94 + DESC_W,               w: 44       },
-      price:  { x: MARGIN + 94 + DESC_W + 44,          w: 72       },
-      disc:   { x: MARGIN + 94 + DESC_W + 44 + 72,     w: 42       },
-      mon:    { x: MARGIN + 94 + DESC_W + 44 + 72 + 42, w: MON_W  },
-      total:  { x: MARGIN + 94 + DESC_W + 44 + 72 + 42 + MON_W, w: 80 },
+      num:    { x: MARGIN,                                   w: 22      },
+      code:   { x: MARGIN + 22,                              w: 72      },
+      desc:   { x: MARGIN + 94,                              w: DESC_W  },
+      qty:    { x: MARGIN + 94 + DESC_W,                     w: 44      },
+      price:  { x: MARGIN + 94 + DESC_W + 44,               w: 72      },
+      disc:   { x: MARGIN + 94 + DESC_W + 44 + 72,          w: DISC_W  },
+      mon:    { x: MARGIN + 94 + DESC_W + 44 + 72 + DISC_W, w: MON_W   },
+      total:  { x: MARGIN + 94 + DESC_W + 44 + 72 + DISC_W + MON_W, w: 80 },
     };
 
     // Table header row
@@ -304,7 +307,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.text("Descripción",cols.desc.x + 2, currentY + 4, { width: cols.desc.w - 2 });
     doc.text("Cant.",      cols.qty.x  + 2, currentY + 4, { width: cols.qty.w  - 4, align: "center" });
     doc.text("P. Unit.",   cols.price.x+ 2, currentY + 4, { width: cols.price.w- 4, align: "right" });
-    doc.text("Desc%",      cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
+    if (!hideDiscount) {
+      doc.text("Desc%",    cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
+    }
     if (showMonColumn) {
       doc.text("Mon.",     cols.mon.x  + 2, currentY + 4, { width: cols.mon.w  - 2, align: "center" });
     }
@@ -353,7 +358,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       doc.text(parseFloat(item.quantity).toString(), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
       const rowFmt = showMonColumn ? (v: number) => fmtItem(v, itemCurrency) : fmtQuote;
       doc.text(rowFmt(displayUnitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
-      doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
+      if (!hideDiscount) {
+        doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
+      }
       if (showMonColumn) {
         doc.fillColor(itemCurrency === "USD" ? "#1a6b3a" : "#444");
         doc.text(itemCurrency, cols.mon.x + 2, rowY, { width: cols.mon.w - 2, align: "center", lineBreak: false });
@@ -433,10 +440,15 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const GAP = 10;
       const BOX2_START = PAGE_W - MARGIN - TOTALS_W * 2 - GAP;
 
+      // When hideDiscount: show post-discount subtotal, pass disc=0 so no discount line appears
       const mxnH = drawTotalsBox(BOX2_START, currentY, TOTALS_W, "PESOS MEXICANOS (MXN)", primaryColor,
-        mxnSub, mxnDisc, mxnTax, mxnTotal, fmtMXN);
+        hideDiscount ? (mxnSub - mxnDisc) : mxnSub,
+        hideDiscount ? 0 : mxnDisc,
+        mxnTax, mxnTotal, fmtMXN);
       const usdH = drawTotalsBox(BOX2_START + TOTALS_W + GAP, currentY, TOTALS_W, "DÓLARES AMERICANOS (USD)", "#1a6b3a",
-        usdSub, usdDisc, 0, usdTotal, fmtUSD);
+        hideDiscount ? (usdSub - usdDisc) : usdSub,
+        hideDiscount ? 0 : usdDisc,
+        0, usdTotal, fmtUSD);
 
       currentY += Math.max(mxnH, usdH) + 20;
     } else {
@@ -459,8 +471,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const quoteLabel = quoteCurrency === "USD" ? "DÓLARES AMERICANOS (USD)" : "PESOS MEXICANOS (MXN)";
       const quoteColor = quoteCurrency === "USD" ? "#1a6b3a" : primaryColor;
 
+      // When hideDiscount: pass post-discount subtotal as "sub", disc=0 → no discount row shown
       const singleH = drawTotalsBox(TOTALS_X, currentY, TOTALS_W, quoteLabel, quoteColor,
-        subtotalVal, discountAmt, taxVal, totalVal, fmtQuote);
+        hideDiscount ? subtotalAfterDisc : subtotalVal,
+        hideDiscount ? 0 : discountAmt,
+        taxVal, totalVal, fmtQuote);
 
       currentY += singleH + 20;
     }
