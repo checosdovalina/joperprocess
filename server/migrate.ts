@@ -15,6 +15,10 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     sql: `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locale text DEFAULT 'es'`,
   },
   {
+    id: "004_add_shipping_approval_token",
+    sql: `ALTER TABLE quotations ADD COLUMN IF NOT EXISTS shipping_approval_token text UNIQUE`,
+  },
+  {
     id: "003_create_account_statement_schedules",
     sql: `CREATE TABLE IF NOT EXISTS account_statement_schedules (
       id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
