@@ -431,7 +431,6 @@ export function QuotationForm({
       const convert = (v: number) => fromMXN ? v / exRate : v * exRate;
       const newListPrice = convert(parseFloat(newItem.listPrice) || 0);
       const newUnitPrice = convert(parseFloat(newItem.unitPrice) || 0);
-      const newMaxDiscount = convert(parseFloat(newItem.maxDiscount) || 0);
       const qty = parseFloat(newItem.quantity) || 1;
       const taxRateNum = parseFloat(newItem.taxRate) || 0;
       const newSubtotal = qty * newUnitPrice;
@@ -441,7 +440,6 @@ export function QuotationForm({
         listPrice: newListPrice.toFixed(2),
         unitPrice: newUnitPrice.toFixed(2),
         discountAmount: (newListPrice - newUnitPrice).toFixed(2),
-        maxDiscount: newMaxDiscount.toFixed(2),
         subtotal: newSubtotal.toFixed(2),
         taxAmount: (newSubtotal * taxRateNum / 100).toFixed(2),
         total: (newSubtotal * (1 + taxRateNum / 100)).toFixed(2),
