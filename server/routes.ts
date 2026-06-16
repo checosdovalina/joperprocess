@@ -2039,6 +2039,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { items, ...quotationData } = req.body;
 
+      // Capture the vendor's intended status BEFORE any internal overrides.
+      // This is the signal that distinguishes "Enviar a Autorización" from "Guardar Borrador".
+      const requestedStatus: string = quotationData.status || QuotationStatus.DRAFT;
+
       // If editing a non-DRAFT quotation, reset it to DRAFT and clear the approval token
       // so the customer link is invalidated and a new one must be sent
       if (existingQuotation.status !== QuotationStatus.DRAFT) {
@@ -2084,11 +2088,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderBy: (items, { asc }) => [asc(items.position)],
       });
 
-      // Send shipping approval email if shippingHandledByJoper is true and approval is pending
-      // This fires for PATCH (edit) because the POST handler already covers creation.
+      // Send shipping approval email when the vendor explicitly clicked "Enviar a Autorización"
+      // (requestedStatus === PENDING_APPROVAL) and the quotation has shipping handled by Joper.
+      // We use requestedStatus (captured before any internal reset) rather than quotationData.status
+      // because our reset code always forces the DB status back to DRAFT on edit.
       const needsShippingEmail =
-        quotationData.shippingHandledByJoper &&
-        quotationData.shippingApprovalStatus === "pending" &&
+        requestedStatus === QuotationStatus.PENDING_APPROVAL &&
+        finalQuotation?.shippingHandledByJoper &&
         finalQuotation?.tenantId;
 
       if (needsShippingEmail) {
