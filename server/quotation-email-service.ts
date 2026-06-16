@@ -755,6 +755,102 @@ export async function sendWarrantySheetEmail({
   console.log(`✅ Warranty sheet email sent for ${ticketNumber}`);
 }
 
+// ─── Order Release Pending Notification ──────────────────────────────────────
+
+interface SendOrderReleasePendingEmailParams {
+  orderFolio: string;
+  customerName: string;
+  quotationTotal: string;
+  vendedorName: string;
+  tenantName: string;
+  adminRecipients: { email: string; name: string }[];
+}
+
+export async function sendOrderReleasePendingEmail({
+  orderFolio,
+  customerName,
+  quotationTotal,
+  vendedorName,
+  tenantName,
+  adminRecipients,
+}: SendOrderReleasePendingEmailParams): Promise<void> {
+  const apiKey = process.env.MAILERSEND_API_KEY;
+  if (!apiKey) {
+    console.warn("MAILERSEND_API_KEY not configured — skipping order release pending email");
+    return;
+  }
+
+  const ms = new MailerSend({ apiKey });
+  const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+  const subject = `Pedido pendiente de liberación — ${orderFolio}`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"></head>
+      <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;background:#f5f5f5;">
+        <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.08);">
+          <div style="background:linear-gradient(135deg,#1e40af 0%,#1e3a8a 100%);padding:28px 32px;">
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Acción requerida: Liberar Pedido</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:13px;">${tenantName} — Sistema Comercial</p>
+          </div>
+          <div style="padding:28px 32px;">
+            <p style="margin:0 0 20px;color:#374151;font-size:14px;">
+              Un pedido acaba de ser <strong>aprobado por Crédito y Cobranza</strong> y está esperando tu autorización para continuar a producción.
+            </p>
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+              <div style="margin-bottom:8px;display:flex;gap:12px;">
+                <span style="color:#6b7280;font-size:13px;min-width:130px;">Pedido:</span>
+                <span style="color:#1e40af;font-size:13px;font-weight:700;">${orderFolio}</span>
+              </div>
+              <div style="margin-bottom:8px;display:flex;gap:12px;">
+                <span style="color:#6b7280;font-size:13px;min-width:130px;">Cliente:</span>
+                <span style="color:#111827;font-size:13px;font-weight:600;">${customerName}</span>
+              </div>
+              <div style="margin-bottom:8px;display:flex;gap:12px;">
+                <span style="color:#6b7280;font-size:13px;min-width:130px;">Monto:</span>
+                <span style="color:#111827;font-size:13px;font-weight:600;">${quotationTotal}</span>
+              </div>
+              <div style="display:flex;gap:12px;">
+                <span style="color:#6b7280;font-size:13px;min-width:130px;">Vendedor:</span>
+                <span style="color:#111827;font-size:13px;">${vendedorName}</span>
+              </div>
+            </div>
+            <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+              <p style="margin:0;color:#92400e;font-size:13px;">
+                <strong>Siguiente paso:</strong> Ingresa al módulo <em>Liberación de Pedidos</em> para aprobar o rechazar este pedido antes de que pase a producción.
+              </p>
+            </div>
+          </div>
+          <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;">${tenantName} — Este es un mensaje automático, por favor no respondas a este correo.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const validRecipients = adminRecipients.filter(r => r.email?.trim());
+  if (validRecipients.length === 0) {
+    console.warn("No valid admin recipients for order release pending email — skipping");
+    return;
+  }
+
+  for (const recipient of validRecipients) {
+    try {
+      const emailParams = new EmailParams()
+        .setFrom(sentFrom)
+        .setTo([new Recipient(recipient.email, recipient.name)])
+        .setSubject(subject)
+        .setHtml(htmlContent);
+      await ms.email.send(emailParams);
+      console.log(`✅ Order release pending email sent to admin: ${recipient.email}`);
+    } catch (err: any) {
+      console.warn(`Failed to send order release pending email to ${recipient.email}:`, err.message || err);
+    }
+  }
+}
+
 // ─── Order Release Email ──────────────────────────────────────────────────────
 
 interface OrderReleaseEmailRecipient {

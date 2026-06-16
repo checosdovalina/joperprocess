@@ -2904,6 +2904,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
           authorizedAt: new Date(),
           convertedToOrderId: order.id,
         });
+
+        // Notify admins that a new order is pending release (fire and forget)
+        (async () => {
+          try {
+            const { sendOrderReleasePendingEmail } = await import("./quotation-email-service");
+            const quotForRelease = await db.query.quotations.findFirst({
+              where: eq(quotations.id, updatedAuth.quotationId),
+              with: { customer: true, user: true },
+            });
+            if (!quotForRelease) return;
+
+            const tenantRecord = quotForRelease.tenantId
+              ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotForRelease.tenantId) })
+              : null;
+            const tenantName = tenantRecord?.name || "Nexxo Sistema Comercial";
+
+            const adminUsers = quotForRelease.tenantId
+              ? await db.select({ email: users.email, fullName: users.fullName })
+                  .from(users)
+                  .where(and(eq(users.tenantId, quotForRelease.tenantId), eq(users.role, UserRole.ADMIN), eq(users.active, true)))
+              : [];
+
+            const rawCurrency = quotForRelease.currency;
+            const safeCurrency = rawCurrency && /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "MXN";
+            const totalDisplay = new Intl.NumberFormat("es-MX", { style: "currency", currency: safeCurrency })
+              .format(parseFloat(quotForRelease.total || "0"));
+
+            await sendOrderReleasePendingEmail({
+              orderFolio: quotForRelease.folio,
+              customerName: quotForRelease.customer?.name || "—",
+              quotationTotal: totalDisplay,
+              vendedorName: (quotForRelease.user as any)?.fullName || "—",
+              tenantName,
+              adminRecipients: adminUsers.filter(u => u.email).map(u => ({ email: u.email!, name: u.fullName })),
+            });
+          } catch (err) {
+            console.warn("[OrderRelease] Pending notification email failed:", err);
+          }
+        })();
       }
 
       // Send email notifications to seller, customer, and admins
