@@ -189,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .leftJoin(quotations, eq(orders.quotationId, quotations.id))
         .leftJoin(customers, eq(quotations.customerId, customers.id))
         .leftJoin(sellerAlias, eq(quotations.userId, sellerAlias.id))
-        .where(orderTenantFilter)
+        .where(orderTenantFilter ? and(orderTenantFilter, eq(orders.releaseStatus, "approved")) : eq(orders.releaseStatus, "approved"))
         .orderBy(sql`${orders.createdAt} DESC`)
         .limit(200);
 

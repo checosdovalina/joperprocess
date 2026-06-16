@@ -386,7 +386,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<Order[]> {
-    return await db.select().from(orders).orderBy(desc(orders.createdAt));
+    return await db.select().from(orders)
+      .where(eq(orders.releaseStatus, "approved"))
+      .orderBy(desc(orders.createdAt));
   }
 
   async createOrder(insertOrder: InsertOrder): Promise<Order> {
@@ -734,6 +736,7 @@ export class TenantScopedStorage {
   async getAllOrders() {
     if (this.ctx.allowGlobal) {
       return await db.query.orders.findMany({
+        where: eq(orders.releaseStatus, "approved"),
         with: {
           quotation: {
             with: {
@@ -746,7 +749,7 @@ export class TenantScopedStorage {
     }
     if (!this.ctx.tenantId) return [];
     return await db.query.orders.findMany({
-      where: eq(orders.tenantId, this.ctx.tenantId),
+      where: and(eq(orders.tenantId, this.ctx.tenantId), eq(orders.releaseStatus, "approved")),
       with: {
         quotation: {
           with: {
