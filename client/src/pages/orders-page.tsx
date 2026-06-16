@@ -338,7 +338,7 @@ export default function OrdersPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>{t("orders.all")}</CardTitle>
+              <CardTitle>Pedidos</CardTitle>
               <CardDescription>
                 {(() => {
                   const terminal = [OrderStatus.SHIPPED, OrderStatus.DELIVERED];
