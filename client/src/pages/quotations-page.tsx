@@ -140,11 +140,17 @@ export default function QuotationsPage() {
     }
   };
 
+  const EDITABLE_STATUSES = [
+    QuotationStatus.DRAFT,
+    QuotationStatus.PENDING_APPROVAL,
+    QuotationStatus.SENT,
+  ];
+
   const handleEdit = async (quotation: QuotationWithDetails) => {
-    if (quotation.status !== QuotationStatus.DRAFT) {
+    if (!EDITABLE_STATUSES.includes(quotation.status as any)) {
       toast({
         title: "No se puede editar",
-        description: "Solo se pueden editar cotizaciones en estado Borrador",
+        description: "Solo se pueden editar cotizaciones en estado Borrador, Enviada o Pendiente de Aprobación",
         variant: "destructive",
       });
       return;
@@ -699,7 +705,7 @@ export default function QuotationsPage() {
                             <Eye className="h-4 w-4" />
                           </Button>
 
-                          {quotation.status === QuotationStatus.DRAFT && (
+                          {EDITABLE_STATUSES.includes(quotation.status as any) && (
                             <Button
                               variant="ghost"
                               size="icon"

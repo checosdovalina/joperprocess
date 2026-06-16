@@ -317,7 +317,9 @@ export function QuotationForm({
     const subtotal = quantity * unitPrice;
     const taxAmount = subtotal * (taxRate / 100);
     const total = subtotal + taxAmount;
-    const exceedsMaxDiscount = discountPercent > maxDiscount;
+    // Only flag when maxDiscount is explicitly set (>0) AND the positive discount exceeds it.
+    // Negative discounts (unit price > list price) must never trigger the approval workflow.
+    const exceedsMaxDiscount = maxDiscount > 0 && discountPercent > 0 && discountPercent > maxDiscount;
 
     return {
       ...item,

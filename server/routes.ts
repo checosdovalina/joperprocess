@@ -2031,12 +2031,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "No autorizado para editar esta cotización" });
       }
 
-      // Only allow editing DRAFT quotations
-      if (existingQuotation.status !== QuotationStatus.DRAFT) {
-        return res.status(400).json({ error: "Solo se pueden editar cotizaciones en estado Borrador" });
+      // Allow editing DRAFT, SENT, and PENDING_APPROVAL quotations
+      const EDITABLE_STATUSES = [QuotationStatus.DRAFT, QuotationStatus.SENT, QuotationStatus.PENDING_APPROVAL];
+      if (!EDITABLE_STATUSES.includes(existingQuotation.status as any)) {
+        return res.status(400).json({ error: "Solo se pueden editar cotizaciones en estado Borrador, Enviada o Pendiente de Aprobación" });
       }
 
       const { items, ...quotationData } = req.body;
+
+      // If editing a non-DRAFT quotation, reset it to DRAFT and clear the approval token
+      // so the customer link is invalidated and a new one must be sent
+      if (existingQuotation.status !== QuotationStatus.DRAFT) {
+        quotationData.status = QuotationStatus.DRAFT;
+        quotationData.approvalToken = null;
+        quotationData.approvedAt = null;
+      }
 
       // Convert date strings to Date objects for Drizzle
       if (quotationData.validUntil && typeof quotationData.validUntil === 'string') {
