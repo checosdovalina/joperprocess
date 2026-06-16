@@ -754,3 +754,128 @@ export async function sendWarrantySheetEmail({
   await ms.email.send(emailParams);
   console.log(`✅ Warranty sheet email sent for ${ticketNumber}`);
 }
+
+// ─── Order Release Email ──────────────────────────────────────────────────────
+
+interface OrderReleaseEmailRecipient {
+  email: string;
+  name: string;
+}
+
+interface SendOrderReleaseEmailParams {
+  status: "approved" | "rejected";
+  orderFolio: string;
+  customerName: string;
+  quotationTotal: string;
+  releaseNotes?: string;
+  tenantName: string;
+  releasedByName: string;
+  recipients: OrderReleaseEmailRecipient[];
+}
+
+export async function sendOrderReleaseEmail({
+  status,
+  orderFolio,
+  customerName,
+  quotationTotal,
+  releaseNotes,
+  tenantName,
+  releasedByName,
+  recipients,
+}: SendOrderReleaseEmailParams): Promise<void> {
+  const apiKey = process.env.MAILERSEND_API_KEY;
+  if (!apiKey) {
+    console.warn("MAILERSEND_API_KEY not configured — skipping order release email");
+    return;
+  }
+
+  const isApproved = status === "approved";
+  const ms = new MailerSend({ apiKey });
+  const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+
+  const subject = isApproved
+    ? `Pedido liberado — ${orderFolio}`
+    : `Pedido rechazado — ${orderFolio}`;
+
+  const headerColor = isApproved
+    ? "linear-gradient(135deg, #15803d 0%, #14532d 100%)"
+    : "linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%)";
+
+  const statusBadge = isApproved
+    ? `<span style="background:#dcfce7;color:#15803d;padding:4px 14px;border-radius:9999px;font-size:13px;font-weight:700;">LIBERADO</span>`
+    : `<span style="background:#fef2f2;color:#b91c1c;padding:4px 14px;border-radius:9999px;font-size:13px;font-weight:700;">RECHAZADO</span>`;
+
+  const detailBox = isApproved
+    ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-top:24px;">
+        <h3 style="margin:0 0 8px;color:#15803d;font-size:14px;">Próximos pasos</h3>
+        <ul style="margin:0;padding-left:20px;color:#374151;font-size:13px;">
+          <li style="margin-bottom:4px;">El pedido ha sido autorizado para producción</li>
+          <li>Puedes consultar el avance desde el panel de pedidos</li>
+        </ul>
+      </div>`
+    : `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:16px 20px;margin-top:24px;">
+        <h3 style="margin:0 0 8px;color:#b91c1c;font-size:14px;">Motivo del rechazo</h3>
+        <p style="margin:0;color:#374151;font-size:13px;">${releaseNotes || "No se proporcionó motivo"}</p>
+      </div>`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"></head>
+      <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;background:#f5f5f5;">
+        <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.08);">
+          <div style="background:${headerColor};padding:28px 32px;">
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Liberación de Pedido</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:13px;">${tenantName} — Sistema Comercial</p>
+          </div>
+          <div style="padding:28px 32px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+              <span style="font-size:15px;font-weight:600;color:#111827;">Estatus:</span>
+              ${statusBadge}
+            </div>
+            <div style="margin-bottom:8px;display:flex;gap:12px;">
+              <span style="color:#6b7280;font-size:13px;min-width:130px;">Pedido:</span>
+              <span style="color:#111827;font-size:13px;font-weight:600;">${orderFolio}</span>
+            </div>
+            <div style="margin-bottom:8px;display:flex;gap:12px;">
+              <span style="color:#6b7280;font-size:13px;min-width:130px;">Cliente:</span>
+              <span style="color:#111827;font-size:13px;font-weight:600;">${customerName}</span>
+            </div>
+            <div style="margin-bottom:8px;display:flex;gap:12px;">
+              <span style="color:#6b7280;font-size:13px;min-width:130px;">Monto:</span>
+              <span style="color:#111827;font-size:13px;font-weight:600;">${quotationTotal}</span>
+            </div>
+            <div style="margin-bottom:8px;display:flex;gap:12px;">
+              <span style="color:#6b7280;font-size:13px;min-width:130px;">Autorizado por:</span>
+              <span style="color:#111827;font-size:13px;">${releasedByName}</span>
+            </div>
+            ${detailBox}
+          </div>
+          <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;">${tenantName} — Este es un mensaje automático, por favor no respondas a este correo.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const validRecipients = recipients.filter(r => r.email && r.email.trim() !== "");
+  if (validRecipients.length === 0) {
+    console.warn("No valid recipients for order release email — skipping");
+    return;
+  }
+
+  for (const recipient of validRecipients) {
+    try {
+      const emailParams = new EmailParams()
+        .setFrom(sentFrom)
+        .setTo([new Recipient(recipient.email, recipient.name)])
+        .setSubject(subject)
+        .setHtml(htmlContent);
+      await ms.email.send(emailParams);
+      console.log(`✅ Order release ${status} email sent to: ${recipient.email}`);
+    } catch (err: any) {
+      console.warn(`Failed to send order release email to ${recipient.email}:`, err.message || err);
+    }
+  }
+}

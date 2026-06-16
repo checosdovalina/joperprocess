@@ -21,6 +21,7 @@ import {
   CreditCard,
   LayoutGrid,
   Mail,
+  ShieldCheck,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -91,6 +92,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { titleKey: "nav.quotations", url: "/quotations", icon: FileText, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA] },
       { titleKey: "nav.credit-auth", url: "/credit-auth", icon: ClipboardCheck, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA] },
+      { titleKey: "nav.order-release", url: "/order-release", icon: ShieldCheck, roles: [UserRole.ADMIN] },
       { titleKey: "nav.orders", url: "/orders", icon: Package, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA] },
     ],
   },

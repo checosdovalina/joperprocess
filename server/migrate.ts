@@ -19,6 +19,15 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     sql: `ALTER TABLE quotations ADD COLUMN IF NOT EXISTS shipping_approval_token text UNIQUE`,
   },
   {
+    id: "005_add_order_release_fields",
+    sql: `
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS release_status text NOT NULL DEFAULT 'pending';
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS release_notes text;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS released_by_id varchar;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS released_at timestamptz;
+    `,
+  },
+  {
     id: "003_create_account_statement_schedules",
     sql: `CREATE TABLE IF NOT EXISTS account_statement_schedules (
       id text PRIMARY KEY DEFAULT gen_random_uuid()::text,

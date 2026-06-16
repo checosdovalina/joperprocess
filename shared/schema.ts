@@ -428,6 +428,13 @@ export const creditAuthorizationComments = pgTable("credit_authorization_comment
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Order Release Status
+export const OrderReleaseStatus = {
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+} as const;
+
 // Orders table
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -439,6 +446,11 @@ export const orders = pgTable("orders", {
   actualDelivery: timestamp("actual_delivery"),
   factoryNotes: text("factory_notes"),
   lastUpdatedBy: varchar("last_updated_by").references(() => users.id),
+  // Admin release workflow
+  releaseStatus: text("release_status").notNull().default(OrderReleaseStatus.PENDING),
+  releaseNotes: text("release_notes"),
+  releasedById: varchar("released_by_id").references(() => users.id),
+  releasedAt: timestamp("released_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

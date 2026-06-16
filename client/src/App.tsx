@@ -66,6 +66,7 @@ import PublicTicketPage from "@/pages/public-ticket-page";
 import TenantsPage from "@/pages/tenants-page";
 import ProductionPage from "@/pages/production-page";
 import ReportsPage from "@/pages/reports-page";
+import OrderReleasePage from "@/pages/order-release-page";
 import ProductionBoardPage from "@/pages/production-board-page";
 import PipelinePage from "@/pages/pipeline-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
@@ -88,6 +89,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/production": "Producción",
   "/board": "Tablero de Producción",
   "/pipeline": "Tablero Ventas",
+  "/order-release": "Liberación de Pedidos",
   "/shipments": "Embarques",
   "/accounts-receivable": "Facturación",
   "/payments": "Cobranza",
@@ -149,6 +151,7 @@ function Router() {
       <ProtectedRoute path="/scheduled-visits" component={ScheduledVisitsPage} />
       <ProtectedRoute path="/quotations" component={QuotationsPage} />
       <ProtectedRoute path="/credit-auth" component={CreditAuthPage} />
+      <ProtectedRoute path="/order-release" component={OrderReleasePage} allowedRoles={[UserRole.ADMIN]} />
       <ProtectedRoute path="/orders" component={OrdersPage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA]} />
       <ProtectedRoute path="/production" component={ProductionPage} allowedRoles={[UserRole.ADMIN, UserRole.FABRICA]} />
       <ProtectedRoute path="/shipments" component={ShipmentsPage} />

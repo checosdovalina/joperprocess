@@ -56,6 +56,7 @@ import {
   QuotationStatus,
   CreditAuthStatus,
   OrderStatus,
+  OrderReleaseStatus,
   ShipmentStatus,
   InvoiceStatus,
   ScheduledVisitStatus,
@@ -3769,6 +3770,252 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error: any) {
       console.error("Error creating order release:", error);
       res.status(400).json({ error: error.message || "Error creating order release" });
+    }
+  });
+
+  // ─── ORDER RELEASE ──────────────────────────────────────────────────────────
+
+  app.get("/api/order-release", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { status } = req.query as { status?: string };
+      const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
+
+      const orderRows = await db.query.orders.findMany({
+        where: resolvedTenantId ? eq(orders.tenantId, resolvedTenantId) : undefined,
+        with: {
+          quotation: {
+            with: {
+              customer: true,
+              items: true,
+              user: true,
+            },
+          },
+        },
+        orderBy: (o, { desc }) => [desc(o.createdAt)],
+      });
+
+      // Get shipments for shipping dates
+      const allShipments = await db.query.shipments.findMany({
+        where: resolvedTenantId ? eq(shipments.tenantId, resolvedTenantId) : undefined,
+      });
+      const shipmentByOrder = new Map(allShipments.map(s => [s.orderId, s]));
+
+      // Get credit authorizations for release dates
+      const allCreditAuths = await db.query.creditAuthorizations.findMany({
+        where: resolvedTenantId
+          ? sql`${creditAuthorizations.quotationId} IN (SELECT id FROM quotations WHERE tenant_id = ${resolvedTenantId})`
+          : undefined,
+      });
+      const creditAuthByQuotation = new Map(allCreditAuths.map(c => [c.quotationId, c]));
+
+      // Get releasedBy user names
+      const releasedByIds = [...new Set(orderRows.map(o => o.releasedById).filter(Boolean))] as string[];
+      const releasedByUsers = releasedByIds.length > 0
+        ? await db.query.users.findMany({ where: sql`${users.id} = ANY(${sql.raw(`ARRAY['${releasedByIds.join("','")}']::varchar[]`)})` })
+        : [];
+      const releasedByMap = new Map(releasedByUsers.map(u => [u.id, u]));
+
+      let filtered = orderRows;
+      if (status === "pending") {
+        filtered = orderRows.filter(o => o.releaseStatus === "pending");
+      } else if (status === "history") {
+        filtered = orderRows.filter(o => o.releaseStatus === "approved" || o.releaseStatus === "rejected");
+      }
+
+      const result = filtered.map(o => {
+        const shipment = shipmentByOrder.get(o.id);
+        const creditAuth = creditAuthByQuotation.get(o.quotationId);
+        const releasedBy = o.releasedById ? releasedByMap.get(o.releasedById) : null;
+        const quotation = o.quotation as any;
+        const vendedor = quotation?.user;
+        const rawCurrency = quotation?.currency;
+        const safeCurrency = rawCurrency && /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "MXN";
+        return {
+          id: o.id,
+          folio: quotation?.folio || o.id.substring(0, 8),
+          customerName: quotation?.customer?.name || "—",
+          customerRfc: quotation?.customer?.rfc || null,
+          vendedorName: vendedor?.fullName || "—",
+          vendedorEmail: vendedor?.email || null,
+          purchaseOrder: quotation?.purchaseOrder || null,
+          quotationTotal: quotation?.total || "0",
+          currency: safeCurrency,
+          creditReleaseDate: creditAuth?.authorizedAt || null,
+          shippingDate: shipment?.shippedAt || null,
+          notes: quotation?.notes || null,
+          releaseStatus: o.releaseStatus,
+          releaseNotes: o.releaseNotes || null,
+          releasedAt: o.releasedAt || null,
+          releasedByName: releasedBy?.fullName || null,
+          createdAt: o.createdAt,
+          items: (quotation?.items || []).map((item: any) => ({
+            productCode: item.productCode || null,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitOfMeasure: item.unitOfMeasure,
+          })),
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching order release list:", error);
+      res.status(500).json({ error: "Error fetching orders" });
+    }
+  });
+
+  app.post("/api/order-release/:id/approve", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
+
+      const order = await db.query.orders.findFirst({
+        where: and(eq(orders.id, id), resolvedTenantId ? eq(orders.tenantId, resolvedTenantId) : undefined),
+        with: {
+          quotation: {
+            with: { customer: true, user: true },
+          },
+        },
+      });
+
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
+
+      await db.update(orders).set({
+        releaseStatus: OrderReleaseStatus.APPROVED,
+        releasedById: req.user!.id,
+        releasedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(orders.id, id));
+
+      // Send email notifications (fire and forget)
+      (async () => {
+        try {
+          const { sendOrderReleaseEmail } = await import("./quotation-email-service");
+          const quotation = order.quotation as any;
+          const tenantName = req.tenant?.name || "Sistema Comercial";
+          const releasedByName = req.user!.fullName;
+
+          // Collect recipients: vendedor + C&C + admins (not the customer)
+          const allUsers = await db.query.users.findMany({
+            where: resolvedTenantId ? eq(users.tenantId, resolvedTenantId) : undefined,
+          });
+          const recipients = allUsers
+            .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
+            .filter(u => u.email)
+            .map(u => ({ email: u.email!, name: u.fullName }));
+
+          // Add vendedor if not already included
+          const vendedorEmail = quotation?.user?.email;
+          const vendedorName = quotation?.user?.fullName;
+          if (vendedorEmail && !recipients.find(r => r.email === vendedorEmail)) {
+            recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
+          }
+
+          const uniqueRecipients = [...new Map(recipients.map(r => [r.email, r])).values()];
+
+          const total = new Intl.NumberFormat("es-MX", {
+            style: "currency",
+            currency: quotation?.currency || "MXN",
+          }).format(parseFloat(quotation?.total || "0"));
+
+          await sendOrderReleaseEmail({
+            status: "approved",
+            orderFolio: quotation?.folio || id,
+            customerName: quotation?.customer?.name || "—",
+            quotationTotal: total,
+            tenantName,
+            releasedByName,
+            recipients: uniqueRecipients,
+          });
+        } catch (emailErr) {
+          console.warn("[OrderRelease] Approve email failed:", emailErr);
+        }
+      })();
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error approving order release:", error);
+      res.status(500).json({ error: "Error approving order release" });
+    }
+  });
+
+  app.post("/api/order-release/:id/reject", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { releaseNotes } = req.body;
+      if (!releaseNotes?.trim()) return res.status(400).json({ error: "Motivo de rechazo requerido" });
+
+      const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
+
+      const order = await db.query.orders.findFirst({
+        where: and(eq(orders.id, id), resolvedTenantId ? eq(orders.tenantId, resolvedTenantId) : undefined),
+        with: {
+          quotation: {
+            with: { customer: true, user: true },
+          },
+        },
+      });
+
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
+
+      await db.update(orders).set({
+        releaseStatus: OrderReleaseStatus.REJECTED,
+        releaseNotes: releaseNotes.trim(),
+        releasedById: req.user!.id,
+        releasedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(orders.id, id));
+
+      // Send email notifications (fire and forget)
+      (async () => {
+        try {
+          const { sendOrderReleaseEmail } = await import("./quotation-email-service");
+          const quotation = order.quotation as any;
+          const tenantName = req.tenant?.name || "Sistema Comercial";
+          const releasedByName = req.user!.fullName;
+
+          const allUsers = await db.query.users.findMany({
+            where: resolvedTenantId ? eq(users.tenantId, resolvedTenantId) : undefined,
+          });
+          const recipients = allUsers
+            .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
+            .filter(u => u.email)
+            .map(u => ({ email: u.email!, name: u.fullName }));
+
+          const vendedorEmail = quotation?.user?.email;
+          const vendedorName = quotation?.user?.fullName;
+          if (vendedorEmail && !recipients.find(r => r.email === vendedorEmail)) {
+            recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
+          }
+
+          const uniqueRecipients = [...new Map(recipients.map(r => [r.email, r])).values()];
+
+          const total = new Intl.NumberFormat("es-MX", {
+            style: "currency",
+            currency: quotation?.currency || "MXN",
+          }).format(parseFloat(quotation?.total || "0"));
+
+          await sendOrderReleaseEmail({
+            status: "rejected",
+            orderFolio: quotation?.folio || id,
+            customerName: quotation?.customer?.name || "—",
+            quotationTotal: total,
+            releaseNotes: releaseNotes.trim(),
+            tenantName,
+            releasedByName,
+            recipients: uniqueRecipients,
+          });
+        } catch (emailErr) {
+          console.warn("[OrderRelease] Reject email failed:", emailErr);
+        }
+      })();
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error rejecting order release:", error);
+      res.status(500).json({ error: "Error rejecting order release" });
     }
   });
 
