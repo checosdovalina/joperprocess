@@ -2084,6 +2084,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderBy: (items, { asc }) => [asc(items.position)],
       });
 
+      // Send shipping approval email if shippingHandledByJoper is true and approval is pending
+      // This fires for PATCH (edit) because the POST handler already covers creation.
+      const needsShippingEmail =
+        quotationData.shippingHandledByJoper &&
+        quotationData.shippingApprovalStatus === "pending" &&
+        finalQuotation?.tenantId;
+
+      if (needsShippingEmail) {
+        (async () => {
+          try {
+            console.log(`[ShippingEmail] PATCH: quotation ${finalQuotation!.folio} requires shipping approval — notifying admins`);
+            const adminUsers = await db.query.users.findMany({
+              where: and(
+                eq(users.tenantId, finalQuotation!.tenantId!),
+                eq(users.role, UserRole.ADMIN)
+              ),
+            });
+            console.log(`[ShippingEmail] Found ${adminUsers.length} admin(s):`, adminUsers.map(u => u.email));
+            const adminEmails = adminUsers
+              .filter((u) => u.email && u.email.includes("@"))
+              .map((u) => ({ email: u.email!, name: u.fullName || u.username }));
+
+            if (adminEmails.length === 0) {
+              console.error(`[ShippingEmail] No admin emails found — skipping`);
+              return;
+            }
+            const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, finalQuotation!.tenantId!) });
+            const customer = await db.query.customers.findFirst({ where: eq(customers.id, finalQuotation!.customerId) });
+
+            const host = req.get("host") || "localhost:5000";
+            const protocol = req.protocol || "https";
+            const quotationUrl = `${protocol}://${host}/quotations`;
+
+            const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
+            await sendShippingApprovalRequestEmail({
+              adminEmails,
+              quotationData: {
+                folio: finalQuotation!.folio,
+                customerName: customer?.name || finalQuotation!.customerId,
+                vendedorName: req.user!.fullName || req.user!.username,
+                total: parseFloat(finalQuotation!.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+                currency: finalQuotation!.currency || "MXN",
+                itemsCount: finalItems.length,
+                shippingMethod: (quotationData as any).shippingMethod || "truck",
+              },
+              quotationUrl,
+              tenantName: tenant?.name || "Nexxo",
+            });
+            console.log(`[ShippingEmail] PATCH notification sent to: ${adminEmails.map(a => a.email).join(", ")}`);
+          } catch (emailErr: any) {
+            console.error("[ShippingEmail] PATCH notification failed:", emailErr.message || emailErr);
+          }
+        })();
+      }
+
       res.json({ ...finalQuotation, items: finalItems });
     } catch (error) {
       console.error("Error updating quotation:", error);
