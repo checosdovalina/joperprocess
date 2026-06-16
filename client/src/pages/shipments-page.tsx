@@ -65,7 +65,10 @@ export default function ShipmentsPage() {
   const [editInvoiceNumber, setEditInvoiceNumber] = useState("");
   const [hideDelivered, setHideDelivered] = useState(true);
   const [searchText, setSearchText] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("status") || "all";
+  });
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
 

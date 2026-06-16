@@ -19,6 +19,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -93,6 +94,7 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
 
 function SellerDashboard({ userName }: { userName: string }) {
   const { t } = useI18n();
+  const [, navigate] = useLocation();
   const { data: stats, isLoading } = useQuery<SellerStats>({
     queryKey: ["/api/dashboard/seller-stats"],
     refetchInterval: 60_000,
@@ -112,6 +114,7 @@ function SellerDashboard({ userName }: { userName: string }) {
       icon: FileText,
       description: t("dashboard.draft-sent"),
       color: "text-blue-600",
+      href: "/quotations",
     },
     {
       title: t("dashboard.checkins-today"),
@@ -119,6 +122,7 @@ function SellerDashboard({ userName }: { userName: string }) {
       icon: Users,
       description: t("dashboard.visits-today"),
       color: "text-green-600",
+      href: "/checkins",
     },
     {
       title: t("dashboard.orders-to-deliver"),
@@ -126,6 +130,7 @@ function SellerDashboard({ userName }: { userName: string }) {
       icon: Truck,
       description: t("dashboard.ready-dispatch"),
       color: "text-emerald-600",
+      href: "/orders",
     },
     {
       title: t("dashboard.month-sales"),
@@ -133,6 +138,7 @@ function SellerDashboard({ userName }: { userName: string }) {
       icon: TrendingUp,
       description: `${format(new Date(), "MMMM yyyy", { locale: es })}`,
       color: "text-indigo-600",
+      href: "/quotations",
     },
   ];
 
@@ -161,7 +167,12 @@ function SellerDashboard({ userName }: { userName: string }) {
               </Card>
             ))
           : kpis.map((kpi) => (
-              <Card key={kpi.title} className="hover-elevate">
+              <Card
+                key={kpi.title}
+                className="hover-elevate cursor-pointer"
+                onClick={() => navigate(kpi.href)}
+                data-testid={`kpi-${kpi.title.toLowerCase().replace(/\s+/g, "-")}`}
+              >
                 <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
                   <kpi.icon className={`h-4 w-4 ${kpi.color}`} />
@@ -287,6 +298,7 @@ function SellerDashboard({ userName }: { userName: string }) {
 
 function GeneralDashboard({ userName, role }: { userName: string; role: string }) {
   const { t } = useI18n();
+  const [, navigate] = useLocation();
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
     refetchInterval: 60_000,
@@ -329,6 +341,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.need-followup"),
       color: "text-blue-600",
       roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA],
+      href: "/quotations",
     },
     {
       title: t("dashboard.checkins-today"),
@@ -337,6 +350,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.visits-done"),
       color: "text-green-600",
       roles: [UserRole.ADMIN],
+      href: "/checkins",
     },
     {
       title: t("dashboard.pending-auth"),
@@ -345,6 +359,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.need-approval"),
       color: "text-orange-600",
       roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA],
+      href: "/credit-auth",
     },
     {
       title: t("dashboard.active-orders"),
@@ -353,6 +368,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.in-production"),
       color: "text-purple-600",
       roles: [UserRole.ADMIN, UserRole.FABRICA, UserRole.VENTAS_LOGISTICA],
+      href: "/orders",
     },
     {
       title: t("dashboard.pending-shipments"),
@@ -361,6 +377,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.to-dispatch"),
       color: "text-indigo-600",
       roles: [UserRole.ADMIN, UserRole.EMBARQUES, UserRole.VENTAS_LOGISTICA],
+      href: "/shipments?status=pending",
     },
     {
       title: t("dashboard.overdue-invoices"),
@@ -369,6 +386,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.need-collection"),
       color: "text-red-600",
       roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA],
+      href: "/invoices?status=overdue",
     },
     {
       title: t("dashboard.month-revenue"),
@@ -377,6 +395,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.total-billed"),
       color: "text-green-600",
       roles: [UserRole.ADMIN, UserRole.FACTURACION, UserRole.CREDITO_COBRANZA],
+      href: "/invoices",
     },
     {
       title: t("dashboard.orders-to-deliver"),
@@ -385,6 +404,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: t("dashboard.ready-dispatch"),
       color: "text-emerald-600",
       roles: [UserRole.ADMIN, UserRole.EMBARQUES, UserRole.VENTAS_LOGISTICA],
+      href: "/orders",
     },
     {
       title: t("dashboard.annual-sales"),
@@ -393,6 +413,7 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
       description: `${t("label.year")} ${new Date().getFullYear()}`,
       color: "text-blue-600",
       roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA],
+      href: "/invoices",
     },
   ];
 
@@ -422,7 +443,12 @@ function GeneralDashboard({ userName, role }: { userName: string; role: string }
               </Card>
             ))
           : metrics.map((metric, index) => (
-              <Card key={index} className="hover-elevate">
+              <Card
+                key={index}
+                className="hover-elevate cursor-pointer"
+                onClick={() => navigate(metric.href)}
+                data-testid={`kpi-${metric.title.toLowerCase().replace(/\s+/g, "-")}`}
+              >
                 <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
                   <metric.icon className={`h-4 w-4 ${metric.color}`} />

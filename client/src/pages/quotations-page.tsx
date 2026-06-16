@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -84,6 +84,13 @@ export default function QuotationsPage() {
   const [hideConverted, setHideConverted] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSeller, setFilterSeller] = useState("all");
+
+  // Pre-apply filter from URL param (e.g. navigating from dashboard)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    if (status) setFilterStatus(status);
+  }, []);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [searchText, setSearchText] = useState("");

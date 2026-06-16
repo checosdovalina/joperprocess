@@ -80,7 +80,10 @@ export default function InvoicesPage() {
   const [searchCliente, setSearchCliente] = useState("");
   const [filterFechaDesde, setFilterFechaDesde] = useState("");
   const [filterFechaHasta, setFilterFechaHasta] = useState("");
-  const [filterEstado, setFilterEstado] = useState("all");
+  const [filterEstado, setFilterEstado] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("status") || "all";
+  });
 
   const { data: invoices, isLoading } = useQuery<InvoiceWithDetails[]>({
     queryKey: ["/api/invoices"],
