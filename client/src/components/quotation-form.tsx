@@ -402,7 +402,7 @@ export function QuotationForm({
     const total = subtotal + taxAmount;
     const exceedsMaxDiscount = maxDiscount > 0 && discountPercent > maxDiscount;
 
-    const newItem: QuotationLineItem = {
+    let newItem: QuotationLineItem = {
       productId: product.id,
       productCode: product.code,
       productName: product.name,
@@ -422,6 +422,31 @@ export function QuotationForm({
       position: index,
       currency: product.currency || "MXN",
     };
+
+    // If the quotation has a fixed currency (USD or MXN), convert the item's prices to match
+    const quoteCurrency = form.getValues("currency") || "AMBAS";
+    if (quoteCurrency !== "AMBAS" && newItem.currency !== quoteCurrency) {
+      const exRate = Math.max(parseFloat(form.getValues("exchangeRate")) || 18, 0.0001);
+      const fromMXN = newItem.currency === "MXN";
+      const convert = (v: number) => fromMXN ? v / exRate : v * exRate;
+      const newListPrice = convert(parseFloat(newItem.listPrice) || 0);
+      const newUnitPrice = convert(parseFloat(newItem.unitPrice) || 0);
+      const newMaxDiscount = convert(parseFloat(newItem.maxDiscount) || 0);
+      const qty = parseFloat(newItem.quantity) || 1;
+      const taxRateNum = parseFloat(newItem.taxRate) || 0;
+      const newSubtotal = qty * newUnitPrice;
+      newItem = {
+        ...newItem,
+        currency: quoteCurrency,
+        listPrice: newListPrice.toFixed(2),
+        unitPrice: newUnitPrice.toFixed(2),
+        discountAmount: (newListPrice - newUnitPrice).toFixed(2),
+        maxDiscount: newMaxDiscount.toFixed(2),
+        subtotal: newSubtotal.toFixed(2),
+        taxAmount: (newSubtotal * taxRateNum / 100).toFixed(2),
+        total: (newSubtotal * (1 + taxRateNum / 100)).toFixed(2),
+      };
+    }
 
     setLineItems(prev => {
       const newItems = [...prev];
