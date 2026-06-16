@@ -22,6 +22,7 @@ interface QuotationItem {
   unitPrice: string;
   discount: string;
   subtotal: string;
+  taxAmount?: string;
   currency?: string;
 }
 
@@ -112,18 +113,28 @@ export default function PublicQuotationApproval() {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(num);
   };
 
-  const formatCurrency = (amount: string | number) => {
-    const num = typeof amount === "string" ? parseFloat(amount) : amount;
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: quotation?.currency || "MXN",
-    }).format(num);
-  };
-
   // Detect mixed currencies in items
   const mxnItems = quotation?.items?.filter(i => (i.currency || "MXN") === "MXN") ?? [];
   const usdItems = quotation?.items?.filter(i => i.currency === "USD") ?? [];
   const hasMixedCurrencies = mxnItems.length > 0 && usdItems.length > 0;
+
+  // Resolve effective display currency — "AMBAS" is not a valid ISO code for Intl
+  const effectiveCurrency: "MXN" | "USD" = (() => {
+    const c = quotation?.currency || "MXN";
+    if (c === "AMBAS") {
+      return (usdItems.length > 0 && mxnItems.length === 0) ? "USD" : "MXN";
+    }
+    return c as "MXN" | "USD";
+  })();
+
+  const formatCurrency = (amount: string | number) => {
+    const num = typeof amount === "string" ? parseFloat(amount) : amount;
+    const locale = effectiveCurrency === "USD" ? "en-US" : "es-MX";
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: effectiveCurrency,
+    }).format(num);
+  };
 
   const discountPct = parseFloat(quotation?.globalDiscount || "0");
 
