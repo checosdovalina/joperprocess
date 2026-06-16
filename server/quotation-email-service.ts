@@ -413,6 +413,8 @@ interface SendShippingApprovalRequestEmailParams {
   };
   quotationUrl: string;
   tenantName: string;
+  approveUrl?: string;
+  rejectUrl?: string;
 }
 
 export async function sendShippingApprovalRequestEmail({
@@ -420,6 +422,8 @@ export async function sendShippingApprovalRequestEmail({
   quotationData,
   quotationUrl,
   tenantName,
+  approveUrl,
+  rejectUrl,
 }: SendShippingApprovalRequestEmailParams): Promise<void> {
   const apiKey = process.env.MAILERSEND_API_KEY;
   if (!apiKey) {
@@ -485,16 +489,32 @@ export async function sendShippingApprovalRequestEmail({
               </div>
             </div>
 
+            ${approveUrl && rejectUrl ? `
+            <div style="text-align:center;margin:24px 0;">
+              <a href="${approveUrl}"
+                 style="display:inline-block;background:#16a34a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,0.15);margin:0 8px 8px 0;">
+                Aprobar envío
+              </a>
+              <a href="${rejectUrl}"
+                 style="display:inline-block;background:#dc2626;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,0.15);margin:0 0 8px 0;">
+                Rechazar
+              </a>
+            </div>
+            <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0;">
+              Puedes aprobar o rechazar directamente desde este correo, o ingresar al sistema para más detalles.
+              <a href="${quotationUrl}" style="color:#c05621;text-decoration:none;">Ver en el sistema</a>
+            </p>
+            ` : `
             <div style="text-align:center;margin:24px 0;">
               <a href="${quotationUrl}"
                  style="display:inline-block;background:linear-gradient(135deg,#c05621 0%,#9c4221 100%);color:#fff;padding:14px 36px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
                 Ver cotización y autorizar
               </a>
             </div>
-
             <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0;">
               Ingresa al sistema para aprobar o rechazar el envío sin costo.
             </p>
+            `}
           </div>
 
           <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:14px 32px;text-align:center;">

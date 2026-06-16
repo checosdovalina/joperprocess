@@ -1944,6 +1944,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const protocol = req.protocol || "https";
             const quotationUrl = `${protocol}://${host}/quotations`;
 
+            // Generate a shipping approval token for one-click email approve/reject
+            const crypto = await import("crypto");
+            const shippingToken = crypto.randomBytes(32).toString("hex");
+            await db.update(quotations)
+              .set({ shippingApprovalToken: shippingToken })
+              .where(eq(quotations.id, quotation.id));
+            const approveUrl = `${protocol}://${host}/autorizar-envio/${shippingToken}`;
+            const rejectUrl = `${protocol}://${host}/autorizar-envio/${shippingToken}`;
+
             const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
             await sendShippingApprovalRequestEmail({
               adminEmails,
@@ -1958,6 +1967,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               },
               quotationUrl,
               tenantName: tenant?.name || "Nexxo",
+              approveUrl,
+              rejectUrl,
             });
             console.log(`[ShippingEmail] Notification sent to: ${adminEmails.map(a => a.email).join(", ")}`);
           } catch (emailErr: any) {
@@ -2123,6 +2134,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const protocol = req.protocol || "https";
             const quotationUrl = `${protocol}://${host}/quotations`;
 
+            // Generate / regenerate shipping approval token for one-click approve/reject
+            const crypto = await import("crypto");
+            const shippingToken = crypto.randomBytes(32).toString("hex");
+            await db.update(quotations)
+              .set({ shippingApprovalToken: shippingToken })
+              .where(eq(quotations.id, finalQuotation!.id));
+            const approveUrl = `${protocol}://${host}/autorizar-envio/${shippingToken}`;
+            const rejectUrl = `${protocol}://${host}/autorizar-envio/${shippingToken}`;
+
             const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
             await sendShippingApprovalRequestEmail({
               adminEmails,
@@ -2137,6 +2157,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               },
               quotationUrl,
               tenantName: tenant?.name || "Nexxo",
+              approveUrl,
+              rejectUrl,
             });
             console.log(`[ShippingEmail] PATCH notification sent to: ${adminEmails.map(a => a.email).join(", ")}`);
           } catch (emailErr: any) {
@@ -2412,6 +2434,195 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error sending quotation email:", error);
       res.status(500).json({ error: "Error al enviar el correo" });
+    }
+  });
+
+  // ─── Public shipping approval/rejection via email token ─────────────────────
+
+  // GET /api/public/shipping-approval/:token — returns quotation info for the public page
+  app.get("/api/public/shipping-approval/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.shippingApprovalToken, token),
+        with: { customer: true, user: true },
+      });
+      if (!quotation) return res.status(404).json({ error: "Token de autorización no válido o ya expiró" });
+
+      const items = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, quotation.id),
+      });
+      const tenant = quotation.tenantId
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
+        : null;
+
+      const alreadyProcessed = quotation.shippingApprovalStatus !== "pending";
+      const decision = quotation.shippingApprovalStatus === "approved"
+        ? "approved"
+        : quotation.shippingApprovalStatus === "rejected"
+          ? "rejected"
+          : undefined;
+
+      res.json({
+        id: quotation.id,
+        folio: quotation.folio,
+        currency: quotation.currency,
+        total: quotation.total,
+        shippingMethod: quotation.shippingMethod,
+        shippingApprovalStatus: quotation.shippingApprovalStatus,
+        alreadyProcessed,
+        decision,
+        rejectionReason: quotation.shippingRejectionReason,
+        customer: quotation.customer ? { name: quotation.customer.name } : undefined,
+        user: quotation.user ? { fullName: quotation.user.fullName || quotation.user.username } : undefined,
+        itemsCount: items.length,
+        tenantName: tenant?.name || "Nexxo Sistema Comercial",
+      });
+    } catch (error) {
+      console.error("Error fetching public shipping approval:", error);
+      res.status(500).json({ error: "Error al cargar la solicitud" });
+    }
+  });
+
+  // POST /api/public/shipping-approve/:token — approve via email link (no auth required)
+  app.post("/api/public/shipping-approve/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.shippingApprovalToken, token),
+        with: { customer: true, user: true },
+      });
+      if (!quotation) return res.status(404).json({ error: "Token no válido" });
+      if (!quotation.shippingHandledByJoper) return res.status(400).json({ error: "Esta cotización no tiene envío por Joper" });
+      if (quotation.shippingApprovalStatus !== "pending") {
+        return res.status(400).json({ error: "Esta solicitud ya fue procesada" });
+      }
+
+      // Run the same approval logic as the authenticated endpoint
+      await db.update(quotations)
+        .set({
+          shippingApprovalStatus: "approved",
+          shippingApprovedAt: new Date(),
+          status: QuotationStatus.SENT,
+        })
+        .where(eq(quotations.id, quotation.id));
+
+      // Generate PDF and send to customer (fire-and-forget)
+      (async () => {
+        try {
+          const crypto = await import("crypto");
+          const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
+          const tenant = quotation.tenantId
+            ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
+            : null;
+          const items = await db.query.quotationItems.findMany({
+            where: eq(quotationItems.quotationId, quotation.id),
+          });
+          const { generateQuotationPDFStream } = await import("./quotation-pdf-generator");
+          const pdfStream = await generateQuotationPDFStream({
+            quotation: { ...quotation, shippingApprovalStatus: "approved" },
+            items,
+            customer: quotation.customer,
+            user: quotation.user,
+            tenant,
+          });
+          let pdfPath: string;
+          if (useLocalStorage()) {
+            pdfPath = await localStorageService.uploadQuotationPdfToStorage(pdfStream, quotation.folio, "token-approval");
+          } else {
+            const objectStorageService = new ObjectStorageService();
+            pdfPath = await objectStorageService.uploadQuotationPdfToStorage(pdfStream, quotation.folio, "token-approval");
+          }
+          await db.update(quotations)
+            .set({ pdfPath, approvalToken })
+            .where(eq(quotations.id, quotation.id));
+
+          const recipients: string[] = [];
+          if (quotation.customer?.email) recipients.push(quotation.customer.email);
+          if (quotation.user?.email) recipients.push(quotation.user.email);
+          if (recipients.length > 0) {
+            const host = req.get("host") || "localhost:5000";
+            const protocol = req.protocol || "https";
+            const approvalUrl = `${protocol}://${host}/aprobar-cotizacion/${approvalToken}`;
+            const { sendQuotationEmail } = await import("./quotation-email-service");
+            await sendQuotationEmail({
+              to: recipients,
+              quotationData: {
+                folio: quotation.folio,
+                customerName: quotation.customer.name,
+                vendedorName: quotation.user.fullName,
+                total: parseFloat(quotation.total).toLocaleString("es-MX", { minimumFractionDigits: 2 }),
+                currency: quotation.currency || "MXN",
+                itemsCount: items.length,
+              },
+              pdfPath,
+              approvalUrl,
+            });
+          }
+        } catch (err: any) {
+          console.warn("[PublicShippingApprove] PDF/email failed:", err.message || err);
+        }
+      })();
+
+      console.log(`[PublicShippingApprove] Quotation ${quotation.folio} approved via email token`);
+      res.json({ success: true, message: "Envío aprobado. La cotización será enviada al cliente." });
+    } catch (error) {
+      console.error("Error in public shipping approve:", error);
+      res.status(500).json({ error: "Error al aprobar el envío" });
+    }
+  });
+
+  // POST /api/public/shipping-reject/:token — reject via email link (no auth required)
+  app.post("/api/public/shipping-reject/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { reason } = req.body;
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.shippingApprovalToken, token),
+        with: { customer: true, user: true },
+      });
+      if (!quotation) return res.status(404).json({ error: "Token no válido" });
+      if (!quotation.shippingHandledByJoper) return res.status(400).json({ error: "Esta cotización no tiene envío por Joper" });
+      if (quotation.shippingApprovalStatus !== "pending") {
+        return res.status(400).json({ error: "Esta solicitud ya fue procesada" });
+      }
+
+      await db.update(quotations)
+        .set({
+          shippingApprovalStatus: "rejected",
+          shippingRejectedAt: new Date(),
+          shippingRejectionReason: reason || "No se proporcionó motivo",
+          status: QuotationStatus.DRAFT,
+        })
+        .where(eq(quotations.id, quotation.id));
+
+      // Notify the seller (fire-and-forget)
+      (async () => {
+        try {
+          if (quotation.user?.email) {
+            const tenant = quotation.tenantId
+              ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
+              : null;
+            const { sendShippingRejectionEmail } = await import("./quotation-email-service");
+            await sendShippingRejectionEmail({
+              sellerEmail: quotation.user.email,
+              sellerName: quotation.user.fullName || quotation.user.username,
+              quotationFolio: quotation.folio,
+              customerName: quotation.customer?.name || "Cliente",
+              rejectionReason: reason || "No se proporcionó motivo",
+              tenantName: tenant?.name || "Nexxo Sistema Comercial",
+            });
+          }
+        } catch (err: any) {
+          console.warn("[PublicShippingReject] Seller notification failed:", err.message || err);
+        }
+      })();
+
+      console.log(`[PublicShippingReject] Quotation ${quotation.folio} rejected via email token`);
+      res.json({ success: true, message: "Envío rechazado. El vendedor será notificado." });
+    } catch (error) {
+      console.error("Error in public shipping reject:", error);
+      res.status(500).json({ error: "Error al rechazar el envío" });
     }
   });
 
@@ -5911,6 +6122,15 @@ Proporciona tu análisis en el siguiente formato JSON:
         where: eq(quotationItems.quotationId, id),
       });
 
+      // Generate / regenerate shipping approval token for one-click approve/reject
+      const crypto = await import("crypto");
+      const shippingToken = crypto.randomBytes(32).toString("hex");
+      await db.update(quotations)
+        .set({ shippingApprovalToken: shippingToken })
+        .where(eq(quotations.id, id));
+      const approveUrl = `${protocol}://${host}/autorizar-envio/${shippingToken}`;
+      const rejectUrl = `${protocol}://${host}/autorizar-envio/${shippingToken}`;
+
       const { sendShippingApprovalRequestEmail } = await import("./quotation-email-service");
       await sendShippingApprovalRequestEmail({
         adminEmails,
@@ -5925,6 +6145,8 @@ Proporciona tu análisis en el siguiente formato JSON:
         },
         quotationUrl,
         tenantName: tenant?.name || "Nexxo",
+        approveUrl,
+        rejectUrl,
       });
 
       console.log(`[ResendShippingEmail] Sent to: ${adminEmails.map(a => a.email).join(", ")}`);

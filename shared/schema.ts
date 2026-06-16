@@ -365,6 +365,7 @@ export const quotations = pgTable("quotations", {
   shippingCost: decimal("shipping_cost", { precision: 12, scale: 2 }).default("0"),
   shippingCostStatus: text("shipping_cost_status").default("confirmed"), // confirmed, pending
   shippingApprovalStatus: text("shipping_approval_status").default("not_required"), // not_required, pending, approved, rejected
+  shippingApprovalToken: text("shipping_approval_token").unique(),
   shippingApprovedBy: varchar("shipping_approved_by").references(() => users.id),
   shippingApprovedAt: timestamp("shipping_approved_at"),
   shippingRejectedBy: varchar("shipping_rejected_by").references(() => users.id),
