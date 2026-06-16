@@ -4538,10 +4538,21 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.patch("/api/product-instances/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const { status, notes, deliveredAt } = req.body;
+      const { status, notes, deliveredAt, serialNumber } = req.body;
+      if (serialNumber !== undefined) {
+        const existing = await db.query.shipmentProductInstances.findFirst({
+          where: and(
+            eq(shipmentProductInstances.serialNumber, serialNumber),
+            sql`${shipmentProductInstances.id} != ${id}`
+          ),
+        });
+        if (existing) {
+          return res.status(400).json({ error: "El número de serie ya existe en otro producto" });
+        }
+      }
       const [updated] = await db
         .update(shipmentProductInstances)
-        .set({ status, notes, deliveredAt })
+        .set({ ...(status !== undefined && { status }), ...(notes !== undefined && { notes }), ...(deliveredAt !== undefined && { deliveredAt }), ...(serialNumber !== undefined && { serialNumber }) })
         .where(eq(shipmentProductInstances.id, id))
         .returning();
       if (!updated) {
@@ -4551,6 +4562,23 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error updating product instance:", error);
       res.status(500).json({ error: "Error updating product instance" });
+    }
+  });
+
+  app.delete("/api/product-instances/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const [deleted] = await db
+        .delete(shipmentProductInstances)
+        .where(eq(shipmentProductInstances.id, id))
+        .returning();
+      if (!deleted) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting product instance:", error);
+      res.status(500).json({ error: "Error deleting product instance" });
     }
   });
 

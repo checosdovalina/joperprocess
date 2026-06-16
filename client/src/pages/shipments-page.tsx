@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff, RotateCcw, FileDown } from "lucide-react";
+import { Truck, Barcode, Plus, Trash2, Loader2, Package, Eye, EyeOff, RotateCcw, FileDown, Pencil, Check, X, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
@@ -57,6 +57,9 @@ export default function ShipmentsPage() {
   const [serialDialogOpen, setSerialDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [newSerials, setNewSerials] = useState<{ productId: string; serialNumber: string }[]>([]);
+  const [editingInstanceId, setEditingInstanceId] = useState<string | null>(null);
+  const [editingSerialValue, setEditingSerialValue] = useState("");
+  const [deletingInstanceId, setDeletingInstanceId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editTransporter, setEditTransporter] = useState("");
   const [editTransportType, setEditTransportType] = useState("");
@@ -147,6 +150,40 @@ export default function ShipmentsPage() {
     },
   });
 
+  const deleteSerialMutation = useMutation({
+    mutationFn: async (instanceId: string) => {
+      const res = await apiRequest("DELETE", `/api/product-instances/${instanceId}`);
+      if (!res.ok) throw new Error("Error al eliminar");
+    },
+    onSuccess: () => {
+      setDeletingInstanceId(null);
+      refetchInstances();
+      toast({ title: "Serie eliminada", description: "El número de serie fue eliminado correctamente." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo eliminar el número de serie", variant: "destructive" });
+    },
+  });
+
+  const editSerialMutation = useMutation({
+    mutationFn: async ({ id, serialNumber }: { id: string; serialNumber: string }) => {
+      const res = await apiRequest("PATCH", `/api/product-instances/${id}`, { serialNumber });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Error al actualizar");
+      }
+    },
+    onSuccess: () => {
+      setEditingInstanceId(null);
+      setEditingSerialValue("");
+      refetchInstances();
+      toast({ title: "Serie actualizada", description: "El número de serie fue corregido correctamente." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const updateShipmentMutation = useMutation({
     mutationFn: async (data: { transporter?: string; transportType?: string; trackingNumber?: string; driverName?: string; vehiclePlates?: string; status?: string; shippedAt?: string; invoiceNumber?: string }) => {
       if (!selectedShipment) throw new Error("No shipment selected");
@@ -221,6 +258,16 @@ export default function ShipmentsPage() {
   };
 
   const addNewSerialRow = () => {
+    const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + (item.quantity ?? 0), 0) ?? 0;
+    const captured = (productInstances?.length ?? 0) + newSerials.length;
+    if (totalNeeded > 0 && captured >= totalNeeded) {
+      toast({
+        title: "Límite alcanzado",
+        description: `Ya se tienen ${totalNeeded} de ${totalNeeded} series requeridas. Elimina una existente si necesitas corregirla.`,
+        variant: "destructive",
+      });
+      return;
+    }
     const autoProductId = orderProducts.length === 1 ? (orderProducts[0]?.id ?? "") : "";
     setNewSerials([...newSerials, { productId: autoProductId, serialNumber: "" }]);
   };
@@ -523,24 +570,98 @@ export default function ShipmentsPage() {
             {productInstances && productInstances.length > 0 && (
               <div>
                 <Label className="text-sm font-medium">Series Registradas</Label>
-                <ScrollArea className="h-40 mt-2 border rounded-md">
+                <ScrollArea className="h-48 mt-2 border rounded-md">
                   <div className="p-3 space-y-2">
                     {productInstances.map((instance) => (
                       <div
                         key={instance.id}
-                        className="flex items-center justify-between p-2 bg-muted/50 rounded"
+                        className="flex items-center gap-2 p-2 bg-muted/50 rounded"
                         data-testid={`serial-${instance.id}`}
                       >
-                        <div className="flex items-center gap-3">
-                          <Package className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <div className="font-mono text-sm">{instance.serialNumber}</div>
-                            <div className="text-xs text-muted-foreground">{instance.product?.name}</div>
-                          </div>
+                        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          {editingInstanceId === instance.id ? (
+                            <Input
+                              value={editingSerialValue}
+                              onChange={(e) => setEditingSerialValue(e.target.value)}
+                              className="h-7 text-sm font-mono"
+                              autoFocus
+                              data-testid={`input-edit-serial-${instance.id}`}
+                            />
+                          ) : (
+                            <>
+                              <div className="font-mono text-sm truncate">{instance.serialNumber}</div>
+                              <div className="text-xs text-muted-foreground truncate">{instance.product?.name}</div>
+                            </>
+                          )}
                         </div>
-                        <Badge variant={instance.status === "active" ? "secondary" : "outline"}>
-                          {instance.status === "active" ? "Activo" : instance.status}
-                        </Badge>
+                        {deletingInstanceId === instance.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-xs text-destructive font-medium">¿Eliminar?</span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => deleteSerialMutation.mutate(instance.id)}
+                              disabled={deleteSerialMutation.isPending}
+                              data-testid={`button-confirm-delete-serial-${instance.id}`}
+                            >
+                              {deleteSerialMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-destructive" />}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => setDeletingInstanceId(null)}
+                              data-testid={`button-cancel-delete-serial-${instance.id}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : editingInstanceId === instance.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => editSerialMutation.mutate({ id: instance.id, serialNumber: editingSerialValue.trim() })}
+                              disabled={editSerialMutation.isPending || !editingSerialValue.trim()}
+                              data-testid={`button-confirm-edit-serial-${instance.id}`}
+                            >
+                              {editSerialMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-green-600" />}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => { setEditingInstanceId(null); setEditingSerialValue(""); }}
+                              data-testid={`button-cancel-edit-serial-${instance.id}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => { setEditingInstanceId(instance.id); setEditingSerialValue(instance.serialNumber); setDeletingInstanceId(null); }}
+                              data-testid={`button-edit-serial-${instance.id}`}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => { setDeletingInstanceId(instance.id); setEditingInstanceId(null); }}
+                              data-testid={`button-delete-serial-${instance.id}`}
+                            >
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
