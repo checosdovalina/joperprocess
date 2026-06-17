@@ -5843,8 +5843,12 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Check-in not found" });
       }
 
-      // Verify authorization: user must own the check-in or be an admin
-      if (checkin.userId !== userId && req.user!.role !== UserRole.ADMIN) {
+      // Verify authorization: user must own the check-in, or be ADMIN / VENTAS_LOGISTICA
+      const canCheckout =
+        checkin.userId === userId ||
+        req.user!.role === UserRole.ADMIN ||
+        req.user!.role === UserRole.VENTAS_LOGISTICA;
+      if (!canCheckout) {
         return res.status(403).json({ error: "Not authorized to checkout this check-in" });
       }
 
