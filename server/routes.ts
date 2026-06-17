@@ -2043,9 +2043,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "No autorizado para editar esta cotización" });
       }
 
-      // Allow editing DRAFT, SENT, and PENDING_APPROVAL quotations
+      // Allow editing DRAFT, SENT, and PENDING_APPROVAL quotations.
+      // ADMIN and VENTAS_LOGISTICA can also edit quotations in any status (e.g. order-release adjustments).
       const EDITABLE_STATUSES = [QuotationStatus.DRAFT, QuotationStatus.SENT, QuotationStatus.PENDING_APPROVAL];
-      if (!EDITABLE_STATUSES.includes(existingQuotation.status as any)) {
+      const isPrivilegedRole = [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA].includes(userRole as any);
+      if (!EDITABLE_STATUSES.includes(existingQuotation.status as any) && !isPrivilegedRole) {
         return res.status(400).json({ error: "Solo se pueden editar cotizaciones en estado Borrador, Enviada o Pendiente de Aprobación" });
       }
 
@@ -2056,8 +2058,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requestedStatus: string = quotationData.status || QuotationStatus.DRAFT;
 
       // If editing a non-DRAFT quotation, reset it to DRAFT and clear the approval token
-      // so the customer link is invalidated and a new one must be sent
-      if (existingQuotation.status !== QuotationStatus.DRAFT) {
+      // so the customer link is invalidated and a new one must be sent.
+      // Exception: privileged roles (ADMIN/VENTAS_LOGISTICA) doing order-release adjustments
+      // send the original status back — preserve it so the quotation stays in its current workflow state.
+      const isStatusPreserved = isPrivilegedRole && requestedStatus === existingQuotation.status;
+      if (existingQuotation.status !== QuotationStatus.DRAFT && !isStatusPreserved) {
         quotationData.status = QuotationStatus.DRAFT;
         quotationData.approvalToken = null;
         quotationData.approvedAt = null;
