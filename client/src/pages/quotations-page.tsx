@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { QuotationForm } from "@/components/quotation-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -109,22 +109,72 @@ export default function QuotationsPage() {
   const { data: products } = useEntityQuery<Product[]>("/api/products");
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
 
-  const createQuotationMutation = useEntityMutation<Quotation, InsertQuotation & { items: InsertQuotationItem[] }>({
-    endpoint: "/api/quotations",
-    method: "POST",
-    successMessage: "Cotización creada exitosamente",
-    invalidateQueries: ["/api/quotations"],
-    onSuccessCallback: () => setCreateDialogOpen(false),
+  const createQuotationMutation = useMutation<Quotation, Error, InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean }>({
+    mutationFn: async (data) => {
+      const { _sendEmail, ...payload } = data;
+      const res = await apiRequest("POST", "/api/quotations", payload);
+      const quotation = await res.json();
+      if (_sendEmail) {
+        try {
+          await apiRequest("POST", `/api/quotations/${quotation.id}/send-email`, {});
+        } catch {
+          // Email error handled below via flag on quotation
+          (quotation as any)._emailFailed = true;
+        }
+      }
+      (quotation as any)._sendEmail = _sendEmail;
+      return quotation;
+    },
+    onSuccess: (quotation: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
+      if (quotation._sendEmail) {
+        if (quotation._emailFailed) {
+          toast({ title: "Cotización guardada", description: "La cotización se guardó pero el correo no pudo enviarse. Intenta enviarlo manualmente.", variant: "destructive" });
+        } else {
+          toast({ title: "Cotización enviada", description: "La cotización se guardó y se envió al cliente por correo." });
+        }
+      } else {
+        toast({ title: "Borrador guardado", description: "Cotización guardada como borrador." });
+      }
+      setCreateDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
-  const updateQuotationMutation = useEntityMutation<Quotation, Partial<InsertQuotation> & { items?: InsertQuotationItem[] }>({
-    endpoint: selectedQuotation ? `/api/quotations/${selectedQuotation.id}` : "/api/quotations",
-    method: "PATCH",
-    successMessage: "Cotización actualizada exitosamente",
-    invalidateQueries: ["/api/quotations"],
-    onSuccessCallback: () => {
+  const updateQuotationMutation = useMutation<Quotation, Error, Partial<InsertQuotation> & { items?: InsertQuotationItem[]; _sendEmail: boolean }>({
+    mutationFn: async (data) => {
+      const { _sendEmail, ...payload } = data;
+      const endpoint = selectedQuotation ? `/api/quotations/${selectedQuotation.id}` : "/api/quotations";
+      const res = await apiRequest("PATCH", endpoint, payload);
+      const quotation = await res.json();
+      if (_sendEmail) {
+        try {
+          await apiRequest("POST", `/api/quotations/${quotation.id}/send-email`, {});
+        } catch {
+          (quotation as any)._emailFailed = true;
+        }
+      }
+      (quotation as any)._sendEmail = _sendEmail;
+      return quotation;
+    },
+    onSuccess: (quotation: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
+      if (quotation._sendEmail) {
+        if (quotation._emailFailed) {
+          toast({ title: "Cotización guardada", description: "La cotización se guardó pero el correo no pudo enviarse. Intenta enviarlo manualmente.", variant: "destructive" });
+        } else {
+          toast({ title: "Cotización enviada", description: "La cotización se actualizó y se envió al cliente por correo." });
+        }
+      } else {
+        toast({ title: "Cotización actualizada", description: quotation._sendEmail === false ? "Borrador guardado." : "Cotización actualizada." });
+      }
       setEditDialogOpen(false);
       setSelectedQuotation(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 

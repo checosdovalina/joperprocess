@@ -51,7 +51,7 @@ type ProductWithCategory = Product & { category?: ProductCategory | null };
 interface QuotationFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: InsertQuotation & { items: InsertQuotationItem[] }) => void;
+  onSubmit: (data: InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean }) => void;
   isPending: boolean;
   onCancel?: () => void;
   customers?: Customer[];
@@ -623,7 +623,7 @@ export function QuotationForm({
       approvalReason = "Envío sin costo por cuenta de Joper requiere autorización";
     }
 
-    const quotationData: InsertQuotation & { items: InsertQuotationItem[] } = {
+    const quotationData: InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean } = {
       customerId: data.customerId,
       userId: userId || "",
       status: (!saveAsDraftRef.current && requiresAnyApproval) ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
@@ -641,6 +641,7 @@ export function QuotationForm({
       conditions: data.conditions || null,
       requiresApproval: !saveAsDraftRef.current && requiresAnyApproval,
       approvalReason: saveAsDraftRef.current ? null : approvalReason,
+      _sendEmail: !saveAsDraftRef.current && !requiresAnyApproval,
       shippingHandledByJoper: data.shippingHandledByJoper,
       shippingMethod: data.shippingMethod,
       requiresPallet: data.requiresPallet,
