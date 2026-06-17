@@ -41,12 +41,11 @@ import {
   FileText,
   Truck,
   Pencil,
-  Loader2,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { QuotationForm } from "@/components/quotation-form";
+import { Customer, InsertQuotation, InsertQuotationItem } from "@shared/schema";
 
 interface ReleaseOrderItem {
   id: string;
@@ -384,9 +383,9 @@ export default function OrderReleasePage() {
   const [rejectTarget, setRejectTarget] = useState<ReleaseOrder | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<ReleaseOrder | null>(null);
-  const [adjustItems, setAdjustItems] = useState<{ id: string; productName: string; unitOfMeasure: string; quantity: string; unitPrice: string; discountPercent: string }[]>([]);
-  const [adjustNotes, setAdjustNotes] = useState("");
-  const [adjustConditions, setAdjustConditions] = useState("");
+  const [adjustQuotationData, setAdjustQuotationData] = useState<any>(null);
+  const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
+  const [adjustIsFetching, setAdjustIsFetching] = useState(false);
 
   const { data: pendingOrders = [], isLoading: loadingPending } = useQuery<ReleaseOrder[]>({
     queryKey: ["/api/order-release?status=pending"],
@@ -395,6 +394,8 @@ export default function OrderReleasePage() {
   const { data: historyOrders = [], isLoading: loadingHistory } = useQuery<ReleaseOrder[]>({
     queryKey: ["/api/order-release?status=history"],
   });
+
+  const { data: customers = [] } = useQuery<Customer[]>({ queryKey: ["/api/customers"] });
 
   const approveMutation = useMutation({
     mutationFn: ({ orderId, notes }: { orderId: string; notes: string }) =>
@@ -412,16 +413,17 @@ export default function OrderReleasePage() {
   });
 
   const adjustMutation = useMutation({
-    mutationFn: ({ orderId, items, notes, conditions }: {
-      orderId: string;
-      items: { id: string; quantity: number; unitPrice: number; discountPercent: number }[];
-      notes: string;
-      conditions: string;
-    }) => apiRequest("PATCH", `/api/order-release/${orderId}/adjust`, { items, notes, conditions }),
+    mutationFn: async ({ quotationId, data }: { quotationId: string; data: InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean } }) => {
+      const { _sendEmail, ...payload } = data;
+      const res = await apiRequest("PATCH", `/api/quotations/${quotationId}`, payload);
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=pending"] });
       toast({ title: "Pedido ajustado", description: "Los cambios se guardaron. Ya puedes liberarlo." });
+      setAdjustDialogOpen(false);
       setAdjustTarget(null);
+      setAdjustQuotationData(null);
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo ajustar el pedido." });
@@ -445,18 +447,20 @@ export default function OrderReleasePage() {
 
   const mutating = approveMutation.isPending || rejectMutation.isPending || adjustMutation.isPending;
 
-  const openAdjust = (order: ReleaseOrder) => {
+  const openAdjust = async (order: ReleaseOrder) => {
     setAdjustTarget(order);
-    setAdjustItems(order.items.map(i => ({
-      id: i.id,
-      productName: i.productName,
-      unitOfMeasure: i.unitOfMeasure,
-      quantity: i.quantity,
-      unitPrice: i.unitPrice,
-      discountPercent: i.discountPercent,
-    })));
-    setAdjustNotes(order.notes || "");
-    setAdjustConditions(order.conditions || "");
+    setAdjustIsFetching(true);
+    try {
+      const res = await fetch(`/api/quotations/${order.quotationId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Error al cargar la cotización");
+      const quotation = await res.json();
+      setAdjustQuotationData(quotation);
+      setAdjustDialogOpen(true);
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la cotización para editar." });
+    } finally {
+      setAdjustIsFetching(false);
+    }
   };
 
   return (
@@ -601,173 +605,25 @@ export default function OrderReleasePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Adjust Dialog */}
-      <Dialog open={!!adjustTarget} onOpenChange={(open) => { if (!open) setAdjustTarget(null); }}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-5 w-5" />
-              Ajustar pedido {adjustTarget?.folio}
-            </DialogTitle>
-            <DialogDescription>
-              Modifica cantidades, precios o notas. Los cambios son definitivos y no reinician el proceso de aprobación.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {/* Items table */}
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Partidas del pedido</Label>
-              <ScrollArea className="max-h-64 border rounded-md">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/60 sticky top-0">
-                    <tr>
-                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Producto</th>
-                      <th className="text-center px-2 py-2 font-medium text-muted-foreground w-24">Cantidad</th>
-                      <th className="text-center px-2 py-2 font-medium text-muted-foreground w-28">P. Unitario</th>
-                      <th className="text-center px-2 py-2 font-medium text-muted-foreground w-20">Desc %</th>
-                      <th className="text-right px-3 py-2 font-medium text-muted-foreground w-28">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adjustItems.map((item, idx) => {
-                      const qty = parseFloat(item.quantity) || 0;
-                      const price = parseFloat(item.unitPrice) || 0;
-                      const disc = parseFloat(item.discountPercent) || 0;
-                      const subtotal = qty * price * (1 - disc / 100);
-                      return (
-                        <tr key={item.id} className="border-t">
-                          <td className="px-3 py-2">
-                            <p className="font-medium text-xs leading-tight">{item.productName}</p>
-                            <p className="text-xs text-muted-foreground">{item.unitOfMeasure}</p>
-                          </td>
-                          <td className="px-2 py-2">
-                            <Input
-                              type="number"
-                              min="0.01"
-                              step="1"
-                              value={item.quantity}
-                              onChange={e => {
-                                const updated = [...adjustItems];
-                                updated[idx] = { ...updated[idx], quantity: e.target.value };
-                                setAdjustItems(updated);
-                              }}
-                              className="h-7 text-center text-xs"
-                              data-testid={`adjust-qty-${idx}`}
-                            />
-                          </td>
-                          <td className="px-2 py-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={item.unitPrice}
-                              onChange={e => {
-                                const updated = [...adjustItems];
-                                updated[idx] = { ...updated[idx], unitPrice: e.target.value };
-                                setAdjustItems(updated);
-                              }}
-                              className="h-7 text-center text-xs"
-                              data-testid={`adjust-price-${idx}`}
-                            />
-                          </td>
-                          <td className="px-2 py-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.1"
-                              value={item.discountPercent}
-                              onChange={e => {
-                                const updated = [...adjustItems];
-                                updated[idx] = { ...updated[idx], discountPercent: e.target.value };
-                                setAdjustItems(updated);
-                              }}
-                              className="h-7 text-center text-xs"
-                              data-testid={`adjust-disc-${idx}`}
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-xs font-semibold">
-                            {formatMoney(subtotal, adjustTarget?.currency)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </ScrollArea>
-              {adjustItems.length > 0 && (
-                <p className="text-right text-xs text-muted-foreground mt-1">
-                  Nuevo subtotal:{" "}
-                  <span className="font-semibold text-foreground">
-                    {formatMoney(
-                      adjustItems.reduce((sum, i) => {
-                        const qty = parseFloat(i.quantity) || 0;
-                        const price = parseFloat(i.unitPrice) || 0;
-                        const disc = parseFloat(i.discountPercent) || 0;
-                        return sum + qty * price * (1 - disc / 100);
-                      }, 0),
-                      adjustTarget?.currency
-                    )}
-                  </span>
-                </p>
-              )}
-            </div>
-
-            {/* Notes */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="adjust-notes" className="text-sm">Notas <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                <Textarea
-                  id="adjust-notes"
-                  rows={2}
-                  placeholder="Notas internas del pedido..."
-                  value={adjustNotes}
-                  onChange={e => setAdjustNotes(e.target.value)}
-                  data-testid="adjust-notes"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="adjust-conditions" className="text-sm">Condiciones <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                <Textarea
-                  id="adjust-conditions"
-                  rows={2}
-                  placeholder="Condiciones del pedido..."
-                  value={adjustConditions}
-                  onChange={e => setAdjustConditions(e.target.value)}
-                  data-testid="adjust-conditions"
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjustTarget(null)} disabled={adjustMutation.isPending}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (!adjustTarget) return;
-                adjustMutation.mutate({
-                  orderId: adjustTarget.id,
-                  items: adjustItems.map(i => ({
-                    id: i.id,
-                    quantity: parseFloat(i.quantity) || 0,
-                    unitPrice: parseFloat(i.unitPrice) || 0,
-                    discountPercent: parseFloat(i.discountPercent) || 0,
-                  })),
-                  notes: adjustNotes,
-                  conditions: adjustConditions,
-                });
-              }}
-              disabled={adjustMutation.isPending}
-              data-testid="button-confirm-adjust"
-            >
-              {adjustMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Guardando...</> : "Guardar ajustes"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Adjust Dialog — reuses QuotationForm with full product search + auto-calculations */}
+      {adjustQuotationData && (
+        <QuotationForm
+          open={adjustDialogOpen}
+          onOpenChange={(open) => {
+            setAdjustDialogOpen(open);
+            if (!open) { setAdjustTarget(null); setAdjustQuotationData(null); }
+          }}
+          onSubmit={(data) => {
+            if (!adjustTarget) return;
+            adjustMutation.mutate({ quotationId: adjustTarget.quotationId, data });
+          }}
+          isPending={adjustMutation.isPending}
+          customers={customers}
+          userId={adjustQuotationData.userId}
+          initialData={adjustQuotationData}
+          isEditing
+        />
+      )}
     </div>
   );
 }
