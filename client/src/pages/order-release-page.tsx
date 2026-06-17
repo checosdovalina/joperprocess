@@ -622,6 +622,7 @@ export default function OrderReleasePage() {
           userId={adjustQuotationData.userId}
           initialData={adjustQuotationData}
           isEditing
+          adjustMode
         />
       )}
     </div>

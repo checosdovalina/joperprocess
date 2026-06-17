@@ -58,6 +58,7 @@ interface QuotationFormProps {
   userId?: string;
   initialData?: any;
   isEditing?: boolean;
+  adjustMode?: boolean;
 }
 
 interface QuotationLineItem {
@@ -159,6 +160,7 @@ export function QuotationForm({
   userId,
   initialData,
   isEditing = false,
+  adjustMode = false,
 }: QuotationFormProps) {
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0)]);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
@@ -626,7 +628,10 @@ export function QuotationForm({
     const quotationData: InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean } = {
       customerId: data.customerId,
       userId: userId || "",
-      status: (!saveAsDraftRef.current && requiresAnyApproval) ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
+      // In adjustMode keep original status; otherwise compute from save mode
+      status: adjustMode
+        ? (initialData?.status ?? QuotationStatus.DRAFT)
+        : (!saveAsDraftRef.current && requiresAnyApproval) ? QuotationStatus.PENDING_APPROVAL : QuotationStatus.DRAFT,
       currency: data.currency,
       exchangeRate: data.exchangeRate,
       paymentTerms: data.paymentTerms || null,
@@ -639,9 +644,9 @@ export function QuotationForm({
       totalSavings: freshTotals.totalSavings,
       notes: data.notes || null,
       conditions: data.conditions || null,
-      requiresApproval: !saveAsDraftRef.current && requiresAnyApproval,
-      approvalReason: saveAsDraftRef.current ? null : approvalReason,
-      _sendEmail: !saveAsDraftRef.current && !requiresAnyApproval,
+      requiresApproval: adjustMode ? (initialData?.requiresApproval ?? false) : (!saveAsDraftRef.current && requiresAnyApproval),
+      approvalReason: adjustMode ? (initialData?.approvalReason ?? null) : (saveAsDraftRef.current ? null : approvalReason),
+      _sendEmail: adjustMode ? false : (!saveAsDraftRef.current && !requiresAnyApproval),
       shippingHandledByJoper: data.shippingHandledByJoper,
       shippingMethod: data.shippingMethod,
       requiresPallet: data.requiresPallet,
@@ -1499,36 +1504,50 @@ export function QuotationForm({
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  disabled={isPending || lineItems.filter(i => i.productName).length === 0}
-                  onClick={() => { saveAsDraftRef.current = true; }}
-                  data-testid="button-save-draft"
-                >
-                  {isPending && saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Guardar Borrador
-                </Button>
-                {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) ? (
+                {adjustMode ? (
                   <Button
                     type="submit"
                     disabled={isPending || lineItems.filter(i => i.productName).length === 0}
                     onClick={() => { saveAsDraftRef.current = false; }}
                     data-testid="button-submit"
                   >
-                    {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Enviar a Autorización
+                    {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Guardar Ajustes
                   </Button>
                 ) : (
-                  <Button
-                    type="submit"
-                    disabled={isPending || lineItems.filter(i => i.productName).length === 0}
-                    onClick={() => { saveAsDraftRef.current = false; }}
-                    data-testid="button-submit"
-                  >
-                    {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Cotización
-                  </Button>
+                  <>
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      disabled={isPending || lineItems.filter(i => i.productName).length === 0}
+                      onClick={() => { saveAsDraftRef.current = true; }}
+                      data-testid="button-save-draft"
+                    >
+                      {isPending && saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Guardar Borrador
+                    </Button>
+                    {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) ? (
+                      <Button
+                        type="submit"
+                        disabled={isPending || lineItems.filter(i => i.productName).length === 0}
+                        onClick={() => { saveAsDraftRef.current = false; }}
+                        data-testid="button-submit"
+                      >
+                        {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Enviar a Autorización
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        disabled={isPending || lineItems.filter(i => i.productName).length === 0}
+                        onClick={() => { saveAsDraftRef.current = false; }}
+                        data-testid="button-submit"
+                      >
+                        {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Guardar Cotización
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
