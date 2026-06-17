@@ -266,7 +266,7 @@ export function QuotationForm({
       }
       setInitialized(true);
     }
-  }, [isEditing, initialData, open, form, initialized]);
+  }, [isEditing, initialData, open, form, initialized, products]);
 
   useEffect(() => {
     if (!open) {
