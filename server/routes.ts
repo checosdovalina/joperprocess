@@ -2515,11 +2515,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(quotations.id, quotation.id));
 
+      // Persist the approvalToken immediately so the link always exists,
+      // even if PDF generation fails later (fire-and-forget).
+      const cryptoMod = await import("crypto");
+      const approvalTokenPublic = quotation.approvalToken || cryptoMod.randomBytes(32).toString("hex");
+      if (!quotation.approvalToken) {
+        await db.update(quotations)
+          .set({ approvalToken: approvalTokenPublic })
+          .where(eq(quotations.id, quotation.id));
+      }
+
       // Generate PDF and send to customer (fire-and-forget)
       (async () => {
         try {
-          const crypto = await import("crypto");
-          const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
+          const approvalToken = approvalTokenPublic;
           const tenant = quotation.tenantId
             ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
             : null;
@@ -2541,8 +2550,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const objectStorageService = new ObjectStorageService();
             pdfPath = await objectStorageService.uploadQuotationPdfToStorage(pdfStream, quotation.folio, "token-approval");
           }
+          // Update only pdfPath — token was already saved above
           await db.update(quotations)
-            .set({ pdfPath, approvalToken })
+            .set({ pdfPath })
             .where(eq(quotations.id, quotation.id));
 
           const recipients: string[] = [];
@@ -2672,11 +2682,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(quotationItems.quotationId, id),
       });
 
+      // Persist the approvalToken immediately so the link always exists,
+      // even if PDF generation fails later.
+      const crypto = await import("crypto");
+      const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
+      if (!quotation.approvalToken) {
+        await scopedStorage.updateQuotation(id, { approvalToken });
+      }
+
       // Generate PDF and send to customer for approval
       try {
-        const crypto = await import("crypto");
-        const approvalToken = quotation.approvalToken || crypto.randomBytes(32).toString("hex");
-
         // Get tenant branding for PDF
         const tenant = quotation.tenantId 
           ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
@@ -2708,8 +2723,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
         }
 
-        // Update PDF path and approval token
-        await scopedStorage.updateQuotation(id, { pdfPath, approvalToken });
+        // Update PDF path (token already saved above)
+        await scopedStorage.updateQuotation(id, { pdfPath });
 
         // Send email to customer and salesperson with approval link
         const recipients: string[] = [];
