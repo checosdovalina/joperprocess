@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexxo — Sistema Comercial de Nueva Generación</title>
+<style>
+  :root {
+    --azul: #1d4ed8;
+    --azul-osc: #1e3a8a;
+    --azul-med: #2563eb;
+    --azul-cla: #93c5fd;
+    --naranja: #f97316;
+    --naranja-osc: #ea580c;
+    --verde: #16a34a;
+    --blanco: #ffffff;
+    --gris-osc: #111827;
+    --gris-med: #374151;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #000;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* ── CONTENEDOR DE SLIDES ── */
+  .deck {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 48px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    transform: translateX(60px);
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateX(0);
+  }
+  .slide.exit {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  /* ── PROGRESS BAR ── */
+  #progress {
+    position: fixed;
+    top: 0; left: 0;
+    height: 3px;
+    background: var(--naranja);
+    transition: width 0.4s ease;
+    z-index: 100;
+  }
+
+  /* ── NAVEGACIÓN ── */
+  #nav {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 16px;
+    border-radius: 999px;
+    backdrop-filter: blur(8px);
+  }
+  #nav button {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #fff;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  #nav button:hover { background: rgba(255,255,255,0.3); }
+  #slide-counter {
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    min-width: 44px;
+    text-align: center;
+  }
+  #dots {
+    display: flex;
+    gap: 5px;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dot.active {
+    background: var(--naranja);
+    width: 18px;
+    border-radius: 3px;
+  }
+
+  /* ── UTILIDADES ── */
+  .tag {
+    display: inline-block;
+    background: rgba(249,115,22,0.2);
+    color: var(--naranja);
+    border: 1px solid rgba(249,115,22,0.4);
+    padding: 4px 14px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .tag.azul {
+    background: rgba(29,78,216,0.25);
+    color: var(--azul-cla);
+    border-color: rgba(147,197,253,0.3);
+  }
+
+  h1.hero-title {
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.1;
+    text-align: center;
+    letter-spacing: -1px;
+  }
+  h2.slide-title {
+    font-size: clamp(28px, 3.5vw, 48px);
+    font-weight: 800;
+    color: #fff;
+    text-align: center;
+    line-height: 1.15;
+    margin-bottom: 12px;
+  }
+  h2.slide-title span { color: var(--naranja); }
+  p.subtitle {
+    color: rgba(255,255,255,0.65);
+    font-size: clamp(14px, 1.5vw, 18px);
+    text-align: center;
+    max-width: 640px;
+    line-height: 1.6;
+    margin-top: 8px;
+  }
+
+  /* ── CARD ── */
+  .card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 24px;
+    transition: transform 0.25s, background 0.25s;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    background: rgba(255,255,255,0.1);
+  }
+  .card-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    margin-bottom: 14px;
+  }
+  .card h3 {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .card p {
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  /* ── GRID ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; max-width: 900px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; width: 100%; max-width: 960px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; width: 100%; max-width: 1000px; }
+
+  /* ── ANIMACIONES ENTRADA ── */
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(28px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .slide.active .anim-1 { animation: fadeUp 0.5s 0.1s both; }
+  .slide.active .anim-2 { animation: fadeUp 0.5s 0.2s both; }
+  .slide.active .anim-3 { animation: fadeUp 0.5s 0.3s both; }
+  .slide.active .anim-4 { animation: fadeUp 0.5s 0.4s both; }
+  .slide.active .anim-5 { animation: fadeUp 0.5s 0.5s both; }
+  .slide.active .anim-6 { animation: fadeUp 0.5s 0.6s both; }
+  .slide.active .anim-7 { animation: fadeUp 0.5s 0.7s both; }
+  .slide.active .anim-8 { animation: fadeUp 0.5s 0.8s both; }
+
+  /* ── HEXAGON SVG BACKGROUND ── */
+  .hex-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .hex-bg svg { position: absolute; }
+
+  /* ── LOGO MARK ── */
+  .logomark {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .logomark svg { width: 48px; height: 48px; }
+  .logomark span {
+    font-size: 28px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -1px;
+  }
+  .logomark small {
+    display: block;
+    font-size: 10px;
+    color: var(--azul-cla);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ── STAT COUNTER ── */
+  .stat {
+    text-align: center;
+    padding: 24px 16px;
+  }
+  .stat .num {
+    font-size: clamp(36px, 4vw, 52px);
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+  }
+  .stat .num span { color: var(--naranja); }
+  .stat .label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── FLOW STEP ── */
+  .flow {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .flow:last-child { border-bottom: none; }
+  .flow-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--azul);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .flow-text h4 { color: #fff; font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .flow-text p  { color: rgba(255,255,255,0.55); font-size: 12px; line-height: 1.5; }
+
+  /* ── CHECK LIST ── */
+  .check-list { list-style: none; width: 100%; max-width: 680px; }
+  .check-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.8);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .check-list li:last-child { border-bottom: none; }
+  .check-list .ico {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 12px;
+    margin-top: 1px;
+  }
+  .ico-green  { background: rgba(22,163,74,0.2);  color: #4ade80; }
+  .ico-blue   { background: rgba(29,78,216,0.25); color: var(--azul-cla); }
+  .ico-orange { background: rgba(249,115,22,0.2); color: #fb923c; }
+
+  /* ── BIG QUOTE ── */
+  .big-quote {
+    font-size: clamp(20px, 2.5vw, 32px);
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    line-height: 1.4;
+    max-width: 800px;
+  }
+  .big-quote em { color: var(--naranja); font-style: normal; }
+
+  /* ── PILL BADGE ── */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    margin: 4px;
+  }
+  .pill span { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+  /* ── GRADIENT BACKGROUNDS ── */
+  .bg-hero      { background: radial-gradient(ellipse at 30% 50%, #1e3a8a 0%, #0f172a 60%); }
+  .bg-dark      { background: #0f172a; }
+  .bg-problem   { background: radial-gradient(ellipse at 70% 30%, #1c0f3f 0%, #0f172a 70%); }
+  .bg-blue      { background: radial-gradient(ellipse at 50% 50%, #1e3a8a 0%, #0f172a 70%); }
+  .bg-orange    { background: radial-gradient(ellipse at 30% 60%, #431407 0%, #0f172a 65%); }
+  .bg-green     { background: radial-gradient(ellipse at 60% 40%, #052e16 0%, #0f172a 70%); }
+  .bg-closing   { background: radial-gradient(ellipse at 50% 50%, #1d4ed8 0%, #0f172a 70%); }
+
+  /* ── ROLE CHIP ── */
+  .roles { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px; max-width: 720px; }
+  .role-chip {
+    background: rgba(29,78,216,0.2);
+    border: 1px solid rgba(147,197,253,0.25);
+    color: var(--azul-cla);
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* ── SCREEN MOCKUP ── */
+  .mockup {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    overflow: hidden;
+    width: 100%;
+  }
+  .mockup-bar {
+    background: rgba(255,255,255,0.07);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .mockup-bar i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .mockup-bar .url {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    margin-left: 8px;
+  }
+  .mockup-content { padding: 16px; }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<div class="deck" id="deck">
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 1 — PORTADA HERO
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-hero active" data-slide="0">
+    <div class="hex-bg">
+      <svg width="600" height="600" style="top:-100px;right:-150px;opacity:0.08">
+        <defs><pattern id="hex1" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+          <polygon points="30,1 59,17 59,35 30,51 1,35 1,17" fill="none" stroke="#93c5fd" stroke-width="1"/>
+        </pattern></defs>
+        <rect width="600" height="600" fill="url(#hex1)"/>
+      </svg>
+    </div>
+
+    <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;">
+      <div class="logomark anim-1">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="24,2 44,14 44,34 24,46 4,34 4,14" fill="url(#g1)" opacity="0.9"/>
+          <polygon points="24,8 38,16 38,32 24,40 10,32 10,16" fill="none" stroke="#93c5fd" stroke-width="1.5" opacity="0.6"/>
+          <circle cx="24" cy="24" r="5" fill="#fff"/>
+          <line x1="24" y1="19" x2="24" y2="8" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="24" y1="29" x2="24" y2="40" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="19.7" y1="21.5" x2="10" y2="16" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="28.3" y1="26.5" x2="38" y2="32" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="19.7" y1="26.5" x2="10" y2="32" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="28.3" y1="21.5" x2="38" y2="16" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <defs><linearGradient id="g1" x1="4" y1="2" x2="44" y2="46" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#2563eb"/>
+            <stop offset="100%" stop-color="#1e3a8a"/>
+          </linearGradient></defs>
+        </svg>
+        <div>
+          <span>nexxo</span>
+          <small>Sistema Comercial</small>
+        </div>
+      </div>
+
+      <div class="tag anim-2">Nueva Generación</div>
+      <h1 class="hero-title anim-3">El sistema que conecta<br>cada venta con cada entrega</h1>
+      <p class="subtitle anim-4">Cotizaciones · Crédito · Producción · Embarques · Cobranza<br>Todo en una sola plataforma, en tiempo real.</p>
+
+      <div style="display:flex;gap:10px;margin-top:32px;" class="anim-5">
+        <div class="pill"><span style="background:#4ade80"></span> Multi-empresa</div>
+        <div class="pill"><span style="background:#60a5fa"></span> 100% en la nube</div>
+        <div class="pill"><span style="background:#fb923c"></span> Optimizado para móvil</div>
+        <div class="pill"><span style="background:#a78bfa"></span> Integración ERP</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 2 — EL PROBLEMA
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-problem" data-slide="1">
+    <div class="tag anim-1">El Desafío</div>
+    <h2 class="slide-title anim-2">¿Qué pasa cuando no hay<br><span>visibilidad del proceso</span>?</h2>
+
+    <div class="grid-3 anim-3" style="margin-top:36px;max-width:860px;">
+      <div class="card">
+        <div class="card-icon" style="background:rgba(239,68,68,0.15);color:#f87171;">📋</div>
+        <h3>Cotizaciones perdidas</h3>
+        <p>Las cotizaciones viajan por WhatsApp y email. No hay historial, no hay seguimiento.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(239,68,68,0.15);color:#f87171;">🔒</div>
+        <h3>Crédito sin control</h3>
+        <p>El área de crédito se entera tarde. Las autorizaciones son verbales, sin registro.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(239,68,68,0.15);color:#f87171;">🚚</div>
+        <h3>Embarques sin trazabilidad</h3>
+        <p>Producción y logística no están sincronizados. El cliente no sabe qué esperar.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(239,68,68,0.15);color:#f87171;">💸</div>
+        <h3>Cartera desactualizada</h3>
+        <p>Los vendedores visitan clientes sin saber su saldo real ni facturas vencidas.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(239,68,68,0.15);color:#f87171;">📁</div>
+        <h3>Información fragmentada</h3>
+        <p>Los datos están en Excel, WhatsApp, correo y el ERP. Nadie tiene la imagen completa.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(239,68,68,0.15);color:#f87171;">⏱️</div>
+        <h3>Tiempo perdido</h3>
+        <p>Horas en recopilar información que debería estar disponible en segundos.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 3 — LA SOLUCIÓN
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-blue" data-slide="2">
+    <div class="hex-bg">
+      <svg width="400" height="400" style="bottom:-80px;left:-80px;opacity:0.06">
+        <defs><pattern id="hex2" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+          <polygon points="30,1 59,17 59,35 30,51 1,35 1,17" fill="none" stroke="#fff" stroke-width="1"/>
+        </pattern></defs>
+        <rect width="400" height="400" fill="url(#hex2)"/>
+      </svg>
+    </div>
+
+    <div class="tag azul anim-1">La Solución</div>
+    <h2 class="slide-title anim-2">Nexxo conecta <span>todo tu proceso comercial</span><br>en un solo lugar</h2>
+    <p class="subtitle anim-3">Una plataforma que acompaña a cada rol de tu empresa, desde la primera visita al cliente hasta el cobro final.</p>
+
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:40px;flex-wrap:wrap;max-width:900px;" class="anim-4">
+      <div style="text-align:center;padding:16px 20px;background:rgba(255,255,255,0.07);border-radius:12px;min-width:110px;">
+        <div style="font-size:26px;margin-bottom:6px;">🤝</div>
+        <div style="color:#fff;font-size:12px;font-weight:700;">Visitas</div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:24px;">→</div>
+      <div style="text-align:center;padding:16px 20px;background:rgba(255,255,255,0.07);border-radius:12px;min-width:110px;">
+        <div style="font-size:26px;margin-bottom:6px;">📄</div>
+        <div style="color:#fff;font-size:12px;font-weight:700;">Cotización</div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:24px;">→</div>
+      <div style="text-align:center;padding:16px 20px;background:rgba(255,255,255,0.07);border-radius:12px;min-width:110px;">
+        <div style="font-size:26px;margin-bottom:6px;">✅</div>
+        <div style="color:#fff;font-size:12px;font-weight:700;">Crédito</div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:24px;">→</div>
+      <div style="text-align:center;padding:16px 20px;background:rgba(255,255,255,0.07);border-radius:12px;min-width:110px;">
+        <div style="font-size:26px;margin-bottom:6px;">🏭</div>
+        <div style="color:#fff;font-size:12px;font-weight:700;">Producción</div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:24px;">→</div>
+      <div style="text-align:center;padding:16px 20px;background:rgba(255,255,255,0.07);border-radius:12px;min-width:110px;">
+        <div style="font-size:26px;margin-bottom:6px;">🚚</div>
+        <div style="color:#fff;font-size:12px;font-weight:700;">Embarque</div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:24px;">→</div>
+      <div style="text-align:center;padding:16px 20px;background:rgba(255,255,255,0.07);border-radius:12px;min-width:110px;">
+        <div style="font-size:26px;margin-bottom:6px;">🧾</div>
+        <div style="color:#fff;font-size:12px;font-weight:700;">Factura</div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:24px;">→</div>
+      <div style="text-align:center;padding:16px 20px;background:rgba(255,255,255,0.07);border-radius:12px;min-width:110px;">
+        <div style="font-size:26px;margin-bottom:6px;">💰</div>
+        <div style="color:#fff;font-size:12px;font-weight:700;">Cobranza</div>
+      </div>
+    </div>
+
+    <div class="roles anim-5">
+      <span class="role-chip">Ventas</span>
+      <span class="role-chip">Crédito y Cobranza</span>
+      <span class="role-chip">Administración</span>
+      <span class="role-chip">Producción</span>
+      <span class="role-chip">Embarques</span>
+      <span class="role-chip">Facturación</span>
+      <span class="role-chip">Servicio al Cliente</span>
+      <span class="role-chip">Servicio Técnico</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 4 — COTIZACIONES
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-dark" data-slide="3">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;width:100%;max-width:1000px;">
+      <div>
+        <div class="tag anim-1">Módulo 1</div>
+        <h2 class="slide-title anim-2" style="text-align:left;font-size:clamp(24px,2.8vw,40px);">Cotizaciones<br><span>profesionales</span><br>en minutos</h2>
+        <ul class="check-list anim-3" style="margin-top:20px;">
+          <li><div class="ico ico-green">✓</div>PDF corporativo con logo y datos del tenant</li>
+          <li><div class="ico ico-green">✓</div>Multi-moneda con conversión automática en tiempo real</li>
+          <li><div class="ico ico-green">✓</div>Descuentos por línea con validación de máximos</li>
+          <li><div class="ico ico-green">✓</div>Envío por email directo al cliente desde el sistema</li>
+          <li><div class="ico ico-green">✓</div>Versión sin descuentos para presentar al cliente</li>
+          <li><div class="ico ico-green">✓</div>Plazos de pago: 30, 60, 90, 120 días o de contado</li>
+          <li><div class="ico ico-green">✓</div>IVA condicional para clientes extranjeros</li>
+        </ul>
+      </div>
+      <div class="anim-4">
+        <div class="mockup">
+          <div class="mockup-bar">
+            <i style="background:#ef4444"></i>
+            <i style="background:#f59e0b"></i>
+            <i style="background:#22c55e"></i>
+            <div class="url">joper.nexxo.com.mx/quotations</div>
+          </div>
+          <div class="mockup-content">
+            <div style="background:rgba(29,78,216,0.15);border:1px solid rgba(29,78,216,0.3);border-radius:8px;padding:12px;margin-bottom:10px;">
+              <div style="color:var(--azul-cla);font-size:10px;font-weight:700;margin-bottom:6px;">COT-2026-0847</div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="color:rgba(255,255,255,0.6);font-size:11px;">Cliente</span>
+                <span style="color:#fff;font-size:11px;font-weight:600;">JOPER, S.A. de C.V.</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="color:rgba(255,255,255,0.6);font-size:11px;">Moneda</span>
+                <span style="color:#fff;font-size:11px;font-weight:600;">USD → MXN $17.25</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;">
+                <span style="color:rgba(255,255,255,0.6);font-size:11px;">Total</span>
+                <span style="color:#4ade80;font-size:13px;font-weight:800;">$284,750.00 MXN</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+              <div style="background:rgba(249,115,22,0.15);border-radius:6px;padding:8px;text-align:center;">
+                <div style="color:#fb923c;font-size:10px;font-weight:700;">PENDIENTE</div>
+              </div>
+              <div style="background:rgba(34,197,94,0.15);border-radius:6px;padding:8px;text-align:center;">
+                <div style="color:#4ade80;font-size:10px;font-weight:700;">ENVIADA</div>
+              </div>
+              <div style="background:rgba(168,85,247,0.15);border-radius:6px;padding:8px;text-align:center;">
+                <div style="color:#c084fc;font-size:10px;font-weight:700;">CONVERTIDA</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 5 — CRÉDITO
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-problem" data-slide="4">
+    <div class="tag anim-1">Módulo 2</div>
+    <h2 class="slide-title anim-2">Autorización de <span>Crédito</span><br>con firma digital</h2>
+
+    <div class="grid-2 anim-3" style="margin-top:28px;max-width:860px;align-items:start;">
+      <div>
+        <div style="display:flex;flex-direction:column;gap:0;">
+          <div class="flow">
+            <div class="flow-num">1</div>
+            <div class="flow-text">
+              <h4>Solicitud automática</h4>
+              <p>Al convertir una cotización a crédito, Crédito y Cobranza recibe un email inmediato con saldo vencido, crédito disponible y monto solicitado.</p>
+            </div>
+          </div>
+          <div class="flow">
+            <div class="flow-num">2</div>
+            <div class="flow-text">
+              <h4>Análisis con IA</h4>
+              <p>El sistema analiza automáticamente el historial crediticio del cliente y genera una recomendación basada en reglas configurables.</p>
+            </div>
+          </div>
+          <div class="flow">
+            <div class="flow-num">3</div>
+            <div class="flow-text">
+              <h4>Firma digital de autorización</h4>
+              <p>El responsable firma digitalmente desde el sistema. El registro queda en el expediente con fecha y hora.</p>
+            </div>
+          </div>
+          <div class="flow">
+            <div class="flow-num">4</div>
+            <div class="flow-text">
+              <h4>Notificación automática</h4>
+              <p>Vendedor, cliente, admin y Crédito y Cobranza son notificados del resultado al instante.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="background:rgba(29,78,216,0.12);border-color:rgba(29,78,216,0.3);">
+        <div style="color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;margin-bottom:12px;letter-spacing:1px;">ANÁLISIS DE CRÉDITO</div>
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="color:rgba(255,255,255,0.55);font-size:12px;">Crédito disponible</span>
+            <span style="color:#4ade80;font-size:12px;font-weight:700;">$150,000</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="color:rgba(255,255,255,0.55);font-size:12px;">Crédito utilizado</span>
+            <span style="color:#facc15;font-size:12px;font-weight:700;">$84,200</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+            <span style="color:rgba(255,255,255,0.55);font-size:12px;">Saldo vencido</span>
+            <span style="color:#f87171;font-size:12px;font-weight:700;">$12,340</span>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:56%;background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:3px;"></div>
+          </div>
+          <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:4px;">56% del límite utilizado</div>
+        </div>
+        <div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;text-align:center;">
+          <div style="color:#4ade80;font-size:13px;font-weight:800;">✓ AUTORIZADO</div>
+          <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:3px;">Firmado · 14 Jun 2026 · 11:42am</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 6 — LIBERACIÓN DE PEDIDOS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-dark" data-slide="5">
+    <div class="tag anim-1">Módulo 3</div>
+    <h2 class="slide-title anim-2">Liberación de <span>Pedidos</span><br>sin cuellos de botella</h2>
+    <p class="subtitle anim-3">Los administradores aprueban o rechazan pedidos directamente desde el email — sin necesidad de iniciar sesión en el sistema.</p>
+
+    <div class="grid-3 anim-4" style="margin-top:28px;max-width:900px;">
+      <div class="card" style="text-align:center;">
+        <div style="font-size:36px;margin-bottom:12px;">📧</div>
+        <h3>Un clic desde el email</h3>
+        <p>El email de notificación incluye botones de Aprobar y Rechazar. Sin login, sin pasos extra.</p>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="font-size:36px;margin-bottom:12px;">🔧</div>
+        <h3>Ajuste antes de liberar</h3>
+        <p>El admin puede ajustar la cotización (precios, cantidades, notas) justo antes de aprobarla, sin alterar el estado original.</p>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="font-size:36px;margin-bottom:12px;">🏭</div>
+        <h3>Producción en automático</h3>
+        <p>Al aprobar, el pedido pasa directamente a la vista de producción. Fábrica sabe exactamente qué procesar.</p>
+      </div>
+    </div>
+
+    <div class="anim-5" style="margin-top:20px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);border-radius:12px;padding:14px 24px;max-width:600px;text-align:center;">
+      <div style="color:#fb923c;font-size:13px;font-weight:700;">Pipeline en tiempo real</div>
+      <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-top:4px;">Cotizaciones → Autorizaciones → Pedidos → Embarques — todo visible en un tablero unificado</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 7 — CHECK-IN VISITAS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-green" data-slide="6">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;width:100%;max-width:1000px;">
+      <div class="anim-1">
+        <div class="mockup" style="max-width:280px;margin:auto;">
+          <div class="mockup-bar">
+            <i style="background:#ef4444"></i><i style="background:#f59e0b"></i><i style="background:#22c55e"></i>
+            <div class="url">nexxo.com.mx (móvil)</div>
+          </div>
+          <div class="mockup-content">
+            <div style="text-align:center;padding:10px 0;">
+              <div style="width:60px;height:60px;border-radius:50%;background:rgba(22,163,74,0.2);border:2px solid rgba(34,197,94,0.4);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 10px;">🤝</div>
+              <div style="color:#4ade80;font-size:11px;font-weight:700;">CHECK-IN ACTIVO</div>
+              <div style="color:rgba(255,255,255,0.5);font-size:10px;margin-top:2px;">JOPER, S.A. de C.V.</div>
+            </div>
+            <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">
+              <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:5px;">
+                <span style="color:rgba(255,255,255,0.5);">Inicio</span>
+                <span style="color:#fff;">10:30 AM</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:5px;">
+                <span style="color:rgba(255,255,255,0.5);">Fotos</span>
+                <span style="color:#fff;">3 / 10</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;">
+                <span style="color:rgba(255,255,255,0.5);">Ubicación</span>
+                <span style="color:#4ade80;">✓ Capturada</span>
+              </div>
+            </div>
+            <div style="margin-top:10px;background:rgba(22,163,74,0.2);border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:8px;text-align:center;font-size:11px;color:#4ade80;font-weight:700;">
+              Finalizar visita →
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="tag anim-2" style="background:rgba(22,163,74,0.2);color:#4ade80;border-color:rgba(34,197,94,0.3);">Módulo 4</div>
+        <h2 class="slide-title anim-3" style="text-align:left;font-size:clamp(22px,2.5vw,36px);">Visitas de campo<br><span style="color:#4ade80;">con evidencia real</span></h2>
+        <ul class="check-list anim-4" style="margin-top:16px;">
+          <li><div class="ico ico-green">✓</div>Check-in y checkout con GPS y timestamp automático</li>
+          <li><div class="ico ico-green">✓</div>Fotos comprimidas, hasta 10 por visita</li>
+          <li><div class="ico ico-green">✓</div>Minuta de visita en PDF generada automáticamente</li>
+          <li><div class="ico ico-green">✓</div>Email enviado a cliente y admin al cerrar la visita</li>
+          <li><div class="ico ico-green">✓</div>Historial completo de visitas por cliente</li>
+          <li><div class="ico ico-green">✓</div>Saldo y facturas vencidas visibles durante la visita</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 8 — ESTADOS DE CUENTA
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-dark" data-slide="7">
+    <div class="tag anim-1">Módulo 5</div>
+    <h2 class="slide-title anim-2">Estados de Cuenta<br><span>en tiempo real</span> desde el ERP</h2>
+    <p class="subtitle anim-3">Datos directamente de Microsip. Sin recalcular, sin discrepancias, sin Excel.</p>
+
+    <div class="grid-4 anim-4" style="margin-top:32px;max-width:960px;">
+      <div class="card" style="text-align:center;padding:20px 12px;">
+        <div style="font-size:28px;margin-bottom:8px;">🔗</div>
+        <h3 style="font-size:13px;">Sincronización ERP</h3>
+        <p>Conectado a Microsip Firebird en tiempo real. Los saldos siempre son los del sistema oficial.</p>
+      </div>
+      <div class="card" style="text-align:center;padding:20px 12px;">
+        <div style="font-size:28px;margin-bottom:8px;">📤</div>
+        <h3 style="font-size:13px;">Envío masivo</h3>
+        <p>Selecciona múltiples clientes y envía sus estados de cuenta en un solo clic con múltiples destinatarios.</p>
+      </div>
+      <div class="card" style="text-align:center;padding:20px 12px;">
+        <div style="font-size:28px;margin-bottom:8px;">📅</div>
+        <h3 style="font-size:13px;">Filtros por fecha</h3>
+        <p>Visualiza el corte a cualquier fecha. Las facturas antiguas se excluyen automáticamente.</p>
+      </div>
+      <div class="card" style="text-align:center;padding:20px 12px;">
+        <div style="font-size:28px;margin-bottom:8px;">📥</div>
+        <h3 style="font-size:13px;">PDF descargable</h3>
+        <p>Estado de cuenta profesional con logo, RFC y desglose completo listo para compartir.</p>
+      </div>
+    </div>
+
+    <div class="anim-5" style="margin-top:20px;display:flex;gap:24px;justify-content:center;">
+      <div class="stat">
+        <div class="num">100<span>%</span></div>
+        <div class="label">Alineado con Microsip</div>
+      </div>
+      <div style="width:1px;background:rgba(255,255,255,0.1);margin:8px 0;"></div>
+      <div class="stat">
+        <div class="num"><span>∞</span></div>
+        <div class="label">Clientes simultáneos</div>
+      </div>
+      <div style="width:1px;background:rgba(255,255,255,0.1);margin:8px 0;"></div>
+      <div class="stat">
+        <div class="num">0<span>s</span></div>
+        <div class="label">Tiempo de generación</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 9 — NOTIFICACIONES / AUTOMATIZACIÓN
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-orange" data-slide="8">
+    <div class="tag anim-1" style="background:rgba(249,115,22,0.2);color:#fb923c;border-color:rgba(249,115,22,0.4);">Automatización</div>
+    <h2 class="slide-title anim-2">El sistema trabaja<br><span>mientras tú vendes</span></h2>
+    <p class="subtitle anim-3">Notificaciones automáticas para que nadie espere y nada se olvide.</p>
+
+    <div class="grid-3 anim-4" style="margin-top:28px;max-width:840px;">
+      <div class="card">
+        <div style="font-size:22px;margin-bottom:10px;">📬</div>
+        <h3>Solicitud de crédito</h3>
+        <p>Al crear: email instantáneo a Crédito y Cobranza con todos los datos financieros del cliente.</p>
+      </div>
+      <div class="card">
+        <div style="font-size:22px;margin-bottom:10px;">🚦</div>
+        <h3>Resolución de crédito</h3>
+        <p>Al aprobar o rechazar: vendedor, cliente, admin y Crédito y Cobranza notificados al mismo tiempo.</p>
+      </div>
+      <div class="card">
+        <div style="font-size:22px;margin-bottom:10px;">📦</div>
+        <h3>Pedido pendiente</h3>
+        <p>Los admins reciben un email con un clic para liberar el pedido sin entrar al sistema.</p>
+      </div>
+      <div class="card">
+        <div style="font-size:22px;margin-bottom:10px;">🚢</div>
+        <h3>Aprobación de embarque</h3>
+        <p>El cliente aprueba o rechaza el embarque directamente desde su correo con un clic.</p>
+      </div>
+      <div class="card">
+        <div style="font-size:22px;margin-bottom:10px;">📋</div>
+        <h3>Minuta de visita</h3>
+        <p>PDF automático enviado al cliente, vendedor y admin al terminar cada visita de campo.</p>
+      </div>
+      <div class="card">
+        <div style="font-size:22px;margin-bottom:10px;">💳</div>
+        <h3>Estado de cuenta</h3>
+        <p>Programado o manual — el sistema envía estados de cuenta a todos los contactos del cliente.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 10 — MULTI-EMPRESA
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-blue" data-slide="9">
+    <div class="tag azul anim-1">Arquitectura</div>
+    <h2 class="slide-title anim-2">Una plataforma,<br><span>muchas empresas</span></h2>
+    <p class="subtitle anim-3">Cada empresa opera en su propio subdominio con datos completamente aislados, colores y logo propios.</p>
+
+    <div class="grid-3 anim-4" style="margin-top:28px;max-width:840px;">
+      <div class="card" style="text-align:center;">
+        <div style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a);border-radius:8px;padding:8px 16px;margin:0 auto 12px;display:inline-block;">
+          <span style="color:#fff;font-size:12px;font-weight:800;">joper.nexxo.com.mx</span>
+        </div>
+        <h3>JOPER, S.A. de C.V.</h3>
+        <p>Logo, colores y datos propios. Usuarios, clientes y transacciones completamente aislados.</p>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="background:linear-gradient(135deg,#7c3aed,#4c1d95);border-radius:8px;padding:8px 16px;margin:0 auto 12px;display:inline-block;">
+          <span style="color:#fff;font-size:12px;font-weight:800;">empresa2.nexxo.com.mx</span>
+        </div>
+        <h3>Empresa 2</h3>
+        <p>Otro tenant, otra empresa. Cada una con su propio plan, límite de usuarios y configuración.</p>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="background:linear-gradient(135deg,#047857,#052e16);border-radius:8px;padding:8px 16px;margin:0 auto 12px;display:inline-block;">
+          <span style="color:#fff;font-size:12px;font-weight:800;">empresa3.nexxo.com.mx</span>
+        </div>
+        <h3>Empresa 3</h3>
+        <p>Escala sin límite. El superadmin gestiona todos los tenants desde un panel centralizado.</p>
+      </div>
+    </div>
+
+    <div class="grid-4 anim-5" style="margin-top:20px;max-width:800px;">
+      <div class="card" style="padding:14px;text-align:center;">
+        <div style="color:#fb923c;font-size:20px;font-weight:900;">9</div>
+        <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px;">Roles de usuario</div>
+      </div>
+      <div class="card" style="padding:14px;text-align:center;">
+        <div style="color:#60a5fa;font-size:20px;font-weight:900;">SSL</div>
+        <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px;">Wildcard *.nexxo.com.mx</div>
+      </div>
+      <div class="card" style="padding:14px;text-align:center;">
+        <div style="color:#4ade80;font-size:20px;font-weight:900;">100%</div>
+        <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px;">Datos aislados</div>
+      </div>
+      <div class="card" style="padding:14px;text-align:center;">
+        <div style="color:#a78bfa;font-size:20px;font-weight:900;">ERP</div>
+        <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px;">Integración Microsip</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 11 — BENEFICIOS / ROI
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-dark" data-slide="10">
+    <div class="tag anim-1">Beneficios</div>
+    <h2 class="slide-title anim-2">¿Por qué <span>Nexxo</span>?</h2>
+
+    <div class="grid-2 anim-3" style="margin-top:28px;max-width:900px;">
+      <div>
+        <ul class="check-list">
+          <li><div class="ico ico-blue">→</div><div><strong style="color:#fff;">Ciclo de ventas más corto.</strong> Desde la cotización hasta la liberación del pedido sin esperas manuales.</div></li>
+          <li><div class="ico ico-blue">→</div><div><strong style="color:#fff;">Cartera controlada.</strong> El vendedor llega a la visita con el saldo real del cliente en su celular.</div></li>
+          <li><div class="ico ico-blue">→</div><div><strong style="color:#fff;">Menos errores.</strong> Los precios, monedas y descuentos se calculan automáticamente.</div></li>
+          <li><div class="ico ico-blue">→</div><div><strong style="color:#fff;">Trazabilidad completa.</strong> Cada acción queda registrada: quién, cuándo, qué cambió.</div></li>
+        </ul>
+      </div>
+      <div>
+        <ul class="check-list">
+          <li><div class="ico ico-orange">→</div><div><strong style="color:#fff;">Equipo siempre informado.</strong> Las notificaciones automáticas eliminan el seguimiento por WhatsApp.</div></li>
+          <li><div class="ico ico-orange">→</div><div><strong style="color:#fff;">PDFs listos en segundos.</strong> Cotizaciones, minutas, estados de cuenta y garantías generados al instante.</div></li>
+          <li><div class="ico ico-orange">→</div><div><strong style="color:#fff;">Funciona en el campo.</strong> Optimizado para móvil. El vendedor opera desde su celular sin instalar nada.</div></li>
+          <li><div class="ico ico-orange">→</div><div><strong style="color:#fff;">Integración con Microsip.</strong> Los datos del ERP llegan a Nexxo sin doble captura.</div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 12 — CIERRE / CTA
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide bg-closing" data-slide="11">
+    <div class="hex-bg">
+      <svg width="700" height="700" style="top:-200px;left:-200px;opacity:0.07">
+        <defs><pattern id="hex3" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+          <polygon points="30,1 59,17 59,35 30,51 1,35 1,17" fill="none" stroke="#fff" stroke-width="1"/>
+        </pattern></defs>
+        <rect width="700" height="700" fill="url(#hex3)"/>
+      </svg>
+    </div>
+
+    <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;text-align:center;">
+      <div class="logomark anim-1">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="24,2 44,14 44,34 24,46 4,34 4,14" fill="url(#g2)" opacity="0.9"/>
+          <circle cx="24" cy="24" r="5" fill="#fff"/>
+          <line x1="24" y1="19" x2="24" y2="8" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="24" y1="29" x2="24" y2="40" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="19.7" y1="21.5" x2="10" y2="16" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="28.3" y1="26.5" x2="38" y2="32" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="19.7" y1="26.5" x2="10" y2="32" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <line x1="28.3" y1="21.5" x2="38" y2="16" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+          <defs><linearGradient id="g2" x1="4" y1="2" x2="44" y2="46" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#3b82f6"/>
+            <stop offset="100%" stop-color="#1e3a8a"/>
+          </linearGradient></defs>
+        </svg>
+        <div>
+          <span>nexxo</span>
+          <small>Sistema Comercial de Nueva Generación</small>
+        </div>
+      </div>
+
+      <div class="big-quote anim-2">
+        Conecta tu proceso comercial.<br>
+        <em>Cierra más ventas, cobra más rápido,</em><br>
+        con menos esfuerzo.
+      </div>
+
+      <div style="display:flex;gap:24px;margin-top:40px;flex-wrap:wrap;justify-content:center;" class="anim-3">
+        <div style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:16px;padding:20px 28px;min-width:180px;text-align:center;">
+          <div style="color:var(--azul-cla);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">CONTÁCTANOS</div>
+          <div style="color:#fff;font-size:15px;font-weight:700;">nexxo.com.mx</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:16px;padding:20px 28px;min-width:180px;text-align:center;">
+          <div style="color:var(--azul-cla);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:6px;">DEMO EN VIVO</div>
+          <div style="color:#fff;font-size:15px;font-weight:700;">joper.nexxo.com.mx</div>
+        </div>
+      </div>
+
+      <div style="margin-top:36px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;" class="anim-4">
+        <div class="pill"><span style="background:#4ade80"></span> Multi-empresa</div>
+        <div class="pill"><span style="background:#60a5fa"></span> Integración ERP</div>
+        <div class="pill"><span style="background:#fb923c"></span> PDFs corporativos</div>
+        <div class="pill"><span style="background:#a78bfa"></span> Notificaciones automáticas</div>
+        <div class="pill"><span style="background:#34d399"></span> Optimizado para móvil</div>
+        <div class="pill"><span style="background:#f472b6"></span> Firma digital</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- NAVEGACIÓN -->
+<div id="nav">
+  <button id="btn-prev" title="Anterior">&#8592;</button>
+  <div id="dots"></div>
+  <span id="slide-counter">1 / 12</span>
+  <button id="btn-next" title="Siguiente">&#8594;</button>
+</div>
+
+<div id="progress"></div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const dotsEl = document.getElementById('dots');
+  const counter = document.getElementById('slide-counter');
+  const progressEl = document.getElementById('progress');
+  let current = 0;
+  const total = slides.length;
+
+  // Build dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => goTo(i));
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n, dir = 1) {
+    const prev = current;
+    slides[prev].classList.remove('active');
+    slides[prev].classList.add('exit');
+    setTimeout(() => slides[prev].classList.remove('exit'), 500);
+
+    current = Math.max(0, Math.min(total - 1, n));
+    slides[current].classList.add('active');
+
+    document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === current));
+    counter.textContent = `${current + 1} / ${total}`;
+    progressEl.style.width = `${((current + 1) / total) * 100}%`;
+  }
+
+  document.getElementById('btn-prev').addEventListener('click', () => goTo(current - 1));
+  document.getElementById('btn-next').addEventListener('click', () => goTo(current + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); goTo(current - 1); }
+  });
+
+  // Touch swipe
+  let touchX = 0;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) goTo(dx < 0 ? current + 1 : current - 1);
+  });
+
+  // Initial progress
+  progressEl.style.width = `${(1 / total) * 100}%`;
+</script>
+
+</body>
+</html>
