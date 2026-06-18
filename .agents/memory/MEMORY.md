@@ -1,2 +1,3 @@
 - [Microsip invoice sync](microsip-invoice-sync.md) — IMPORTE_COBRO>0 is the correct open-invoice filter; SALDO column does not exist in this Firebird install.
 - [Microsip sync architecture](microsip-sync-arch.md) — sync is async fire-and-forget; orphan log cleanup runs on startup; never auto-close invoices by absence.
+- [Microsip cancelled-payment credits](microsip-cancelled-payment-credits.md) — CXC credit sums must join payment doc and filter CANCELADO<>'S'; cancelled receipts keep phantom application rows.

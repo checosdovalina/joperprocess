@@ -1091,12 +1091,18 @@ class MicrosipSyncService {
           GROUP BY D.CLIENTE_ID, D.DOCTO_CC_ID, D.FECHA, D.COND_PAGO_ID
         ),
         CREDITOS AS (
+          -- Must filter on the PAYMENT document's CANCELADO, not just the charge's:
+          -- cancelling a receipt sets DOCTOS_CC.CANCELADO='S' but leaves its
+          -- IMPORTES_DOCTOS_CC application rows, which would otherwise be counted as
+          -- phantom credits and understate the balance.
           SELECT
             I.DOCTO_CC_ACR_ID,
             SUM(I.IMPORTE + COALESCE(I.IMPUESTO,0) + COALESCE(I.DSCTO_PPAG,0)) AS CREDITO_APLICADO
           FROM IMPORTES_DOCTOS_CC I
+          JOIN DOCTOS_CC P ON I.DOCTO_CC_ID = P.DOCTO_CC_ID
           WHERE I.DOCTO_CC_ACR_ID IS NOT NULL
             AND I.TIPO_IMPTE <> 'C'
+            AND P.CANCELADO <> 'S'
           GROUP BY I.DOCTO_CC_ACR_ID
         )
         SELECT
@@ -1192,11 +1198,16 @@ class MicrosipSyncService {
         JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID AND I.TIPO_IMPTE = 'C'
         LEFT JOIN PLAZOS_COND_PAG PCP ON D.COND_PAGO_ID = PCP.COND_PAGO_ID
         LEFT JOIN (
+          -- Filter on the PAYMENT document's CANCELADO: a cancelled receipt keeps its
+          -- IMPORTES_DOCTOS_CC application rows, which would otherwise be counted as
+          -- phantom credits and understate the invoice balance.
           SELECT IC.DOCTO_CC_ACR_ID,
                  SUM(IC.IMPORTE + COALESCE(IC.IMPUESTO,0) + COALESCE(IC.DSCTO_PPAG,0)) AS CREDITO_APLICADO
           FROM IMPORTES_DOCTOS_CC IC
+          JOIN DOCTOS_CC PC ON IC.DOCTO_CC_ID = PC.DOCTO_CC_ID
           WHERE IC.DOCTO_CC_ACR_ID IS NOT NULL
             AND IC.TIPO_IMPTE <> 'C'
+            AND PC.CANCELADO <> 'S'
           GROUP BY IC.DOCTO_CC_ACR_ID
         ) CR ON CR.DOCTO_CC_ACR_ID = D.DOCTO_CC_ID
         WHERE D.CANCELADO <> 'S'
@@ -1397,6 +1408,7 @@ class MicrosipSyncService {
         WHERE C.CLIENTE_ID = ${clienteId}
           AND C.NATURALEZA_CONCEPTO = 'C'
           AND C.CANCELADO <> 'S'
+          AND PD.CANCELADO <> 'S'
           AND I.TIPO_IMPTE <> 'C'
         ORDER BY I.DOCTO_CC_ACR_ID, PD.FECHA
       `);
