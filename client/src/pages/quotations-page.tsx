@@ -1435,7 +1435,7 @@ export default function QuotationsPage() {
 
       {/* PDF Download Options Dialog */}
       <Dialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Download className="h-5 w-5" />
@@ -1448,21 +1448,21 @@ export default function QuotationsPage() {
           <div className="flex flex-col gap-3 pt-2">
             <Button
               variant="outline"
-              className="justify-start gap-3 h-auto py-3"
+              className="justify-start gap-3 h-auto py-3 whitespace-normal text-left"
               onClick={() => quotationForPDF && performDownloadPDF(quotationForPDF, false)}
               data-testid="button-pdf-with-discount"
             >
-              <div className="flex flex-col items-start text-left">
+              <div className="flex flex-col items-start text-left min-w-0">
                 <span className="font-medium">Con descuentos</span>
                 <span className="text-xs text-muted-foreground">Muestra la columna Desc% y el desglose de descuento en totales</span>
               </div>
             </Button>
             <Button
-              className="justify-start gap-3 h-auto py-3"
+              className="justify-start gap-3 h-auto py-3 whitespace-normal text-left"
               onClick={() => quotationForPDF && performDownloadPDF(quotationForPDF, true)}
               data-testid="button-pdf-no-discount"
             >
-              <div className="flex flex-col items-start text-left">
+              <div className="flex flex-col items-start text-left min-w-0">
                 <span className="font-medium">Sin descuentos</span>
                 <span className="text-xs text-primary-foreground/80">Oculta los descuentos — el cliente solo ve el precio final</span>
               </div>
