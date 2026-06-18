@@ -403,6 +403,8 @@ export default function OrderReleasePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
       toast({ title: "Pedido liberado", description: "Se notificó a los involucrados por correo." });
       setApproveTarget(null);
       setApproveNotes("");
@@ -436,6 +438,8 @@ export default function OrderReleasePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
       toast({ title: "Pedido rechazado", description: "Se notificó a los involucrados por correo." });
       setRejectTarget(null);
       setRejectNotes("");
