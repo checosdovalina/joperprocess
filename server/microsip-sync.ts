@@ -1347,6 +1347,146 @@ class MicrosipSyncService {
     }
   }
 
+  /**
+   * Detailed balance breakdown for a single customer.
+   * Shows every charge document, every credit applied to each charge,
+   * unapplied payments, and the CXC net balance — for direct comparison
+   * against Microsip's "Auxiliar de clientes" report.
+   */
+  async debugBalanceBreakdown(clienteId: number): Promise<object> {
+    if (!await this.loadConfig(false)) {
+      throw new Error('Configuración de Microsip no encontrada');
+    }
+    let fbDb: FirebirdConnection | null = null;
+    try {
+      fbDb = await this.connect(true);
+
+      // 1. All charge docs (NATURALEZA_CONCEPTO='C') for this customer, with their gross amount.
+      const chargeDocs = await this.query<any>(fbDb, `
+        SELECT
+          D.DOCTO_CC_ID,
+          D.FOLIO,
+          D.FECHA,
+          D.CANCELADO,
+          SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)) AS CARGO_BRUTO
+        FROM DOCTOS_CC D
+        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID AND I.TIPO_IMPTE = 'C'
+        WHERE D.CLIENTE_ID = ${clienteId}
+          AND D.NATURALEZA_CONCEPTO = 'C'
+          AND D.CANCELADO <> 'S'
+        GROUP BY D.DOCTO_CC_ID, D.FOLIO, D.FECHA, D.CANCELADO
+        ORDER BY D.FECHA
+      `);
+
+      // 2. All credits linked to any of this customer's charge docs (via DOCTO_CC_ACR_ID).
+      //    This is exactly what the balance query uses.
+      const linkedCredits = await this.query<any>(fbDb, `
+        SELECT
+          I.DOCTO_CC_ACR_ID,
+          I.TIPO_IMPTE,
+          I.IMPORTE,
+          COALESCE(I.IMPUESTO,0)  AS IMPUESTO,
+          COALESCE(I.DSCTO_PPAG,0) AS DSCTO_PPAG,
+          I.IMPORTE + COALESCE(I.IMPUESTO,0) + COALESCE(I.DSCTO_PPAG,0) AS TOTAL_CREDITO,
+          PD.FOLIO  AS PAGO_FOLIO,
+          PD.FECHA  AS PAGO_FECHA,
+          PD.NATURALEZA_CONCEPTO AS PAGO_NAT
+        FROM IMPORTES_DOCTOS_CC I
+        JOIN DOCTOS_CC C ON I.DOCTO_CC_ACR_ID = C.DOCTO_CC_ID
+        JOIN DOCTOS_CC PD ON I.DOCTO_CC_ID = PD.DOCTO_CC_ID
+        WHERE C.CLIENTE_ID = ${clienteId}
+          AND C.NATURALEZA_CONCEPTO = 'C'
+          AND C.CANCELADO <> 'S'
+          AND I.TIPO_IMPTE <> 'C'
+        ORDER BY I.DOCTO_CC_ACR_ID, PD.FECHA
+      `);
+
+      // 3. All payment docs (NATURALEZA_CONCEPTO='R') for this customer — to detect
+      //    payments NOT linked to any invoice (unapplied / floating).
+      const allPaymentDocs = await this.query<any>(fbDb, `
+        SELECT
+          D.DOCTO_CC_ID,
+          D.FOLIO,
+          D.FECHA,
+          SUM(I.IMPORTE) AS TOTAL_IMPORTE,
+          COUNT(I.DOCTO_CC_ACR_ID) AS APPLIED_ROWS
+        FROM DOCTOS_CC D
+        JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID
+        WHERE D.CLIENTE_ID = ${clienteId}
+          AND D.NATURALEZA_CONCEPTO = 'R'
+          AND D.CANCELADO <> 'S'
+        GROUP BY D.DOCTO_CC_ID, D.FOLIO, D.FECHA
+        ORDER BY D.FECHA DESC
+      `);
+
+      // 4. Summary: group credits by DOCTO_CC_ACR_ID to see per-invoice credit totals.
+      const creditsByInvoice: Record<number, {
+        cargo_folio: string;
+        cargo_bruto: number;
+        credito_aplicado: number;
+        saldo_nexxo: number;
+        creditos: any[];
+      }> = {};
+
+      for (const charge of chargeDocs) {
+        creditsByInvoice[charge.DOCTO_CC_ID] = {
+          cargo_folio: charge.FOLIO,
+          cargo_bruto: Number(charge.CARGO_BRUTO),
+          credito_aplicado: 0,
+          saldo_nexxo: 0,
+          creditos: [],
+        };
+      }
+
+      for (const credit of linkedCredits) {
+        const id = credit.DOCTO_CC_ACR_ID;
+        if (creditsByInvoice[id]) {
+          creditsByInvoice[id].credito_aplicado += Number(credit.TOTAL_CREDITO);
+          creditsByInvoice[id].creditos.push({
+            tipo: credit.TIPO_IMPTE,
+            importe: Number(credit.IMPORTE),
+            impuesto: Number(credit.IMPUESTO),
+            dscto_ppag: Number(credit.DSCTO_PPAG),
+            total: Number(credit.TOTAL_CREDITO),
+            pago_folio: credit.PAGO_FOLIO,
+            pago_fecha: credit.PAGO_FECHA,
+            pago_naturaleza: credit.PAGO_NAT,
+          });
+        }
+      }
+
+      let totalCargoBruto = 0;
+      let totalCreditoAplicado = 0;
+      for (const id in creditsByInvoice) {
+        const entry = creditsByInvoice[id];
+        entry.saldo_nexxo = entry.cargo_bruto - entry.credito_aplicado;
+        totalCargoBruto += entry.cargo_bruto;
+        totalCreditoAplicado += entry.credito_aplicado;
+      }
+
+      const totalSaldoNexxo = totalCargoBruto - totalCreditoAplicado;
+
+      return {
+        clienteId,
+        summary: {
+          total_cargo_bruto: totalCargoBruto,
+          total_credito_aplicado: totalCreditoAplicado,
+          saldo_nexxo: totalSaldoNexxo,
+        },
+        invoices: Object.values(creditsByInvoice).filter(e => e.saldo_nexxo > 0.005 || e.creditos.length > 0),
+        allPaymentDocs: allPaymentDocs.map(p => ({
+          folio: p.FOLIO,
+          fecha: p.FECHA,
+          total_importe: Number(p.TOTAL_IMPORTE),
+          applied_rows: Number(p.APPLIED_ROWS),
+          unapplied: Number(p.APPLIED_ROWS) === 0,
+        })),
+      };
+    } finally {
+      if (fbDb) fbDb.detach();
+    }
+  }
+
   async testConnection(): Promise<{ success: boolean; message: string }> {
     if (!await this.loadConfig(false)) {
       return { success: false, message: 'Configuración no encontrada' };

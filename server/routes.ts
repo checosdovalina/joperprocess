@@ -8058,6 +8058,23 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // GET /api/microsip/debug-balance/:clienteId — detailed credit/debit breakdown per invoice
+  // to compare against Microsip's "Auxiliar de clientes" and identify balance discrepancies.
+  app.get("/api/microsip/debug-balance/:clienteId", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = requireTenantId(req);
+      const clienteId = parseInt(req.params.clienteId);
+      if (isNaN(clienteId)) return res.status(400).json({ error: "clienteId must be numeric" });
+
+      const service = await createMicrosipSyncService(tenantId);
+      const result = await service.debugBalanceBreakdown(clienteId);
+      res.json(result);
+    } catch (err) {
+      console.error("[debug-balance] error:", err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // ==================== END MICROSIP INTEGRATION ====================
 
   const httpServer = createServer(app);
