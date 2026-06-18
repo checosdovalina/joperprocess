@@ -610,7 +610,10 @@ export default function QuotationsPage() {
             >
               En Proceso
               <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
-                {(quotations ?? []).filter(q => !INACTIVE_STATUSES.includes(q.status as any)).length}
+                {(quotations ?? []).filter(q =>
+                  !INACTIVE_STATUSES.includes(q.status as any) &&
+                  !(hideConverted && q.status === QuotationStatus.CONVERTED)
+                ).length}
               </span>
             </button>
             <button
