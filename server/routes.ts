@@ -4029,50 +4029,64 @@ Proporciona tu análisis en el siguiente formato JSON:
         ...(approveNotes?.trim() && { releaseNotes: approveNotes.trim() }),
       }).where(eq(orders.id, id));
 
-      // Send email notifications (fire and forget)
-      (async () => {
-        try {
-          const { sendOrderReleaseEmail } = await import("./quotation-email-service");
-          const quotation = order.quotation as any;
-          const tenantName = req.tenant?.name || "Sistema Comercial";
-          const releasedByName = req.user!.fullName;
+      // Skip email if the order is already past the initial stage (in production,
+      // shipped, delivered, etc.) — avoids spam when approving backlog orders.
+      const ADVANCED_STATUSES = [
+        OrderStatus.IN_PRODUCTION,
+        OrderStatus.READY,
+        OrderStatus.PARTIALLY_RELEASED,
+        OrderStatus.RELEASED,
+        OrderStatus.SHIPPED,
+        OrderStatus.DELIVERED,
+      ];
+      const skipEmail = ADVANCED_STATUSES.includes(order.status as any);
 
-          // Collect recipients: vendedor + C&C + admins (not the customer)
-          const allUsers = await db.query.users.findMany({
-            where: resolvedTenantId ? eq(users.tenantId, resolvedTenantId) : undefined,
-          });
-          const recipients = allUsers
-            .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
-            .filter(u => u.email)
-            .map(u => ({ email: u.email!, name: u.fullName }));
+      if (!skipEmail) {
+        // Send email notifications (fire and forget)
+        (async () => {
+          try {
+            const { sendOrderReleaseEmail } = await import("./quotation-email-service");
+            const quotation = order.quotation as any;
+            const tenantName = req.tenant?.name || "Sistema Comercial";
+            const releasedByName = req.user!.fullName;
 
-          // Add vendedor if not already included
-          const vendedorEmail = quotation?.user?.email;
-          const vendedorName = quotation?.user?.fullName;
-          if (vendedorEmail && !recipients.find(r => r.email === vendedorEmail)) {
-            recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
+            // Collect recipients: vendedor + C&C + admins (not the customer)
+            const allUsers = await db.query.users.findMany({
+              where: resolvedTenantId ? eq(users.tenantId, resolvedTenantId) : undefined,
+            });
+            const recipients = allUsers
+              .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
+              .filter(u => u.email)
+              .map(u => ({ email: u.email!, name: u.fullName }));
+
+            // Add vendedor if not already included
+            const vendedorEmail = quotation?.user?.email;
+            const vendedorName = quotation?.user?.fullName;
+            if (vendedorEmail && !recipients.find(r => r.email === vendedorEmail)) {
+              recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
+            }
+
+            const uniqueRecipients = [...new Map(recipients.map(r => [r.email, r])).values()];
+
+            const total = new Intl.NumberFormat("es-MX", {
+              style: "currency",
+              currency: quotation?.currency || "MXN",
+            }).format(parseFloat(quotation?.total || "0"));
+
+            await sendOrderReleaseEmail({
+              status: "approved",
+              orderFolio: quotation?.folio || id,
+              customerName: quotation?.customer?.name || "—",
+              quotationTotal: total,
+              tenantName,
+              releasedByName,
+              recipients: uniqueRecipients,
+            });
+          } catch (emailErr) {
+            console.warn("[OrderRelease] Approve email failed:", emailErr);
           }
-
-          const uniqueRecipients = [...new Map(recipients.map(r => [r.email, r])).values()];
-
-          const total = new Intl.NumberFormat("es-MX", {
-            style: "currency",
-            currency: quotation?.currency || "MXN",
-          }).format(parseFloat(quotation?.total || "0"));
-
-          await sendOrderReleaseEmail({
-            status: "approved",
-            orderFolio: quotation?.folio || id,
-            customerName: quotation?.customer?.name || "—",
-            quotationTotal: total,
-            tenantName,
-            releasedByName,
-            recipients: uniqueRecipients,
-          });
-        } catch (emailErr) {
-          console.warn("[OrderRelease] Approve email failed:", emailErr);
-        }
-      })();
+        })();
+      }
 
       res.json({ success: true });
     } catch (error) {
