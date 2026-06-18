@@ -172,8 +172,8 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
     doc.text("COTIZACIÓN", MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "left" });
 
-    doc.fontSize(10).font("Helvetica").fillColor(primaryColor);
-    doc.text(`Folio: ${quotation.folio}`, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 10, { width: CONTENT_W / 2, align: "right" });
+    doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
+    doc.text(`Folio: ${quotation.folio}`, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "right" });
 
     let currentY = TITLE_BAND_Y + TITLE_BAND_H + 18;
 
