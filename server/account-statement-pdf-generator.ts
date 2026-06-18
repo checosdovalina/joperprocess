@@ -135,7 +135,9 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   const localActiveInvoices = cxcData ? [] : invoices.filter(
     (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
   );
+  const currentYear = new Date().getFullYear();
   const recentPayments = [...payments]
+    .filter((p) => new Date(p.paymentDate).getFullYear() === currentYear)
     .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
     .slice(0, 15);
 
