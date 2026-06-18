@@ -1,7 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,9 +119,41 @@ export default function AccountStatementsPage() {
   const [schedHour, setSchedHour] = useState<number>(9);
   const [schedOnlyOverdue, setSchedOnlyOverdue] = useState(false);
 
-  const { data: statements = [], isLoading, refetch } = useQuery<CustomerBalance[]>({
+  const { data: statements = [], isLoading, refetch, dataUpdatedAt } = useQuery<CustomerBalance[]>({
     queryKey: ["/api/account-statements"],
+    refetchInterval: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
+
+  const [isForceRefreshing, setIsForceRefreshing] = useState(false);
+  const [nowTick, setNowTick] = useState(Date.now());
+
+  // Re-render every 30s so the "última actualización" label stays current.
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Manual refresh forces a fresh Firebird read, bypassing the server cache.
+  // Uses apiRequest so tenant headers match the normal query fetcher.
+  async function handleManualRefresh() {
+    setIsForceRefreshing(true);
+    try {
+      const res = await apiRequest("GET", "/api/account-statements?force=1");
+      queryClient.setQueryData(["/api/account-statements"], await res.json());
+    } catch {
+      await refetch();
+    } finally {
+      setIsForceRefreshing(false);
+    }
+  }
+
+  const lastUpdatedLabel = useMemo(() => {
+    void nowTick;
+    if (!dataUpdatedAt) return null;
+    return formatDistanceToNow(dataUpdatedAt, { addSuffix: true, locale: es });
+  }, [dataUpdatedAt, nowTick]);
 
   const { data: allCustomers = [] } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -369,15 +403,27 @@ export default function AccountStatementsPage() {
             <CalendarClock className="w-4 h-4 mr-2" />
             {scheduleConfig?.enabled ? "Envío automático activo" : "Programar envío"}
           </Button>
-          <Button
-            variant="outline"
-            size="default"
-            data-testid="button-refresh"
-            onClick={() => refetch()}
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Actualizar
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              variant="outline"
+              size="default"
+              data-testid="button-refresh"
+              onClick={handleManualRefresh}
+              disabled={isForceRefreshing}
+            >
+              {isForceRefreshing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Actualizar
+            </Button>
+            {lastUpdatedLabel && (
+              <span className="text-xs text-muted-foreground" data-testid="text-last-updated">
+                Actualizado {lastUpdatedLabel}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

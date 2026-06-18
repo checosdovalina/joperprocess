@@ -4870,11 +4870,25 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   // ─── ACCOUNT STATEMENTS ────────────────────────────────────────────────────
 
+  // In-memory cache for account-statements to protect Firebird from repeated
+  // auto-refresh/multi-user load. Keyed by tenantId, short TTL. The manual
+  // "Actualizar" button bypasses it via ?force=1.
+  const accountStatementsCache = new Map<string, { at: number; data: any[] }>();
+  const ACCOUNT_STATEMENTS_TTL_MS = 60_000;
+
   // GET /api/account-statements — returns all customers with their outstanding balance summary
   app.get("/api/account-statements", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
       if (!tenantId) return res.status(400).json({ error: "Tenant no encontrado" });
+
+      const forceRefresh = req.query.force === "1" || req.query.force === "true";
+      const cachedStmt = accountStatementsCache.get(tenantId);
+      if (!forceRefresh && cachedStmt && Date.now() - cachedStmt.at < ACCOUNT_STATEMENTS_TTL_MS) {
+        res.setHeader("X-Cache", "HIT");
+        return res.json(cachedStmt.data);
+      }
+      res.setHeader("X-Cache", forceRefresh ? "BYPASS" : "MISS");
 
       // --- Live Microsip CXC path ---
       // If the tenant has Microsip configured, query DOCTOS_CC directly from Firebird.
@@ -4918,6 +4932,7 @@ Proporciona tu análisis en el siguiente formato JSON:
             })
             .sort((a, b) => b.overdueBalance - a.overdueBalance || b.totalBalance - a.totalBalance);
 
+          accountStatementsCache.set(tenantId, { at: Date.now(), data: result });
           return res.json(result);
         } catch (msErr) {
           console.error("[account-statements] Microsip live query failed, falling back to local DB:", msErr);
@@ -4968,6 +4983,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       const result = Array.from(byCustomer.values()).sort((a, b) => b.overdueBalance - a.overdueBalance || b.totalBalance - a.totalBalance);
+      accountStatementsCache.set(tenantId, { at: Date.now(), data: result });
       res.json(result);
     } catch (error) {
       console.error("Error fetching account statements:", error);
