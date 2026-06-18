@@ -453,7 +453,6 @@ export default function ShipmentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("label.client")}</TableHead>
                     <TableHead>{t("label.folio")}</TableHead>
                     <TableHead>{t("shipments.col.carrier")}</TableHead>
                     <TableHead>{t("label.type")}</TableHead>
@@ -465,9 +464,6 @@ export default function ShipmentsPage() {
                 <TableBody>
                   {filteredShipments.map((shipment) => (
                     <TableRow key={shipment.id} className="hover-elevate" data-testid={`row-shipment-${shipment.id}`}>
-                      <TableCell>
-                        <div className="font-medium">{shipment.order.quotation.customer.name}</div>
-                      </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm">{shipment.order.quotation.folio}</div>
                       </TableCell>
@@ -541,7 +537,7 @@ export default function ShipmentsPage() {
               Números de Serie - {selectedShipment?.order.quotation.folio}
             </DialogTitle>
             <DialogDescription>
-              Cliente: {selectedShipment?.order.quotation.customer.name}
+              {selectedShipment?.order.quotation.folio}
             </DialogDescription>
           </DialogHeader>
 
@@ -767,7 +763,7 @@ export default function ShipmentsPage() {
               Detalles del Embarque
             </DialogTitle>
             <DialogDescription>
-              {selectedShipment?.order.quotation.folio} - {selectedShipment?.order.quotation.customer.name}
+              {selectedShipment?.order.quotation.folio}
             </DialogDescription>
           </DialogHeader>
 
