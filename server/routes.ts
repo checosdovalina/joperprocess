@@ -2855,6 +2855,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const auth = await scopedStorage.createCreditAuthorization(validated);
       res.status(201).json(auth);
+
+      // Fire-and-forget: notify CREDITO_COBRANZA users of new credit auth request
+      (async () => {
+        try {
+          const tenantId = (req.user as any)?.tenantId;
+          if (!tenantId) return;
+
+          const quotForAuth = auth.quotationId
+            ? await db.query.quotations.findFirst({
+                where: eq(quotations.id, auth.quotationId),
+                with: { customer: true, user: true },
+              })
+            : null;
+
+          const tenantRecord = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+          const tenantName = tenantRecord?.name || "Nexxo Sistema Comercial";
+
+          const creditoUsers = await db
+            .select({ email: users.email, fullName: users.fullName })
+            .from(users)
+            .where(
+              and(
+                eq(users.tenantId, tenantId),
+                eq(users.role, UserRole.CREDITO_COBRANZA),
+                eq(users.active, true)
+              )
+            );
+
+          if (creditoUsers.length === 0 || !quotForAuth) return;
+
+          const rawCurrency = quotForAuth.currency;
+          const safeCurrency = rawCurrency && /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "MXN";
+          const totalDisplay = new Intl.NumberFormat("es-MX", { style: "currency", currency: safeCurrency })
+            .format(parseFloat(quotForAuth.total || "0"));
+
+          const fmt = (val: string | null | undefined) =>
+            val ? `$${parseFloat(val).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "$0.00";
+
+          const { sendCreditAuthNewRequestEmail } = await import("./quotation-email-service");
+          await sendCreditAuthNewRequestEmail({
+            quotationFolio: quotForAuth.folio,
+            customerName: quotForAuth.customer?.name || "—",
+            quotationTotal: totalDisplay,
+            vendedorName: (quotForAuth.user as any)?.fullName || "—",
+            creditAvailable: fmt(auth.creditAvailable),
+            creditUsed: fmt(auth.creditUsed),
+            overdueBalance: fmt(auth.overdueBalance),
+            tenantName,
+            tenantSubdomain: tenantRecord?.subdomain || undefined,
+            recipients: creditoUsers.filter(u => u.email).map(u => ({ email: u.email!, name: u.fullName })),
+          });
+        } catch (err) {
+          console.warn("[CreditAuth] New request notification email failed:", err);
+        }
+      })();
     } catch (error) {
       console.error("Error creating credit authorization:", error);
       res.status(400).json({ error: "Error creating credit authorization" });
@@ -2993,6 +3048,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 )
             : [];
 
+          // Fetch CREDITO_COBRANZA users for this tenant
+          const creditoUsers = tenantId
+            ? await db
+                .select({ email: users.email, fullName: users.fullName })
+                .from(users)
+                .where(
+                  and(
+                    eq(users.tenantId, tenantId),
+                    eq(users.role, UserRole.CREDITO_COBRANZA),
+                    eq(users.active, true)
+                  )
+                )
+            : [];
+
           // Build recipient list (deduplicated by email)
           const emailMap = new Map<string, string>();
 
@@ -3005,6 +3074,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Admins
           for (const admin of adminUsers) {
             if (admin.email) emailMap.set(admin.email, admin.fullName);
+          }
+
+          // Crédito y Cobranza
+          for (const cu of creditoUsers) {
+            if (cu.email) emailMap.set(cu.email, cu.fullName);
           }
 
           // Format total
