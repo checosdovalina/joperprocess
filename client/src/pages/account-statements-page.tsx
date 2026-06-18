@@ -725,9 +725,9 @@ export default function AccountStatementsPage() {
                 Destinatario principal
               </p>
               {singleSendCustomer?.customer.email ? (
-                <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-2.5">
-                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm text-muted-foreground truncate">
+                <div className="flex items-start gap-2 bg-muted rounded-md px-3 py-2.5 min-w-0">
+                  <Mail className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <span className="text-sm text-muted-foreground break-all min-w-0">
                     {singleSendCustomer.customer.email}
                   </span>
                 </div>
