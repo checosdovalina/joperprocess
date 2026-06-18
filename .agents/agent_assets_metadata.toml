@@ -12,3 +12,9 @@ id = "Jgft_sKFeLA_V6ZadfiVB"
 uri = "file://MANUAL_NEXXO.docx"
 type = "word_document"
 title = "Manual Completo Nexxo — Word (.docx)"
+
+[[outputs]]
+id = "aF6Ul7jYohTeNIXChnsVS"
+uri = "file://nexxo-mejoras-mayo-junio-2026.pdf"
+type = "pdf"
+title = "Nexxo — Relación de Mejoras Mayo–Junio 2026"
