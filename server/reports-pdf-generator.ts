@@ -217,7 +217,7 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         const notesH = order.notes
           ? doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: notesTextW }) + 4
           : 0;
-        const orderH = 58 + itemsH + 14 + notesH;
+        const orderH = 44 + itemsH + 14 + notesH;
 
         // Page break
         if (currentY + orderH > PAGE_H - 50) {
@@ -251,12 +251,7 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         doc.text(formatDate(order.closeDate), col2X + 85, cardY, { lineBreak: false });
         cardY += 14;
 
-        // Row 2: Cliente | Lib. Crédito y Cobranza
-        doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Cliente:", innerX, cardY, { lineBreak: false });
-        doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(order.customerName, innerX + 38, cardY, { width: halfW - 38, lineBreak: false });
-
+        // Row 2: Lib. Crédito y Cobranza (only right column)
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
         doc.text("Lib. C y Cobranza:", col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
@@ -429,8 +424,8 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
         const resH = inc.resolution
           ? doc.fontSize(8).font("Helvetica").heightOfString(inc.resolution, { width: descW }) + 14
           : 0;
-        // cardPad(10) + 4 rows×14 + label"Descripción:"(11) + descH + resH + cardPad(10) = 87 + descH + resH
-        const cardH = 87 + descH + resH;
+        // cardPad(10) + 3 rows×14 + label"Descripción:"(11) + descH + resH + cardPad(10) = 73 + descH + resH
+        const cardH = 73 + descH + resH;
 
         // Page break
         if (currentY + cardH > PAGE_H - 50) {
@@ -462,12 +457,7 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
         doc.text(formatDate(inc.createdAt), col2X + 38, cardY, { lineBreak: false });
         cardY += 14;
 
-        // Row 2: Cliente | Tipo
-        doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Cliente:", innerX, cardY, { lineBreak: false });
-        doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(inc.customerName, innerX + 40, cardY, { width: halfW - 40, lineBreak: false });
-
+        // Row 2: Tipo (only right column)
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
         doc.text("Tipo:", col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
