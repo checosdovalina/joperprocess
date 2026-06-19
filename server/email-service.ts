@@ -219,6 +219,155 @@ export async function getAdminEmails(): Promise<string[]> {
   return [];
 }
 
+interface SendIncidentNotificationParams {
+  to: string[];
+  eventType: "created" | "customer_comment" | "status_change";
+  incident: {
+    ticketNumber: string;
+    customerName: string;
+    type: string;
+    urgency: string;
+    status: string;
+    subject: string;
+    description?: string;
+    contactName?: string | null;
+    contactEmail?: string | null;
+    contactPhone?: string | null;
+  };
+  extraMessage?: string;
+  detailUrl?: string;
+  tenantName?: string;
+}
+
+const INCIDENT_TYPE_LABELS: Record<string, string> = {
+  garantia: "Garantía",
+  retrabajo: "Retrabajo",
+  queja: "Queja",
+  consulta: "Consulta",
+  administrativo: "Administrativo",
+};
+
+const INCIDENT_URGENCY_LABELS: Record<string, string> = {
+  baja: "Baja",
+  media: "Media",
+  alta: "Alta",
+  critica: "Crítica",
+};
+
+const INCIDENT_STATUS_LABELS: Record<string, string> = {
+  nuevo: "Nuevo",
+  asignado: "Asignado",
+  en_proceso: "En Proceso",
+  esperando_cliente: "Esperando Cliente",
+  esperando_interno: "Esperando Interno",
+  resuelto: "Resuelto",
+  cerrado: "Cerrado",
+  cancelado: "Cancelado",
+};
+
+export async function sendIncidentNotificationEmail({
+  to,
+  eventType,
+  incident,
+  extraMessage,
+  detailUrl,
+  tenantName = "Nexxo",
+}: SendIncidentNotificationParams): Promise<void> {
+  try {
+    if (!to || to.length === 0) {
+      console.warn("⚠️ No admin recipients for incident notification");
+      return;
+    }
+
+    const headings: Record<string, string> = {
+      created: "Nuevo Incidente Recibido",
+      customer_comment: "Nuevo Comentario del Cliente",
+      status_change: "Actualización de Incidente",
+    };
+    const heading = headings[eventType] || "Notificación de Incidente";
+    const subject = `[${incident.ticketNumber}] ${heading} - ${incident.customerName}`;
+
+    const escapeHtml = (s: string) =>
+      String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const row = (label: string, value?: string | null) =>
+      value
+        ? `<div class="info-row"><div class="info-label">${label}:</div><div class="info-value">${escapeHtml(value)}</div></div>`
+        : "";
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+            .container { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #4DA3FF 0%, #1F3C88 100%); color: white; padding: 24px 20px; text-align: center; }
+            .header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+            .ticket { font-family: monospace; font-size: 14px; opacity: 0.9; margin-top: 6px; }
+            .content { padding: 24px 20px; }
+            .info-row { display: flex; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+            .info-row:last-child { border-bottom: none; }
+            .info-label { font-weight: 600; color: #6b7280; min-width: 130px; }
+            .info-value { color: #111827; }
+            .message { background: #f9fafb; padding: 15px; border-radius: 6px; margin-top: 16px; border-left: 4px solid #4DA3FF; }
+            .button-container { text-align: center; margin: 24px 0 4px; }
+            .button { display: inline-block; background: linear-gradient(135deg, #4DA3FF 0%, #1F3C88 100%); color: white !important; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 15px; }
+            .footer { background: #f9fafb; padding: 18px; text-align: center; color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>${heading}</h1>
+              <div class="ticket">${escapeHtml(incident.ticketNumber)}</div>
+            </div>
+            <div class="content">
+              ${extraMessage ? `<div class="message">${escapeHtml(extraMessage)}</div>` : ""}
+              ${row("Cliente", incident.customerName)}
+              ${row("Asunto", incident.subject)}
+              ${row("Tipo", INCIDENT_TYPE_LABELS[incident.type] || incident.type)}
+              ${row("Urgencia", INCIDENT_URGENCY_LABELS[incident.urgency] || incident.urgency)}
+              ${row("Estado", INCIDENT_STATUS_LABELS[incident.status] || incident.status)}
+              ${row("Descripción", incident.description)}
+              ${row("Contacto", incident.contactName)}
+              ${row("Email", incident.contactEmail)}
+              ${row("Teléfono", incident.contactPhone)}
+              ${detailUrl ? `<div class="button-container"><a href="${detailUrl}" class="button">Ver Incidente</a></div>` : ""}
+            </div>
+            <div class="footer">
+              <p><strong>${escapeHtml(tenantName)}</strong> - Sistema Comercial</p>
+              <p>Este es un correo automático, por favor no responder.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+
+    for (const email of to) {
+      try {
+        const emailParams = new EmailParams()
+          .setFrom(sentFrom)
+          .setTo([new Recipient(email)])
+          .setSubject(subject)
+          .setHtml(htmlContent);
+        await mailerSend.email.send(emailParams);
+        console.log(`✅ Incident notification sent to: ${email}`);
+      } catch (individualError) {
+        console.error(`❌ Failed to send incident notification to ${email}:`, individualError);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error sending incident notification:", error);
+  }
+}
+
 interface SendPasswordResetEmailParams {
   to: string;
   userName: string;

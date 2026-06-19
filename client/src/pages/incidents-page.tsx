@@ -230,6 +230,7 @@ export default function IncidentsPage() {
   const [previewIncident, setPreviewIncident] = useState<IncidentWithDetails | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
   const { toast } = useToast();
 
   const form = useForm<IncidentFormData>({
@@ -280,6 +281,15 @@ export default function IncidentsPage() {
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
   });
+
+  const filteredCustomers = useMemo(() => {
+    const list = customers ?? [];
+    const normalize = (s: string) =>
+      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    const query = normalize(customerSearch);
+    if (!query) return list;
+    return list.filter((c) => normalize(c.name).includes(query));
+  }, [customers, customerSearch]);
 
   const createMutation = useMutation({
     mutationFn: async (data: IncidentFormData) => {
@@ -403,11 +413,12 @@ export default function IncidentsPage() {
             {t("incidents.subtitle")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full sm:w-auto items-center gap-2">
           <Button
             variant="outline"
             onClick={downloadPdf}
             disabled={isDownloadingPdf}
+            className="flex-1 sm:flex-none"
             data-testid="button-download-incidents-pdf"
           >
             {isDownloadingPdf ? (
@@ -417,7 +428,11 @@ export default function IncidentsPage() {
             )}
             Reporte Vigentes
           </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-incident">
+          <Button
+            onClick={() => setCreateDialogOpen(true)}
+            className="flex-1 sm:flex-none"
+            data-testid="button-create-incident"
+          >
             <Plus className="h-4 w-4 mr-2" />
             {t("incidents.new")}
           </Button>
@@ -761,7 +776,7 @@ export default function IncidentsPage() {
       </Sheet>
 
       {/* Create Incident Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog open={createDialogOpen} onOpenChange={(open) => { setCreateDialogOpen(open); if (!open) setCustomerSearch(""); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -802,19 +817,25 @@ export default function IncidentsPage() {
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Escribe el nombre del cliente..." data-testid="input-customer-search" />
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Escribe el nombre del cliente..."
+                            value={customerSearch}
+                            onValueChange={setCustomerSearch}
+                            data-testid="input-customer-search"
+                          />
                           <CommandList>
                             <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                             <CommandGroup>
-                              {customers?.map((customer) => (
+                              {filteredCustomers.map((customer) => (
                                 <CommandItem
                                   key={customer.id}
-                                  value={customer.name}
+                                  value={customer.id}
                                   onSelect={() => {
                                     field.onChange(customer.id);
                                     form.setValue("productInstanceId", "");
                                     setCustomerPopoverOpen(false);
+                                    setCustomerSearch("");
                                   }}
                                   data-testid={`option-customer-${customer.id}`}
                                 >

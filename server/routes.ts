@@ -6440,6 +6440,66 @@ Proporciona tu análisis en el siguiente formato JSON:
     });
   }
 
+  // Get email addresses of active admin users for a tenant
+  async function getTenantAdminEmails(tenantId: string): Promise<string[]> {
+    try {
+      const admins = await db.query.users.findMany({
+        where: and(
+          eq(users.tenantId, tenantId),
+          eq(users.role, UserRole.ADMIN),
+          eq(users.active, true),
+        ),
+      });
+      return admins
+        .map((a) => a.email)
+        .filter((e): e is string => !!e && e.includes("@"));
+    } catch (error) {
+      console.error("Error fetching admin emails:", error);
+      return [];
+    }
+  }
+
+  // Send incident notification email to tenant admins (fire-and-forget)
+  async function notifyAdminsOfIncident(params: {
+    tenantId: string;
+    eventType: "created" | "customer_comment" | "status_change";
+    incident: any;
+    customerName: string;
+    extraMessage?: string;
+  }) {
+    try {
+      const { tenantId, eventType, incident, customerName, extraMessage } = params;
+      const adminEmails = await getTenantAdminEmails(tenantId);
+      if (adminEmails.length === 0) return;
+
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, tenantId),
+      });
+
+      const { sendIncidentNotificationEmail } = await import("./email-service");
+      await sendIncidentNotificationEmail({
+        to: adminEmails,
+        eventType,
+        incident: {
+          ticketNumber: incident.ticketNumber,
+          customerName,
+          type: incident.type,
+          urgency: incident.urgency,
+          status: incident.status,
+          subject: incident.subject,
+          description: incident.description,
+          contactName: incident.contactName,
+          contactEmail: incident.contactEmail,
+          contactPhone: incident.contactPhone,
+        },
+        extraMessage,
+        tenantName: tenant?.name || "Nexxo",
+      });
+    } catch (error) {
+      console.error("Error notifying admins of incident:", error);
+    }
+  }
+
   // Get all incidents (with filters)
   app.get("/api/incidents", isAuthenticated, async (req, res) => {
     try {
@@ -6593,6 +6653,14 @@ Proporciona tu análisis en el siguiente formato JSON:
         undefined,
         `Incidente creado con número ${ticketNumber}`
       );
+
+      notifyAdminsOfIncident({
+        tenantId,
+        eventType: "created",
+        incident: newIncident,
+        customerName: customer.name,
+        extraMessage: `Se ha creado un nuevo incidente (${ticketNumber}) por ${user.fullName}.`,
+      });
 
       res.status(201).json(newIncident);
     } catch (error) {
@@ -7179,6 +7247,14 @@ Proporciona tu análisis en el siguiente formato JSON:
         true
       );
 
+      notifyAdminsOfIncident({
+        tenantId,
+        eventType: "created",
+        incident: newIncident,
+        customerName: customer.name,
+        extraMessage: `Un cliente ha creado un nuevo incidente (${ticketNumber}) desde el portal de clientes.`,
+      });
+
       // Save attachments if any were uploaded
       if (attachments && Array.isArray(attachments) && attachments.length > 0) {
         const allowedMimeTypes = [
@@ -7647,6 +7723,19 @@ Proporciona tu análisis en el siguiente formato JSON:
         hasAttachments ? 'Comentario con evidencia agregado por el cliente' : 'Comentario agregado por el cliente',
         true
       );
+
+      const commentCustomer = await db.query.customers.findFirst({
+        where: eq(customers.id, incident.customerId),
+      });
+      notifyAdminsOfIncident({
+        tenantId: incident.tenantId,
+        eventType: "customer_comment",
+        incident,
+        customerName: commentCustomer?.name || "Cliente",
+        extraMessage: hasContent
+          ? `El cliente respondió en el incidente ${incident.ticketNumber}: "${content.trim()}"`
+          : `El cliente agregó evidencia al incidente ${incident.ticketNumber}.`,
+      });
 
       // Update status if waiting for customer
       if (incident.status === IncidentStatus.ESPERANDO_CLIENTE) {
