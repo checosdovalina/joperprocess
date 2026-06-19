@@ -211,8 +211,14 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
       for (let oi = 0; oi < orders.length; oi++) {
         const order = orders[oi];
 
-        // Estimate height needed for this order
-        const itemsH = Math.max(order.items.length, 1) * 16 + 20;
+        // Estimate height needed for this order — measure each product label to handle wraps
+        const itemProductW = CONTENT_W - (10 + 3) * 2 - 80; // innerW - qty column
+        const itemsH = order.items.length === 0
+          ? 16 + 20
+          : order.items.reduce((sum, item) => {
+              const label = item.productCode ? `${item.productCode} — ${item.productName}` : item.productName;
+              return sum + doc.fontSize(8.5).font("Helvetica").heightOfString(label, { width: itemProductW }) + 4;
+            }, 20); // 20 = header row (14) + divider (6)
         const notesTextW = CONTENT_W - (10 + 3) * 2 - 38; // innerW - label width
         const notesH = order.notes
           ? doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: notesTextW }) + 4
@@ -300,12 +306,13 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
           for (const item of order.items) {
             doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
             const qty = parseFloat(item.quantity).toLocaleString("es-MX", { maximumFractionDigits: 2 });
-            doc.text(`${qty} ${item.unitOfMeasure}`, innerX + 4, cardY, { width: 70, lineBreak: false });
             const productLabel = item.productCode
               ? `${item.productCode} — ${item.productName}`
               : item.productName;
-            doc.text(productLabel, innerX + 80, cardY, { width: innerW - 80, lineBreak: false });
-            cardY += 14;
+            const labelH = doc.fontSize(8.5).font("Helvetica").heightOfString(productLabel, { width: innerW - 80 });
+            doc.text(`${qty} ${item.unitOfMeasure}`, innerX + 4, cardY, { width: 70, lineBreak: false });
+            doc.text(productLabel, innerX + 80, cardY, { width: innerW - 80 });
+            cardY += labelH + 4;
           }
         }
 
