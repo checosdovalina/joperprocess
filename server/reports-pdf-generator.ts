@@ -192,7 +192,10 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
 
         // Estimate height needed for this order
         const itemsH = Math.max(order.items.length, 1) * 16 + 20;
-        const notesH = order.notes ? 14 : 0;
+        const notesTextW = CONTENT_W - (10 + 3) * 2 - 38; // innerW - label width
+        const notesH = order.notes
+          ? doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: notesTextW }) + 4
+          : 0;
         const orderH = 58 + itemsH + 14 + notesH;
 
         // Page break
@@ -251,13 +254,14 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         doc.text(STATUS_LABELS[order.status] || order.status, col2X + 45, cardY, { lineBreak: false });
         cardY += 14;
 
-        // Row 4: Notas (from quotation)
+        // Row 4: Notas (from quotation) — allow wrapping for long notes
         if (order.notes) {
           doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
           doc.text("Notas:", innerX, cardY, { lineBreak: false });
           doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-          doc.text(order.notes, innerX + 38, cardY, { width: innerW - 38, lineBreak: false });
-          cardY += 14;
+          doc.text(order.notes, innerX + 38, cardY, { width: innerW - 38 });
+          const renderedNotesH = doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: innerW - 38 });
+          cardY += renderedNotesH + 4;
         }
 
         // Items divider
