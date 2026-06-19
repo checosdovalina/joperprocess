@@ -24,6 +24,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   AlertTriangle,
   Search,
   Plus,
@@ -45,7 +58,10 @@ import {
   Barcode,
   Package,
   RefreshCw,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -213,6 +229,7 @@ export default function IncidentsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [previewIncident, setPreviewIncident] = useState<IncidentWithDetails | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<IncidentFormData>({
@@ -501,7 +518,66 @@ export default function IncidentsPage() {
               <p>{hasActiveFilters ? t("incidents.no-results-filter") : t("incidents.no-results")}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile card list */}
+            <div className="space-y-3 md:hidden">
+              {incidents.map((incident) => (
+                <div
+                  key={incident.id}
+                  className="rounded-md border p-3 space-y-2 hover-elevate cursor-pointer"
+                  onClick={() => setPreviewIncident(incident)}
+                  data-testid={`card-incident-${incident.id}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-medium text-sm" data-testid={`text-ticket-mobile-${incident.id}`}>
+                      {incident.ticketNumber}
+                    </span>
+                    {getStatusBadge(incident.status)}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate">{incident.customer?.name}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{incident.subject}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {getTypeBadge(incident.type)}
+                    {getUrgencyBadge(incident.urgency)}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(incident.createdAt), "dd/MM/yy HH:mm", { locale: es })}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/incidents/${incident.id}`);
+                        }}
+                        data-testid={`button-view-mobile-${incident.id}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyAccessLink(incident);
+                        }}
+                        title="Copiar enlace"
+                        data-testid={`button-copy-link-mobile-${incident.id}`}
+                      >
+                        <Link2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="overflow-x-auto hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -599,6 +675,7 @@ export default function IncidentsPage() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -699,28 +776,62 @@ export default function IncidentsPage() {
                 control={form.control}
                 name="customerId"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Cliente</FormLabel>
-                    <Select 
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        form.setValue("productInstanceId", "");
-                      }} 
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-customer">
-                          <SelectValue placeholder="Selecciona un cliente" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {customers?.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            {customer.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={customerPopoverOpen}
+                            className={cn(
+                              "w-full justify-between font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                            data-testid="select-customer"
+                          >
+                            <span className="truncate">
+                              {field.value
+                                ? customers?.find((c) => c.id === field.value)?.name
+                                : "Selecciona un cliente"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Escribe el nombre del cliente..." data-testid="input-customer-search" />
+                          <CommandList>
+                            <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                            <CommandGroup>
+                              {customers?.map((customer) => (
+                                <CommandItem
+                                  key={customer.id}
+                                  value={customer.name}
+                                  onSelect={() => {
+                                    field.onChange(customer.id);
+                                    form.setValue("productInstanceId", "");
+                                    setCustomerPopoverOpen(false);
+                                  }}
+                                  data-testid={`option-customer-${customer.id}`}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === customer.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="truncate">{customer.name}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
