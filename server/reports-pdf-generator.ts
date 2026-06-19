@@ -429,7 +429,8 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
         const resH = inc.resolution
           ? doc.fontSize(8).font("Helvetica").heightOfString(inc.resolution, { width: descW }) + 14
           : 0;
-        const cardH = 68 + descH + resH;
+        // cardPad(10) + 4 rows×14 + label"Descripción:"(11) + descH + resH + cardPad(10) = 87 + descH + resH
+        const cardH = 87 + descH + resH;
 
         // Page break
         if (currentY + cardH > PAGE_H - 50) {
