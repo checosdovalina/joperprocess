@@ -4376,6 +4376,45 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // POST /api/reports/incidents/pdf — download PDF of active (vigentes) incidents
+  app.post("/api/reports/incidents/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { incidents: incidentData } = req.body;
+      const tenant = req.tenant;
+
+      const tenantBranding = tenant ? {
+        name: tenant.name,
+        legalName: (tenant as any).legalName || null,
+        logoUrl: tenant.logoUrl,
+        primaryColor: tenant.primaryColor,
+        rfc: (tenant as any).rfc || null,
+        address: (tenant as any).address || null,
+        city: (tenant as any).city || null,
+        state: (tenant as any).state || null,
+        zipCode: (tenant as any).zipCode || null,
+        phone: (tenant as any).phone || null,
+        email: (tenant as any).email || null,
+        website: (tenant as any).website || null,
+      } : null;
+
+      const cutoffDate = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+      const { generateIncidentsReportPDF } = await import("./reports-pdf-generator");
+      const pdfStream = await generateIncidentsReportPDF({
+        incidents: incidentData,
+        tenant: tenantBranding,
+        cutoffDate,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="reporte-incidentes-${Date.now()}.pdf"`);
+      pdfStream.pipe(res);
+    } catch (error) {
+      console.error("Error generating incidents PDF:", error);
+      res.status(500).json({ error: "Error al generar el PDF" });
+    }
+  });
+
   app.post("/api/reports/orders/pdf", isAuthenticated, async (req, res) => {
     try {
       const { filters = {}, orders: orderData } = req.body;

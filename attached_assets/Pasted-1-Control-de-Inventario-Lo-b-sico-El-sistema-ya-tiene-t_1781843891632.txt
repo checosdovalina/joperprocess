@@ -1,0 +1,87 @@
+1. Control de Inventario
+Lo básico: El sistema ya tiene tabla de productos con stock. Lo ampliaríamos para cubrir las necesidades solares específicas.
+
+Propuesta ampliada:
+
+Categorías especializadas: Paneles fotovoltaicos, Inversores, Baterías, Estructuras de montaje, Cableado y protecciones, Medidores y monitoreo
+Doble unidad de medida: Por pieza (inversores, paneles) y por rollo/metro (cableado)
+Número de serie por equipo principal: Rastrear cada panel e inversor individualmente desde bodega hasta instalación en proyecto
+Múltiples almacenes / ubicaciones: Bodega central, vehículos de servicio, consignación en proyecto activo
+Movimientos con bitácora: Entradas (compra, devolución), salidas (venta, instalación, merma), transferencias entre almacenes
+Alertas de stock mínimo configurables por producto
+Fotos del equipo en recepción (aprovechando el sistema de fotos existente)
+2. Reducción de Ventas contra Inventario de Equipos Principales
+Lo básico: Vincular cotizaciones/pedidos con el stock real.
+
+Propuesta ampliada:
+
+Stock disponible vs. comprometido: Al crear una cotización, los equipos quedan en estado "reservado" (no restados aún). Al convertirse en pedido confirmado, se descuentan del inventario
+Alerta en cotización: Si al cotizar no hay suficiente stock, mostrar aviso con fecha estimada de disponibilidad basada en pedidos de compra abiertos
+Vista de disponibilidad por proyecto: Tablero que muestra qué proyectos tienen todos sus equipos listos vs. cuáles están esperando material
+Equipos principales vs. consumibles: Diferenciación automática — los paneles e inversores llevan control por serie, el cableado y conectores por cantidad/metro
+Reposición sugerida automática: Cuando el stock cae bajo el mínimo configurado, el sistema sugiere crear una requisición de compra
+3. Requisición de Materiales y Análisis contra Inventario → Requisición de Compra
+Lo básico: Lista de materiales por proyecto comparada contra inventario.
+
+Propuesta ampliada:
+
+Plantillas de instalación (Listas de Materiales / BOM): Definir una instalación típica de X kW: cuántos paneles, qué inversor, cuántos metros de cable, cuántos conectores, etc. Al crear un proyecto, se pre-llena la requisición automáticamente
+Requisición de materiales por proyecto: El ingeniero o coordinador declara qué se necesita para cada instalación
+Análisis automático stock vs. requisición: El sistema compara la lista con el inventario actual y muestra:
+✅ Disponible en bodega
+⚠️ Stock parcial (hay pero no suficiente)
+❌ Sin stock (requiere compra)
+Generación de Requisición de Compra: Con un clic, los faltantes se convierten en una orden de compra propuesta, agrupando por proveedor
+Flujo de aprobación: La requisición de compra pasa por aprobación del director antes de enviarse al proveedor
+Seguimiento de compras: Estado de cada OC (enviada, confirmada, en tránsito, recibida parcial, recibida total)
+4. Registro de Movimientos Bancarios y Efectivo (Tesorería)
+Lo básico: Registro de ingresos y egresos por cuenta.
+
+Propuesta ampliada:
+
+Cuentas configurables: Múltiples cuentas bancarias + caja chica + caja principal. Cada una con banco, número de cuenta, moneda
+Movimientos de ingreso: Pagos de clientes (vinculados a facturas existentes), anticipos de proyectos, ingresos varios
+Movimientos de egreso: Pago a proveedores (vinculados a OC), nómina, gastos operativos (gasolina, herramientas), impuestos, servicios
+Categorías de gasto personalizables: Para análisis posterior (mano de obra, material, logística, administrativo, etc.)
+Transferencias entre cuentas: Mover saldo de caja a banco y viceversa, con registro completo
+Conciliación bancaria básica: Subir extracto o ingresar saldo bancario real y comparar contra lo registrado en el sistema
+Saldo en tiempo real por cuenta y global
+Vinculación con facturas y OC: Al registrar un pago a proveedor, se liga a la OC correspondiente; al registrar cobro de cliente, se liga a la factura
+5. Tablas de Análisis de Ingresos y Egresos Mensuales
+Lo básico: Dashboard financiero mensual.
+
+Propuesta ampliada:
+
+Estado de Resultados simplificado por mes: Ingresos totales, Costo de ventas (material + mano de obra), Gastos operativos, Utilidad bruta y neta
+Análisis de ingresos:
+Por cliente (¿quién genera más?)
+Por tipo de proyecto (residencial, comercial, industrial)
+Por vendedor
+Por zona geográfica
+Análisis de egresos:
+Por categoría (material, mano de obra, logística, etc.)
+Por proveedor (¿a quién le compras más?)
+Por proyecto
+Flujo de caja proyectado: Con base en facturas pendientes de cobro y compras pendientes de pago, proyectar el saldo bancario para los próximos 30-60-90 días
+Indicadores clave (KPIs):
+Días de cobro promedio (DSO)
+Margen bruto por proyecto
+Ticket promedio de venta
+Proyectos completados vs. en proceso
+Exportación a Excel de cualquier tabla para análisis externo
+6. Análisis de Costo por Proyecto en Base a Compras
+Lo básico: Comparar costo real vs. costo cotizado por proyecto.
+
+Propuesta ampliada:
+
+Costo presupuestado del proyecto: Al momento de crear el pedido/cotización, el sistema calcula el costo esperado en base a la lista de precios de los materiales del BOM
+Registro de costo real: Cada compra de material se vincula a un proyecto específico. Los movimientos de tesorería de mano de obra también se asignan al proyecto
+Ficha de rentabilidad por proyecto:
+Precio de venta (cotización)
+Costo material real (compras vinculadas)
+Costo instalación/mano de obra
+Otros gastos (transporte, permisos, etc.)
+Margen real vs. margen estimado
+Alertas de desviación: Si el costo real supera el presupuestado en más de un X%, el sistema notifica al administrador
+Comparativo de proyectos: Ordenar todos los proyectos por rentabilidad real para identificar qué tipo de instalaciones son más rentables
+Reporte de cierre de proyecto: Al marcar un proyecto como completado, generar PDF con resumen financiero completo

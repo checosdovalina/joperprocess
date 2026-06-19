@@ -31,6 +31,7 @@ import {
   Filter,
   X,
   Loader2,
+  FileDown,
   Clock,
   CheckCircle2,
   XCircle,
@@ -211,6 +212,7 @@ export default function IncidentsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [previewIncident, setPreviewIncident] = useState<IncidentWithDetails | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<IncidentFormData>({
@@ -317,6 +319,52 @@ export default function IncidentsPage() {
     },
   });
 
+  const ACTIVE_STATUSES = ["nuevo", "asignado", "en_proceso", "esperando_cliente", "esperando_interno"];
+
+  const downloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      const response = await fetch("/api/incidents", { credentials: "include" });
+      const allIncidents: IncidentWithDetails[] = await response.json();
+      const vigentes = allIncidents.filter((i) => ACTIVE_STATUSES.includes(i.status));
+
+      const incidentData = vigentes.map((i) => ({
+        ticketNumber: i.ticketNumber,
+        customerName: (i as any).customer?.name || "—",
+        type: i.type,
+        urgency: i.urgency,
+        status: i.status,
+        subject: i.subject,
+        description: i.description,
+        assignedArea: i.assignedArea || null,
+        assignedUserName: (i as any).assignedUser?.fullName || null,
+        contactName: i.contactName || null,
+        resolution: i.resolution || null,
+        createdAt: i.createdAt,
+      }));
+
+      const pdfResp = await fetch("/api/reports/incidents/pdf", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ incidents: incidentData }),
+      });
+
+      if (!pdfResp.ok) throw new Error("Error al generar el PDF");
+      const blob = await pdfResp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `reporte-incidentes-${Date.now()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Error", description: "No se pudo generar el reporte.", variant: "destructive" });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const clearFilters = () => {
     setFilterStatus("");
     setFilterType("");
@@ -338,10 +386,25 @@ export default function IncidentsPage() {
             {t("incidents.subtitle")}
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-incident">
-          <Plus className="h-4 w-4 mr-2" />
-          {t("incidents.new")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={downloadPdf}
+            disabled={isDownloadingPdf}
+            data-testid="button-download-incidents-pdf"
+          >
+            {isDownloadingPdf ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4 mr-2" />
+            )}
+            Reporte Vigentes
+          </Button>
+          <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-incident">
+            <Plus className="h-4 w-4 mr-2" />
+            {t("incidents.new")}
+          </Button>
+        </div>
       </div>
 
       <Card>
