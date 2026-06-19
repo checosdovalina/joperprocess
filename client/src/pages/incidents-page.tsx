@@ -403,7 +403,7 @@ export default function IncidentsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
             <AlertTriangle className="h-6 w-6" />
@@ -413,12 +413,12 @@ export default function IncidentsPage() {
             {t("incidents.subtitle")}
           </p>
         </div>
-        <div className="flex w-full sm:w-auto items-center gap-2">
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
           <Button
             variant="outline"
             onClick={downloadPdf}
             disabled={isDownloadingPdf}
-            className="flex-1 sm:flex-none"
+            className="w-full sm:w-auto"
             data-testid="button-download-incidents-pdf"
           >
             {isDownloadingPdf ? (
@@ -430,7 +430,7 @@ export default function IncidentsPage() {
           </Button>
           <Button
             onClick={() => setCreateDialogOpen(true)}
-            className="flex-1 sm:flex-none"
+            className="w-full sm:w-auto"
             data-testid="button-create-incident"
           >
             <Plus className="h-4 w-4 mr-2" />
