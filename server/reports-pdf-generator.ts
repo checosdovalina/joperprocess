@@ -211,15 +211,20 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
       for (let oi = 0; oi < orders.length; oi++) {
         const order = orders[oi];
 
-        // Estimate height needed for this order — measure each product label to handle wraps
-        const itemProductW = CONTENT_W - (10 + 3) * 2 - 80; // innerW - qty column
+        // Pre-calculate layout constants (same as used during rendering)
+        const cardPadEst = 10;
+        const innerWEst = CONTENT_W - cardPadEst * 2 - 3;
+        const productColW = innerWEst - 80; // same as innerW - 80 used during rendering
+
+        // Estimate height — measure each product label exactly as it will be rendered
         const itemsH = order.items.length === 0
           ? 16 + 20
           : order.items.reduce((sum, item) => {
               const label = item.productCode ? `${item.productCode} — ${item.productName}` : item.productName;
-              return sum + doc.fontSize(8.5).font("Helvetica").heightOfString(label, { width: itemProductW }) + 4;
+              const h = doc.fontSize(8.5).font("Helvetica").heightOfString(label, { width: productColW });
+              return sum + h + 6; // +6 gap between rows
             }, 20); // 20 = header row (14) + divider (6)
-        const notesTextW = CONTENT_W - (10 + 3) * 2 - 38; // innerW - label width
+        const notesTextW = innerWEst - 38; // innerW - label width
         const notesH = order.notes
           ? doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: notesTextW }) + 4
           : 0;
@@ -312,7 +317,7 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
             const labelH = doc.fontSize(8.5).font("Helvetica").heightOfString(productLabel, { width: innerW - 80 });
             doc.text(`${qty} ${item.unitOfMeasure}`, innerX + 4, cardY, { width: 70, lineBreak: false });
             doc.text(productLabel, innerX + 80, cardY, { width: innerW - 80 });
-            cardY += labelH + 4;
+            cardY += labelH + 6;
           }
         }
 
