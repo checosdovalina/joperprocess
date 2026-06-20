@@ -47,13 +47,21 @@ const sections = [
     ],
   },
   {
+    title: "Liberación de Pedidos (Módulo Nuevo)",
+    items: [
+      "Nuevo módulo de Liberación de Pedidos para revisión y aprobación administrativa antes de producción.",
+      "Ajuste de pedidos pendientes (cantidades, precios y detalles) antes de liberarlos.",
+      "Campos de fecha de aprobación y de liberación de crédito en cada pedido.",
+      "Notificación automática a los administradores cuando hay un pedido pendiente de liberación.",
+      "Detalle completo de la cotización visible dentro de la vista de liberación.",
+      "Actualización automática de las vistas relacionadas al liberar un pedido.",
+      "Acceso restringido al rol Administrador (menú: Ventas → Liberación de Pedidos).",
+    ],
+  },
+  {
     title: "Pedidos y Producción",
     items: [
-      "Flujo de liberación de pedidos para revisión y aprobación administrativa.",
-      "Ajuste de pedidos pendientes antes de su liberación.",
-      "Campos de fecha de aprobación y liberación de crédito en pedidos.",
       "Filtrado por órdenes de producción activas y solo pedidos aprobados.",
-      "Notificación a administradores cuando hay un pedido pendiente de liberación.",
       "Reporte de pedidos muestra la fecha de aprobación del cliente como fecha de cierre.",
       "Títulos de los tableros de ventas y producción actualizados.",
       "Nombres de clientes ocultos en el tablero de producción.",
