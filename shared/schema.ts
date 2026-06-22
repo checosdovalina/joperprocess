@@ -112,6 +112,7 @@ export const OrderStatus = {
   RELEASED: "released",
   SHIPPED: "shipped",
   DELIVERED: "delivered",
+  CLOSED: "closed",
   CANCELLED: "cancelled",
 } as const;
 

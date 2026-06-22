@@ -59,6 +59,7 @@ const AUTH_STATUS_COLORS: Record<string, string> = {
 const ORDER_STATUS_COLORS: Record<string, string> = {
   pending: "#6b7280", in_production: "#3b82f6", ready: "#22c55e",
   partially_released: "#f97316", released: "#a855f7", shipped: "#818cf8", delivered: "#10b981",
+  closed: "#64748b", cancelled: "#ef4444",
 };
 const SHIP_STATUS_COLORS: Record<string, string> = {
   pending: "#6b7280", in_transit: "#3b82f6", delivered: "#10b981",
@@ -306,6 +307,7 @@ function OrderCard({ o }: { o: PipelineOrder }) {
     pending: "status.pending", in_production: "status.in-production", ready: "status.ready",
     partially_released: "status.partial", released: "status.released",
     shipped: "status.shipped", delivered: "status.delivered",
+    closed: "status.closed", cancelled: "status.cancelled",
   };
   const cfg = { label: t(orderStatusKey[o.status] ?? o.status), color: ORDER_STATUS_COLORS[o.status] ?? "#6b7280" };
 

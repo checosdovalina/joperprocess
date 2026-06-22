@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, Eye, EyeOff, Truck, FileText, ChevronRight, Mail, Factory, Calendar, Clock, AlertCircle, Search, XCircle } from "lucide-react";
+import { Package, Plus, Eye, EyeOff, Truck, FileText, ChevronRight, Mail, Factory, Calendar, Clock, AlertCircle, Search, XCircle, CheckCircle2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -197,6 +197,22 @@ export default function OrdersPage() {
     setCancelDialogOpen(true);
   };
 
+  const closeOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest("POST", `/api/orders/${orderId}/close`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Pedido cerrado", description: "El pedido se marcó como cerrado" });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pipeline"] });
+      setDetailsDialogOpen(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err?.message || "No se pudo cerrar el pedido", variant: "destructive" });
+    },
+  });
+
   const handleSaveProductionInfo = () => {
     updateOrderMutation.mutate({
       estimatedDelivery: editEstimatedDelivery || null,
@@ -246,6 +262,7 @@ export default function OrdersPage() {
       [OrderStatus.PARTIALLY_RELEASED]: { label: t("status.partial"), className: "bg-yellow-100 text-yellow-800" },
       [OrderStatus.SHIPPED]: { label: t("status.shipped"), className: "bg-purple-100 text-purple-800" },
       [OrderStatus.DELIVERED]: { label: t("status.delivered"), className: "bg-green-100 text-green-800" },
+      [OrderStatus.CLOSED]: { label: t("status.closed"), className: "bg-slate-200 text-slate-800" },
       [OrderStatus.CANCELLED]: { label: t("status.cancelled"), className: "bg-red-100 text-red-800" },
     };
     const config = statusConfig[status] || statusConfig[OrderStatus.PENDING];
@@ -478,7 +495,19 @@ export default function OrdersPage() {
                           >
                             <Truck className="h-4 w-4" />
                           </Button>
-                          {isAdmin && order.status !== OrderStatus.CANCELLED && (
+                          {isAdmin && (order.status === OrderStatus.SHIPPED || order.status === OrderStatus.DELIVERED) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => closeOrderMutation.mutate(order.id)}
+                              disabled={closeOrderMutation.isPending}
+                              data-testid={`button-close-order-${order.id}`}
+                              title="Cerrar pedido (proceso terminado)"
+                            >
+                              <CheckCircle2 className="h-4 w-4 text-slate-600" />
+                            </Button>
+                          )}
+                          {isAdmin && order.status !== OrderStatus.CANCELLED && order.status !== OrderStatus.CLOSED && (
                             <Button
                               variant="ghost"
                               size="icon"

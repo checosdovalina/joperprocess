@@ -3697,7 +3697,13 @@ Proporciona tu análisis en el siguiente formato JSON:
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
       const updateData = { ...req.body };
-      
+
+      // Terminal statuses must go through their dedicated admin-only endpoints
+      // (POST /close, POST /cancel). Block them here to prevent bypassing role checks.
+      if (updateData.status === OrderStatus.CLOSED || updateData.status === OrderStatus.CANCELLED) {
+        return res.status(403).json({ error: "Usa la opción de Cerrar o Cancelar pedido (solo administradores)" });
+      }
+
       // Convert estimatedDelivery string to Date object if present
       if (updateData.estimatedDelivery) {
         updateData.estimatedDelivery = new Date(updateData.estimatedDelivery);
@@ -3750,6 +3756,45 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error cancelling order:", error);
       res.status(500).json({ error: "Error cancelling order" });
+    }
+  });
+
+  app.post("/api/orders/:id/close", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { id } = req.params;
+
+      const existing = await scopedStorage.getOrder(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      if (existing.status === OrderStatus.CLOSED) {
+        return res.status(400).json({ error: "El pedido ya está cerrado" });
+      }
+      if (existing.status === OrderStatus.CANCELLED) {
+        return res.status(400).json({ error: "No se puede cerrar un pedido cancelado" });
+      }
+      if (existing.status !== OrderStatus.SHIPPED && existing.status !== OrderStatus.DELIVERED) {
+        return res.status(400).json({ error: "Solo se pueden cerrar pedidos embarcados o entregados" });
+      }
+
+      const stamp = format(new Date(), "dd/MM/yyyy");
+      const closeNote = `[Cerrado ${stamp} por ${req.user!.name || req.user!.username}]`;
+      const factoryNotes = existing.factoryNotes ? `${existing.factoryNotes}\n${closeNote}` : closeNote;
+
+      const updatedOrder = await scopedStorage.updateOrder(id, {
+        status: OrderStatus.CLOSED,
+        factoryNotes,
+        lastUpdatedBy: req.user!.id,
+        updatedAt: new Date(),
+      });
+      if (!updatedOrder) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("Error closing order:", error);
+      res.status(500).json({ error: "Error closing order" });
     }
   });
 
