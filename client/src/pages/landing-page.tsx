@@ -129,18 +129,20 @@ export default function LandingPage() {
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth?tab=register">
+              <Link href={isSubdomain ? "/auth?tab=register" : "/registro"}>
                 <Button size="lg" className="text-lg px-8" data-testid="button-hero-start">
                   Comenzar Ahora
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Link href="/soporte">
-                <Button size="lg" variant="outline" className="text-lg px-8" data-testid="button-hero-support">
-                  Portal de Soporte
-                  <Globe className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
+              {isSubdomain && (
+                <Link href="/soporte">
+                  <Button size="lg" variant="outline" className="text-lg px-8" data-testid="button-hero-support">
+                    Portal de Soporte
+                    <Globe className="ml-2 h-5 w-5" />
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -232,9 +234,11 @@ export default function LandingPage() {
               © {new Date().getFullYear()} Nexxo. Sistema Comercial Integral.
             </p>
             <div className="flex items-center gap-4">
-              <Link href="/soporte" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Soporte
-              </Link>
+              {isSubdomain && (
+                <Link href="/soporte" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Soporte
+                </Link>
+              )}
               <Link href="/auth" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 Acceder
               </Link>

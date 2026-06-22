@@ -62,6 +62,7 @@ import PublicShippingApprovalPage from "@/pages/public-shipping-approval";
 import PublicAccountStatementPage from "@/pages/public-account-statement-page";
 import PublicIncidentPortal from "@/pages/public-incident-portal";
 import PublicSupportPage from "@/pages/public-support-page";
+import CompanyRegistrationPage from "@/pages/company-registration-page";
 import PublicTicketPage from "@/pages/public-ticket-page";
 import TenantsPage from "@/pages/tenants-page";
 import ProductionPage from "@/pages/production-page";
@@ -214,8 +215,9 @@ export default function App() {
   const [isIncidentPortal] = useRoute("/public/incidents/:token");
   const [isSupportPage] = useRoute("/soporte");
   const [isTicketPage] = useRoute("/soporte/ticket/:token");
+  const [isRegisterCompany] = useRoute("/registro");
   const [isBoardRoute] = useRoute("/board");
-  const isPublicRoute = isLandingPage || isAuthPage || isForgotPassword || isResetPassword || isQuotationApproval || isShippingApproval || isIncidentPortal || isSupportPage || isTicketPage;
+  const isPublicRoute = isLandingPage || isAuthPage || isForgotPassword || isResetPassword || isQuotationApproval || isShippingApproval || isIncidentPortal || isSupportPage || isTicketPage || isRegisterCompany;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -236,6 +238,7 @@ export default function App() {
                   <Route path="/public/incidents/:token" component={PublicIncidentPortal} />
                   <Route path="/soporte/ticket/:token" component={PublicTicketPage} />
                   <Route path="/soporte" component={PublicSupportPage} />
+                  <Route path="/registro" component={CompanyRegistrationPage} />
                 </Switch>
               ) : isBoardRoute ? (
                 <ProtectedRoute path="/board" component={ProductionBoardPage} />

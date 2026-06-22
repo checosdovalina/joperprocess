@@ -9,7 +9,7 @@ import { User as SelectUser, UserRole, users, passwordResetTokens, tenants } fro
 import { db } from "./db";
 import { eq, and, or, isNull, gt } from "drizzle-orm";
 import { z } from "zod";
-import { sendPasswordResetEmail } from "./email-service";
+import { sendPasswordResetEmail, sendCompanyWelcomeEmail } from "./email-service";
 
 declare global {
   namespace Express {
@@ -212,6 +212,140 @@ export function setupAuth(app: Express) {
       }
     } catch (error) {
       next(error);
+    }
+  });
+
+  // Public company self-registration - creates a tenant + admin user, emails credentials
+  app.post("/api/register-company", async (req, res) => {
+    try {
+      const schema = z.object({
+        companyName: z.string().trim().min(2, "El nombre de la empresa es requerido").max(100),
+        phone: z.string().trim().min(7, "El teléfono es requerido").max(50),
+        contactEmail: z.string().trim().email("Correo de contacto inválido"),
+      });
+
+      const validationResult = schema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          error: "Datos inválidos",
+          details: validationResult.error.errors,
+        });
+      }
+
+      const { companyName, phone, contactEmail } = validationResult.data;
+
+      // Duplicate company name check (case-insensitive)
+      const existingTenants = await db.select().from(tenants);
+      const nameTaken = existingTenants.some(
+        (t) => t.name.trim().toLowerCase() === companyName.toLowerCase()
+      );
+      if (nameTaken) {
+        return res.status(409).json({
+          error: "La empresa ya fue registrada. Si necesitas acceso, contacta a tu administrador.",
+        });
+      }
+
+      // Generate a unique subdomain slug from the company name
+      const baseSlug =
+        companyName
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "")
+          .slice(0, 30) || "empresa";
+
+      // Pre-pick a candidate that avoids known collisions; the retry loop below
+      // is the real safeguard against concurrent inserts.
+      const usedSubdomains = new Set(existingTenants.map((t) => t.subdomain));
+      let suffix = 0;
+      let subdomain = baseSlug;
+      while (usedSubdomains.has(subdomain)) {
+        suffix++;
+        subdomain = `${baseSlug}${suffix}`;
+      }
+
+      const generatedPassword = randomBytes(6).toString("base64url").slice(0, 10);
+      const hashedPassword = await hashPassword(generatedPassword);
+
+      // Create tenant + admin user atomically. Usernames are globally unique, so
+      // the admin username is namespaced with the (unique) subdomain. On a unique
+      // collision (concurrent signup of the same slug), regenerate and retry.
+      const MAX_ATTEMPTS = 6;
+      let newTenant: typeof tenants.$inferSelect | undefined;
+      let username = "";
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        username = `admin_${subdomain}`;
+        try {
+          newTenant = await db.transaction(async (tx) => {
+            const [tenant] = await tx
+              .insert(tenants)
+              .values({
+                name: companyName,
+                subdomain,
+                email: contactEmail,
+                phone,
+                active: true,
+              })
+              .returning();
+
+            await tx.insert(users).values({
+              username,
+              password: hashedPassword,
+              fullName: "Administrador",
+              email: contactEmail,
+              role: UserRole.ADMIN,
+              active: true,
+              tenantId: tenant.id,
+            });
+
+            return tenant;
+          });
+          break;
+        } catch (err: any) {
+          // Retry only on unique-constraint collisions (subdomain/username races)
+          if (err?.code === "23505" && attempt < MAX_ATTEMPTS - 1) {
+            suffix++;
+            subdomain = `${baseSlug}${suffix}`;
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (!newTenant) {
+        return res.status(500).json({ error: "Error al registrar la empresa" });
+      }
+
+      // Build portal URL
+      const baseDomain = "nexxo.com.mx";
+      const portalUrl = `https://${subdomain}.${baseDomain}`;
+
+      // Send welcome email (fire-and-forget, don't fail registration if email fails)
+      sendCompanyWelcomeEmail({
+        to: contactEmail,
+        companyName,
+        portalUrl,
+        username,
+        password: generatedPassword,
+      }).catch((err) => {
+        console.error("Failed to send company welcome email:", err);
+      });
+
+      res.status(201).json({
+        message: "Empresa registrada exitosamente",
+        companyName,
+        subdomain,
+        portalUrl,
+        emailSentTo: contactEmail,
+      });
+    } catch (error: any) {
+      if (error?.code === "23505") {
+        return res.status(409).json({
+          error: "La empresa ya fue registrada. Si necesitas acceso, contacta a tu administrador.",
+        });
+      }
+      console.error("Error in register-company:", error);
+      res.status(500).json({ error: "Error al registrar la empresa" });
     }
   });
 

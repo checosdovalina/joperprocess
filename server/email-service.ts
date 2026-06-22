@@ -616,3 +616,181 @@ export async function sendPasswordResetEmail({
     throw new Error('Failed to send password reset email');
   }
 }
+
+interface SendCompanyWelcomeEmailParams {
+  to: string;
+  companyName: string;
+  portalUrl: string;
+  username: string;
+  password: string;
+}
+
+export async function sendCompanyWelcomeEmail({
+  to,
+  companyName,
+  portalUrl,
+  username,
+  password,
+}: SendCompanyWelcomeEmailParams): Promise<void> {
+  try {
+    const subject = `Bienvenido a Nexxo - Tu portal de ${companyName} está listo`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+              background-color: #f5f5f5;
+            }
+            .container {
+              background: white;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .header {
+              background: linear-gradient(135deg, #4DA3FF 0%, #1F3C88 100%);
+              color: white;
+              padding: 30px 20px;
+              text-align: center;
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 24px;
+              font-weight: 600;
+            }
+            .content {
+              padding: 30px 20px;
+            }
+            .content p {
+              margin-bottom: 20px;
+            }
+            .button-container {
+              text-align: center;
+              margin: 30px 0;
+            }
+            .button {
+              display: inline-block;
+              background: linear-gradient(135deg, #4DA3FF 0%, #1F3C88 100%);
+              color: white !important;
+              text-decoration: none;
+              padding: 14px 32px;
+              border-radius: 6px;
+              font-weight: 600;
+              font-size: 16px;
+            }
+            .credentials {
+              background: #f0f7ff;
+              border: 1px solid #4DA3FF;
+              border-radius: 6px;
+              padding: 16px 20px;
+              margin: 20px 0;
+            }
+            .credentials p {
+              margin: 8px 0;
+            }
+            .credentials .label {
+              color: #6b7280;
+              font-size: 13px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .credentials .value {
+              font-size: 18px;
+              font-weight: 700;
+              color: #1F3C88;
+              font-family: monospace;
+            }
+            .warning {
+              background: #fff3cd;
+              border: 1px solid #ffc107;
+              color: #856404;
+              padding: 12px;
+              border-radius: 6px;
+              font-size: 14px;
+              margin-top: 20px;
+            }
+            .footer {
+              background: #f9fafb;
+              padding: 20px;
+              text-align: center;
+              color: #6b7280;
+              font-size: 12px;
+              border-top: 1px solid #e5e7eb;
+            }
+            .link-text {
+              word-break: break-all;
+              font-size: 12px;
+              color: #6b7280;
+              margin-top: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>¡Bienvenido a Nexxo!</h1>
+            </div>
+
+            <div class="content">
+              <p>Hola,</p>
+
+              <p>El portal comercial de <strong>${companyName}</strong> ha sido creado exitosamente. Ya puedes acceder a tu plataforma personalizada de Nexxo.</p>
+
+              <div class="button-container">
+                <a href="${portalUrl}" class="button">Acceder a mi portal</a>
+              </div>
+
+              <p>Estos son tus datos de acceso de administrador:</p>
+
+              <div class="credentials">
+                <p><span class="label">Dirección del portal</span><br>
+                <a href="${portalUrl}">${portalUrl}</a></p>
+                <p><span class="label">Usuario</span><br>
+                <span class="value">${username}</span></p>
+                <p><span class="label">Contraseña</span><br>
+                <span class="value">${password}</span></p>
+              </div>
+
+              <div class="warning">
+                ⚠️ Por seguridad, te recomendamos cambiar tu contraseña después de iniciar sesión por primera vez.
+              </div>
+
+              <p class="link-text">
+                Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
+                ${portalUrl}
+              </p>
+            </div>
+
+            <div class="footer">
+              <p><strong>Nexxo</strong> - Sistema Comercial</p>
+              <p>Este es un correo automático, por favor no responder.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const sentFrom = new Sender('noreply@nexxo.com.mx', 'Nexxo');
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo([new Recipient(to)])
+      .setSubject(subject)
+      .setHtml(htmlContent);
+
+    await mailerSend.email.send(emailParams);
+    console.log(`✅ Company welcome email sent to: ${to}`);
+  } catch (error) {
+    console.error('❌ Error sending company welcome email:', error);
+    throw new Error('Failed to send company welcome email');
+  }
+}
