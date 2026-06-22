@@ -368,6 +368,112 @@ export async function sendIncidentNotificationEmail({
   }
 }
 
+interface SendOrderCancellationEmailParams {
+  to: { email: string; name: string }[];
+  orderData: {
+    folio: string;
+    customerName: string;
+    cancelledBy: string;
+    cancelDate: string;
+    reason?: string;
+  };
+  orderUrl?: string;
+  tenantName?: string;
+}
+
+export async function sendOrderCancellationEmail({
+  to,
+  orderData,
+  orderUrl,
+  tenantName = "Nexxo",
+}: SendOrderCancellationEmailParams): Promise<void> {
+  try {
+    if (!to || to.length === 0) {
+      console.warn("⚠️ No admin recipients for order cancellation notification");
+      return;
+    }
+
+    const escapeHtml = (s: string) =>
+      String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const subject = `Pedido ${orderData.folio} cancelado - ${orderData.customerName}`;
+
+    const row = (label: string, value?: string | null) =>
+      value
+        ? `<div class="info-row"><div class="info-label">${label}:</div><div class="info-value">${escapeHtml(value)}</div></div>`
+        : "";
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+            .container { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); color: white; padding: 24px 20px; text-align: center; }
+            .header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+            .content { padding: 24px 20px; }
+            .info-row { display: flex; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+            .info-row:last-child { border-bottom: none; }
+            .info-label { font-weight: 600; color: #6b7280; min-width: 130px; }
+            .info-value { color: #111827; }
+            .reason { background: #fef2f2; padding: 15px; border-radius: 6px; margin-top: 16px; border-left: 4px solid #ef4444; }
+            .reason-label { font-weight: 600; color: #6b7280; margin-bottom: 8px; }
+            .button-container { text-align: center; margin: 24px 0 4px; }
+            .button { display: inline-block; background: linear-gradient(135deg, #4DA3FF 0%, #1F3C88 100%); color: white !important; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 15px; }
+            .footer { background: #f9fafb; padding: 18px; text-align: center; color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Pedido Cancelado</h1>
+            </div>
+            <div class="content">
+              <p>Se ha cancelado el siguiente pedido:</p>
+              ${row("Pedido", orderData.folio)}
+              ${row("Cliente", orderData.customerName)}
+              ${row("Cancelado por", orderData.cancelledBy)}
+              ${row("Fecha", orderData.cancelDate)}
+              <div class="reason">
+                <div class="reason-label">Razón de la cancelación:</div>
+                <div>${orderData.reason ? escapeHtml(orderData.reason) : "No se especificó una razón."}</div>
+              </div>
+              ${orderUrl ? `<div class="button-container"><a href="${orderUrl}" class="button">Ver Pedidos</a></div>` : ""}
+            </div>
+            <div class="footer">
+              <p><strong>${escapeHtml(tenantName)}</strong> - Sistema Comercial</p>
+              <p>Este es un correo automático, por favor no responder.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
+
+    for (const recipient of to) {
+      try {
+        const emailParams = new EmailParams()
+          .setFrom(sentFrom)
+          .setTo([new Recipient(recipient.email, recipient.name)])
+          .setSubject(subject)
+          .setHtml(htmlContent);
+        await mailerSend.email.send(emailParams);
+        console.log(`✅ Order cancellation notification sent to: ${recipient.email}`);
+      } catch (individualError) {
+        console.error(`❌ Failed to send cancellation notification to ${recipient.email}:`, individualError);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error sending order cancellation notification:", error);
+  }
+}
+
 interface SendPasswordResetEmailParams {
   to: string;
   userName: string;

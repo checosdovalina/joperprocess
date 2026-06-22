@@ -3753,6 +3753,56 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Order not found" });
       }
       res.json(updatedOrder);
+
+      // Notify admin users about the cancellation (fire-and-forget)
+      if (existing.tenantId) {
+        const cancelledByName = req.user!.fullName || req.user!.username;
+        const protocol = req.protocol || "https";
+        const host = req.get("host") || "localhost:5000";
+        (async () => {
+          try {
+            const adminUsers = await db.query.users.findMany({
+              where: and(
+                eq(users.tenantId, existing.tenantId),
+                eq(users.role, UserRole.ADMIN)
+              ),
+            });
+            const adminEmails = adminUsers
+              .filter((u) => u.email && u.email.includes("@"))
+              .map((u) => ({ email: u.email!, name: u.fullName || u.username }));
+            if (adminEmails.length === 0) {
+              console.warn(`[CancelEmail] No admin emails found for tenant ${existing.tenantId}`);
+              return;
+            }
+
+            const quotation = await db.query.quotations.findFirst({
+              where: eq(quotations.id, existing.quotationId),
+            });
+            const customer = quotation
+              ? await db.query.customers.findFirst({ where: eq(customers.id, quotation.customerId) })
+              : undefined;
+            const tenant = await db.query.tenants.findFirst({
+              where: eq(tenants.id, existing.tenantId),
+            });
+
+            const { sendOrderCancellationEmail } = await import("./email-service");
+            await sendOrderCancellationEmail({
+              to: adminEmails,
+              orderData: {
+                folio: quotation?.folio || existing.id,
+                customerName: customer?.name || "Cliente",
+                cancelledBy: cancelledByName,
+                cancelDate: stamp,
+                reason,
+              },
+              orderUrl: `${protocol}://${host}/orders`,
+              tenantName: tenant?.name || "Nexxo",
+            });
+          } catch (emailErr: any) {
+            console.error("[CancelEmail] Notification failed:", emailErr?.message || emailErr);
+          }
+        })();
+      }
     } catch (error) {
       console.error("Error cancelling order:", error);
       res.status(500).json({ error: "Error cancelling order" });
