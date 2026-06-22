@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, Eye, EyeOff, Truck, FileText, ChevronRight, Mail, Factory, Calendar, Clock, AlertCircle } from "lucide-react";
+import { Package, Plus, Eye, EyeOff, Truck, FileText, ChevronRight, Mail, Factory, Calendar, Clock, AlertCircle, Search, XCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -78,8 +78,13 @@ export default function OrdersPage() {
   const [editFactoryNotes, setEditFactoryNotes] = useState("");
   const [isEditingProduction, setIsEditingProduction] = useState(false);
   const [hideDelivered, setHideDelivered] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
   const { user } = useAuth();
   const { toast } = useToast();
+  const isAdmin = user?.role === "admin";
 
   const { data: orders, isLoading } = useEntityQuery<
     (Order & { quotation: Quotation & { customer: Customer } })[]
@@ -166,6 +171,32 @@ export default function OrdersPage() {
     },
   });
 
+  const cancelOrderMutation = useMutation({
+    mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
+      const res = await apiRequest("POST", `/api/orders/${orderId}/cancel`, { reason });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Pedido cancelado", description: "El pedido se marcó como cancelado" });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", cancelOrderId, "details"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pipeline"] });
+      setCancelDialogOpen(false);
+      setDetailsDialogOpen(false);
+      setCancelOrderId(null);
+      setCancelReason("");
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err?.message || "No se pudo cancelar el pedido", variant: "destructive" });
+    },
+  });
+
+  const handleOpenCancel = (orderId: string) => {
+    setCancelOrderId(orderId);
+    setCancelReason("");
+    setCancelDialogOpen(true);
+  };
+
   const handleSaveProductionInfo = () => {
     updateOrderMutation.mutate({
       estimatedDelivery: editEstimatedDelivery || null,
@@ -215,6 +246,7 @@ export default function OrdersPage() {
       [OrderStatus.PARTIALLY_RELEASED]: { label: t("status.partial"), className: "bg-yellow-100 text-yellow-800" },
       [OrderStatus.SHIPPED]: { label: t("status.shipped"), className: "bg-purple-100 text-purple-800" },
       [OrderStatus.DELIVERED]: { label: t("status.delivered"), className: "bg-green-100 text-green-800" },
+      [OrderStatus.CANCELLED]: { label: t("status.cancelled"), className: "bg-red-100 text-red-800" },
     };
     const config = statusConfig[status] || statusConfig[OrderStatus.PENDING];
     return <Badge className={config.className} data-testid={`status-${status}`}>{config.label}</Badge>;
@@ -351,11 +383,23 @@ export default function OrdersPage() {
                 })()}
               </CardDescription>
             </div>
-            {(orders?.filter(o => o.status === OrderStatus.SHIPPED || o.status === OrderStatus.DELIVERED).length ?? 0) > 0 && (
-              <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
-                {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar enviados/entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar enviados/entregados</>}
-              </Button>
-            )}
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por folio o cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                  data-testid="input-search-orders"
+                />
+              </div>
+              {(orders?.filter(o => o.status === OrderStatus.SHIPPED || o.status === OrderStatus.DELIVERED).length ?? 0) > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
+                  {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar enviados/entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar enviados/entregados</>}
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -379,7 +423,15 @@ export default function OrdersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(hideDelivered ? orders.filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED) : orders).map((order) => (
+                  {(hideDelivered ? orders.filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED) : orders)
+                    .filter((o) => {
+                      const q = searchTerm.trim().toLowerCase();
+                      if (!q) return true;
+                      const folio = (o.quotation?.folio || "").toLowerCase();
+                      const customer = (o.quotation?.customer?.name || "").toLowerCase();
+                      return folio.includes(q) || customer.includes(q);
+                    })
+                    .map((order) => (
                     <TableRow key={order.id} className="hover-elevate" data-testid={`row-order-${order.id}`}>
                       <TableCell>
                         <div className="font-mono font-medium">{order.quotation.folio}</div>
@@ -426,6 +478,17 @@ export default function OrdersPage() {
                           >
                             <Truck className="h-4 w-4" />
                           </Button>
+                          {isAdmin && order.status !== OrderStatus.CANCELLED && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenCancel(order.id)}
+                              data-testid={`button-cancel-order-${order.id}`}
+                              title="Cancelar pedido"
+                            >
+                              <XCircle className="h-4 w-4 text-red-600" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -757,6 +820,43 @@ export default function OrdersPage() {
               data-testid="button-confirm-release"
             >
               {releaseMutation.isPending ? "Procesando..." : "Confirmar Liberación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-600" />
+              Cancelar Pedido
+            </DialogTitle>
+            <DialogDescription>
+              El pedido se marcará como cancelado y dejará de aparecer como activo. Esta acción no elimina facturas ni embarques ya generados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="cancelReason">Motivo de la cancelación (opcional)</Label>
+            <Textarea
+              id="cancelReason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Ej. El cliente canceló el pedido"
+              data-testid="input-cancel-reason"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} data-testid="button-cancel-dismiss">
+              Volver
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => cancelOrderId && cancelOrderMutation.mutate({ orderId: cancelOrderId, reason: cancelReason })}
+              disabled={cancelOrderMutation.isPending}
+              data-testid="button-confirm-cancel-order"
+            >
+              {cancelOrderMutation.isPending ? "Cancelando..." : "Cancelar Pedido"}
             </Button>
           </DialogFooter>
         </DialogContent>

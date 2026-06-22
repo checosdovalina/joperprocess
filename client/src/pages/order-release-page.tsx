@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -41,6 +42,7 @@ import {
   FileText,
   Truck,
   Pencil,
+  Search,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -376,8 +378,11 @@ function OrderCard({
   );
 }
 
+const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
 export default function OrderReleasePage() {
   const { toast } = useToast();
+  const [searchTerm, setSearchTerm] = useState("");
   const [approveTarget, setApproveTarget] = useState<ReleaseOrder | null>(null);
   const [approveNotes, setApproveNotes] = useState("");
   const [rejectTarget, setRejectTarget] = useState<ReleaseOrder | null>(null);
@@ -396,6 +401,14 @@ export default function OrderReleasePage() {
   });
 
   const { data: customers = [] } = useQuery<Customer[]>({ queryKey: ["/api/customers"] });
+
+  const matchesSearch = (order: ReleaseOrder) => {
+    const q = norm(searchTerm.trim());
+    if (!q) return true;
+    return norm(order.folio).includes(q) || norm(order.customerName).includes(q) || norm(order.vendedorName).includes(q);
+  };
+  const filteredPendingOrders = pendingOrders.filter(matchesSearch);
+  const filteredHistoryOrders = historyOrders.filter(matchesSearch);
 
   const approveMutation = useMutation({
     mutationFn: ({ orderId, notes }: { orderId: string; notes: string }) =>
@@ -485,6 +498,17 @@ export default function OrderReleasePage() {
         )}
       </div>
 
+      <div className="relative w-full sm:w-64">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por folio o cliente..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-8"
+          data-testid="input-search-order-release"
+        />
+      </div>
+
       <Tabs defaultValue="pending">
         <TabsList>
           <TabsTrigger value="pending" data-testid="tab-pending">
@@ -507,8 +531,13 @@ export default function OrderReleasePage() {
               <p className="text-sm font-medium">No hay pedidos pendientes de liberar</p>
               <p className="text-xs mt-1">Los pedidos aparecerán aquí después de ser aprobados por Crédito y Cobranza</p>
             </div>
+          ) : filteredPendingOrders.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-medium">Sin resultados para la búsqueda</p>
+            </div>
           ) : (
-            pendingOrders.map(order => (
+            filteredPendingOrders.map(order => (
               <OrderCard
                 key={order.id}
                 order={order}
@@ -529,8 +558,13 @@ export default function OrderReleasePage() {
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No hay historial de pedidos liberados o rechazados</p>
             </div>
+          ) : filteredHistoryOrders.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-medium">Sin resultados para la búsqueda</p>
+            </div>
           ) : (
-            historyOrders.map(order => (
+            filteredHistoryOrders.map(order => (
               <OrderCard key={order.id} order={order} />
             ))
           )}

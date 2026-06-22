@@ -38,10 +38,13 @@ export default function PaymentsPage() {
   const [selectedPayment, setSelectedPayment] = useState<PaymentWithDetails | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState("");
   const [searchCliente, setSearchCliente] = useState("");
   const [searchFactura, setSearchFactura] = useState("");
   const [filterFechaDesde, setFilterFechaDesde] = useState("");
   const [filterFechaHasta, setFilterFechaHasta] = useState("");
+
+  const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const { data: payments, isLoading } = useQuery<PaymentWithDetails[]>({
     queryKey: ["/api/payments"],
@@ -49,6 +52,7 @@ export default function PaymentsPage() {
 
   const filteredPayments = useMemo(() => {
     if (!payments) return [];
+    const q = norm(searchTerm.trim());
     return payments.filter((p) => {
       const cliente = (p.customer?.name || "").toLowerCase();
       const factura = p.invoice
@@ -56,6 +60,14 @@ export default function PaymentsPage() {
         : (p.notes || "").toLowerCase();
       const fecha = new Date(p.paymentDate);
 
+      if (q) {
+        const matchCliente = norm(p.customer?.name || "").includes(q);
+        const matchFactura = norm(
+          p.invoice ? `${p.invoice.serie}-${p.invoice.folio}` : (p.notes || "")
+        ).includes(q);
+        const matchReferencia = norm(p.reference || "").includes(q);
+        if (!matchCliente && !matchFactura && !matchReferencia) return false;
+      }
       if (searchCliente && !cliente.includes(searchCliente.toLowerCase())) return false;
       if (searchFactura && !factura.includes(searchFactura.toLowerCase())) return false;
       if (filterFechaDesde && fecha < new Date(filterFechaDesde)) return false;
@@ -66,11 +78,12 @@ export default function PaymentsPage() {
       }
       return true;
     });
-  }, [payments, searchCliente, searchFactura, filterFechaDesde, filterFechaHasta]);
+  }, [payments, searchTerm, searchCliente, searchFactura, filterFechaDesde, filterFechaHasta]);
 
-  const hasActiveFilters = searchCliente || searchFactura || filterFechaDesde || filterFechaHasta;
+  const hasActiveFilters = searchTerm || searchCliente || searchFactura || filterFechaDesde || filterFechaHasta;
 
   const clearFilters = () => {
+    setSearchTerm("");
     setSearchCliente("");
     setSearchFactura("");
     setFilterFechaDesde("");
@@ -206,11 +219,25 @@ export default function PaymentsPage() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("payments.history")}</CardTitle>
-          <CardDescription>
-            {filteredPayments.length} pago{filteredPayments.length !== 1 ? "s" : ""}
-            {hasActiveFilters ? " con los filtros aplicados" : " registrados"}
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <CardTitle>{t("payments.history")}</CardTitle>
+              <CardDescription>
+                {filteredPayments.length} pago{filteredPayments.length !== 1 ? "s" : ""}
+                {hasActiveFilters ? " con los filtros aplicados" : " registrados"}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por cliente o factura..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+                data-testid="input-search-payments"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (

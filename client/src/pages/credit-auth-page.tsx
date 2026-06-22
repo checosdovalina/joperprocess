@@ -13,7 +13,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, CheckCircle2, XCircle, Eye, EyeOff, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2, MessageSquare, Send, PenLine, User2, Download } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, Eye, EyeOff, Sparkles, Loader2, AlertTriangle, TrendingUp, TrendingDown, CircleDollarSign, FileText, Building2, MessageSquare, Send, PenLine, User2, Download, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -110,7 +111,10 @@ export default function CreditAuthPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hideResolved, setHideResolved] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
+
+  const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const { data: authorizations, isLoading } = useQuery<CreditAuthWithDetails[]>({
     queryKey: ["/api/credit-authorizations"],
@@ -441,11 +445,23 @@ export default function CreditAuthPage() {
                 })()}
               </CardDescription>
             </div>
-            {(authorizations?.filter(a => a.status === "approved" || a.status === "rejected").length ?? 0) > 0 && (
-              <Button variant="outline" size="sm" onClick={() => setHideResolved(v => !v)} data-testid="button-toggle-resolved">
-                {hideResolved ? <><Eye className="h-4 w-4 mr-2" />{t("credit.show-resolved")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("credit.hide-resolved")}</>}
-              </Button>
-            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por folio o cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                  data-testid="input-search-credit-auth"
+                />
+              </div>
+              {(authorizations?.filter(a => a.status === "approved" || a.status === "rejected").length ?? 0) > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setHideResolved(v => !v)} data-testid="button-toggle-resolved">
+                  {hideResolved ? <><Eye className="h-4 w-4 mr-2" />{t("credit.show-resolved")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("credit.hide-resolved")}</>}
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -470,7 +486,15 @@ export default function CreditAuthPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(hideResolved ? authorizations.filter(a => a.status === "pending") : authorizations).map((auth) => (
+                  {(hideResolved ? authorizations.filter(a => a.status === "pending") : authorizations)
+                    .filter((auth) => {
+                      const q = norm(searchTerm.trim());
+                      if (!q) return true;
+                      return norm(auth.quotation?.folio || "").includes(q)
+                        || norm(auth.quotation?.customer?.name || "").includes(q)
+                        || norm(auth.quotation?.customer?.rfc || "").includes(q);
+                    })
+                    .map((auth) => (
                     <TableRow key={auth.id} className="hover-elevate" data-testid={`row-auth-${auth.id}`}>
                       <TableCell>
                         <div className="text-sm">

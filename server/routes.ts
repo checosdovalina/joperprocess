@@ -3718,6 +3718,41 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Cancel an order (admin only) - used when a customer cancels even after release
+  app.post("/api/orders/:id/cancel", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { id } = req.params;
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+
+      const existing = await scopedStorage.getOrder(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      if (existing.status === OrderStatus.CANCELLED) {
+        return res.status(400).json({ error: "El pedido ya está cancelado" });
+      }
+
+      const stamp = format(new Date(), "dd/MM/yyyy");
+      const cancelNote = `[Cancelado ${stamp} por ${req.user!.name || req.user!.username}]${reason ? ` ${reason}` : ""}`;
+      const factoryNotes = existing.factoryNotes ? `${existing.factoryNotes}\n${cancelNote}` : cancelNote;
+
+      const updatedOrder = await scopedStorage.updateOrder(id, {
+        status: OrderStatus.CANCELLED,
+        factoryNotes,
+        lastUpdatedBy: req.user!.id,
+        updatedAt: new Date(),
+      });
+      if (!updatedOrder) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      res.status(500).json({ error: "Error cancelling order" });
+    }
+  });
+
   // Get order with full details including quotation items and releases
   app.get("/api/orders/:id/details", isAuthenticated, async (req, res) => {
     try {

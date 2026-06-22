@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Factory, Eye, EyeOff, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package, Truck } from "lucide-react";
+import { Factory, Eye, EyeOff, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package, Truck, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -67,8 +67,11 @@ export default function ProductionPage() {
   const [editProgress, setEditProgress] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [hideDelivered, setHideDelivered] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const { user } = useAuth();
   const { toast } = useToast();
+
+  const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const { data: orders, isLoading } = useQuery<OrderWithQuotation[]>({
     queryKey: ["/api/orders"],
@@ -206,6 +209,13 @@ export default function ProductionPage() {
   ) || [];
 
   const renderOrdersTable = (ordersList: OrderWithQuotation[], emptyMessage: string) => {
+    const q = norm(searchTerm.trim());
+    if (q) {
+      ordersList = ordersList.filter((order) =>
+        norm(order.quotation?.folio || "").includes(q)
+        || norm(order.quotation?.customer?.name || "").includes(q)
+      );
+    }
     if (ordersList.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -355,6 +365,17 @@ export default function ProductionPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="relative w-full sm:w-72">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por folio o cliente..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-8"
+          data-testid="input-search-production"
+        />
       </div>
 
       <Tabs defaultValue="pending" className="w-full">

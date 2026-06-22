@@ -76,6 +76,7 @@ export default function InvoicesPage() {
   const { toast } = useToast();
 
   // Filter state
+  const [searchTerm, setSearchTerm] = useState("");
   const [searchFolio, setSearchFolio] = useState("");
   const [searchCliente, setSearchCliente] = useState("");
   const [filterFechaDesde, setFilterFechaDesde] = useState("");
@@ -84,6 +85,8 @@ export default function InvoicesPage() {
     const params = new URLSearchParams(window.location.search);
     return params.get("status") || "all";
   });
+
+  const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const { data: invoices, isLoading } = useQuery<InvoiceWithDetails[]>({
     queryKey: ["/api/invoices"],
@@ -102,11 +105,17 @@ export default function InvoicesPage() {
 
   const filteredInvoices = useMemo(() => {
     if (!invoices) return [];
+    const q = norm(searchTerm.trim());
     return invoices.filter((inv) => {
       const folio = `${inv.serie}-${inv.folio}`.toLowerCase();
       const cliente = inv.customer.name.toLowerCase();
       const fechaEmision = new Date(inv.issuedAt);
 
+      if (q) {
+        const matchFolio = norm(`${inv.serie}-${inv.folio}`).includes(q);
+        const matchCliente = norm(inv.customer?.name || "").includes(q);
+        if (!matchFolio && !matchCliente) return false;
+      }
       if (searchFolio && !folio.includes(searchFolio.toLowerCase())) return false;
       if (searchCliente && !cliente.includes(searchCliente.toLowerCase())) return false;
       if (filterFechaDesde && fechaEmision < new Date(filterFechaDesde)) return false;
@@ -121,12 +130,13 @@ export default function InvoicesPage() {
       }
       return true;
     });
-  }, [invoices, searchFolio, searchCliente, filterFechaDesde, filterFechaHasta, filterEstado]);
+  }, [invoices, searchTerm, searchFolio, searchCliente, filterFechaDesde, filterFechaHasta, filterEstado]);
 
   const hasActiveFilters =
-    searchFolio || searchCliente || filterFechaDesde || filterFechaHasta || filterEstado !== "all";
+    searchTerm || searchFolio || searchCliente || filterFechaDesde || filterFechaHasta || filterEstado !== "all";
 
   const clearFilters = () => {
+    setSearchTerm("");
     setSearchFolio("");
     setSearchCliente("");
     setFilterFechaDesde("");
@@ -366,11 +376,25 @@ export default function InvoicesPage() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Facturas</CardTitle>
-          <CardDescription>
-            {filteredInvoices.length} factura{filteredInvoices.length !== 1 ? "s" : ""}
-            {hasActiveFilters ? " con los filtros aplicados" : " emitidas"}
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <CardTitle>Facturas</CardTitle>
+              <CardDescription>
+                {filteredInvoices.length} factura{filteredInvoices.length !== 1 ? "s" : ""}
+                {hasActiveFilters ? " con los filtros aplicados" : " emitidas"}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por folio o cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+                data-testid="input-search-invoices"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (

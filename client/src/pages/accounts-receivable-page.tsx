@@ -52,11 +52,14 @@ export default function AccountsReceivablePage() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithCustomer | null>(null);
   const { user } = useAuth();
 
+  const [searchTerm, setSearchTerm] = useState("");
   const [searchFolio, setSearchFolio] = useState("");
   const [searchCliente, setSearchCliente] = useState("");
   const [filterFechaDesde, setFilterFechaDesde] = useState("");
   const [filterFechaHasta, setFilterFechaHasta] = useState("");
   const [filterEstado, setFilterEstado] = useState("all");
+
+  const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const { data: invoices, isLoading } = useQuery<InvoiceWithCustomer[]>({
     queryKey: ["/api/accounts-receivable"],
@@ -82,11 +85,17 @@ export default function AccountsReceivablePage() {
 
   const filteredInvoices = useMemo(() => {
     if (!invoices) return [];
+    const q = norm(searchTerm.trim());
     return invoices.filter((inv) => {
       const folio = `${inv.serie}-${inv.folio}`.toLowerCase();
       const cliente = inv.customer.name.toLowerCase();
       const fecha = new Date(inv.issuedAt);
 
+      if (q) {
+        const matchFolio = norm(`${inv.serie}-${inv.folio}`).includes(q);
+        const matchCliente = norm(inv.customer?.name || "").includes(q);
+        if (!matchFolio && !matchCliente) return false;
+      }
       if (searchFolio && !folio.includes(searchFolio.toLowerCase())) return false;
       if (searchCliente && !cliente.includes(searchCliente.toLowerCase())) return false;
       if (filterFechaDesde && fecha < new Date(filterFechaDesde)) return false;
@@ -100,12 +109,13 @@ export default function AccountsReceivablePage() {
       }
       return true;
     });
-  }, [invoices, searchFolio, searchCliente, filterFechaDesde, filterFechaHasta, filterEstado]);
+  }, [invoices, searchTerm, searchFolio, searchCliente, filterFechaDesde, filterFechaHasta, filterEstado]);
 
   const hasActiveFilters =
-    searchFolio || searchCliente || filterFechaDesde || filterFechaHasta || filterEstado !== "all";
+    searchTerm || searchFolio || searchCliente || filterFechaDesde || filterFechaHasta || filterEstado !== "all";
 
   const clearFilters = () => {
+    setSearchTerm("");
     setSearchFolio("");
     setSearchCliente("");
     setFilterFechaDesde("");
@@ -267,11 +277,25 @@ export default function AccountsReceivablePage() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Facturas por Cobrar</CardTitle>
-          <CardDescription>
-            {filteredInvoices.length} factura{filteredInvoices.length !== 1 ? "s" : ""}
-            {hasActiveFilters ? " con los filtros aplicados" : " registradas"}
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <CardTitle>Facturas por Cobrar</CardTitle>
+              <CardDescription>
+                {filteredInvoices.length} factura{filteredInvoices.length !== 1 ? "s" : ""}
+                {hasActiveFilters ? " con los filtros aplicados" : " registradas"}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por folio o cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+                data-testid="input-search-accounts-receivable"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
