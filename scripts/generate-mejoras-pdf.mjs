@@ -65,6 +65,9 @@ const sections = [
       "Reporte de pedidos muestra la fecha de aprobación del cliente como fecha de cierre.",
       "Títulos de los tableros de ventas y producción actualizados.",
       "Nombres de clientes ocultos en el tablero de producción.",
+      "Cancelación de pedidos por administrador, incluso después de liberados, registrando el motivo de la cancelación.",
+      "Nuevo estado \u201cCerrado\u201d para identificar f\u00e1cilmente los pedidos cuyo ciclo (embarque o entrega) ya finaliz\u00f3.",
+      "Notificación automática por correo a los administradores al cancelar un pedido, incluyendo el motivo.",
     ],
   },
   {
@@ -149,6 +152,7 @@ const sections = [
       "Notificaciones por correo de aprobación de embarque y opción de reenvío.",
       "Prevención de correos redundantes para pedidos ya procesados.",
       "Manejo de errores para evitar caídas de la aplicación y mejorar la carga de páginas.",
+      "Buscadores agregados en las páginas de pagos, facturas, cuentas por cobrar, autorización de crédito, producción y liberación de pedidos.",
       "Gestión de usuarios e inicio de sesión seguro mejorados.",
       "Scripts seguros de despliegue y respaldo para el servidor de producción (VPS).",
       "Presentación animada de ventas y manual de usuario del sistema.",
@@ -171,14 +175,14 @@ doc.rect(0, 0, PAGE_W, 110).fill(COLORS.primary);
 doc.fillColor(COLORS.white).font("Helvetica-Bold").fontSize(26).text("NEXXO", M, 32);
 doc.fillColor(COLORS.accent).font("Helvetica").fontSize(12).text("Sistema Comercial de Nueva Generación", M, 64);
 doc.fillColor(COLORS.white).font("Helvetica-Bold").fontSize(11).text("Relación de Mejoras Significativas", M, 82);
-doc.fillColor(COLORS.accentSoft).font("Helvetica").fontSize(9).text("05 Mayo 2026  —  19 Junio 2026     |     nexxo.com.mx", M, 98);
+doc.fillColor(COLORS.accentSoft).font("Helvetica").fontSize(9).text("05 Mayo 2026  —  22 Junio 2026     |     nexxo.com.mx", M, 98);
 
 // ---------- Executive summary ----------
 let y = 134;
 doc.rect(M, y, CONTENT_W, 70).fill(COLORS.bandSoft);
 doc.fillColor(COLORS.primaryLight).font("Helvetica-Bold").fontSize(10).text("Resumen Ejecutivo", M + 14, y + 12);
 doc.fillColor(COLORS.text).font("Helvetica").fontSize(9).text(
-  "Este documento presenta las mejoras implementadas en Nexxo durante el periodo comprendido entre el 5 de mayo y el 19 de junio de 2026. " +
+  "Este documento presenta las mejoras implementadas en Nexxo durante el periodo comprendido entre el 5 de mayo y el 22 de junio de 2026. " +
     `Se registran ${totalImprovements} mejoras agrupadas en ${sections.length} áreas funcionales, desde correcciones de usabilidad hasta módulos completos del flujo comercial.`,
   M + 14,
   y + 30,
@@ -190,7 +194,7 @@ y += 86;
 const cards = [
   { big: String(sections.length), small: "áreas\nfuncionales" },
   { big: "+" + totalImprovements, small: "mejoras\nimplementadas" },
-  { big: "46", small: "días de\ndesarrollo" },
+  { big: "49", small: "días de\ndesarrollo" },
   { big: "100%", small: "operación\nproductiva" },
 ];
 const gap = 12;
