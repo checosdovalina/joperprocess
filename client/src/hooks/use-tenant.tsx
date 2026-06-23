@@ -74,8 +74,27 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     return null;
   });
 
-  const { data: tenant, isLoading, error } = useQuery<TenantConfig>({
+  const { data: tenant, isLoading, error } = useQuery<TenantConfig | null>({
     queryKey: ["/api/tenant-config"],
+    queryFn: async () => {
+      // Forward the dev-only ?tenant= override so the main-domain (no tenant)
+      // experience can be simulated locally. In production the subdomain is
+      // resolved server-side from the hostname.
+      const params = new URLSearchParams(window.location.search);
+      const tenantParam = params.get("tenant");
+      const url = tenantParam
+        ? `/api/tenant-config?tenant=${encodeURIComponent(tenantParam)}`
+        : "/api/tenant-config";
+      const res = await fetch(url, { credentials: "include" });
+      if (res.status === 404) {
+        // No tenant context = main marketing domain
+        return null;
+      }
+      if (!res.ok) {
+        throw new Error("Failed to load tenant config");
+      }
+      return res.json();
+    },
     retry: false,
     staleTime: 1000 * 60 * 5,
   });
