@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "@/hooks/use-i18n";
+import { useTenant } from "@/hooks/use-tenant";
 import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +67,8 @@ type QuotationWithDetails = Quotation & {
 
 export default function QuotationsPage() {
   const { t } = useI18n();
+  const { tenant } = useTenant();
+  const companyName = tenant?.name || "la empresa";
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -1016,7 +1019,7 @@ export default function QuotationsPage() {
                   <div className="flex items-center gap-2 p-3 rounded-md bg-muted">
                     <Truck className="h-5 w-5" />
                     <div className="flex-1">
-                      <p className="font-medium">Envío por cuenta de Joper</p>
+                      <p className="font-medium">Envío por cuenta de {companyName}</p>
                       {(selectedQuotation as any).shippingApprovalStatus === "pending" && (
                         <Badge variant="outline" className="text-orange-600 border-orange-600 mt-1">
                           Pendiente de aprobación

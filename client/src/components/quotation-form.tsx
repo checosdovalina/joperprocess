@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, Trash2, Search, AlertTriangle, Calculator, Truck } from "lucide-react";
 import { useEntityQuery } from "@/hooks/use-entity-query";
+import { useTenant } from "@/hooks/use-tenant";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CustomerCombobox } from "@/components/customer-combobox";
@@ -162,6 +163,8 @@ export function QuotationForm({
   isEditing = false,
   adjustMode = false,
 }: QuotationFormProps) {
+  const { tenant } = useTenant();
+  const companyName = tenant?.name || "la empresa";
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0)]);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -618,11 +621,11 @@ export function QuotationForm({
     // Build approval reason
     let approvalReason = null;
     if (hasExceedingDiscounts && requiresFreeShippingApproval) {
-      approvalReason = "Descuentos exceden el máximo permitido y envío sin costo por cuenta de Joper";
+      approvalReason = `Descuentos exceden el máximo permitido y envío sin costo por cuenta de ${companyName}`;
     } else if (hasExceedingDiscounts) {
       approvalReason = "Descuentos exceden el máximo permitido";
     } else if (requiresFreeShippingApproval) {
-      approvalReason = "Envío sin costo por cuenta de Joper requiere autorización";
+      approvalReason = `Envío sin costo por cuenta de ${companyName} requiere autorización`;
     }
 
     const quotationData: InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean } = {
@@ -958,7 +961,7 @@ export function QuotationForm({
                           </FormControl>
                           <div className="space-y-1 leading-none">
                             <FormLabel className="cursor-pointer">
-                              Envío por cuenta de Joper (sin costo al cliente)
+                              Envío por cuenta de {companyName} (sin costo al cliente)
                             </FormLabel>
                             <p className="text-xs text-muted-foreground">
                               Requiere autorización del administrador antes de enviar al cliente
@@ -1425,7 +1428,7 @@ export function QuotationForm({
                           <span>Envío:</span>
                           <span className="font-mono">
                             {form.watch("shippingHandledByJoper")
-                              ? "$0.00 (Joper)"
+                              ? `$0.00 (${companyName})`
                               : form.watch("shippingCostStatus") === "pending"
                                 ? "Por cotizar"
                                 : formatCurrency(form.watch("shippingCost") || "0")}
@@ -1475,7 +1478,7 @@ export function QuotationForm({
                               ? "Descuentos exceden el máximo y envío sin costo requiere autorización."
                               : hasExceedingDiscounts
                                 ? "Algunos descuentos exceden el máximo permitido."
-                                : "Envío sin costo por cuenta de Joper requiere autorización del administrador."}
+                                : `Envío sin costo por cuenta de ${companyName} requiere autorización del administrador.`}
                           </p>
                         </div>
                       )}
