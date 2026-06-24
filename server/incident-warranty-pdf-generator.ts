@@ -176,38 +176,8 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   doc.text(URGENCY_LABELS[data.urgency] || data.urgency, MARGIN + INFO_COL * 2, Y);
   Y += 18;
 
-  // ── CUSTOMER + PRODUCT BOXES ─────────────────────────────────────────────
-  const BOX_W = CONTENT_W / 2 - 6;
-  const BOX2_X = MARGIN + BOX_W + 12;
-  const BOX_H = 78;
-
-  // Customer box
-  doc.rect(MARGIN, Y, BOX_W, BOX_H).fill(lightColor);
-  doc.rect(MARGIN, Y, BOX_W, 15).fill(mediumColor);
-  doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("CLIENTE / EMPRESA", MARGIN + 6, Y + 4, { width: BOX_W - 12 });
-
-  doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
-  doc.text(data.customerName, MARGIN + 6, Y + 20, { width: BOX_W - 12, lineBreak: false, ellipsis: true });
-
-  const customerDetails: { label: string; value: string }[] = [];
-  if (data.customerAddress) customerDetails.push({ label: "Dir:", value: data.customerAddress });
-  if (data.contactName) customerDetails.push({ label: "Contacto:", value: data.contactName });
-  if (data.contactPhone) customerDetails.push({ label: "Tel:", value: data.contactPhone });
-  if (data.contactEmail) customerDetails.push({ label: "Email:", value: data.contactEmail });
-
-  doc.fontSize(7.5).font("Helvetica").fillColor("#374151");
-  customerDetails.slice(0, 4).forEach((row, i) => {
-    doc.font("Helvetica-Bold").text(row.label, MARGIN + 6, Y + 33 + i * 11, { width: 40, continued: false });
-    doc.font("Helvetica").text(row.value, MARGIN + 48, Y + 33 + i * 11, { width: BOX_W - 54, lineBreak: false, ellipsis: true });
-  });
-
-  // Product / equipment box
-  doc.rect(BOX2_X, Y, BOX_W, BOX_H).fill(lightColor);
-  doc.rect(BOX2_X, Y, BOX_W, 15).fill(mediumColor);
-  doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("PRODUCTO / EQUIPO", BOX2_X + 6, Y + 4, { width: BOX_W - 12 });
-
+  // ── PRODUCT / EQUIPMENT BOX ──────────────────────────────────────────────
+  // Customer data is intentionally NOT shown on this sheet per requirement.
   const productLines: { label: string; value: string }[] = [];
   if (data.productName) productLines.push({ label: "Producto:", value: data.productName });
   if (data.productSku) productLines.push({ label: "SKU/Modelo:", value: data.productSku });
@@ -216,13 +186,21 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   if (data.orderFolio) productLines.push({ label: "Pedido:", value: data.orderFolio });
   if (data.invoiceFolio) productLines.push({ label: "Factura:", value: data.invoiceFolio });
 
+  const PROD_BOX_H = Math.max(40, 22 + Math.min(productLines.length, 6) * 11 + 6);
+
+  // Product / equipment box (full width)
+  doc.rect(MARGIN, Y, CONTENT_W, PROD_BOX_H).fill(lightColor);
+  doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
+  doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
+  doc.text("PRODUCTO / EQUIPO", MARGIN + 6, Y + 4, { width: CONTENT_W - 12 });
+
   doc.fontSize(7.5);
-  productLines.slice(0, 5).forEach((row, i) => {
-    doc.font("Helvetica-Bold").fillColor("#374151").text(row.label, BOX2_X + 6, Y + 20 + i * 11, { width: 60, continued: false });
-    doc.font("Helvetica").text(row.value, BOX2_X + 68, Y + 20 + i * 11, { width: BOX_W - 74, lineBreak: false, ellipsis: true });
+  productLines.slice(0, 6).forEach((row, i) => {
+    doc.font("Helvetica-Bold").fillColor("#374151").text(row.label, MARGIN + 6, Y + 20 + i * 11, { width: 70, continued: false });
+    doc.font("Helvetica").text(row.value, MARGIN + 78, Y + 20 + i * 11, { width: CONTENT_W - 90, lineBreak: false, ellipsis: true });
   });
 
-  Y += BOX_H + 14;
+  Y += PROD_BOX_H + 14;
 
   // ── SUBJECT & DESCRIPTION ─────────────────────────────────────────────────
   doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
