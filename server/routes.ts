@@ -1364,7 +1364,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Check-in no encontrado" });
       }
 
-      // Delete associated pending_uploads and photos records first
+      // Nullify FK on scheduled_visits (nullable FK, not CASCADE)
+      await db.execute(sql`UPDATE scheduled_visits SET checkin_id = NULL WHERE checkin_id = ${id}`);
+      // Delete associated pending_uploads first
       await db.execute(sql`DELETE FROM pending_uploads WHERE checkin_id = ${id}`);
       await db.delete(checkins).where(eq(checkins.id, id));
 
