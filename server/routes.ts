@@ -7632,7 +7632,6 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       // Info grid
       const infoItems: [string, string][] = [
-        ["Cliente", incident.customer?.name || "—"],
         ["Tipo", { garantia:"Garantía", retrabajo:"Retrabajo", queja:"Queja", consulta:"Consulta", administrativo:"Administrativo" }[incident.type] || incident.type],
         ["Urgencia", { baja:"Baja", media:"Media", alta:"Alta", critica:"Crítica" }[incident.urgency] || incident.urgency],
         ["Asignado a", incident.assignee?.fullName || "Sin asignar"],
