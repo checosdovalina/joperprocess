@@ -1,7 +1,18 @@
 import { useState, useMemo } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Incident, Customer, User, IncidentType, IncidentStatus, IncidentUrgency, ShipmentProductInstance, Product } from "@shared/schema";
+import { Incident, Customer, User, IncidentType, IncidentStatus, IncidentUrgency, ShipmentProductInstance, Product, UserRole } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -60,6 +71,7 @@ import {
   RefreshCw,
   Check,
   ChevronsUpDown,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -221,6 +233,9 @@ function getUrgencyBadge(urgency: string) {
 export default function IncidentsPage() {
   const [, navigate] = useLocation();
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isAdmin = user?.role === UserRole.ADMIN;
+  const [incidentToDelete, setIncidentToDelete] = useState<IncidentWithDetails | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
@@ -344,6 +359,20 @@ export default function IncidentsPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "No se pudo renovar el enlace.", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (incidentId: string) => {
+      await apiRequest("DELETE", `/api/incidents/${incidentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
+      setIncidentToDelete(null);
+      toast({ title: "Incidencia eliminada", description: "Se eliminó correctamente." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo eliminar la incidencia.", variant: "destructive" });
     },
   });
 
@@ -608,6 +637,21 @@ export default function IncidentsPage() {
                       >
                         <Link2 className="h-4 w-4" />
                       </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIncidentToDelete(incident);
+                          }}
+                          title="Eliminar"
+                          className="text-destructive"
+                          data-testid={`button-delete-mobile-${incident.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -705,6 +749,21 @@ export default function IncidentsPage() {
                               <RefreshCw className="h-4 w-4" />
                             )}
                           </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIncidentToDelete(incident);
+                              }}
+                              title="Eliminar"
+                              className="text-destructive"
+                              data-testid={`button-delete-${incident.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1075,6 +1134,35 @@ export default function IncidentsPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!incidentToDelete} onOpenChange={(open) => !open && setIncidentToDelete(null)}>
+        <AlertDialogContent data-testid="dialog-delete-incident">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta incidencia?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {incidentToDelete?.ticketNumber} — {incidentToDelete?.subject}
+              <br />
+              Esta acción no se puede deshacer. Se eliminará la incidencia junto con sus comentarios y archivos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => incidentToDelete && deleteMutation.mutate(incidentToDelete.id)}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

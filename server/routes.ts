@@ -7497,7 +7497,33 @@ Proporciona tu análisis en el siguiente formato JSON:
     };
   }
 
-  // Download incident Warranty Sheet PDF (authenticated, POST with overrides)
+  // Delete an incident permanently (admin only, tenant-scoped). Removes child rows first.
+  app.delete("/api/incidents/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantId = req.user!.tenantId;
+
+      const existing = await db.query.incidents.findFirst({
+        where: tenantId
+          ? and(eq(incidents.id, id), eq(incidents.tenantId, tenantId))
+          : eq(incidents.id, id),
+      });
+      if (!existing) return res.status(404).json({ error: "Incidente no encontrado" });
+
+      await db.transaction(async (tx) => {
+        await tx.delete(incidentComments).where(eq(incidentComments.incidentId, id));
+        await tx.delete(incidentActivities).where(eq(incidentActivities.incidentId, id));
+        await tx.delete(incidentAttachments).where(eq(incidentAttachments.incidentId, id));
+        await tx.delete(incidents).where(eq(incidents.id, id));
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting incident:", error);
+      res.status(500).json({ error: "Error al eliminar el incidente" });
+    }
+  });
+
   app.post("/api/incidents/:id/warranty-pdf", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
