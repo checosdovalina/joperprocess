@@ -194,11 +194,16 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text("PRODUCTO / EQUIPO", MARGIN + 6, Y + 4, { width: CONTENT_W - 12 });
 
-  doc.fontSize(7.5);
-  productLines.slice(0, 6).forEach((row, i) => {
-    doc.font("Helvetica-Bold").fillColor("#374151").text(row.label, MARGIN + 6, Y + 20 + i * 11, { width: 70, continued: false });
-    doc.font("Helvetica").text(row.value, MARGIN + 78, Y + 20 + i * 11, { width: CONTENT_W - 90, lineBreak: false, ellipsis: true });
-  });
+  if (productLines.length === 0) {
+    doc.fontSize(8).font("Helvetica-Oblique").fillColor("#9ca3af");
+    doc.text("Sin información de producto / equipo registrada.", MARGIN + 6, Y + 22, { width: CONTENT_W - 12 });
+  } else {
+    doc.fontSize(7.5);
+    productLines.slice(0, 6).forEach((row, i) => {
+      doc.font("Helvetica-Bold").fillColor("#374151").text(row.label, MARGIN + 6, Y + 20 + i * 11, { width: 70, continued: false });
+      doc.font("Helvetica").text(row.value, MARGIN + 78, Y + 20 + i * 11, { width: CONTENT_W - 90, lineBreak: false, ellipsis: true });
+    });
+  }
 
   Y += PROD_BOX_H + 14;
 
