@@ -4510,22 +4510,14 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/reports/incidents/pdf", isAuthenticated, async (req, res) => {
     try {
       const { incidents: incidentData } = req.body;
-      const tenant = req.tenant;
 
-      const tenantBranding = tenant ? {
-        name: tenant.name,
-        legalName: (tenant as any).legalName || null,
-        logoUrl: tenant.logoUrl,
-        primaryColor: tenant.primaryColor,
-        rfc: (tenant as any).rfc || null,
-        address: (tenant as any).address || null,
-        city: (tenant as any).city || null,
-        state: (tenant as any).state || null,
-        zipCode: (tenant as any).zipCode || null,
-        phone: (tenant as any).phone || null,
-        email: (tenant as any).email || null,
-        website: (tenant as any).website || null,
-      } : null;
+      // Load the FULL tenant record so the PDF header shows complete company
+      // branding (RFC, address, phone, etc.). req.tenant only carries a partial
+      // context (name/logo/colors), which is why it was missing fiscal data.
+      const tenantId = getEffectiveTenantId(req);
+      const tenantBranding = tenantId
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }) ?? null
+        : null;
 
       const cutoffDate = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -4548,22 +4540,12 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/reports/orders/pdf", isAuthenticated, async (req, res) => {
     try {
       const { filters = {}, orders: orderData } = req.body;
-      const tenant = req.tenant;
 
-      const tenantBranding = tenant ? {
-        name: tenant.name,
-        legalName: (tenant as any).legalName || null,
-        logoUrl: tenant.logoUrl,
-        primaryColor: tenant.primaryColor,
-        rfc: (tenant as any).rfc || null,
-        address: (tenant as any).address || null,
-        city: (tenant as any).city || null,
-        state: (tenant as any).state || null,
-        zipCode: (tenant as any).zipCode || null,
-        phone: (tenant as any).phone || null,
-        email: (tenant as any).email || null,
-        website: (tenant as any).website || null,
-      } : null;
+      // Load the FULL tenant record (req.tenant only has name/logo/colors)
+      const tenantId = getEffectiveTenantId(req);
+      const tenantBranding = tenantId
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }) ?? null
+        : null;
 
       const { generateOrdersReportPDF } = await import("./reports-pdf-generator");
       const pdfStream = await generateOrdersReportPDF({
