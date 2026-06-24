@@ -271,7 +271,7 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
 
   const SIG_W = CONTENT_W / 4 - 6;
   const SIG_H = 82;
-  const sigBoxes = ["ENTREGADO POR\n(CLIENTE)", "RECIBIDO POR\n(EMPRESA)", "TÉCNICO\nRESPONSABLE", "AUTORIZACIÓN\nGERENTE"];
+  const sigBoxes = ["DEPTO. DE\nSEGURIDAD", "EMBARQUES", "FACTURACIÓN", "TRANSPORTE\nO CLIENTE"];
 
   sigBoxes.forEach((label, i) => {
     const bx = MARGIN + i * (SIG_W + 8);
