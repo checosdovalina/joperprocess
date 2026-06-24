@@ -7487,7 +7487,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         warrantySerialNumber: overrides.warrantySerialNumber ?? incident.warrantySerialNumber,
         referenceNumber: overrides.referenceNumber ?? incident.referenceNumber,
         orderFolio: incident.order?.folio ?? null,
-        invoiceFolio: (incident.invoice as any)?.folio ?? null,
+        invoiceFolio: overrides.invoiceNumber || (incident.invoice as any)?.folio || null,
         assigneeName: incident.assignee?.fullName ?? null,
         assignedArea: incident.assignedArea,
         resolution: overrides.resolution ?? incident.resolution,

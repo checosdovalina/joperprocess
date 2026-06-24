@@ -243,6 +243,7 @@ export default function IncidentDetailPage() {
     productSku: "",
     warrantySerialNumber: "",
     referenceNumber: "",
+    invoiceNumber: "",
     contactName: "",
     contactEmail: "",
     contactPhone: "",
@@ -280,6 +281,7 @@ export default function IncidentDetailPage() {
         productSku: (incident as any).product?.sku || "",
         warrantySerialNumber: incident.warrantySerialNumber || "",
         referenceNumber: incident.referenceNumber || "",
+        invoiceNumber: (incident as any).invoice?.folio || "",
         contactName: incident.contactName || "",
         contactEmail: incident.contactEmail || "",
         contactPhone: incident.contactPhone || "",
@@ -926,6 +928,15 @@ export default function IncidentDetailPage() {
                             onChange={e => setWarrantyForm(f => ({ ...f, referenceNumber: e.target.value }))}
                             placeholder="Ej: REF-4567"
                             data-testid="input-warranty-reference"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Número de factura</Label>
+                          <Input
+                            value={warrantyForm.invoiceNumber}
+                            onChange={e => setWarrantyForm(f => ({ ...f, invoiceNumber: e.target.value }))}
+                            placeholder="Ej: F-12345"
+                            data-testid="input-warranty-invoice"
                           />
                         </div>
                       </div>

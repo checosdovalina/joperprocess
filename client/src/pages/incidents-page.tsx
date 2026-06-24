@@ -225,6 +225,7 @@ export default function IncidentsPage() {
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
   const [filterUrgency, setFilterUrgency] = useState<string>("");
+  const [showResolved, setShowResolved] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [previewIncident, setPreviewIncident] = useState<IncidentWithDetails | null>(null);
@@ -401,6 +402,13 @@ export default function IncidentsPage() {
 
   const hasActiveFilters = filterStatus || filterType || filterUrgency || searchQuery;
 
+  const CLOSED_STATUSES = ["resuelto", "cerrado", "cancelado"];
+  const visibleIncidents = useMemo(() => {
+    if (!incidents) return incidents;
+    if (showResolved || filterStatus) return incidents;
+    return incidents.filter((i) => !CLOSED_STATUSES.includes(i.status));
+  }, [incidents, showResolved, filterStatus]);
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -454,6 +462,14 @@ export default function IncidentsPage() {
                   data-testid="input-search"
                 />
               </div>
+              <Button
+                variant={showResolved ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowResolved(!showResolved)}
+                data-testid="button-toggle-resolved"
+              >
+                {showResolved ? "Ocultar resueltas" : "Ver resueltas"}
+              </Button>
               <Button
                 variant={showFilters ? "default" : "outline"}
                 size="icon"
@@ -527,16 +543,22 @@ export default function IncidentsPage() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : !incidents || incidents.length === 0 ? (
+          ) : !visibleIncidents || visibleIncidents.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>{hasActiveFilters ? t("incidents.no-results-filter") : t("incidents.no-results")}</p>
+              <p>
+                {incidents && incidents.length > 0 && !hasActiveFilters && !showResolved
+                  ? 'No hay incidencias abiertas. Activa "Ver resueltas" para ver las cerradas.'
+                  : hasActiveFilters
+                  ? t("incidents.no-results-filter")
+                  : t("incidents.no-results")}
+              </p>
             </div>
           ) : (
             <>
             {/* Mobile card list */}
             <div className="space-y-3 md:hidden">
-              {incidents.map((incident) => (
+              {visibleIncidents.map((incident) => (
                 <div
                   key={incident.id}
                   className="rounded-md border p-3 space-y-2 hover-elevate cursor-pointer"
@@ -608,7 +630,7 @@ export default function IncidentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {incidents.map((incident) => (
+                  {visibleIncidents.map((incident) => (
                     <TableRow
                       key={incident.id}
                       className="hover-elevate cursor-pointer"
