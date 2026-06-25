@@ -24,6 +24,7 @@ export interface CxcLiveInvoice {
   FECHA_VEN: Date | null;
   IMPORTE_TOTAL: number;
   SALDO: number;
+  MONEDA_ID?: number; // 1 = MXN, other = USD
 }
 
 export interface CxcLivePayment {
@@ -101,22 +102,33 @@ export async function sendAccountStatementEmail({
   const now = new Date();
   let totalBalance: number;
   let totalOverdue: number;
+  let usdTotal = 0;
   let invoiceRows: string;
+  let invoiceTableHeader: string;
   let paymentRows: string;
   let activeCount: number;
 
   if (liveData) {
     // ── Live CXC path: real-time balances from Firebird ──────────────────────
     const liveInvoices = liveData.invoices; // already filtered SALDO > 0.005
-    totalBalance = liveInvoices.reduce((s, i) => s + i.SALDO, 0);
+    const currencyOf = (inv: CxcLiveInvoice) => inv.MONEDA_ID === 1 || !inv.MONEDA_ID ? "MXN" : "USD";
+
+    // Separate totals per currency
+    const mxnInvoices = liveInvoices.filter((i) => currencyOf(i) === "MXN");
+    const usdInvoices = liveInvoices.filter((i) => currencyOf(i) === "USD");
+    const totalMXN = mxnInvoices.reduce((s, i) => s + i.SALDO, 0);
+    const totalUSD = usdInvoices.reduce((s, i) => s + i.SALDO, 0);
+    // For the main "totalBalance" card use MXN (primary currency); USD shown separately below
+    totalBalance = totalMXN;
     const overdueInv = liveInvoices.filter((i) => i.FECHA_VEN && new Date(i.FECHA_VEN) < now);
-    totalOverdue = overdueInv.reduce((s, i) => s + i.SALDO, 0);
+    totalOverdue = overdueInv.filter((i) => currencyOf(i) === "MXN").reduce((s, i) => s + i.SALDO, 0);
     activeCount = liveInvoices.length;
 
     invoiceRows = liveInvoices.map((inv) => {
       const isOverdue = inv.FECHA_VEN && new Date(inv.FECHA_VEN) < now;
       const statusCol = isOverdue ? "#dc2626" : "#d97706";
       const statusTxt = isOverdue ? "Vencida" : "Pendiente";
+      const cur = currencyOf(inv);
       return `
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:8px 10px;font-weight:600;">${inv.FOLIO}</td>
@@ -124,10 +136,11 @@ export async function sendAccountStatementEmail({
         <td style="padding:8px 10px;color:${isOverdue ? "#dc2626" : "#374151"};">
           ${inv.FECHA_VEN ? fmtDate(inv.FECHA_VEN) : "—"}${isOverdue ? " ⚠" : ""}
         </td>
-        <td style="padding:8px 10px;text-align:right;">${fmt(inv.IMPORTE_TOTAL)}</td>
+        <td style="padding:8px 10px;text-align:right;">${fmt(inv.IMPORTE_TOTAL, cur)}</td>
         <td style="padding:8px 10px;text-align:right;font-weight:600;color:${statusCol};">
-          ${fmt(inv.SALDO)}
+          ${fmt(inv.SALDO, cur)}
         </td>
+        <td style="padding:8px 10px;text-align:center;font-size:11px;color:#6b7280;font-weight:600;">${cur}</td>
         <td style="padding:8px 10px;">
           <span style="background:${statusCol}20;color:${statusCol};padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">
             ${statusTxt}
@@ -135,6 +148,18 @@ export async function sendAccountStatementEmail({
         </td>
       </tr>`;
     }).join("");
+
+    usdTotal = totalUSD;
+    invoiceTableHeader = `
+          <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Folio</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Emisión</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Vencimiento</th>
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Total</th>
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Saldo</th>
+            <th style="padding:8px 10px;text-align:center;color:#6b7280;font-weight:600;">Moneda</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Estado</th>
+          </tr>`;
 
     paymentRows = liveData.payments.slice(0, 10).map((pay) => `
       <tr style="border-bottom:1px solid #e5e7eb;">
@@ -206,6 +231,16 @@ export async function sendAccountStatementEmail({
       </tr>`;
       })
       .join("");
+
+    invoiceTableHeader = `
+          <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Folio</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Emisión</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Vencimiento</th>
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Total (MXN)</th>
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Saldo (MXN)</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Estado</th>
+          </tr>`;
   }
 
   const cutoffStr = cutoffDate
@@ -241,19 +276,25 @@ export async function sendAccountStatementEmail({
     </div>
 
     <!-- Summary cards -->
-    <div style="display:flex;padding:20px 32px;gap:16px;border-bottom:1px solid #e5e7eb;">
-      <div style="flex:1;background:#fef2f2;border-radius:8px;padding:16px 18px;border:1px solid #fecaca;">
+    <div style="display:flex;padding:20px 32px;gap:16px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap;">
+      <div style="flex:1;min-width:140px;background:#fef2f2;border-radius:8px;padding:16px 18px;border:1px solid #fecaca;">
         <p style="margin:0 0 6px;font-size:12px;color:#ef4444;font-weight:600;text-transform:uppercase;">Saldo Total</p>
         <p style="margin:0;font-size:22px;font-weight:700;color:#dc2626;">${fmt(totalBalance)}</p>
         <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">MXN</p>
       </div>
       ${totalOverdue > 0 ? `
-      <div style="flex:1;background:#fff7ed;border-radius:8px;padding:16px 18px;border:1px solid #fed7aa;">
+      <div style="flex:1;min-width:140px;background:#fff7ed;border-radius:8px;padding:16px 18px;border:1px solid #fed7aa;">
         <p style="margin:0 0 6px;font-size:12px;color:#f97316;font-weight:600;text-transform:uppercase;">Saldo Vencido</p>
         <p style="margin:0;font-size:22px;font-weight:700;color:#ea580c;">${fmt(totalOverdue)}</p>
         <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">MXN</p>
       </div>` : ""}
-      <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:16px 18px;border:1px solid #bbf7d0;">
+      ${usdTotal > 0 ? `
+      <div style="flex:1;min-width:140px;background:#eff6ff;border-radius:8px;padding:16px 18px;border:1px solid #bfdbfe;">
+        <p style="margin:0 0 6px;font-size:12px;color:#2563eb;font-weight:600;text-transform:uppercase;">Saldo Total</p>
+        <p style="margin:0;font-size:22px;font-weight:700;color:#1d4ed8;">${fmt(usdTotal, "USD")}</p>
+        <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">USD</p>
+      </div>` : ""}
+      <div style="flex:1;min-width:140px;background:#f0fdf4;border-radius:8px;padding:16px 18px;border:1px solid #bbf7d0;">
         <p style="margin:0 0 6px;font-size:12px;color:#16a34a;font-weight:600;text-transform:uppercase;">Facturas Activas</p>
         <p style="margin:0;font-size:22px;font-weight:700;color:#15803d;">${activeCount}</p>
       </div>
@@ -268,16 +309,7 @@ export async function sendAccountStatementEmail({
         <p style="color:#6b7280;font-style:italic;padding:16px 0;">Sin facturas pendientes.</p>
       ` : `
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead>
-          <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
-            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Folio</th>
-            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Emisión</th>
-            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Vencimiento</th>
-            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Total (MXN)</th>
-            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Saldo (MXN)</th>
-            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Estado</th>
-          </tr>
-        </thead>
+        <thead>${invoiceTableHeader}</thead>
         <tbody>${invoiceRows}</tbody>
       </table>`}
     </div>
