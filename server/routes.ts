@@ -5212,6 +5212,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         if (tenant?.name) tenantName = tenant.name;
       }
 
+      // Try live CXC data from Microsip for accurate real-time balances
+      let liveData: { invoices: any[]; payments: any[] } | undefined;
+      if (tenantId && customer.microsipId) {
+        try {
+          const msService = await createMicrosipSyncService(tenantId);
+          liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
+        } catch (_e) {
+          console.warn("[account-statement] Live CXC fetch failed, using local DB:", (_e as any)?.message);
+        }
+      }
+
       const { sendAccountStatementEmail } = await import("./account-statement-email-service");
       await sendAccountStatementEmail({
         customer,
@@ -5219,6 +5230,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         payments: custPayments,
         recipientEmails,
         tenantName,
+        liveData,
       });
 
       res.json({ success: true, message: `Estado de cuenta enviado a ${recipientEmails.join(", ")}` });

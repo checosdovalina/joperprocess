@@ -18,6 +18,21 @@ interface PaymentLine {
   invoiceRef: string;
 }
 
+export interface CxcLiveInvoice {
+  FOLIO: string;
+  FECHA: Date;
+  FECHA_VEN: Date | null;
+  IMPORTE_TOTAL: number;
+  SALDO: number;
+}
+
+export interface CxcLivePayment {
+  REFERENCIA: string;
+  FECHA: Date;
+  IMPORTE: number;
+  FACTURA_FOLIO: string | null;
+}
+
 interface SendAccountStatementParams {
   customer: Customer;
   invoices: Invoice[];
@@ -25,6 +40,10 @@ interface SendAccountStatementParams {
   recipientEmails: string[];
   tenantName?: string;
   cutoffDate?: Date;
+  /** When provided, overrides local-DB invoices/payments with real-time CXC data */
+  liveData?: { invoices: CxcLiveInvoice[]; payments: CxcLivePayment[] };
+  /** Additional CC emails (e.g. internal admin copy) */
+  ccEmails?: string[];
 }
 
 function fmt(value: string | number, currency = "MXN"): string {
@@ -73,39 +92,89 @@ export async function sendAccountStatementEmail({
   recipientEmails,
   tenantName = "Nexxo",
   cutoffDate,
+  liveData,
+  ccEmails,
 }: SendAccountStatementParams): Promise<void> {
   const apiKey = process.env.MAILERSEND_API_KEY;
   if (!apiKey) throw new Error("MAILERSEND_API_KEY no está configurado");
 
-  const activeInvoices = invoices.filter(
-    (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
-  );
-
-  const totalBalance = activeInvoices.reduce((sum, inv) => {
-    const b = parseFloat(inv.balanceDue ?? inv.total ?? "0");
-    return sum + (Number.isFinite(b) ? b : 0);
-  }, 0);
-
   const now = new Date();
-  const overdueInvoices = activeInvoices.filter(
-    (inv) => inv.dueDate && new Date(inv.dueDate) < now
-  );
-  const totalOverdue = overdueInvoices.reduce((sum, inv) => {
-    const b = parseFloat(inv.balanceDue ?? inv.total ?? "0");
-    return sum + (Number.isFinite(b) ? b : 0);
-  }, 0);
+  let totalBalance: number;
+  let totalOverdue: number;
+  let invoiceRows: string;
+  let paymentRows: string;
+  let activeCount: number;
 
-  const currentYear = new Date().getFullYear();
-  const recentPayments = [...payments]
-    .filter((p) => new Date(p.paymentDate).getFullYear() === currentYear)
-    .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
-    .slice(0, 10);
+  if (liveData) {
+    // ── Live CXC path: real-time balances from Firebird ──────────────────────
+    const liveInvoices = liveData.invoices; // already filtered SALDO > 0.005
+    totalBalance = liveInvoices.reduce((s, i) => s + i.SALDO, 0);
+    const overdueInv = liveInvoices.filter((i) => i.FECHA_VEN && new Date(i.FECHA_VEN) < now);
+    totalOverdue = overdueInv.reduce((s, i) => s + i.SALDO, 0);
+    activeCount = liveInvoices.length;
 
-  const invoiceRows = activeInvoices
-    .map((inv) => {
-      const isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
-      const bal = parseFloat(inv.balanceDue ?? inv.total ?? "0");
+    invoiceRows = liveInvoices.map((inv) => {
+      const isOverdue = inv.FECHA_VEN && new Date(inv.FECHA_VEN) < now;
+      const statusCol = isOverdue ? "#dc2626" : "#d97706";
+      const statusTxt = isOverdue ? "Vencida" : "Pendiente";
       return `
+      <tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:8px 10px;font-weight:600;">${inv.FOLIO}</td>
+        <td style="padding:8px 10px;color:#6b7280;">${fmtDate(inv.FECHA)}</td>
+        <td style="padding:8px 10px;color:${isOverdue ? "#dc2626" : "#374151"};">
+          ${inv.FECHA_VEN ? fmtDate(inv.FECHA_VEN) : "—"}${isOverdue ? " ⚠" : ""}
+        </td>
+        <td style="padding:8px 10px;text-align:right;">${fmt(inv.IMPORTE_TOTAL)}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:600;color:${statusCol};">
+          ${fmt(inv.SALDO)}
+        </td>
+        <td style="padding:8px 10px;">
+          <span style="background:${statusCol}20;color:${statusCol};padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">
+            ${statusTxt}
+          </span>
+        </td>
+      </tr>`;
+    }).join("");
+
+    paymentRows = liveData.payments.slice(0, 10).map((pay) => `
+      <tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:8px 10px;color:#6b7280;">${fmtDate(pay.FECHA)}</td>
+        <td style="padding:8px 10px;">${pay.REFERENCIA ?? "—"}</td>
+        <td style="padding:8px 10px;color:#6b7280;">${pay.FACTURA_FOLIO ?? "—"}</td>
+        <td style="padding:8px 10px;text-align:right;color:#16a34a;font-weight:600;">+${fmt(pay.IMPORTE)}</td>
+      </tr>`).join("");
+
+  } else {
+    // ── Local-DB fallback path ────────────────────────────────────────────────
+    const activeInvoices = invoices.filter(
+      (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
+    );
+    activeCount = activeInvoices.length;
+
+    totalBalance = activeInvoices.reduce((sum, inv) => {
+      const b = parseFloat(inv.balanceDue ?? inv.total ?? "0");
+      return sum + (Number.isFinite(b) ? b : 0);
+    }, 0);
+
+    const overdueInvoices = activeInvoices.filter(
+      (inv) => inv.dueDate && new Date(inv.dueDate) < now
+    );
+    totalOverdue = overdueInvoices.reduce((sum, inv) => {
+      const b = parseFloat(inv.balanceDue ?? inv.total ?? "0");
+      return sum + (Number.isFinite(b) ? b : 0);
+    }, 0);
+
+    const currentYear = new Date().getFullYear();
+    const recentPayments = [...payments]
+      .filter((p) => new Date(p.paymentDate).getFullYear() === currentYear)
+      .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
+      .slice(0, 10);
+
+    invoiceRows = activeInvoices
+      .map((inv) => {
+        const isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
+        const bal = parseFloat(inv.balanceDue ?? inv.total ?? "0");
+        return `
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:8px 10px;font-weight:600;">${inv.serie}-${inv.folio}</td>
         <td style="padding:8px 10px;color:#6b7280;">${fmtDate(inv.issuedAt)}</td>
@@ -122,21 +191,22 @@ export async function sendAccountStatementEmail({
           </span>
         </td>
       </tr>`;
-    })
-    .join("");
+      })
+      .join("");
 
-  const paymentRows = recentPayments
-    .map((pay) => {
-      const inv = invoices.find((i) => i.id === pay.invoiceId);
-      return `
+    paymentRows = recentPayments
+      .map((pay) => {
+        const inv = invoices.find((i) => i.id === pay.invoiceId);
+        return `
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:8px 10px;color:#6b7280;">${fmtDate(pay.paymentDate)}</td>
         <td style="padding:8px 10px;">${pay.reference ?? "—"}</td>
         <td style="padding:8px 10px;color:#6b7280;">${inv ? `${inv.serie}-${inv.folio}` : "—"}</td>
         <td style="padding:8px 10px;text-align:right;color:#16a34a;font-weight:600;">+${fmt(pay.amount)}</td>
       </tr>`;
-    })
-    .join("");
+      })
+      .join("");
+  }
 
   const cutoffStr = cutoffDate
     ? fmtDate(cutoffDate)
@@ -183,7 +253,7 @@ export async function sendAccountStatementEmail({
       </div>` : ""}
       <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:16px 18px;border:1px solid #bbf7d0;">
         <p style="margin:0 0 6px;font-size:12px;color:#16a34a;font-weight:600;text-transform:uppercase;">Facturas Activas</p>
-        <p style="margin:0;font-size:22px;font-weight:700;color:#15803d;">${activeInvoices.length}</p>
+        <p style="margin:0;font-size:22px;font-weight:700;color:#15803d;">${activeCount}</p>
       </div>
     </div>
 
@@ -192,7 +262,7 @@ export async function sendAccountStatementEmail({
       <h2 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:.5px;">
         Facturas Pendientes
       </h2>
-      ${activeInvoices.length === 0 ? `
+      ${activeCount === 0 ? `
         <p style="color:#6b7280;font-style:italic;padding:16px 0;">Sin facturas pendientes.</p>
       ` : `
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -211,7 +281,7 @@ export async function sendAccountStatementEmail({
     </div>
 
     <!-- Payments table -->
-    ${recentPayments.length > 0 ? `
+    ${paymentRows.length > 0 ? `
     <div style="padding:0 32px 24px;">
       <h2 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:.5px;">
         Últimos Pagos Registrados
@@ -244,11 +314,16 @@ export async function sendAccountStatementEmail({
   const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
   const recipients = recipientEmails.map((e) => new Recipient(e, customer.name));
 
-  const emailParams = new EmailParams()
+  let emailParams = new EmailParams()
     .setFrom(sentFrom)
     .setTo(recipients)
     .setSubject(`Estado de Cuenta — ${customer.name} — ${fmtDate(now)}`)
     .setHtml(html);
+
+  if (ccEmails && ccEmails.length > 0) {
+    const cc = ccEmails.map((e) => new Recipient(e, e));
+    emailParams = emailParams.setCc(cc);
+  }
 
   await mailerSend.email.send(emailParams);
 }

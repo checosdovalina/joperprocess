@@ -1,6 +1,7 @@
 import { db } from "./db";
-import { eq } from "drizzle-orm";
-import { accountStatementSchedules, tenants, customers, invoices, payments } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
+import { accountStatementSchedules, tenants, customers, invoices, payments, users } from "@shared/schema";
+import { createMicrosipSyncService } from "./microsip-sync";
 
 function todayInMexico(tz = "America/Mexico_City"): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
@@ -57,6 +58,22 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
     where: eq(customers.tenantId, tenantId),
   });
 
+  // Admin users for this tenant → will receive CC copy of each statement
+  const adminUsers = await db.query.users.findMany({
+    where: and(eq(users.tenantId, tenantId), eq(users.role, "admin")),
+  });
+  const ccEmails = adminUsers
+    .flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim()))
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+
+  // Try to create Microsip service for live CXC data (one connection per tenant run)
+  let msService: Awaited<ReturnType<typeof createMicrosipSyncService>> | null = null;
+  try {
+    msService = await createMicrosipSyncService(tenantId);
+  } catch (_e) {
+    console.warn(`[StatementScheduler] Microsip not configured for tenant ${tenantId}, using local DB`);
+  }
+
   const { sendAccountStatementEmail } = await import("./account-statement-email-service");
   const now = new Date();
   let sent = 0;
@@ -76,16 +93,32 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
       db.query.payments.findMany({ where: eq(payments.customerId, customer.id) }),
     ]);
 
-    const activeInvoices = custInvoices.filter(
-      (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
-    );
-
-    if (activeInvoices.length === 0) { skipped++; continue; }
-
-    if (onlyOverdue) {
-      const hasOverdue = activeInvoices.some((inv) => inv.dueDate && new Date(inv.dueDate) < now);
-      if (!hasOverdue) { skipped++; continue; }
+    // Try live CXC data for accurate balances
+    let liveData: { invoices: any[]; payments: any[] } | undefined;
+    if (msService && customer.microsipId) {
+      try {
+        liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
+      } catch (_e) {
+        // Fall back to local DB for this customer
+      }
     }
+
+    // Determine if this customer has any active balance (using live data if available)
+    let hasActive: boolean;
+    let hasOverdue: boolean;
+    if (liveData) {
+      hasActive = liveData.invoices.length > 0;
+      hasOverdue = liveData.invoices.some((i: any) => i.FECHA_VEN && new Date(i.FECHA_VEN) < now);
+    } else {
+      const activeInvoices = custInvoices.filter(
+        (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
+      );
+      hasActive = activeInvoices.length > 0;
+      hasOverdue = activeInvoices.some((inv) => inv.dueDate && new Date(inv.dueDate) < now);
+    }
+
+    if (!hasActive) { skipped++; continue; }
+    if (onlyOverdue && !hasOverdue) { skipped++; continue; }
 
     try {
       await sendAccountStatementEmail({
@@ -94,6 +127,8 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
         payments: custPayments,
         recipientEmails: emails,
         tenantName: tenant.name,
+        liveData,
+        ccEmails: ccEmails.length > 0 ? ccEmails : undefined,
       });
       sent++;
     } catch (err) {
