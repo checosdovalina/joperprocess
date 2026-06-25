@@ -245,11 +245,13 @@ export async function sendAccountStatementEmail({
       <div style="flex:1;background:#fef2f2;border-radius:8px;padding:16px 18px;border:1px solid #fecaca;">
         <p style="margin:0 0 6px;font-size:12px;color:#ef4444;font-weight:600;text-transform:uppercase;">Saldo Total</p>
         <p style="margin:0;font-size:22px;font-weight:700;color:#dc2626;">${fmt(totalBalance)}</p>
+        <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">MXN</p>
       </div>
       ${totalOverdue > 0 ? `
       <div style="flex:1;background:#fff7ed;border-radius:8px;padding:16px 18px;border:1px solid #fed7aa;">
         <p style="margin:0 0 6px;font-size:12px;color:#f97316;font-weight:600;text-transform:uppercase;">Saldo Vencido</p>
         <p style="margin:0;font-size:22px;font-weight:700;color:#ea580c;">${fmt(totalOverdue)}</p>
+        <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">MXN</p>
       </div>` : ""}
       <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:16px 18px;border:1px solid #bbf7d0;">
         <p style="margin:0 0 6px;font-size:12px;color:#16a34a;font-weight:600;text-transform:uppercase;">Facturas Activas</p>
@@ -271,8 +273,8 @@ export async function sendAccountStatementEmail({
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Folio</th>
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Emisión</th>
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Vencimiento</th>
-            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Total</th>
-            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Saldo</th>
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Total (MXN)</th>
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Saldo (MXN)</th>
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Estado</th>
           </tr>
         </thead>
