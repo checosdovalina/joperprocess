@@ -58,11 +58,11 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
     where: eq(customers.tenantId, tenantId),
   });
 
-  // Admin users for this tenant → will receive CC copy of each statement
+  // Admin + cobranza users for this tenant → will receive CC copy of each statement
   const adminUsers = await db.query.users.findMany({
-    where: and(eq(users.tenantId, tenantId), eq(users.role, "admin")),
+    where: and(eq(users.tenantId, tenantId)),
   });
-  const ccEmails = adminUsers
+  const ccEmails = adminUsers.filter((u) => u.role === "admin" || u.role === "credito_cobranza")
     .flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim()))
     .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
 
