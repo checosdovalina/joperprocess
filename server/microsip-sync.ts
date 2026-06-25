@@ -1237,7 +1237,7 @@ class MicrosipSyncService {
         WHERE P.CANCELADO <> 'S'
           AND P.NATURALEZA_CONCEPTO = 'R'
           AND P.CLIENTE_ID = ${microsipClienteId}
-          AND P.FECHA >= DATEADD(-730 DAY TO CURRENT_DATE)
+          AND P.FECHA >= DATEADD(-30 DAY TO CURRENT_DATE)
         GROUP BY P.DOCTO_CC_ID, P.FOLIO, P.FECHA
         ORDER BY P.FECHA DESC
       `);

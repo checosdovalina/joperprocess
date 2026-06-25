@@ -164,9 +164,9 @@ export async function sendAccountStatementEmail({
       return sum + (Number.isFinite(b) ? b : 0);
     }, 0);
 
-    const currentYear = new Date().getFullYear();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const recentPayments = [...payments]
-      .filter((p) => new Date(p.paymentDate).getFullYear() === currentYear)
+      .filter((p) => new Date(p.paymentDate) >= thirtyDaysAgo)
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
       .slice(0, 10);
 
