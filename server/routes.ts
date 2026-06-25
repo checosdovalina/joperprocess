@@ -6537,14 +6537,38 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Helper function to generate ticket number (scoped by tenant)
   async function generateTicketNumber(tenantId: string): Promise<string> {
     const year = new Date().getFullYear();
-    // Generate ticket numbers scoped by tenant and year for proper isolation
+    // Derive the next sequence from the highest existing ticket number for this
+    // tenant/year, NOT from COUNT(*). Using COUNT(*)+1 reuses numbers after a
+    // deletion (e.g. delete INC-2026-00005 -> count drops -> next would collide),
+    // causing a unique-constraint violation on ticket_number.
     const result = await db.execute(sql`
-      SELECT COUNT(*) as count FROM ${incidents} 
-      WHERE tenant_id = ${tenantId} 
-      AND EXTRACT(YEAR FROM created_at) = ${year}
+      SELECT COALESCE(MAX(CAST(SUBSTRING(ticket_number FROM 'INC-[0-9]+-([0-9]+)$') AS INTEGER)), 0) AS maxnum
+      FROM ${incidents}
+      WHERE tenant_id = ${tenantId}
+      AND ticket_number LIKE ${`INC-${year}-%`}
     `);
-    const count = Number(result.rows[0].count) + 1;
-    return `INC-${year}-${String(count).padStart(5, '0')}`;
+    const next = Number(result.rows[0].maxnum) + 1;
+    return `INC-${year}-${String(next).padStart(5, '0')}`;
+  }
+
+  // Insert an incident, regenerating the ticket number and retrying if a
+  // concurrent create grabbed the same number (unique_violation = 23505).
+  async function insertIncidentWithTicket(
+    tenantId: string,
+    buildValues: (ticketNumber: string) => any
+  ): Promise<any> {
+    let lastErr: any;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const ticketNumber = await generateTicketNumber(tenantId);
+      try {
+        const [newIncident] = await db.insert(incidents).values(buildValues(ticketNumber)).returning();
+        return newIncident;
+      } catch (err: any) {
+        if (err?.code === '23505' && attempt < 4) { lastErr = err; continue; }
+        throw err;
+      }
+    }
+    throw lastErr;
   }
 
   // Helper function to log incident activity
@@ -6756,7 +6780,6 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "No se pudo determinar el tenant para el incidente" });
       }
       
-      const ticketNumber = await generateTicketNumber(tenantId);
       const accessToken = randomBytes(32).toString('hex');
       const accessTokenExpires = null; // no expiry
 
@@ -6765,13 +6788,13 @@ Proporciona tu análisis en el siguiente formato JSON:
         createdBy: user.id,
       });
 
-      const [newIncident] = await db.insert(incidents).values({
+      const newIncident = await insertIncidentWithTicket(tenantId, (ticketNumber) => ({
         ...validated,
         tenantId,
         ticketNumber,
         accessToken,
         accessTokenExpires,
-      }).returning();
+      }));
 
       await logIncidentActivity(
         newIncident.id,
@@ -6779,7 +6802,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         user.id,
         undefined,
         undefined,
-        `Incidente creado con número ${ticketNumber}`
+        `Incidente creado con número ${newIncident.ticketNumber}`
       );
 
       notifyAdminsOfIncident({
@@ -6787,7 +6810,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         eventType: "created",
         incident: newIncident,
         customerName: customer.name,
-        extraMessage: `Se ha creado un nuevo incidente (${ticketNumber}) por ${user.fullName}.`,
+        extraMessage: `Se ha creado un nuevo incidente (${newIncident.ticketNumber}) por ${user.fullName}.`,
       });
 
       res.status(201).json(newIncident);
@@ -7341,13 +7364,12 @@ Proporciona tu análisis en el siguiente formato JSON:
       // Get tenantId from customer for proper isolation
       const tenantId = customer.tenantId;
 
-      // Generate ticket number and access token
-      const ticketNumber = await generateTicketNumber(tenantId);
+      // Generate access token
       const accessToken = randomBytes(32).toString('hex');
       const accessTokenExpires = null; // no expiry
 
-      // Create the incident
-      const [newIncident] = await db.insert(incidents).values({
+      // Create the incident (ticket number generated with retry on collision)
+      const newIncident = await insertIncidentWithTicket(tenantId, (ticketNumber) => ({
         customerId,
         tenantId,
         type: type as typeof IncidentType[keyof typeof IncidentType],
@@ -7363,7 +7385,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         accessToken,
         accessTokenExpires,
         isFromCustomerPortal: true,
-      }).returning();
+      }));
 
       await logIncidentActivity(
         newIncident.id,
@@ -7371,7 +7393,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         null,
         undefined,
         undefined,
-        `Incidente creado desde portal de clientes con número ${ticketNumber}`,
+        `Incidente creado desde portal de clientes con número ${newIncident.ticketNumber}`,
         true
       );
 
@@ -7380,7 +7402,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         eventType: "created",
         incident: newIncident,
         customerName: customer.name,
-        extraMessage: `Un cliente ha creado un nuevo incidente (${ticketNumber}) desde el portal de clientes.`,
+        extraMessage: `Un cliente ha creado un nuevo incidente (${newIncident.ticketNumber}) desde el portal de clientes.`,
       });
 
       // Save attachments if any were uploaded
