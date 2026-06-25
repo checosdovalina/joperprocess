@@ -24,7 +24,7 @@ export interface CxcLiveInvoice {
   FECHA_VEN: Date | null;
   IMPORTE_TOTAL: number;
   SALDO: number;
-  MONEDA_ID?: number; // 1 = MXN, other = USD
+  TIPO_CAMBIO?: number; // 1 = MXN, > 1.5 = USD (exchange rate used at invoicing)
 }
 
 export interface CxcLivePayment {
@@ -111,7 +111,8 @@ export async function sendAccountStatementEmail({
   if (liveData) {
     // ── Live CXC path: real-time balances from Firebird ──────────────────────
     const liveInvoices = liveData.invoices; // already filtered SALDO > 0.005
-    const currencyOf = (inv: CxcLiveInvoice) => inv.MONEDA_ID === 1 || !inv.MONEDA_ID ? "MXN" : "USD";
+    // TIPO_CAMBIO > 1.5 means the invoice was issued in USD (rate ~17-25 MXN/USD)
+    const currencyOf = (inv: CxcLiveInvoice) => (inv.TIPO_CAMBIO && inv.TIPO_CAMBIO > 1.5) ? "USD" : "MXN";
 
     // Separate totals per currency
     const mxnInvoices = liveInvoices.filter((i) => currencyOf(i) === "MXN");
