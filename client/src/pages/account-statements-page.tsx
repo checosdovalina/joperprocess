@@ -73,6 +73,7 @@ interface CustomerBalance {
   overdueBalance: number;
   invoiceCount: number;
   oldestDueDate: string | null;
+  currency?: string; // "MXN" | "USD"
 }
 
 interface BulkResult {
@@ -82,8 +83,8 @@ interface BulkResult {
   error?: string;
 }
 
-function fmt(n: number) {
-  return n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
+function fmt(n: number, currency = "MXN") {
+  return n.toLocaleString("es-MX", { style: "currency", currency, minimumFractionDigits: 2 });
 }
 
 function fmtDate(d: string | null) {
@@ -607,12 +608,15 @@ export default function AccountStatementsPage() {
                       <p className="text-xs text-muted-foreground">{s.customer.rfc ?? ""}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="text-sm font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
-                          {fmt(s.totalBalance)}
+                          {fmt(s.totalBalance, s.currency)}
                         </span>
+                        {s.currency === "USD" && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-blue-600 border-blue-300">USD</Badge>
+                        )}
                         <span className="text-xs text-muted-foreground">{s.invoiceCount} fact.</span>
                         {isOverdue && (
                           <span className="text-xs text-destructive font-semibold">
-                            {fmt(s.overdueBalance)} vencido
+                            {fmt(s.overdueBalance, s.currency)} vencido
                           </span>
                         )}
                       </div>
@@ -691,15 +695,20 @@ export default function AccountStatementsPage() {
                         <td className="px-3 py-3">
                           <p className="font-medium" data-testid={`text-customer-name-${s.customer.id}`}>{s.customer.name}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{s.customer.rfc ?? ""}</p>
-                          {isOverdue && <Badge variant="destructive" className="mt-1 text-xs">Vencido</Badge>}
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {isOverdue && <Badge variant="destructive" className="text-xs">Vencido</Badge>}
+                            {s.currency === "USD" && (
+                              <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">USD</Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-3 text-right font-semibold tabular-nums" data-testid={`text-balance-${s.customer.id}`}>
-                          {fmt(s.totalBalance)}
+                          {fmt(s.totalBalance, s.currency)}
                           <p className="text-xs text-muted-foreground font-normal">{s.invoiceCount} factura(s)</p>
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums">
                           {s.overdueBalance > 0 ? (
-                            <span className="text-destructive font-semibold">{fmt(s.overdueBalance)}</span>
+                            <span className="text-destructive font-semibold">{fmt(s.overdueBalance, s.currency)}</span>
                           ) : (
                             <span className="text-muted-foreground/40">—</span>
                           )}

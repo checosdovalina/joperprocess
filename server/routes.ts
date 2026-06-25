@@ -5110,6 +5110,7 @@ Proporciona tu análisis en el siguiente formato JSON:
                 overdueBalance: Math.max(0, Number(bal.SALDO_VENCIDO) || 0),
                 invoiceCount: Number(bal.INVOICE_COUNT) || 0,
                 oldestDueDate: bal.OLDEST_DUE ? (bal.OLDEST_DUE instanceof Date ? bal.OLDEST_DUE.toISOString() : String(bal.OLDEST_DUE)) : null,
+                currency: Number(bal.IS_USD) === 1 ? "USD" : "MXN",
               }];
             })
             .sort((a, b) => b.overdueBalance - a.overdueBalance || b.totalBalance - a.totalBalance);
@@ -5385,6 +5386,7 @@ Proporciona tu análisis en el siguiente formato JSON:
                 dueDate: inv.FECHA_VEN ?? null,
                 total: Number(inv.IMPORTE_TOTAL) || 0,
                 balance: Number(inv.SALDO) || 0,
+                currency: (inv.TIPO_CAMBIO && inv.TIPO_CAMBIO > 1.5) ? "USD" : "MXN",
               })),
               payments: raw.payments.map(pay => ({
                 reference: String(pay.REFERENCIA),

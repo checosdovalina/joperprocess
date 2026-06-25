@@ -25,6 +25,7 @@ interface CxcOpenInvoice {
   dueDate: Date | null;
   total: number;
   balance: number;
+  currency?: string; // "MXN" | "USD"
 }
 
 interface CxcPaymentRow {
@@ -63,10 +64,11 @@ async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffe
   } catch { return null; }
 }
 
-function fmt(value: string | number): string {
+function fmt(value: string | number, currency = "MXN"): string {
   const num = typeof value === "string" ? parseFloat(value) : value;
-  if (!Number.isFinite(num)) return "$0.00";
-  return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (!Number.isFinite(num)) return currency === "USD" ? "US$0.00" : "$0.00";
+  const prefix = currency === "USD" ? "US$" : "$";
+  return prefix + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtDate(date: Date | string | null): string {
@@ -115,6 +117,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   let totalBalance: number;
   let totalOverdue: number;
   let activeCount: number;
+  let docCurrency = "MXN"; // overall currency for summary header
 
   if (cxcData) {
     totalBalance = cxcData.invoices.reduce((s, inv) => s + (Number(inv.balance) || 0), 0);
@@ -122,6 +125,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
       .filter((inv) => inv.dueDate && new Date(inv.dueDate) < now)
       .reduce((s, inv) => s + (Number(inv.balance) || 0), 0);
     activeCount = cxcData.invoices.length;
+    if (cxcData.invoices.some(inv => inv.currency === "USD")) docCurrency = "USD";
   } else {
     const activeInvoices = invoices.filter(
       (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
@@ -223,14 +227,14 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   const s3Y = currentY + 16 + summaryRowStep * 2 + 6;
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Saldo Total por Cobrar:", COL2_X + 8, s1Y, { width: COL_W / 2, continued: false });
+  doc.text(`Saldo Total por Cobrar${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s1Y, { width: COL_W / 2, continued: false });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#dc2626");
-  doc.text(fmt(totalBalance), COL2_X + COL_W / 2, s1Y - 2, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(fmt(totalBalance, docCurrency), COL2_X + COL_W / 2, s1Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Saldo Vencido:", COL2_X + 8, s2Y, { width: COL_W / 2 });
+  doc.text(`Saldo Vencido${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s2Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor(totalOverdue > 0 ? "#ea580c" : "#374151");
-  doc.text(fmt(totalOverdue), COL2_X + COL_W / 2, s2Y - 2, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(fmt(totalOverdue, docCurrency), COL2_X + COL_W / 2, s2Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
   doc.text("Facturas Activas:", COL2_X + 8, s3Y, { width: COL_W / 2 });
@@ -276,10 +280,11 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
         doc.text(fmtDate(inv.issueDate), cols.fecha + 4, currentY + 5, { width: 80 });
         doc.fillColor(isOverdue ? "#dc2626" : "#6b7280");
         doc.text(fmtDate(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
+        const cur = inv.currency ?? "MXN";
         doc.fillColor("#374151");
-        doc.text(fmt(tot), cols.total + 4, currentY + 5, { width: 80, align: "right" });
+        doc.text(fmt(tot, cur), cols.total + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
-        doc.text(fmt(bal), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
+        doc.text(fmt(bal, cur), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica").fillColor(isOverdue ? "#dc2626" : "#374151");
         doc.text(isOverdue ? "Vencido" : "Pendiente", cols.estado + 4, currentY + 5, { width: 90 });
         currentY += ROW_H;

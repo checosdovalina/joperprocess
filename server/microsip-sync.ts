@@ -1076,6 +1076,7 @@ class MicrosipSyncService {
         SALDO_VENCIDO: number;
         OLDEST_DUE: Date | null;
         INVOICE_COUNT: number;
+        IS_USD: number;
       }>(fbDb, `
         WITH
         CARGOS AS (
@@ -1084,11 +1085,12 @@ class MicrosipSyncService {
             D.DOCTO_CC_ID,
             D.FECHA,
             D.COND_PAGO_ID,
+            D.TIPO_CAMBIO,
             SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)) AS CARGO_BRUTO
           FROM DOCTOS_CC D
           JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID AND I.TIPO_IMPTE = 'C'
           WHERE D.CANCELADO <> 'S' AND D.NATURALEZA_CONCEPTO = 'C'
-          GROUP BY D.CLIENTE_ID, D.DOCTO_CC_ID, D.FECHA, D.COND_PAGO_ID
+          GROUP BY D.CLIENTE_ID, D.DOCTO_CC_ID, D.FECHA, D.COND_PAGO_ID, D.TIPO_CAMBIO
         ),
         CREDITOS AS (
           -- Must filter on the PAYMENT document's CANCELADO, not just the charge's:
@@ -1131,7 +1133,8 @@ class MicrosipSyncService {
               AND (CA.CARGO_BRUTO - COALESCE(CR.CREDITO_APLICADO, 0)) > 0
             THEN CA.DOCTO_CC_ID
             ELSE NULL
-          END) AS INVOICE_COUNT
+          END) AS INVOICE_COUNT,
+          MAX(CASE WHEN CA.TIPO_CAMBIO > 1.5 THEN 1 ELSE 0 END) AS IS_USD
         FROM CARGOS CA
         LEFT JOIN CREDITOS CR ON CR.DOCTO_CC_ACR_ID = CA.DOCTO_CC_ID
         LEFT JOIN PLAZOS_COND_PAG PCP ON CA.COND_PAGO_ID = PCP.COND_PAGO_ID
