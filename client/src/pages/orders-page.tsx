@@ -440,7 +440,7 @@ export default function OrdersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(hideDelivered ? orders.filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED) : orders)
+                  {(hideDelivered ? orders.filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED && o.status !== OrderStatus.CLOSED && o.status !== OrderStatus.CANCELLED) : orders)
                     .filter((o) => {
                       const q = searchTerm.trim().toLowerCase();
                       if (!q) return true;

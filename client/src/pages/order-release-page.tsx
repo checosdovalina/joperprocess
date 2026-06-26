@@ -43,6 +43,7 @@ import {
   Truck,
   Pencil,
   Search,
+  Ban,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -114,12 +115,20 @@ const STATUS_LABEL: Record<string, string> = {
   pending: "Pendiente",
   approved: "Liberado",
   rejected: "Rechazado",
+  closed: "Cerrado",
 };
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
   approved: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   rejected: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  closed: "bg-gray-200 text-gray-700 dark:bg-gray-700/40 dark:text-gray-300",
+};
+
+const STATUS_DONE_VERB: Record<string, string> = {
+  approved: "Liberado",
+  rejected: "Rechazado",
+  closed: "Cerrado",
 };
 
 function InfoCell({ label, value }: { label: string; value: string | null | undefined }) {
@@ -135,12 +144,14 @@ function OrderCard({
   order,
   onApprove,
   onReject,
+  onClose,
   onAdjust,
   isPending,
 }: {
   order: ReleaseOrder;
   onApprove?: (order: ReleaseOrder) => void;
   onReject?: (order: ReleaseOrder) => void;
+  onClose?: (order: ReleaseOrder) => void;
   onAdjust?: (order: ReleaseOrder) => void;
   isPending?: boolean;
 }) {
@@ -184,7 +195,7 @@ function OrderCard({
           </div>
           {order.releaseStatus !== "pending" && order.releasedAt && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {order.releaseStatus === "approved" ? "Liberado" : "Rechazado"} el {formatDate(order.releasedAt)}
+              {STATUS_DONE_VERB[order.releaseStatus] || "Procesado"} el {formatDate(order.releasedAt)}
               {order.releasedByName ? ` por ${order.releasedByName}` : ""}
             </p>
           )}
@@ -369,6 +380,18 @@ function OrderCard({
                   <XCircle className="h-4 w-4 mr-1.5" />
                   Rechazar
                 </Button>
+                {onClose && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => { e.stopPropagation(); onClose(order); }}
+                    disabled={isPending}
+                    data-testid={`button-close-${order.id}`}
+                  >
+                    <Ban className="h-4 w-4 mr-1.5" />
+                    Cerrar
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -387,6 +410,8 @@ export default function OrderReleasePage() {
   const [approveNotes, setApproveNotes] = useState("");
   const [rejectTarget, setRejectTarget] = useState<ReleaseOrder | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
+  const [closeTarget, setCloseTarget] = useState<ReleaseOrder | null>(null);
+  const [closeNotes, setCloseNotes] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<ReleaseOrder | null>(null);
   const [adjustQuotationData, setAdjustQuotationData] = useState<any>(null);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
@@ -462,7 +487,24 @@ export default function OrderReleasePage() {
     },
   });
 
-  const mutating = approveMutation.isPending || rejectMutation.isPending || adjustMutation.isPending;
+  const closeMutation = useMutation({
+    mutationFn: ({ orderId, notes }: { orderId: string; notes: string }) =>
+      apiRequest("POST", `/api/order-release/${orderId}/close`, { releaseNotes: notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
+      toast({ title: "Pedido cerrado", description: "El pedido se cerró sin enviar correos." });
+      setCloseTarget(null);
+      setCloseNotes("");
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo cerrar el pedido." });
+    },
+  });
+
+  const mutating = approveMutation.isPending || rejectMutation.isPending || adjustMutation.isPending || closeMutation.isPending;
 
   const openAdjust = async (order: ReleaseOrder) => {
     setAdjustTarget(order);
@@ -543,6 +585,7 @@ export default function OrderReleasePage() {
                 order={order}
                 onApprove={setApproveTarget}
                 onReject={(o) => { setRejectTarget(o); setRejectNotes(""); }}
+                onClose={(o) => { setCloseTarget(o); setCloseNotes(""); }}
                 onAdjust={openAdjust}
                 isPending={mutating}
               />
@@ -638,6 +681,42 @@ export default function OrderReleasePage() {
               data-testid="button-confirm-reject"
             >
               {rejectMutation.isPending ? "Rechazando..." : "Rechazar pedido"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close Dialog */}
+      <Dialog open={!!closeTarget} onOpenChange={(open) => { if (!open) { setCloseTarget(null); setCloseNotes(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cerrar pedido {closeTarget?.folio}</DialogTitle>
+            <DialogDescription>
+              El pedido se marcará como <strong>Cerrado</strong> y saldrá de la lista de pendientes,
+              sin pasar por producción ni embarque. No se enviará ningún correo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="close-notes">Motivo <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+            <Textarea
+              id="close-notes"
+              placeholder="Ej. Cliente ya no continúa con el pedido..."
+              value={closeNotes}
+              onChange={e => setCloseNotes(e.target.value)}
+              rows={3}
+              data-testid="textarea-close-notes"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCloseTarget(null); setCloseNotes(""); }} disabled={closeMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => closeTarget && closeMutation.mutate({ orderId: closeTarget.id, notes: closeNotes })}
+              disabled={closeMutation.isPending}
+              data-testid="button-confirm-close"
+            >
+              {closeMutation.isPending ? "Cerrando..." : "Cerrar pedido"}
             </Button>
           </DialogFooter>
         </DialogContent>

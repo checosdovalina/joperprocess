@@ -458,7 +458,7 @@ export default function ProductionPage() {
             <CardContent>
               {renderOrdersTable(
                 hideDelivered
-                  ? (orders || []).filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED)
+                  ? (orders || []).filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED && o.status !== OrderStatus.CLOSED && o.status !== OrderStatus.CANCELLED)
                   : (orders || []),
                 t("production.no-orders")
               )}

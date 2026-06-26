@@ -435,6 +435,7 @@ export const OrderReleaseStatus = {
   PENDING: "pending",
   APPROVED: "approved",
   REJECTED: "rejected",
+  CLOSED: "closed",
 } as const;
 
 // Orders table

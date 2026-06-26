@@ -4089,7 +4089,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (status === "pending") {
         filtered = orderRows.filter(o => o.releaseStatus === "pending");
       } else if (status === "history") {
-        filtered = orderRows.filter(o => o.releaseStatus === "approved" || o.releaseStatus === "rejected");
+        filtered = orderRows.filter(o => o.releaseStatus === "approved" || o.releaseStatus === "rejected" || o.releaseStatus === "closed");
       }
 
       const result = filtered.map(o => {
@@ -4318,6 +4318,39 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error rejecting order release:", error);
       res.status(500).json({ error: "Error rejecting order release" });
+    }
+  });
+
+  // Close a pending order administratively (e.g. customer no longer continues).
+  // Unlike reject, this does NOT send any email notifications and marks the
+  // order as CLOSED so it leaves both the release queue and active order views.
+  app.post("/api/order-release/:id/close", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { releaseNotes } = req.body;
+
+      const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
+
+      const order = await db.query.orders.findFirst({
+        where: and(eq(orders.id, id), resolvedTenantId ? eq(orders.tenantId, resolvedTenantId) : undefined),
+      });
+
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
+
+      await db.update(orders).set({
+        releaseStatus: OrderReleaseStatus.CLOSED,
+        status: OrderStatus.CLOSED,
+        releaseNotes: releaseNotes?.trim() || null,
+        releasedById: req.user!.id,
+        releasedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(orders.id, id));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error closing order release:", error);
+      res.status(500).json({ error: "Error closing order release" });
     }
   });
 
