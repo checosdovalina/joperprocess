@@ -179,18 +179,19 @@ doc.fillColor(COLORS.accentSoft).font("Helvetica").fontSize(9).text("05 Mayo 202
 
 // ---------- Executive summary ----------
 let y = 134;
-doc.rect(M, y, CONTENT_W, 70).fill(COLORS.bandSoft);
+doc.rect(M, y, CONTENT_W, 88).fill(COLORS.bandSoft);
 doc.fillColor(COLORS.primaryLight).font("Helvetica-Bold").fontSize(10).text("Resumen Ejecutivo", M + 14, y + 12);
 doc.fillColor(COLORS.text).font("Helvetica").fontSize(9).text(
   "Este documento presenta las mejoras implementadas en Nexxo durante el periodo comprendido entre el 5 de mayo y el 22 de junio de 2026. " +
-    `Se registran ${totalImprovements} mejoras agrupadas en ${sections.length} áreas funcionales, desde correcciones de usabilidad hasta módulos completos del flujo comercial.`,
+    `Se registran ${totalImprovements} mejoras agrupadas en ${sections.length} áreas funcionales, desde correcciones de usabilidad hasta módulos completos del flujo comercial. ` +
+    "El tiempo de desarrollo fue de aproximadamente 7 semanas (49 días naturales) de trabajo continuo.",
   M + 14,
   y + 30,
   { width: CONTENT_W - 28, lineGap: 2 }
 );
 
 // ---------- Stat cards ----------
-y += 86;
+y += 104;
 const cards = [
   { big: String(sections.length), small: "áreas\nfuncionales" },
   { big: "+" + totalImprovements, small: "mejoras\nimplementadas" },
