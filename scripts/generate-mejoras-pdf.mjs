@@ -162,7 +162,33 @@ const sections = [
   },
 ];
 
-const sectionHours = (s) => s.items.reduce((n, it) => n + it.h, 0);
+// Escalado: los valores `h` son pesos de complejidad relativa; se ajustan
+// para que el total de horas sea exactamente TARGET_HOURS, redondeando a
+// medias horas por línea.
+const TARGET_HOURS = 89;
+const flat = sections.flatMap((s) => s.items);
+const sumWeights = flat.reduce((n, it) => n + it.h, 0);
+flat.forEach((it) => {
+  it.sh = Math.max(0.5, Math.round((it.h * TARGET_HOURS / sumWeights) * 2) / 2);
+});
+const withRaw = flat.map((it) => ({ it, raw: it.h * TARGET_HOURS / sumWeights }));
+let diff = Math.round((TARGET_HOURS - flat.reduce((n, it) => n + it.sh, 0)) * 2) / 2;
+if (diff > 0) {
+  withRaw.sort((a, b) => (b.raw - b.it.sh) - (a.raw - a.it.sh));
+  let i = 0;
+  while (diff > 0) { withRaw[i % withRaw.length].it.sh += 0.5; diff -= 0.5; i++; }
+} else if (diff < 0) {
+  withRaw.sort((a, b) => (a.raw - a.it.sh) - (b.raw - b.it.sh));
+  let i = 0, guard = 0;
+  while (diff < 0 && guard < 100000) {
+    const t = withRaw[i % withRaw.length].it;
+    if (t.sh > 0.5) { t.sh -= 0.5; diff += 0.5; }
+    i++; guard++;
+  }
+}
+
+const fmtH = (h) => (Number.isInteger(h) ? `${h}` : h.toFixed(1));
+const sectionHours = (s) => s.items.reduce((n, it) => n + it.sh, 0);
 const totalImprovements = sections.reduce((n, s) => n + s.items.length, 0);
 const totalHours = sections.reduce((n, s) => n + sectionHours(s), 0);
 
@@ -189,7 +215,7 @@ doc.fillColor(COLORS.primaryLight).font("Helvetica-Bold").fontSize(10).text("Res
 doc.fillColor(COLORS.text).font("Helvetica").fontSize(9).text(
   "Este documento presenta las mejoras implementadas en Nexxo durante el periodo comprendido entre el 5 de mayo y el 22 de junio de 2026. " +
     `Se registran ${totalImprovements} mejoras agrupadas en ${sections.length} áreas funcionales, desde correcciones de usabilidad hasta módulos completos del flujo comercial. ` +
-    `El tiempo de desarrollo estimado fue de aproximadamente ${totalHours} horas (≈7 semanas / 49 días naturales). ` +
+    `El tiempo de desarrollo estimado fue de aproximadamente ${fmtH(totalHours)} horas. ` +
     "Cada mejora indica a la derecha su tiempo estimado de desarrollo en horas.",
   M + 14,
   y + 30,
@@ -201,7 +227,7 @@ y += 116;
 const cards = [
   { big: String(sections.length), small: "áreas\nfuncionales" },
   { big: "+" + totalImprovements, small: "mejoras\nimplementadas" },
-  { big: "~" + totalHours, small: "horas de\ndesarrollo" },
+  { big: fmtH(totalHours), small: "horas de\ndesarrollo" },
   { big: "49", small: "días\nnaturales" },
 ];
 const gap = 12;
@@ -228,7 +254,7 @@ function sectionHeader(title, count, hours) {
   ensureSpace(34);
   doc.rect(M, y, CONTENT_W, 24).fill(COLORS.primary);
   doc.fillColor(COLORS.white).font("Helvetica-Bold").fontSize(11).text(title, M + 12, y + 6, { width: CONTENT_W - 130 });
-  doc.fillColor(COLORS.accent).font("Helvetica").fontSize(9).text(`${count} mejoras  ·  ${hours} h`, M, y + 7, {
+  doc.fillColor(COLORS.accent).font("Helvetica").fontSize(9).text(`${count} mejoras  ·  ${fmtH(hours)} h`, M, y + 7, {
     width: CONTENT_W - 12,
     align: "right",
   });
@@ -242,7 +268,7 @@ function bullet(item) {
   ensureSpace(h + 7);
   doc.circle(M + 6, y + 5, 2).fill(COLORS.primaryLight);
   doc.fillColor(COLORS.text).font("Helvetica").fontSize(9).text(item.t, M + 18, y, { width: textW, lineGap: 1.5 });
-  doc.fillColor(COLORS.primaryLight).font("Helvetica-Bold").fontSize(9).text(`${item.h} h`, M + 18 + textW, y, {
+  doc.fillColor(COLORS.primaryLight).font("Helvetica-Bold").fontSize(9).text(`${fmtH(item.sh)} h`, M + 18 + textW, y, {
     width: HOURS_COL,
     align: "right",
   });
@@ -277,4 +303,4 @@ for (let i = 0; i < range.count; i++) {
 }
 
 doc.end();
-console.log(`PDF generado: ${OUT} (${totalImprovements} mejoras · ${totalHours} h en ${sections.length} áreas)`);
+console.log(`PDF generado: ${OUT} (${totalImprovements} mejoras · ${fmtH(totalHours)} h en ${sections.length} áreas)`);
