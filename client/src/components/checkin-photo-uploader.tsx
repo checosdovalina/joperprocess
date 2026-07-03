@@ -6,6 +6,7 @@ import "@uppy/core/css/style.min.css";
 import "@uppy/dashboard/css/style.min.css";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface CheckinPhotoUploaderProps {
   checkinId: string;
@@ -61,6 +62,7 @@ export function CheckinPhotoUploader({
   onUploadSuccess,
 }: CheckinPhotoUploaderProps) {
   const { toast } = useToast();
+  const { t } = useI18n();
   const maxPhotos = 20;
   const remainingSlots = maxPhotos - currentPhotoCount;
 
@@ -131,8 +133,8 @@ export function CheckinPhotoUploader({
         console.error("Error preparing file for upload:", error);
         toastRef.current({
           variant: "destructive",
-          title: "Error",
-          description: "No se pudo preparar el archivo para carga",
+          title: t("label.error"),
+          description: t("photos.prepare-error"),
         });
         uppyInstance.removeFile(file.id);
       }
@@ -170,16 +172,16 @@ export function CheckinPhotoUploader({
         await queryClient.invalidateQueries({ queryKey: [`/api/checkins/${checkinId}`] });
 
         toastRef.current({
-          title: "Foto cargada",
-          description: `${file.name} se cargó correctamente`,
+          title: t("photos.uploaded-title"),
+          description: `${file.name} ${t("photos.uploaded-suffix")}`,
         });
         onUploadSuccessRef.current?.();
       } catch (error) {
         console.error("Error saving photo to checkin:", error);
         toastRef.current({
           variant: "destructive",
-          title: "Error",
-          description: "No se pudo guardar la foto. Inténtalo de nuevo.",
+          title: t("label.error"),
+          description: t("photos.save-error"),
         });
       }
     });
@@ -189,8 +191,8 @@ export function CheckinPhotoUploader({
       console.error("Upload error:", error);
       toastRef.current({
         variant: "destructive",
-        title: "Error al cargar",
-        description: `No se pudo cargar ${file.name}. Verifica tu conexión e intenta de nuevo.`,
+        title: t("label.error"),
+        description: `${t("photos.upload-error-prefix")} ${file.name}. ${t("photos.upload-error-suffix")}`,
       });
     });
 
@@ -199,7 +201,7 @@ export function CheckinPhotoUploader({
       inline: true,
       height: 300,
       proudlyDisplayPoweredByUppy: false,
-      note: "Máximo 20 fotos. Todas las imágenes se comprimen automáticamente a 1280px antes de subir.",
+      note: t("photos.max-note"),
     });
 
     uppyRef.current = uppyInstance;
@@ -215,7 +217,7 @@ export function CheckinPhotoUploader({
   if (remainingSlots <= 0) {
     return (
       <div className="text-center py-6 text-muted-foreground" data-testid="text-max-photos">
-        Ya has alcanzado el máximo de 20 fotos para este check-in
+        {t("photos.max-reached")}
       </div>
     );
   }

@@ -61,8 +61,8 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
-        title: "Usuario creado",
-        description: "El nuevo usuario ha sido creado exitosamente",
+        title: t("users.toast.created"),
+        description: t("users.toast.created-desc"),
       });
       setIsCreateDialogOpen(false);
       setNewUser({
@@ -76,7 +76,7 @@ export default function UsersPage() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo crear el usuario",
+        description: error.message || t("users.toast.create-error"),
         variant: "destructive",
       });
     },
@@ -90,8 +90,8 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
-        title: "Usuario actualizado",
-        description: "El estado del usuario ha sido modificado",
+        title: t("users.toast.updated"),
+        description: t("users.toast.status-desc"),
       });
     },
     onError: (error: Error) => {
@@ -119,8 +119,8 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
-        title: "Usuario actualizado",
-        description: "Los datos del usuario han sido modificados",
+        title: t("users.toast.updated"),
+        description: t("users.toast.updated-desc"),
       });
       setIsEditDialogOpen(false);
       setEditingUser(null);
@@ -167,13 +167,13 @@ export default function UsersPage() {
   };
 
   const roleOptions = [
-    { value: UserRole.VENDEDOR, label: "Vendedor" },
-    { value: UserRole.CREDITO_COBRANZA, label: "Crédito y Cobranza" },
-    { value: UserRole.VENTAS_LOGISTICA, label: "Ventas/Logística" },
-    { value: UserRole.FABRICA, label: "Fábrica" },
-    { value: UserRole.EMBARQUES, label: "Embarques" },
-    { value: UserRole.FACTURACION, label: "Facturación" },
-    { value: UserRole.ADMIN, label: "Administrador" },
+    { value: UserRole.VENDEDOR, label: t("role.vendedor") },
+    { value: UserRole.CREDITO_COBRANZA, label: t("role.credito_cobranza") },
+    { value: UserRole.VENTAS_LOGISTICA, label: t("role.ventas_logistica") },
+    { value: UserRole.FABRICA, label: t("role.fabrica") },
+    { value: UserRole.EMBARQUES, label: t("role.embarques") },
+    { value: UserRole.FACTURACION, label: t("role.facturacion") },
+    { value: UserRole.ADMIN, label: t("role.admin") },
   ];
 
   const handleCreateUser = (e: React.FormEvent) => {
@@ -199,14 +199,14 @@ export default function UsersPage() {
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+              <DialogTitle>{t("users.create")}</DialogTitle>
               <DialogDescription>
-                Completa los datos para crear un nuevo usuario en el sistema
+                {t("users.create-desc")}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="new-fullName">Nombre Completo</Label>
+                <Label htmlFor="new-fullName">{t("users.form.full-name")}</Label>
                 <Input
                   id="new-fullName"
                   data-testid="input-new-fullname"
@@ -217,7 +217,7 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-email">Correo Electrónico</Label>
+                <Label htmlFor="new-email">{t("users.form.email")}</Label>
                 <Input
                   id="new-email"
                   data-testid="input-new-email"
@@ -228,7 +228,7 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-username">Usuario</Label>
+                <Label htmlFor="new-username">{t("users.form.username")}</Label>
                 <Input
                   id="new-username"
                   data-testid="input-new-username"
@@ -239,7 +239,7 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-password">Contraseña</Label>
+                <Label htmlFor="new-password">{t("users.form.password")}</Label>
                 <Input
                   id="new-password"
                   data-testid="input-new-password"
@@ -250,13 +250,13 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-role">Rol</Label>
+                <Label htmlFor="new-role">{t("users.form.role")}</Label>
                 <Select
                   value={newUser.role}
                   onValueChange={(value) => setNewUser({ ...newUser, role: value })}
                 >
                   <SelectTrigger id="new-role" data-testid="select-new-role">
-                    <SelectValue placeholder="Selecciona un rol" />
+                    <SelectValue placeholder={t("users.form.select-role")} />
                   </SelectTrigger>
                   <SelectContent>
                     {roleOptions.map((option) => (
@@ -274,7 +274,7 @@ export default function UsersPage() {
                   onClick={() => setIsCreateDialogOpen(false)}
                   data-testid="button-cancel-create"
                 >
-                  Cancelar
+                  {t("btn.cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -327,7 +327,7 @@ export default function UsersPage() {
         <CardHeader>
           <CardTitle>{t("users.all")}</CardTitle>
           <CardDescription>
-            {users?.length || 0} usuarios registrados en el sistema
+            {users?.length || 0} {t("users.registered-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -368,11 +368,11 @@ export default function UsersPage() {
                       <TableCell>
                         {user.active ? (
                           <Badge className="bg-green-100 text-green-800" data-testid={`status-active-${user.id}`}>
-                            Activo
+                            {t("status.active")}
                           </Badge>
                         ) : (
                           <Badge variant="destructive" data-testid={`status-inactive-${user.id}`}>
-                            Inactivo
+                            {t("status.inactive")}
                           </Badge>
                         )}
                       </TableCell>
@@ -410,7 +410,7 @@ export default function UsersPage() {
           ) : (
             <div className="text-center py-12">
               <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay usuarios registrados</p>
+              <p className="text-muted-foreground">{t("users.no-results")}</p>
             </div>
           )}
         </CardContent>
@@ -419,9 +419,9 @@ export default function UsersPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Editar Usuario</DialogTitle>
+            <DialogTitle>{t("users.edit")}</DialogTitle>
             <DialogDescription>
-              Modifica los datos del usuario: {editingUser?.username}
+              {t("users.edit-desc")}: {editingUser?.username}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateUser} className="space-y-4">
@@ -437,7 +437,7 @@ export default function UsersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-email">Correo Electrónico</Label>
+              <Label htmlFor="edit-email">{t("users.form.email")}</Label>
               <Input
                 id="edit-email"
                 data-testid="input-edit-email"
@@ -454,7 +454,7 @@ export default function UsersPage() {
                 onValueChange={(value) => setEditData({ ...editData, role: value })}
               >
                 <SelectTrigger id="edit-role" data-testid="select-edit-role">
-                  <SelectValue placeholder="Selecciona un rol" />
+                  <SelectValue placeholder={t("users.form.select-role")} />
                 </SelectTrigger>
                 <SelectContent>
                   {roleOptions.map((option) => (
@@ -466,7 +466,7 @@ export default function UsersPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-newPassword">Nueva Contraseña <span className="text-muted-foreground text-xs">(dejar en blanco para no cambiar)</span></Label>
+              <Label htmlFor="edit-newPassword">{t("users.form.new-password")} <span className="text-muted-foreground text-xs">{t("users.form.password-hint")}</span></Label>
               <Input
                 id="edit-newPassword"
                 data-testid="input-edit-password"
@@ -484,7 +484,7 @@ export default function UsersPage() {
                 onClick={() => setIsEditDialogOpen(false)}
                 data-testid="button-cancel-edit"
               >
-                Cancelar
+                {t("btn.cancel")}
               </Button>
               <Button
                 type="submit"

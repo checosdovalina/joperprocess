@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -112,10 +113,10 @@ function formatPercent(val: string | null | undefined) {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "Pendiente",
-  approved: "Liberado",
-  rejected: "Rechazado",
-  closed: "Cerrado",
+  pending: "release.status.pending",
+  approved: "release.status.approved",
+  rejected: "release.status.rejected",
+  closed: "release.status.closed",
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -126,9 +127,9 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const STATUS_DONE_VERB: Record<string, string> = {
-  approved: "Liberado",
-  rejected: "Rechazado",
-  closed: "Cerrado",
+  approved: "release.status.approved",
+  rejected: "release.status.rejected",
+  closed: "release.status.closed",
 };
 
 function InfoCell({ label, value }: { label: string; value: string | null | undefined }) {
@@ -155,6 +156,7 @@ function OrderCard({
   onAdjust?: (order: ReleaseOrder) => void;
   isPending?: boolean;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
 
   const hasTax = parseFloat(order.tax || "0") > 0;
@@ -177,7 +179,7 @@ function OrderCard({
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="font-semibold text-sm">{order.folio}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[order.releaseStatus] || "bg-muted text-muted-foreground"}`}>
-              {STATUS_LABEL[order.releaseStatus] || order.releaseStatus}
+              {STATUS_LABEL[order.releaseStatus] ? t(STATUS_LABEL[order.releaseStatus]) : order.releaseStatus}
             </span>
             {isUSD && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 font-medium">USD</span>
@@ -187,23 +189,23 @@ function OrderCard({
             <span className="flex items-center gap-1"><User className="h-3 w-3" />{order.vendedorName}</span>
             <span className="flex items-center gap-1 text-foreground font-semibold">{formatMoney(order.quotationTotal, order.currency)}</span>
             {order.creditReleaseDate && (
-              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Lib. C&C: {formatDate(order.creditReleaseDate)}</span>
+              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{t("release.credit-release-short")}: {formatDate(order.creditReleaseDate)}</span>
             )}
             {order.shippingDate && (
-              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Embarque: {formatDate(order.shippingDate)}</span>
+              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{t("release.shipping-short")}: {formatDate(order.shippingDate)}</span>
             )}
           </div>
           {order.releaseStatus !== "pending" && order.releasedAt && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {STATUS_DONE_VERB[order.releaseStatus] || "Procesado"} el {formatDate(order.releasedAt)}
-              {order.releasedByName ? ` por ${order.releasedByName}` : ""}
+              {STATUS_DONE_VERB[order.releaseStatus] ? t(STATUS_DONE_VERB[order.releaseStatus]) : t("release.processed")} {t("release.on-date")} {formatDate(order.releasedAt)}
+              {order.releasedByName ? ` ${t("release.by")} ${order.releasedByName}` : ""}
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant="secondary" className="text-xs">
-            {order.items.length} art{order.items.length !== 1 ? "ículos" : "ículo"}
+            {order.items.length} {order.items.length !== 1 ? t("release.items") : t("release.item")}
           </Badge>
           {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </div>
@@ -216,18 +218,18 @@ function OrderCard({
 
             {/* ── Summary chips ── */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              <InfoCell label="Folio" value={order.folio} />
-              <InfoCell label="Cliente" value={order.customerName} />
-              {order.customerRfc && <InfoCell label="RFC" value={order.customerRfc} />}
-              {order.purchaseOrder && <InfoCell label="Orden de Compra" value={order.purchaseOrder} />}
-              <InfoCell label="Vendedor" value={order.vendedorName} />
-              <InfoCell label="Moneda" value={order.currency === "MXN" ? "Pesos MXN" : order.currency === "USD" ? "Dólares USD" : order.currency} />
-              {order.paymentTerms && <InfoCell label="Condiciones de Pago" value={order.paymentTerms} />}
-              {order.deliveryTime && <InfoCell label="Tiempo de Entrega" value={order.deliveryTime} />}
-              {order.creditReleaseDate && <InfoCell label="Lib. Crédito" value={formatDate(order.creditReleaseDate)} />}
-              {order.shippingDate && <InfoCell label="Fecha Embarque" value={formatDate(order.shippingDate)} />}
+              <InfoCell label={t("label.folio")} value={order.folio} />
+              <InfoCell label={t("release.customer")} value={order.customerName} />
+              {order.customerRfc && <InfoCell label={t("release.rfc")} value={order.customerRfc} />}
+              {order.purchaseOrder && <InfoCell label={t("release.purchase-order")} value={order.purchaseOrder} />}
+              <InfoCell label={t("release.salesperson")} value={order.vendedorName} />
+              <InfoCell label={t("release.currency")} value={order.currency === "MXN" ? t("release.currency-mxn") : order.currency === "USD" ? t("release.currency-usd") : order.currency} />
+              {order.paymentTerms && <InfoCell label={t("release.payment-terms")} value={order.paymentTerms} />}
+              {order.deliveryTime && <InfoCell label={t("release.delivery-time")} value={order.deliveryTime} />}
+              {order.creditReleaseDate && <InfoCell label={t("release.credit-release")} value={formatDate(order.creditReleaseDate)} />}
+              {order.shippingDate && <InfoCell label={t("release.shipping-date")} value={formatDate(order.shippingDate)} />}
               {isUSD && order.exchangeRate && (
-                <InfoCell label="Tipo de Cambio" value={`$${parseFloat(order.exchangeRate).toFixed(2)} MXN/USD`} />
+                <InfoCell label={t("release.exchange-rate")} value={`$${parseFloat(order.exchangeRate).toFixed(2)} MXN/USD`} />
               )}
             </div>
 
@@ -236,8 +238,8 @@ function OrderCard({
               <div className="flex items-center gap-2 text-sm rounded-md border border-border bg-muted/40 px-3 py-2">
                 <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
                 <span className="text-muted-foreground">
-                  Envío por cuenta de la empresa
-                  {order.shippingMethod === "parcel" ? " — Paquetería" : order.shippingMethod === "truck" ? " — Camión" : ""}
+                  {t("release.shipping-by-company")}
+                  {order.shippingMethod === "parcel" ? ` — ${t("release.shipping-parcel")}` : order.shippingMethod === "truck" ? ` — ${t("release.shipping-truck")}` : ""}
                   {hasShipping ? ` · ${formatMoney(order.shippingCost, order.currency)}` : ""}
                 </span>
               </div>
@@ -248,13 +250,13 @@ function OrderCard({
               <div className="space-y-1.5">
                 {order.notes && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Notas</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">{t("release.notes")}</p>
                     <p className="text-sm text-foreground">{order.notes}</p>
                   </div>
                 )}
                 {order.conditions && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Condiciones</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">{t("release.conditions")}</p>
                     <p className="text-sm text-foreground">{order.conditions}</p>
                   </div>
                 )}
@@ -264,7 +266,7 @@ function OrderCard({
             {/* ── Rejection reason ── */}
             {order.releaseStatus === "rejected" && order.releaseNotes && (
               <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
-                <p className="text-xs font-medium text-destructive mb-0.5">Motivo de rechazo</p>
+                <p className="text-xs font-medium text-destructive mb-0.5">{t("release.rejection-reason")}</p>
                 <p className="text-sm text-destructive">{order.releaseNotes}</p>
               </div>
             )}
@@ -274,18 +276,18 @@ function OrderCard({
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-muted border-b">
-                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Clave</th>
-                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Descripción</th>
-                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Cant.</th>
-                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">P. Unitario</th>
-                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Desc.</th>
-                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Subtotal</th>
+                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">{t("release.col.code")}</th>
+                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">{t("label.description")}</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">{t("release.col.qty")}</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">{t("release.col.unit-price")}</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">{t("release.col.discount")}</th>
+                    <th className="text-right px-3 py-2 font-semibold text-muted-foreground">{t("release.col.subtotal")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {order.items.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">Sin artículos</td>
+                      <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">{t("release.no-items")}</td>
                     </tr>
                   ) : order.items.map((item, i) => (
                     <tr key={i} className="bg-background hover:bg-muted/30 transition-colors">
@@ -311,12 +313,12 @@ function OrderCard({
               {/* Totals footer */}
               <div className="border-t bg-muted/40 px-4 py-3 space-y-1.5">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Subtotal</span>
+                  <span>{t("release.col.subtotal")}</span>
                   <span>{formatMoney(order.subtotal, order.currency)}</span>
                 </div>
                 {hasDiscount && (
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Descuento global ({parseFloat(order.globalDiscount).toFixed(1)}%)</span>
+                    <span>{t("release.global-discount")} ({parseFloat(order.globalDiscount).toFixed(1)}%)</span>
                     <span className="text-green-600 dark:text-green-400">
                       -{formatMoney(
                         (parseFloat(order.subtotal) * parseFloat(order.globalDiscount)) / 100,
@@ -327,18 +329,18 @@ function OrderCard({
                 )}
                 {hasShipping && (
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Flete</span>
+                    <span>{t("release.freight")}</span>
                     <span>{formatMoney(order.shippingCost, order.currency)}</span>
                   </div>
                 )}
                 {hasTax && (
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>IVA</span>
+                    <span>{t("release.tax")}</span>
                     <span>{formatMoney(order.tax, order.currency)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-bold border-t pt-1.5 mt-1">
-                  <span>Total</span>
+                  <span>{t("release.total")}</span>
                   <span>{formatMoney(order.quotationTotal, order.currency)}</span>
                 </div>
               </div>
@@ -355,7 +357,7 @@ function OrderCard({
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                  Liberar Pedido
+                  {t("release.release-order")}
                 </Button>
                 {onAdjust && (
                   <Button
@@ -366,7 +368,7 @@ function OrderCard({
                     data-testid={`button-adjust-${order.id}`}
                   >
                     <Pencil className="h-4 w-4 mr-1.5" />
-                    Ajustar
+                    {t("release.adjust")}
                   </Button>
                 )}
                 <Button
@@ -378,7 +380,7 @@ function OrderCard({
                   className="text-destructive border-destructive/40"
                 >
                   <XCircle className="h-4 w-4 mr-1.5" />
-                  Rechazar
+                  {t("release.reject")}
                 </Button>
                 {onClose && (
                   <Button
@@ -389,7 +391,7 @@ function OrderCard({
                     data-testid={`button-close-${order.id}`}
                   >
                     <Ban className="h-4 w-4 mr-1.5" />
-                    Cerrar
+                    {t("release.close")}
                   </Button>
                 )}
               </div>
@@ -405,6 +407,7 @@ const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\
 
 export default function OrderReleasePage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [searchTerm, setSearchTerm] = useState("");
   const [approveTarget, setApproveTarget] = useState<ReleaseOrder | null>(null);
   const [approveNotes, setApproveNotes] = useState("");
@@ -443,12 +446,12 @@ export default function OrderReleasePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
-      toast({ title: "Pedido liberado", description: "Se notificó a los involucrados por correo." });
+      toast({ title: t("release.toast.released"), description: t("release.toast.notified") });
       setApproveTarget(null);
       setApproveNotes("");
     },
     onError: () => {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo liberar el pedido." });
+      toast({ variant: "destructive", title: t("label.error"), description: t("release.toast.release-error") });
     },
   });
 
@@ -460,13 +463,13 @@ export default function OrderReleasePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=pending"] });
-      toast({ title: "Pedido ajustado", description: "Los cambios se guardaron. Ya puedes liberarlo." });
+      toast({ title: t("release.toast.adjusted"), description: t("release.toast.adjusted-desc") });
       setAdjustDialogOpen(false);
       setAdjustTarget(null);
       setAdjustQuotationData(null);
     },
     onError: (error: Error) => {
-      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo ajustar el pedido." });
+      toast({ variant: "destructive", title: t("label.error"), description: error.message || t("release.toast.adjust-error") });
     },
   });
 
@@ -478,12 +481,12 @@ export default function OrderReleasePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
-      toast({ title: "Pedido rechazado", description: "Se notificó a los involucrados por correo." });
+      toast({ title: t("release.toast.rejected"), description: t("release.toast.notified") });
       setRejectTarget(null);
       setRejectNotes("");
     },
     onError: () => {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo rechazar el pedido." });
+      toast({ variant: "destructive", title: t("label.error"), description: t("release.toast.reject-error") });
     },
   });
 
@@ -495,12 +498,12 @@ export default function OrderReleasePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
-      toast({ title: "Pedido cerrado", description: "El pedido se cerró sin enviar correos." });
+      toast({ title: t("release.toast.closed"), description: t("release.toast.closed-desc") });
       setCloseTarget(null);
       setCloseNotes("");
     },
     onError: () => {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo cerrar el pedido." });
+      toast({ variant: "destructive", title: t("label.error"), description: t("release.toast.close-error") });
     },
   });
 
@@ -511,12 +514,12 @@ export default function OrderReleasePage() {
     setAdjustIsFetching(true);
     try {
       const res = await fetch(`/api/quotations/${order.quotationId}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Error al cargar la cotización");
+      if (!res.ok) throw new Error(t("release.fetch-quotation-error"));
       const quotation = await res.json();
       setAdjustQuotationData(quotation);
       setAdjustDialogOpen(true);
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la cotización para editar." });
+      toast({ variant: "destructive", title: t("label.error"), description: t("release.toast.load-error") });
     } finally {
       setAdjustIsFetching(false);
     }
@@ -528,14 +531,14 @@ export default function OrderReleasePage() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-xl font-bold">Liberación de Pedidos</h1>
-            <p className="text-sm text-muted-foreground">Autoriza o rechaza pedidos después de la aprobación de crédito</p>
+            <h1 className="text-xl font-bold">{t("release.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("release.subtitle")}</p>
           </div>
         </div>
         {pendingOrders.length > 0 && (
           <Badge variant="secondary" className="text-sm px-3 py-1">
             <Clock className="h-3.5 w-3.5 mr-1.5" />
-            {pendingOrders.length} pendiente{pendingOrders.length !== 1 ? "s" : ""}
+            {pendingOrders.length} {pendingOrders.length !== 1 ? t("release.pending-plural") : t("release.pending-singular")}
           </Badge>
         )}
       </div>
@@ -543,7 +546,7 @@ export default function OrderReleasePage() {
       <div className="relative w-full sm:w-64">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por folio o cliente..."
+          placeholder={t("release.search-ph")}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-8"
@@ -554,13 +557,13 @@ export default function OrderReleasePage() {
       <Tabs defaultValue="pending">
         <TabsList>
           <TabsTrigger value="pending" data-testid="tab-pending">
-            Pendientes de Liberar
+            {t("release.tab.pending")}
             {pendingOrders.length > 0 && (
               <Badge variant="secondary" className="ml-2 text-xs">{pendingOrders.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="history" data-testid="tab-history">
-            Historial
+            {t("release.tab.history")}
           </TabsTrigger>
         </TabsList>
 
@@ -570,13 +573,13 @@ export default function OrderReleasePage() {
           ) : pendingOrders.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <CheckCircle2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">No hay pedidos pendientes de liberar</p>
-              <p className="text-xs mt-1">Los pedidos aparecerán aquí después de ser aprobados por Crédito y Cobranza</p>
+              <p className="text-sm font-medium">{t("release.empty-pending")}</p>
+              <p className="text-xs mt-1">{t("release.empty-pending-hint")}</p>
             </div>
           ) : filteredPendingOrders.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">Sin resultados para la búsqueda</p>
+              <p className="text-sm font-medium">{t("release.no-search-results")}</p>
             </div>
           ) : (
             filteredPendingOrders.map(order => (
@@ -599,12 +602,12 @@ export default function OrderReleasePage() {
           ) : historyOrders.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No hay historial de pedidos liberados o rechazados</p>
+              <p className="text-sm">{t("release.empty-history")}</p>
             </div>
           ) : filteredHistoryOrders.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">Sin resultados para la búsqueda</p>
+              <p className="text-sm font-medium">{t("release.no-search-results")}</p>
             </div>
           ) : (
             filteredHistoryOrders.map(order => (
@@ -618,16 +621,16 @@ export default function OrderReleasePage() {
       <Dialog open={!!approveTarget} onOpenChange={(open) => { if (!open) { setApproveTarget(null); setApproveNotes(""); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Liberar pedido {approveTarget?.folio}</DialogTitle>
+            <DialogTitle>{t("release.approve-title")} {approveTarget?.folio}</DialogTitle>
             <DialogDescription>
-              Se liberará el pedido y se notificará al vendedor, C&amp;C y administradores.
+              {t("release.approve-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="approve-notes">Comentarios <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+            <Label htmlFor="approve-notes">{t("release.comments")} <span className="text-muted-foreground text-xs">{t("release.optional")}</span></Label>
             <Textarea
               id="approve-notes"
-              placeholder="Instrucciones especiales, observaciones para producción..."
+              placeholder={t("release.approve-notes-ph")}
               value={approveNotes}
               onChange={(e) => setApproveNotes(e.target.value)}
               rows={3}
@@ -636,7 +639,7 @@ export default function OrderReleasePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setApproveTarget(null); setApproveNotes(""); }} disabled={approveMutation.isPending}>
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               onClick={() => approveTarget && approveMutation.mutate({ orderId: approveTarget.id, notes: approveNotes })}
@@ -644,7 +647,7 @@ export default function OrderReleasePage() {
               data-testid="button-confirm-approve"
               className="bg-green-600"
             >
-              {approveMutation.isPending ? "Liberando..." : "Liberar pedido"}
+              {approveMutation.isPending ? t("release.approving") : t("release.approve-btn")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -654,16 +657,16 @@ export default function OrderReleasePage() {
       <Dialog open={!!rejectTarget} onOpenChange={(open) => { if (!open) { setRejectTarget(null); setRejectNotes(""); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rechazar pedido {rejectTarget?.folio}</DialogTitle>
+            <DialogTitle>{t("release.reject-title")} {rejectTarget?.folio}</DialogTitle>
             <DialogDescription>
-              Indica el motivo del rechazo. Se notificará al vendedor, Crédito &amp; Cobranza y administradores.
+              {t("release.reject-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="reject-notes">Motivo del rechazo <span className="text-destructive">*</span></Label>
+            <Label htmlFor="reject-notes">{t("release.reject-reason-label")} <span className="text-destructive">*</span></Label>
             <Textarea
               id="reject-notes"
-              placeholder="Describe el motivo por el que se rechaza este pedido..."
+              placeholder={t("release.reject-notes-ph")}
               value={rejectNotes}
               onChange={e => setRejectNotes(e.target.value)}
               rows={4}
@@ -672,7 +675,7 @@ export default function OrderReleasePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setRejectTarget(null); setRejectNotes(""); }} disabled={rejectMutation.isPending}>
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -680,7 +683,7 @@ export default function OrderReleasePage() {
               disabled={rejectMutation.isPending || !rejectNotes.trim()}
               data-testid="button-confirm-reject"
             >
-              {rejectMutation.isPending ? "Rechazando..." : "Rechazar pedido"}
+              {rejectMutation.isPending ? t("release.rejecting") : t("release.reject-btn")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -690,17 +693,16 @@ export default function OrderReleasePage() {
       <Dialog open={!!closeTarget} onOpenChange={(open) => { if (!open) { setCloseTarget(null); setCloseNotes(""); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cerrar pedido {closeTarget?.folio}</DialogTitle>
+            <DialogTitle>{t("release.close-title")} {closeTarget?.folio}</DialogTitle>
             <DialogDescription>
-              El pedido se marcará como <strong>Cerrado</strong> y saldrá de la lista de pendientes,
-              sin pasar por producción ni embarque. No se enviará ningún correo.
+              {t("release.close-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="close-notes">Motivo <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+            <Label htmlFor="close-notes">{t("release.reason")} <span className="text-muted-foreground text-xs">{t("release.optional")}</span></Label>
             <Textarea
               id="close-notes"
-              placeholder="Ej. Cliente ya no continúa con el pedido..."
+              placeholder={t("release.close-notes-ph")}
               value={closeNotes}
               onChange={e => setCloseNotes(e.target.value)}
               rows={3}
@@ -709,14 +711,14 @@ export default function OrderReleasePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setCloseTarget(null); setCloseNotes(""); }} disabled={closeMutation.isPending}>
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               onClick={() => closeTarget && closeMutation.mutate({ orderId: closeTarget.id, notes: closeNotes })}
               disabled={closeMutation.isPending}
               data-testid="button-confirm-close"
             >
-              {closeMutation.isPending ? "Cerrando..." : "Cerrar pedido"}
+              {closeMutation.isPending ? t("release.closing") : t("release.close-btn")}
             </Button>
           </DialogFooter>
         </DialogContent>

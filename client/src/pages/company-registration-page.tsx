@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
+import { useI18n } from "@/hooks/use-i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,9 +30,9 @@ import {
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 
 const registrationSchema = z.object({
-  companyName: z.string().trim().min(2, "El nombre de la empresa es requerido"),
-  phone: z.string().trim().min(7, "El teléfono es requerido"),
-  contactEmail: z.string().trim().email("Ingresa un correo válido"),
+  companyName: z.string().trim().min(2),
+  phone: z.string().trim().min(7),
+  contactEmail: z.string().trim().email(),
 });
 
 type RegistrationForm = z.infer<typeof registrationSchema>;
@@ -45,11 +46,18 @@ interface RegistrationSuccess {
 }
 
 export default function CompanyRegistrationPage() {
+  const { t } = useI18n();
   const [success, setSuccess] = useState<RegistrationSuccess | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
+  const validationSchema = z.object({
+    companyName: z.string().trim().min(2, t("registration.validation.company-name-required")),
+    phone: z.string().trim().min(7, t("registration.validation.phone-required")),
+    contactEmail: z.string().trim().email(t("registration.validation.email-invalid")),
+  });
+
   const form = useForm<RegistrationForm>({
-    resolver: zodResolver(registrationSchema),
+    resolver: zodResolver(validationSchema),
     defaultValues: {
       companyName: "",
       phone: "",
@@ -67,7 +75,7 @@ export default function CompanyRegistrationPage() {
       setSuccess(data);
     },
     onError: async (error: any) => {
-      let message = "Ocurrió un error al registrar la empresa. Intenta de nuevo.";
+      let message = t("registration.generic-error");
       try {
         const parsed = JSON.parse(error.message.replace(/^\d+:\s*/, ""));
         if (parsed?.error) message = parsed.error;
@@ -94,7 +102,7 @@ export default function CompanyRegistrationPage() {
           <Link href="/">
             <Button variant="ghost" data-testid="link-back-home">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver
+              {t("registration.back")}
             </Button>
           </Link>
         </div>
@@ -108,23 +116,23 @@ export default function CompanyRegistrationPage() {
                 <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-green-500/10 flex items-center justify-center">
                   <CheckCircle2 className="h-8 w-8 text-green-500" />
                 </div>
-                <CardTitle className="text-2xl">¡Empresa registrada!</CardTitle>
+                <CardTitle className="text-2xl">{t("registration.success-title")}</CardTitle>
                 <CardDescription>
-                  El portal de <strong>{success.companyName}</strong> ha sido creado.
+                  {t("registration.portal-created-prefix")}<strong>{success.companyName}</strong>{t("registration.portal-created-suffix")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <Alert>
                   <Mail className="h-4 w-4" />
-                  <AlertTitle>Revisa tu correo</AlertTitle>
+                  <AlertTitle>{t("registration.check-email")}</AlertTitle>
                   <AlertDescription>
-                    Enviamos los datos de acceso (usuario y contraseña) a{" "}
+                    {t("registration.email-sent-prefix")}
                     <strong data-testid="text-email-sent">{success.emailSentTo}</strong>.
                   </AlertDescription>
                 </Alert>
 
                 <div className="rounded-md border p-4 space-y-1">
-                  <p className="text-sm text-muted-foreground">Dirección de tu portal</p>
+                  <p className="text-sm text-muted-foreground">{t("registration.portal-address")}</p>
                   <p
                     className="text-lg font-semibold text-primary break-all"
                     data-testid="text-portal-url"
@@ -134,12 +142,12 @@ export default function CompanyRegistrationPage() {
                 </div>
 
                 <p className="text-sm text-muted-foreground">
-                  Si no ves el correo en unos minutos, revisa tu carpeta de spam.
+                  {t("registration.spam-hint")}
                 </p>
 
                 <Link href="/">
                   <Button className="w-full" data-testid="button-go-home">
-                    Volver al inicio
+                    {t("registration.go-home")}
                   </Button>
                 </Link>
               </CardContent>
@@ -150,16 +158,16 @@ export default function CompanyRegistrationPage() {
                 <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
                   <Building2 className="h-8 w-8 text-primary" />
                 </div>
-                <CardTitle className="text-2xl">Registra tu empresa</CardTitle>
+                <CardTitle className="text-2xl">{t("registration.title")}</CardTitle>
                 <CardDescription>
-                  Crea tu portal en Nexxo. Recibirás tus datos de acceso por correo.
+                  {t("registration.subtitle")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {duplicateWarning && (
                   <Alert variant="destructive" className="mb-6" data-testid="alert-duplicate-warning">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>No se pudo registrar</AlertTitle>
+                    <AlertTitle>{t("registration.cannot-register")}</AlertTitle>
                     <AlertDescription>{duplicateWarning}</AlertDescription>
                   </Alert>
                 )}
@@ -171,10 +179,10 @@ export default function CompanyRegistrationPage() {
                       name="companyName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nombre de la empresa</FormLabel>
+                          <FormLabel>{t("registration.field.company-name")}</FormLabel>
                           <FormControl>
                             <Input
-                              placeholder="Ej. Grupo Comercial del Norte"
+                              placeholder={t("registration.ph.company-name")}
                               data-testid="input-company-name"
                               {...field}
                             />
@@ -189,11 +197,11 @@ export default function CompanyRegistrationPage() {
                       name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Teléfono de contacto</FormLabel>
+                          <FormLabel>{t("registration.field.phone")}</FormLabel>
                           <FormControl>
                             <Input
                               type="tel"
-                              placeholder="Ej. 81 1234 5678"
+                              placeholder={t("registration.ph.phone")}
                               data-testid="input-phone"
                               {...field}
                             />
@@ -208,7 +216,7 @@ export default function CompanyRegistrationPage() {
                       name="contactEmail"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Correo de contacto</FormLabel>
+                          <FormLabel>{t("registration.field.email")}</FormLabel>
                           <FormControl>
                             <Input
                               type="email"
@@ -232,11 +240,11 @@ export default function CompanyRegistrationPage() {
                       {mutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Registrando...
+                          {t("registration.submitting")}
                         </>
                       ) : (
                         <>
-                          Crear mi portal
+                          {t("registration.submit")}
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </>
                       )}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ScheduledVisit, Customer, InsertScheduledVisit, MeetingType } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -40,6 +41,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function ScheduledVisitsPage() {
+  const { t } = useI18n();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingVisit, setEditingVisit] = useState<ScheduledVisit | null>(null);
@@ -76,15 +78,15 @@ export default function ScheduledVisitsPage() {
       setIsDialogOpen(false);
       resetForm();
       toast({
-        title: "Visita programada",
-        description: "La visita se programó correctamente",
+        title: t("visits.toast-scheduled"),
+        description: t("visits.toast-scheduled-desc"),
       });
     },
     onError: (error: any) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo programar la visita",
+        title: t("label.error"),
+        description: error.message || t("visits.toast-schedule-error"),
       });
     },
   });
@@ -99,15 +101,15 @@ export default function ScheduledVisitsPage() {
       setIsDialogOpen(false);
       resetForm();
       toast({
-        title: "Visita actualizada",
-        description: "La visita se actualizó correctamente",
+        title: t("visits.toast-updated"),
+        description: t("visits.toast-updated-desc"),
       });
     },
     onError: (error: any) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo actualizar la visita",
+        title: t("label.error"),
+        description: error.message || t("visits.toast-update-error"),
       });
     },
   });
@@ -120,15 +122,15 @@ export default function ScheduledVisitsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits"] });
       toast({
-        title: "Visita cancelada",
-        description: "La visita se canceló correctamente",
+        title: t("visits.toast-cancelled"),
+        description: t("visits.toast-cancelled-desc"),
       });
     },
     onError: (error: any) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo cancelar la visita",
+        title: t("label.error"),
+        description: error.message || t("visits.toast-cancel-error"),
       });
     },
   });
@@ -150,8 +152,8 @@ export default function ScheduledVisitsPage() {
     if (!formData.customerId || !selectedDate) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Por favor completa los campos requeridos",
+        title: t("label.error"),
+        description: t("visits.complete-required"),
       });
       return;
     }
@@ -191,7 +193,7 @@ export default function ScheduledVisitsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm("¿Estás seguro de cancelar esta visita?")) {
+    if (confirm(t("visits.confirm-cancel"))) {
       deleteMutation.mutate(id);
     }
   };
@@ -199,11 +201,11 @@ export default function ScheduledVisitsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "scheduled":
-        return <Badge variant="default" data-testid={`badge-status-scheduled`}>Programada</Badge>;
+        return <Badge variant="default" data-testid={`badge-status-scheduled`}>{t("visits.status-scheduled")}</Badge>;
       case "completed":
-        return <Badge variant="secondary" data-testid={`badge-status-completed`}>Completada</Badge>;
+        return <Badge variant="secondary" data-testid={`badge-status-completed`}>{t("visits.status-completed")}</Badge>;
       case "cancelled":
-        return <Badge variant="destructive" data-testid={`badge-status-cancelled`}>Cancelada</Badge>;
+        return <Badge variant="destructive" data-testid={`badge-status-cancelled`}>{t("visits.status-cancelled")}</Badge>;
       default:
         return <Badge data-testid={`badge-status-${status}`}>{status}</Badge>;
     }
@@ -245,7 +247,7 @@ export default function ScheduledVisitsPage() {
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex justify-between items-center gap-3">
-        <h1 className="text-xl md:text-3xl font-bold" data-testid="title-scheduled-visits">Visitas Programadas</h1>
+        <h1 className="text-xl md:text-3xl font-bold" data-testid="title-scheduled-visits">{t("visits.title")}</h1>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
           if (!open) resetForm();
@@ -253,50 +255,50 @@ export default function ScheduledVisitsPage() {
           <DialogTrigger asChild>
             <Button size="default" data-testid="button-create-visit" className="shrink-0">
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline ml-2">Nueva Visita</span>
-              <span className="sm:hidden ml-1">Nueva</span>
+              <span className="hidden sm:inline ml-2">{t("visits.new")}</span>
+              <span className="sm:hidden ml-1">{t("visits.new-short")}</span>
             </Button>
           </DialogTrigger>
           <DialogContent data-testid="dialog-create-visit">
             <DialogHeader>
               <DialogTitle data-testid="title-dialog">
-                {editingVisit ? "Editar Visita" : "Programar Nueva Visita"}
+                {editingVisit ? t("visits.edit-title") : t("visits.new-title")}
               </DialogTitle>
               <DialogDescription>
-                {editingVisit ? "Modifica los detalles de la visita" : "Programa una nueva visita a cliente"}
+                {editingVisit ? t("visits.edit-desc") : t("visits.new-desc")}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="customer" data-testid="label-customer">Cliente</Label>
+                <Label htmlFor="customer" data-testid="label-customer">{t("label.client")}</Label>
                 <CustomerCombobox
                   customers={customers || []}
                   value={formData.customerId || ""}
                   onValueChange={(value) => setFormData({ ...formData, customerId: value })}
-                  placeholder="Buscar cliente..."
+                  placeholder={t("visits.search-customer")}
                   data-testid="select-customer"
                 />
               </div>
 
               <div>
-                <Label htmlFor="meetingType" data-testid="label-meeting-type">Tipo de Reunión</Label>
+                <Label htmlFor="meetingType" data-testid="label-meeting-type">{t("checkins.meeting-type")}</Label>
                 <Select
                   value={formData.meetingType}
                   onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
                 >
                   <SelectTrigger data-testid="select-meeting-type">
-                    <SelectValue placeholder="Selecciona tipo" />
+                    <SelectValue placeholder={t("checkins.select-type")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
-                    <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
-                    <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+                    <SelectItem value={MeetingType.VISITA}>{t("checkins.type.visit")}</SelectItem>
+                    <SelectItem value={MeetingType.LLAMADA}>{t("checkins.type.call")}</SelectItem>
+                    <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label data-testid="label-date">Fecha programada</Label>
+                <Label data-testid="label-date">{t("visits.scheduled-date")}</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -308,7 +310,7 @@ export default function ScheduledVisitsPage() {
                       data-testid="button-select-date"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedDate ? format(selectedDate, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                      {selectedDate ? format(selectedDate, "PPP", { locale: es }) : <span>{t("visits.select-date")}</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -325,23 +327,23 @@ export default function ScheduledVisitsPage() {
               </div>
 
               <div>
-                <Label htmlFor="topics" data-testid="label-topics">Temas a tratar (separados por coma)</Label>
+                <Label htmlFor="topics" data-testid="label-topics">{t("visits.topics-label")}</Label>
                 <Input
                   id="topics"
                   value={topicsInput}
                   onChange={(e) => setTopicsInput(e.target.value)}
-                  placeholder="Cotización, Cobranza, Nuevos productos"
+                  placeholder={t("visits.topics-placeholder")}
                   data-testid="input-topics"
                 />
               </div>
 
               <div>
-                <Label htmlFor="notes" data-testid="label-notes">Notas adicionales</Label>
+                <Label htmlFor="notes" data-testid="label-notes">{t("visits.additional-notes")}</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes ?? ""}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Información adicional sobre la visita"
+                  placeholder={t("visits.notes-placeholder")}
                   data-testid="textarea-notes"
                 />
               </div>
@@ -352,7 +354,7 @@ export default function ScheduledVisitsPage() {
                 className="w-full"
                 data-testid="button-submit"
               >
-                {editingVisit ? "Actualizar Visita" : "Programar Visita"}
+                {editingVisit ? t("visits.update-btn") : t("visits.schedule-btn")}
               </Button>
             </div>
           </DialogContent>
@@ -363,7 +365,7 @@ export default function ScheduledVisitsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium" data-testid="card-title-scheduled">Programadas</CardTitle>
+            <CardTitle className="text-sm font-medium" data-testid="card-title-scheduled">{t("visits.card-scheduled")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-count-scheduled">{scheduledVisits.length}</div>
@@ -371,7 +373,7 @@ export default function ScheduledVisitsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium" data-testid="card-title-completed">Completadas</CardTitle>
+            <CardTitle className="text-sm font-medium" data-testid="card-title-completed">{t("visits.card-completed")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-count-completed">{completedVisits.length}</div>
@@ -379,7 +381,7 @@ export default function ScheduledVisitsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium" data-testid="card-title-cancelled">Canceladas</CardTitle>
+            <CardTitle className="text-sm font-medium" data-testid="card-title-cancelled">{t("visits.card-cancelled")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-count-cancelled">{cancelledVisits.length}</div>
@@ -392,9 +394,9 @@ export default function ScheduledVisitsPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle data-testid="card-title-visits">Todas las Visitas</CardTitle>
+              <CardTitle data-testid="card-title-visits">{t("visits.all")}</CardTitle>
               <CardDescription data-testid="card-description-visits">
-                {filteredVisits.length} de {visits?.length || 0} visitas
+                {filteredVisits.length} {t("visits.of")} {visits?.length || 0} {t("visits.count-suffix")}
               </CardDescription>
             </div>
           </div>
@@ -403,7 +405,7 @@ export default function ScheduledVisitsPage() {
           <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
             <div className="flex-1 min-w-[180px]">
               <Input
-                placeholder="Buscar cliente..."
+                placeholder={t("visits.search-customer")}
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
                 data-testid="input-search-visit"
@@ -411,24 +413,24 @@ export default function ScheduledVisitsPage() {
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[150px]" data-testid="select-filter-status">
-                <SelectValue placeholder="Estado" />
+                <SelectValue placeholder={t("label.status")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="scheduled">Programada</SelectItem>
-                <SelectItem value="completed">Completada</SelectItem>
-                <SelectItem value="cancelled">Cancelada</SelectItem>
+                <SelectItem value="all">{t("visits.all-statuses")}</SelectItem>
+                <SelectItem value="scheduled">{t("visits.status-scheduled")}</SelectItem>
+                <SelectItem value="completed">{t("visits.status-completed")}</SelectItem>
+                <SelectItem value="cancelled">{t("visits.status-cancelled")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-[150px]" data-testid="select-filter-type">
-                <SelectValue placeholder="Tipo" />
+                <SelectValue placeholder={t("label.type")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
-                <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
-                <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+                <SelectItem value="all">{t("visits.all-types")}</SelectItem>
+                <SelectItem value={MeetingType.VISITA}>{t("checkins.type.visit")}</SelectItem>
+                <SelectItem value={MeetingType.LLAMADA}>{t("checkins.type.call")}</SelectItem>
+                <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-1">
@@ -438,7 +440,7 @@ export default function ScheduledVisitsPage() {
                 onChange={e => setFilterDateFrom(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-from"
-                title="Desde"
+                title={t("label.from")}
               />
               <span className="text-muted-foreground text-sm">—</span>
               <Input
@@ -447,13 +449,13 @@ export default function ScheduledVisitsPage() {
                 onChange={e => setFilterDateTo(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-to"
-                title="Hasta"
+                title={t("label.to")}
               />
             </div>
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
                 <RotateCcw className="h-4 w-4 mr-1" />
-                Limpiar
+                {t("btn.clear")}
               </Button>
             )}
           </div>
@@ -469,12 +471,12 @@ export default function ScheduledVisitsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead data-testid="header-customer">Cliente</TableHead>
-                  <TableHead data-testid="header-date">Fecha</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead data-testid="header-topics">Temas</TableHead>
-                  <TableHead data-testid="header-status">Estado</TableHead>
-                  <TableHead data-testid="header-actions">Acciones</TableHead>
+                  <TableHead data-testid="header-customer">{t("label.client")}</TableHead>
+                  <TableHead data-testid="header-date">{t("label.date")}</TableHead>
+                  <TableHead>{t("label.type")}</TableHead>
+                  <TableHead data-testid="header-topics">{t("visits.topics")}</TableHead>
+                  <TableHead data-testid="header-status">{t("label.status")}</TableHead>
+                  <TableHead data-testid="header-actions">{t("label.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -525,11 +527,11 @@ export default function ScheduledVisitsPage() {
             </Table>
           ) : visits && visits.length > 0 ? (
             <div className="text-center py-8 text-muted-foreground" data-testid="text-no-results">
-              Ninguna visita coincide con los filtros aplicados
+              {t("visits.no-match")}
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground" data-testid="text-no-visits">
-              No hay visitas programadas
+              {t("visits.no-results")}
             </div>
           )}
         </CardContent>

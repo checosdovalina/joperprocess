@@ -35,26 +35,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useI18n } from "@/hooks/use-i18n";
 import type { Tenant } from "@shared/schema";
 
 const CONFIRM_PHRASE = "CONFIRMAR RESET";
 
 const TIMEZONES = [
-  { value: "America/Mexico_City",   label: "Ciudad de México (CST/CDT)" },
-  { value: "America/Monterrey",     label: "Monterrey (CST/CDT)" },
-  { value: "America/Chihuahua",     label: "Chihuahua (MST/MDT)" },
-  { value: "America/Mazatlan",      label: "Mazatlán (MST/MDT)" },
-  { value: "America/Hermosillo",    label: "Hermosillo (MST, sin DST)" },
-  { value: "America/Tijuana",       label: "Tijuana (PST/PDT)" },
-  { value: "America/Cancun",        label: "Cancún (EST, sin DST)" },
-  { value: "America/New_York",      label: "Nueva York (EST/EDT)" },
-  { value: "America/Los_Angeles",   label: "Los Ángeles (PST/PDT)" },
-  { value: "America/Chicago",       label: "Chicago (CST/CDT)" },
-  { value: "America/Denver",        label: "Denver (MST/MDT)" },
-  { value: "UTC",                   label: "UTC (Coordinado Universal)" },
+  { value: "America/Mexico_City",   labelKey: "settings.tz.mexico-city" },
+  { value: "America/Monterrey",     labelKey: "settings.tz.monterrey" },
+  { value: "America/Chihuahua",     labelKey: "settings.tz.chihuahua" },
+  { value: "America/Mazatlan",      labelKey: "settings.tz.mazatlan" },
+  { value: "America/Hermosillo",    labelKey: "settings.tz.hermosillo" },
+  { value: "America/Tijuana",       labelKey: "settings.tz.tijuana" },
+  { value: "America/Cancun",        labelKey: "settings.tz.cancun" },
+  { value: "America/New_York",      labelKey: "settings.tz.new-york" },
+  { value: "America/Los_Angeles",   labelKey: "settings.tz.los-angeles" },
+  { value: "America/Chicago",       labelKey: "settings.tz.chicago" },
+  { value: "America/Denver",        labelKey: "settings.tz.denver" },
+  { value: "UTC",                   labelKey: "settings.tz.utc" },
 ];
 
 export default function CompanySettingsPage() {
+  const { t } = useI18n();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -86,7 +88,7 @@ export default function CompanySettingsPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "Error al resetear");
+        throw new Error(err.error || t("settings.reset.error"));
       }
       return res.json();
     },
@@ -94,13 +96,13 @@ export default function CompanySettingsPage() {
       queryClient.invalidateQueries();
       resetDialogClose();
       toast({
-        title: "Base de datos reseteada",
-        description: "Todos los datos fueron eliminados. Solo quedan los usuarios.",
+        title: t("settings.reset.done-title"),
+        description: t("settings.reset.done-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -120,7 +122,7 @@ export default function CompanySettingsPage() {
   const bulkDiscountMutation = useMutation({
     mutationFn: async ({ discount, categoryId }: { discount: number; categoryId?: string }) => {
       const res = await apiRequest("POST", "/api/products/bulk-discount", { discount, categoryId });
-      if (!res.ok) throw new Error((await res.json()).error || "Error al aplicar descuento");
+      if (!res.ok) throw new Error((await res.json()).error || t("settings.discount.error"));
       return res.json() as Promise<{ updated: number; discount: string }>;
     },
     onSuccess: (data, variables) => {
@@ -128,21 +130,24 @@ export default function CompanySettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/product-categories"] });
       setApplyingCategory(null);
       toast({
-        title: "Descuento aplicado",
-        description: `Se actualizaron ${data.updated} producto${data.updated !== 1 ? "s" : ""} con ${data.discount}% de descuento máximo.`,
+        title: t("settings.discount.applied"),
+        description: t("settings.discount.applied-desc")
+          .replace("{count}", String(data.updated))
+          .replace("{product}", data.updated !== 1 ? t("settings.discount.products") : t("settings.discount.product"))
+          .replace("{discount}", data.discount),
       });
       if (!variables.categoryId) setGlobalDiscount("");
     },
     onError: (error: Error) => {
       setApplyingCategory(null);
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: t("label.error"), description: error.message, variant: "destructive" });
     },
   });
 
   const handleApplyCategory = (categoryId: string) => {
     const val = parseFloat(categoryDiscounts[categoryId] ?? "");
     if (isNaN(val) || val < 0 || val > 100) {
-      toast({ title: "Valor inválido", description: "Ingresa un porcentaje entre 0 y 100.", variant: "destructive" });
+      toast({ title: t("settings.discount.invalid"), description: t("settings.discount.invalid-desc"), variant: "destructive" });
       return;
     }
     setApplyingCategory(categoryId);
@@ -152,7 +157,7 @@ export default function CompanySettingsPage() {
   const handleApplyGlobal = () => {
     const val = parseFloat(globalDiscount);
     if (isNaN(val) || val < 0 || val > 100) {
-      toast({ title: "Valor inválido", description: "Ingresa un porcentaje entre 0 y 100.", variant: "destructive" });
+      toast({ title: t("settings.discount.invalid"), description: t("settings.discount.invalid-desc"), variant: "destructive" });
       return;
     }
     setApplyingCategory("global");
@@ -170,14 +175,14 @@ export default function CompanySettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/company-settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tenant-config"] });
       toast({
-        title: "Configuración guardada",
-        description: "Los cambios han sido aplicados correctamente.",
+        title: t("settings.saved-title"),
+        description: t("settings.saved-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: error.message || "No se pudo guardar la configuración",
+        title: t("label.error"),
+        description: error.message || t("settings.save-error"),
         variant: "destructive",
       });
     },
@@ -189,8 +194,8 @@ export default function CompanySettingsPage() {
 
     if (!file.type.startsWith('image/')) {
       toast({
-        title: "Error",
-        description: "Solo se permiten archivos de imagen",
+        title: t("label.error"),
+        description: t("settings.logo.only-images"),
         variant: "destructive",
       });
       return;
@@ -198,8 +203,8 @@ export default function CompanySettingsPage() {
 
     if (file.size > 5 * 1024 * 1024) {
       toast({
-        title: "Error",
-        description: "La imagen no puede superar 5MB",
+        title: t("label.error"),
+        description: t("settings.logo.too-large"),
         variant: "destructive",
       });
       return;
@@ -218,19 +223,19 @@ export default function CompanySettingsPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Error al subir el logo");
+        throw new Error(error.error || t("settings.logo.upload-error"));
       }
 
       queryClient.invalidateQueries({ queryKey: ["/api/company-settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tenant-config"] });
       toast({
-        title: "Logo actualizado",
-        description: "El logo de la empresa ha sido actualizado correctamente.",
+        title: t("settings.logo.updated-title"),
+        description: t("settings.logo.updated-desc"),
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "No se pudo subir el logo",
+        title: t("label.error"),
+        description: error instanceof Error ? error.message : t("settings.logo.upload-fail"),
         variant: "destructive",
       });
     } finally {
@@ -273,10 +278,10 @@ export default function CompanySettingsPage() {
     <div className="container mx-auto py-6 max-w-4xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold" data-testid="text-page-title">
-          Configuración de Empresa
+          {t("settings.title")}
         </h1>
         <p className="text-muted-foreground">
-          Gestiona la información y apariencia de tu empresa
+          {t("settings.subtitle")}
         </p>
       </div>
 
@@ -285,10 +290,10 @@ export default function CompanySettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Logo de la Empresa
+              {t("settings.logo.title")}
             </CardTitle>
             <CardDescription>
-              Este logo aparecerá en tus cotizaciones, minutas y documentos PDF
+              {t("settings.logo.desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -321,17 +326,17 @@ export default function CompanySettingsPage() {
                   {isUploading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Subiendo...
+                      {t("settings.logo.uploading")}
                     </>
                   ) : (
                     <>
                       <Upload className="mr-2 h-4 w-4" />
-                      Subir Logo
+                      {t("settings.logo.upload")}
                     </>
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  PNG, JPG o WebP. Máximo 5MB.
+                  {t("settings.logo.hint")}
                 </p>
               </div>
             </div>
@@ -342,31 +347,31 @@ export default function CompanySettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Información de la Empresa
+              {t("settings.company.title")}
             </CardTitle>
             <CardDescription>
-              Datos legales y de contacto de tu empresa
+              {t("settings.company.desc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nombre Comercial</Label>
+                <Label htmlFor="name">{t("settings.field.commercial-name")}</Label>
                 <Input
                   id="name"
                   value={currentData.name || ""}
                   onChange={(e) => handleChange("name", e.target.value)}
-                  placeholder="Nombre de la empresa"
+                  placeholder={t("settings.ph.company-name")}
                   data-testid="input-company-name"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="legalName">Razón Social</Label>
+                <Label htmlFor="legalName">{t("settings.field.legal-name")}</Label>
                 <Input
                   id="legalName"
                   value={currentData.legalName || ""}
                   onChange={(e) => handleChange("legalName", e.target.value)}
-                  placeholder="Razón social completa"
+                  placeholder={t("settings.ph.legal-name")}
                   data-testid="input-legal-name"
                 />
               </div>
@@ -374,17 +379,17 @@ export default function CompanySettingsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="rfc">RFC</Label>
+                <Label htmlFor="rfc">{t("label.rfc")}</Label>
                 <Input
                   id="rfc"
                   value={currentData.rfc || ""}
                   onChange={(e) => handleChange("rfc", e.target.value)}
-                  placeholder="RFC de la empresa"
+                  placeholder={t("settings.ph.rfc")}
                   data-testid="input-rfc"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="website">Sitio Web</Label>
+                <Label htmlFor="website">{t("settings.field.website")}</Label>
                 <Input
                   id="website"
                   value={currentData.website || ""}
@@ -399,7 +404,7 @@ export default function CompanySettingsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Correo Electrónico</Label>
+                <Label htmlFor="email">{t("settings.field.email")}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -410,7 +415,7 @@ export default function CompanySettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Teléfono</Label>
+                <Label htmlFor="phone">{t("label.phone")}</Label>
                 <Input
                   id="phone"
                   value={currentData.phone || ""}
@@ -422,12 +427,12 @@ export default function CompanySettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address">Dirección</Label>
+              <Label htmlFor="address">{t("label.address")}</Label>
               <Textarea
                 id="address"
                 value={currentData.address || ""}
                 onChange={(e) => handleChange("address", e.target.value)}
-                placeholder="Calle, número, colonia..."
+                placeholder={t("settings.ph.address")}
                 rows={2}
                 data-testid="input-address"
               />
@@ -435,22 +440,22 @@ export default function CompanySettingsPage() {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="city">Ciudad</Label>
+                <Label htmlFor="city">{t("label.city")}</Label>
                 <Input
                   id="city"
                   value={currentData.city || ""}
                   onChange={(e) => handleChange("city", e.target.value)}
-                  placeholder="Ciudad"
+                  placeholder={t("settings.ph.city")}
                   data-testid="input-city"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="state">Estado</Label>
+                <Label htmlFor="state">{t("label.state")}</Label>
                 <Input
                   id="state"
                   value={currentData.state || ""}
                   onChange={(e) => handleChange("state", e.target.value)}
-                  placeholder="Estado"
+                  placeholder={t("settings.ph.state")}
                   data-testid="input-state"
                 />
               </div>
@@ -465,26 +470,26 @@ export default function CompanySettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="country">País</Label>
+                <Label htmlFor="country">{t("label.country")}</Label>
                 <Input
                   id="country"
-                  value={currentData.country || "México"}
+                  value={currentData.country || t("settings.default.country")}
                   onChange={(e) => handleChange("country", e.target.value)}
-                  placeholder="País"
+                  placeholder={t("settings.ph.country")}
                   data-testid="input-country"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="timezone">Zona Horaria</Label>
+              <Label htmlFor="timezone">{t("settings.field.timezone")}</Label>
               <Select
                 value={currentData.timezone || "America/Mexico_City"}
                 onValueChange={(value) => handleChange("timezone" as keyof Tenant, value)}
               >
                 <SelectTrigger id="timezone" data-testid="select-timezone">
                   <Clock className="h-4 w-4 text-muted-foreground mr-2" />
-                  <SelectValue placeholder="Selecciona zona horaria" />
+                  <SelectValue placeholder={t("settings.ph.timezone")} />
                 </SelectTrigger>
                 <SelectContent>
                   {TIMEZONES.map((tz) => (
@@ -495,7 +500,7 @@ export default function CompanySettingsPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Zona horaria para las fechas en PDFs generados por el sistema
+                {t("settings.timezone.hint")}
               </p>
             </div>
           </CardContent>
@@ -505,16 +510,16 @@ export default function CompanySettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="h-5 w-5" />
-              Colores de Marca
+              {t("settings.brand.title")}
             </CardTitle>
             <CardDescription>
-              Personaliza los colores de tu sistema
+              {t("settings.brand.desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="primaryColor">Color Primario</Label>
+                <Label htmlFor="primaryColor">{t("settings.primary-color")}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
@@ -533,7 +538,7 @@ export default function CompanySettingsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="secondaryColor">Color Secundario</Label>
+                <Label htmlFor="secondaryColor">{t("settings.secondary-color")}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
@@ -564,24 +569,24 @@ export default function CompanySettingsPage() {
             {updateMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Guardando...
+                {t("btn.saving")}
               </>
             ) : (
               <>
                 <Save className="mr-2 h-4 w-4" />
-                Guardar Cambios
+                {t("btn.save-changes")}
               </>
             )}
           </Button>
         </div>
       </form>
 
-      {/* ─── DESCUENTOS MÁXIMOS ──────────────────────────────────────────────── */}
+      {/* ─── MAX DISCOUNTS ──────────────────────────────────────────────── */}
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-4">
           <div className="h-px flex-1 bg-border" />
           <span className="text-xs font-semibold text-muted-foreground tracking-widest uppercase px-2">
-            Descuentos Máximos en Productos
+            {t("settings.discounts.section")}
           </span>
           <div className="h-px flex-1 bg-border" />
         </div>
@@ -591,16 +596,16 @@ export default function CompanySettingsPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Percent className="h-4 w-4 text-primary" />
-              Aplicar a Todos los Productos
+              {t("settings.discount.apply-all")}
             </CardTitle>
             <CardDescription className="text-xs">
-              Establece el mismo descuento máximo para todos los productos de todas las categorías de un solo paso.
+              {t("settings.discount.apply-all-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1.5 w-40">
-                <Label htmlFor="global-discount" className="text-xs">Descuento máximo %</Label>
+                <Label htmlFor="global-discount" className="text-xs">{t("settings.discount.max-percent")}</Label>
                 <div className="relative">
                   <Input
                     id="global-discount"
@@ -608,7 +613,7 @@ export default function CompanySettingsPage() {
                     min="0"
                     max="100"
                     step="0.01"
-                    placeholder="Ej: 10.00"
+                    placeholder={t("settings.discount.ph-example")}
                     value={globalDiscount}
                     onChange={(e) => setGlobalDiscount(e.target.value)}
                     className="pr-7"
@@ -623,8 +628,8 @@ export default function CompanySettingsPage() {
                 data-testid="button-apply-global-discount"
               >
                 {applyingCategory === "global" && bulkDiscountMutation.isPending
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Aplicando...</>
-                  : <><CheckCircle2 className="h-4 w-4 mr-2" />Aplicar a todos</>
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t("settings.discount.applying")}</>
+                  : <><CheckCircle2 className="h-4 w-4 mr-2" />{t("settings.discount.apply-all-btn")}</>
                 }
               </Button>
             </div>
@@ -636,22 +641,22 @@ export default function CompanySettingsPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Tag className="h-4 w-4 text-primary" />
-              Aplicar por Categoría
+              {t("settings.discount.apply-category")}
             </CardTitle>
             <CardDescription className="text-xs">
-              Define un descuento máximo diferente para cada categoría. Al aplicar, se actualiza el límite en todos los productos de esa categoría.
+              {t("settings.discount.apply-category-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {categories.length === 0 ? (
-              <p className="text-sm text-muted-foreground px-6 py-4">No hay categorías configuradas.</p>
+              <p className="text-sm text-muted-foreground px-6 py-4">{t("settings.discount.no-categories")}</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead className="w-32 text-center">Actual</TableHead>
-                    <TableHead className="w-44">Nuevo descuento %</TableHead>
+                    <TableHead>{t("label.category")}</TableHead>
+                    <TableHead className="w-32 text-center">{t("settings.discount.current")}</TableHead>
+                    <TableHead className="w-44">{t("settings.discount.new-percent")}</TableHead>
                     <TableHead className="w-36" />
                   </TableRow>
                 </TableHeader>
@@ -694,8 +699,8 @@ export default function CompanySettingsPage() {
                             data-testid={`button-apply-discount-${cat.id}`}
                           >
                             {isBusy
-                              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Aplicando</>
-                              : <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Aplicar</>
+                              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />{t("settings.discount.applying-short")}</>
+                              : <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />{t("settings.discount.apply-short")}</>
                             }
                           </Button>
                         </TableCell>
@@ -714,7 +719,7 @@ export default function CompanySettingsPage() {
         <div className="flex items-center gap-2 mb-3">
           <div className="h-px flex-1 bg-border" />
           <span className="text-xs font-semibold text-muted-foreground tracking-widest uppercase px-2">
-            Zona de Peligro
+            {t("settings.danger.section")}
           </span>
           <div className="h-px flex-1 bg-border" />
         </div>
@@ -723,12 +728,11 @@ export default function CompanySettingsPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-destructive">
               <ShieldAlert className="h-4 w-4" />
-              Resetear Base de Datos
+              {t("settings.danger.reset-title")}
             </CardTitle>
             <CardDescription className="text-xs">
-              Elimina permanentemente todos los datos operativos de esta empresa: clientes, cotizaciones,
-              pedidos, facturas, pagos, embarques, incidentes y productos. <strong>Los usuarios no serán eliminados.</strong>
-              Esta acción no puede deshacerse.
+              {t("settings.danger.reset-desc-1")} <strong>{t("settings.danger.reset-desc-2")}</strong>{" "}
+              {t("settings.danger.reset-desc-3")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -740,13 +744,13 @@ export default function CompanySettingsPage() {
               data-testid="button-open-reset-dialog"
             >
               <Trash2 className="h-3.5 w-3.5 mr-2" />
-              Iniciar proceso de reset
+              {t("settings.danger.start-reset")}
             </Button>
           </CardContent>
         </Card>
       </div>
 
-      {/* ─── DIÁLOGO MULTI-PASO ───────────────────────────────────────────────── */}
+      {/* ─── MULTI-STEP DIALOG ───────────────────────────────────────────────── */}
       <Dialog open={resetDialogOpen} onOpenChange={(open) => !open && resetDialogClose()}>
         <DialogContent className="sm:max-w-md">
 
@@ -756,24 +760,24 @@ export default function CompanySettingsPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-destructive">
                   <TriangleAlert className="h-5 w-5" />
-                  Advertencia — Acción Irreversible
+                  {t("settings.reset.step1-title")}
                 </DialogTitle>
                 <DialogDescription className="text-sm pt-1">
-                  Estás a punto de eliminar <strong>todos los datos operativos</strong> de esta empresa.
+                  {t("settings.reset.step1-desc-1")} <strong>{t("settings.reset.step1-desc-strong")}</strong> {t("settings.reset.step1-desc-2")}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="rounded-md border border-destructive/20 bg-destructive/5 p-4 space-y-2 text-sm text-muted-foreground">
-                <p className="font-semibold text-foreground mb-3">Se eliminarán permanentemente:</p>
+                <p className="font-semibold text-foreground mb-3">{t("settings.reset.will-delete")}</p>
                 {[
-                  "Todos los clientes y sus ubicaciones",
-                  "Cotizaciones y sus artículos",
-                  "Pedidos, embarques y surtidos",
-                  "Facturas y pagos",
-                  "Check-ins y visitas programadas",
-                  "Incidentes y comentarios",
-                  "Productos y categorías",
-                  "Configuración e historial de Microsip",
+                  t("settings.reset.item-clients"),
+                  t("settings.reset.item-quotations"),
+                  t("settings.reset.item-orders"),
+                  t("settings.reset.item-invoices"),
+                  t("settings.reset.item-checkins"),
+                  t("settings.reset.item-incidents"),
+                  t("settings.reset.item-products"),
+                  t("settings.reset.item-microsip"),
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-destructive flex-shrink-0" />
@@ -781,7 +785,7 @@ export default function CompanySettingsPage() {
                   </div>
                 ))}
                 <p className="pt-2 font-semibold text-foreground">
-                  Los usuarios del sistema NO serán eliminados.
+                  {t("settings.reset.users-safe")}
                 </p>
               </div>
 
@@ -793,13 +797,13 @@ export default function CompanySettingsPage() {
                   data-testid="checkbox-understood"
                 />
                 <Label htmlFor="understood" className="text-sm leading-snug cursor-pointer">
-                  Entiendo que esta acción es permanente e irreversible y que perderé todos los datos listados arriba.
+                  {t("settings.reset.understood")}
                 </Label>
               </div>
 
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={resetDialogClose} data-testid="button-reset-cancel-step1">
-                  Cancelar
+                  {t("btn.cancel")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -807,7 +811,7 @@ export default function CompanySettingsPage() {
                   onClick={() => setResetStep(2)}
                   data-testid="button-reset-next-step2"
                 >
-                  Continuar
+                  {t("settings.reset.continue")}
                   <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </DialogFooter>
@@ -820,10 +824,10 @@ export default function CompanySettingsPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-destructive">
                   <ShieldAlert className="h-5 w-5" />
-                  Confirmación Final
+                  {t("settings.reset.step2-title")}
                 </DialogTitle>
                 <DialogDescription className="text-sm pt-1">
-                  Para confirmar, escribe exactamente la siguiente frase en el campo de abajo:
+                  {t("settings.reset.step2-desc")}
                 </DialogDescription>
               </DialogHeader>
 
@@ -833,7 +837,7 @@ export default function CompanySettingsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs" htmlFor="confirm-phrase-input">Escribe la frase de confirmación</Label>
+                  <Label className="text-xs" htmlFor="confirm-phrase-input">{t("settings.reset.type-phrase")}</Label>
                   <Input
                     id="confirm-phrase-input"
                     value={resetPhrase}
@@ -845,18 +849,18 @@ export default function CompanySettingsPage() {
                     data-testid="input-confirm-phrase"
                   />
                   {resetPhrase && resetPhrase !== CONFIRM_PHRASE && (
-                    <p className="text-xs text-destructive">La frase no coincide exactamente.</p>
+                    <p className="text-xs text-destructive">{t("settings.reset.no-match")}</p>
                   )}
                 </div>
 
                 <div className="rounded-md border border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/20 p-3 text-xs text-orange-700 dark:text-orange-300">
-                  Esta operación es inmediata y no tiene confirmación adicional. Una vez ejecutada, los datos no se pueden recuperar salvo que tengas un respaldo externo.
+                  {t("settings.reset.warning-box")}
                 </div>
               </div>
 
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => setResetStep(1)} data-testid="button-reset-back">
-                  Atrás
+                  {t("settings.reset.back")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -867,12 +871,12 @@ export default function CompanySettingsPage() {
                   {resetMutation.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Eliminando datos...
+                      {t("settings.reset.deleting")}
                     </>
                   ) : (
                     <>
                       <Trash2 className="h-4 w-4 mr-2" />
-                      Eliminar todos los datos
+                      {t("settings.reset.delete-all")}
                     </>
                   )}
                 </Button>

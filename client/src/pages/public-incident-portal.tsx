@@ -27,6 +27,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useI18n } from "@/hooks/use-i18n";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,33 +65,33 @@ type PublicIncident = {
   comments: PublicComment[];
 };
 
-const typeLabels: Record<string, string> = {
-  garantia: "Garantía",
-  retrabajo: "Retrabajo",
-  queja: "Queja",
-  consulta: "Consulta",
-  administrativo: "Administrativo",
+const typeLabelKeys: Record<string, string> = {
+  garantia: "public.support.type.garantia",
+  retrabajo: "public.support.type.retrabajo",
+  queja: "public.support.type.queja",
+  consulta: "public.support.type.consulta",
+  administrativo: "public.support.type.administrativo",
 };
 
-const statusLabels: Record<string, string> = {
-  nuevo: "Nuevo",
-  asignado: "Asignado",
-  en_proceso: "En Proceso",
-  esperando_cliente: "Esperando tu Respuesta",
-  esperando_interno: "En Revisión",
-  resuelto: "Resuelto",
-  cerrado: "Cerrado",
-  cancelado: "Cancelado",
+const statusLabelKeys: Record<string, string> = {
+  nuevo: "status.new",
+  asignado: "status.assigned",
+  en_proceso: "status.in-progress",
+  esperando_cliente: "public.incident.status.waiting-you",
+  esperando_interno: "public.incident.status.in-review",
+  resuelto: "status.resolved",
+  cerrado: "status.closed",
+  cancelado: "public.incident.status.cancelled",
 };
 
-const urgencyLabels: Record<string, string> = {
-  baja: "Baja",
-  media: "Media",
-  alta: "Alta",
-  critica: "Crítica",
+const urgencyLabelKeys: Record<string, string> = {
+  baja: "public.urgency.baja",
+  media: "public.urgency.media",
+  alta: "public.urgency.alta",
+  critica: "public.urgency.critica",
 };
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     nuevo: "default",
     asignado: "secondary",
@@ -118,12 +119,12 @@ function getStatusBadge(status: string) {
   return (
     <Badge variant={variants[status] || "default"} className="gap-1">
       <Icon className="h-3 w-3" />
-      {statusLabels[status] || status}
+      {statusLabelKeys[status] ? t(statusLabelKeys[status]) : status}
     </Badge>
   );
 }
 
-function getTypeBadge(type: string) {
+function getTypeBadge(type: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     garantia: "destructive",
     retrabajo: "destructive",
@@ -134,12 +135,12 @@ function getTypeBadge(type: string) {
 
   return (
     <Badge variant={variants[type] || "secondary"}>
-      {typeLabels[type] || type}
+      {typeLabelKeys[type] ? t(typeLabelKeys[type]) : type}
     </Badge>
   );
 }
 
-function getUrgencyBadge(urgency: string) {
+function getUrgencyBadge(urgency: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     baja: "secondary",
     media: "outline",
@@ -149,12 +150,13 @@ function getUrgencyBadge(urgency: string) {
 
   return (
     <Badge variant={variants[urgency] || "secondary"}>
-      {urgencyLabels[urgency] || urgency}
+      {urgencyLabelKeys[urgency] ? t(urgencyLabelKeys[urgency]) : urgency}
     </Badge>
   );
 }
 
 export default function PublicIncidentPortal() {
+  const { t } = useI18n();
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
   const [newComment, setNewComment] = useState("");
@@ -167,7 +169,7 @@ export default function PublicIncidentPortal() {
       const response = await fetch(`/api/public/incidents/${token}`);
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Error al cargar el incidente");
+        throw new Error(data.error || t("public.incident.type.load-error"));
       }
       return response.json();
     },
@@ -188,7 +190,7 @@ export default function PublicIncidentPortal() {
       });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Error al enviar comentario");
+        throw new Error(data.error || t("public.incident.comment-error"));
       }
       return response.json();
     },
@@ -196,13 +198,13 @@ export default function PublicIncidentPortal() {
       refetch();
       setNewComment("");
       toast({
-        title: "Comentario enviado",
-        description: "Tu comentario ha sido registrado correctamente.",
+        title: t("public.incident.comment-sent"),
+        description: t("public.incident.comment-sent-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -216,7 +218,7 @@ export default function PublicIncidentPortal() {
       });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Error al confirmar cierre");
+        throw new Error(data.error || t("public.incident.close-error"));
       }
       return response.json();
     },
@@ -224,13 +226,13 @@ export default function PublicIncidentPortal() {
       refetch();
       setConfirmCloseOpen(false);
       toast({
-        title: "Incidente cerrado",
-        description: "Has confirmado el cierre del incidente. Gracias por tu colaboración.",
+        title: t("public.incident.closed-toast"),
+        description: t("public.incident.closed-toast-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -260,9 +262,9 @@ export default function PublicIncidentPortal() {
         <Card className="max-w-md w-full">
           <CardContent className="py-12 text-center">
             <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-destructive" />
-            <h2 className="text-xl font-bold mb-2">Incidente no disponible</h2>
+            <h2 className="text-xl font-bold mb-2">{t("public.incident.not-available")}</h2>
             <p className="text-muted-foreground">
-              {(error as Error)?.message || "El enlace puede haber expirado o el incidente no existe."}
+              {(error as Error)?.message || t("public.incident.not-available-desc")}
             </p>
           </CardContent>
         </Card>
@@ -279,7 +281,7 @@ export default function PublicIncidentPortal() {
         <div className="max-w-3xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-6 w-6 text-primary" />
-            <span className="font-semibold">Portal de Seguimiento de Incidentes</span>
+            <span className="font-semibold">{t("public.incident.portal-title")}</span>
           </div>
         </div>
       </div>
@@ -292,7 +294,7 @@ export default function PublicIncidentPortal() {
               <h1 className="text-2xl font-bold font-mono" data-testid="text-ticket-number">
                 {incident.ticketNumber}
               </h1>
-              {getStatusBadge(incident.status)}
+              {getStatusBadge(incident.status, t)}
             </div>
             <Button
               variant="outline"
@@ -306,7 +308,7 @@ export default function PublicIncidentPortal() {
               data-testid="button-download-pdf"
             >
               <Download className="h-4 w-4 mr-2" />
-              Descargar PDF
+              {t("btn.download-pdf")}
             </Button>
           </div>
           <p className="text-lg text-muted-foreground">{incident.subject}</p>
@@ -319,9 +321,9 @@ export default function PublicIncidentPortal() {
               <div className="flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-warning" />
                 <div>
-                  <p className="font-medium">Se requiere tu respuesta</p>
+                  <p className="font-medium">{t("public.incident.response-required")}</p>
                   <p className="text-sm text-muted-foreground">
-                    Por favor, agrega un comentario con la información solicitada para continuar con tu caso.
+                    {t("public.incident.response-required-desc")}
                   </p>
                 </div>
               </div>
@@ -336,11 +338,11 @@ export default function PublicIncidentPortal() {
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="h-5 w-5 text-primary mt-0.5" />
                 <div className="flex-1">
-                  <p className="font-medium mb-2">Resolución</p>
+                  <p className="font-medium mb-2">{t("public.incident.resolution")}</p>
                   <p className="text-sm whitespace-pre-wrap">{incident.resolution}</p>
                   {incident.resolvedAt && (
                     <p className="text-xs text-muted-foreground mt-2">
-                      Resuelto el {format(new Date(incident.resolvedAt), "PPP 'a las' HH:mm", { locale: es })}
+                      {t("public.incident.resolved-on")} {format(new Date(incident.resolvedAt), "PPP 'a las' HH:mm", { locale: es })}
                     </p>
                   )}
                 </div>
@@ -355,14 +357,14 @@ export default function PublicIncidentPortal() {
             <CardContent className="py-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">¿El problema fue resuelto?</p>
+                  <p className="font-medium">{t("public.incident.problem-resolved-q")}</p>
                   <p className="text-sm text-muted-foreground">
-                    Confirma si la resolución es satisfactoria para cerrar el incidente.
+                    {t("public.incident.confirm-satisfactory")}
                   </p>
                 </div>
                 <Button onClick={() => setConfirmCloseOpen(true)} data-testid="button-confirm-close">
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Confirmar Cierre
+                  {t("public.incident.confirm-close")}
                 </Button>
               </div>
             </CardContent>
@@ -374,25 +376,25 @@ export default function PublicIncidentPortal() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Detalles del Incidente
+              {t("public.incident.details")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <span className="text-xs text-muted-foreground">Tipo</span>
-                <div className="mt-1">{getTypeBadge(incident.type)}</div>
+                <span className="text-xs text-muted-foreground">{t("label.type")}</span>
+                <div className="mt-1">{getTypeBadge(incident.type, t)}</div>
               </div>
               <div>
-                <span className="text-xs text-muted-foreground">Urgencia</span>
-                <div className="mt-1">{getUrgencyBadge(incident.urgency)}</div>
+                <span className="text-xs text-muted-foreground">{t("label.urgency")}</span>
+                <div className="mt-1">{getUrgencyBadge(incident.urgency, t)}</div>
               </div>
               <div>
-                <span className="text-xs text-muted-foreground">Asignado a</span>
-                <p className="text-sm mt-1">{incident.assignee?.fullName || "En espera de asignación"}</p>
+                <span className="text-xs text-muted-foreground">{t("label.assigned-to")}</span>
+                <p className="text-sm mt-1">{incident.assignee?.fullName || t("public.incident.awaiting-assignment")}</p>
               </div>
               <div>
-                <span className="text-xs text-muted-foreground">Fecha</span>
+                <span className="text-xs text-muted-foreground">{t("label.date")}</span>
                 <p className="text-sm mt-1 flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
                   {format(new Date(incident.createdAt), "dd/MM/yyyy")}
@@ -403,7 +405,7 @@ export default function PublicIncidentPortal() {
             <Separator />
 
             <div>
-              <span className="text-xs text-muted-foreground">Descripción</span>
+              <span className="text-xs text-muted-foreground">{t("label.description")}</span>
               <p className="text-sm mt-2 whitespace-pre-wrap">{incident.description}</p>
             </div>
           </CardContent>
@@ -414,18 +416,18 @@ export default function PublicIncidentPortal() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              Conversación
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Actualización automática activa" />
+              {t("public.incident.conversation")}
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title={t("public.incident.auto-update-active")} />
             </CardTitle>
             <CardDescription>
-              Historial de comunicación sobre tu incidente — se actualiza automáticamente
+              {t("public.incident.conversation-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-64 pr-4 mb-4">
               {incident.comments?.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  No hay mensajes aún. Sé el primero en escribir.
+                  {t("public.incident.no-messages")}
                 </p>
               ) : (
                 <div className="space-y-4">
@@ -443,7 +445,7 @@ export default function PublicIncidentPortal() {
                         <div className="flex items-center gap-2">
                           <User2 className="h-3 w-3" />
                           <span className="text-sm font-medium">
-                            {comment.isFromCustomer ? "Tú" : comment.user?.fullName || "Equipo de Soporte"}
+                            {comment.isFromCustomer ? t("public.incident.you") : comment.user?.fullName || t("public.incident.support-team")}
                           </span>
                         </div>
                         <span className="text-xs text-muted-foreground">
@@ -461,7 +463,7 @@ export default function PublicIncidentPortal() {
             {canComment && (
               <div className="space-y-3 border-t pt-4">
                 <Textarea
-                  placeholder="Escribe tu mensaje aquí..."
+                  placeholder={t("public.incident.message-ph")}
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   rows={3}
@@ -478,7 +480,7 @@ export default function PublicIncidentPortal() {
                     ) : (
                       <Send className="h-4 w-4 mr-2" />
                     )}
-                    Enviar Mensaje
+                    {t("public.incident.send-message")}
                   </Button>
                 </div>
               </div>
@@ -486,7 +488,7 @@ export default function PublicIncidentPortal() {
 
             {!canComment && (
               <div className="text-center py-4 text-muted-foreground border-t">
-                Este incidente está cerrado y no se pueden agregar más comentarios.
+                {t("public.incident.closed-no-comments")}
               </div>
             )}
           </CardContent>
@@ -494,8 +496,8 @@ export default function PublicIncidentPortal() {
 
         {/* Footer */}
         <div className="text-center text-sm text-muted-foreground pt-6 border-t">
-          <p>Si tienes alguna pregunta, no dudes en agregar un comentario.</p>
-          <p className="mt-1">Nuestro equipo responderá lo antes posible.</p>
+          <p>{t("public.incident.footer-1")}</p>
+          <p className="mt-1">{t("public.incident.footer-2")}</p>
         </div>
       </div>
 
@@ -503,14 +505,13 @@ export default function PublicIncidentPortal() {
       <AlertDialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar cierre del incidente</AlertDialogTitle>
+            <AlertDialogTitle>{t("public.incident.confirm-close-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Al confirmar, indicarás que el problema fue resuelto satisfactoriamente y el incidente será cerrado.
-              Esta acción no se puede deshacer.
+              {t("public.incident.confirm-close-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmCloseMutation.mutate()}
               disabled={confirmCloseMutation.isPending}
@@ -520,7 +521,7 @@ export default function PublicIncidentPortal() {
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
               )}
-              Confirmar Cierre
+              {t("public.incident.confirm-close")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

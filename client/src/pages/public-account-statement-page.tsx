@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { AlertTriangle, Building2, FileText } from "lucide-react";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface StatementData {
   customer: { id: string; name: string; email: string | null; rfc: string | null; phone: string | null };
@@ -25,8 +26,13 @@ function fmtDate(d: string | null) {
   return new Date(d).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function statusLabel(s: string) {
-  return { pending_payment: "Pendiente", partially_paid: "Pago Parcial", paid: "Pagado", cancelled: "Cancelada" }[s] ?? s;
+function statusLabel(s: string, t: (key: string) => string) {
+  return {
+    pending_payment: t("status.pending"),
+    partially_paid: t("status.partial-pay"),
+    paid: t("public.statement.status.paid"),
+    cancelled: t("status.cancelled"),
+  }[s] ?? s;
 }
 
 function statusColor(s: string) {
@@ -34,6 +40,7 @@ function statusColor(s: string) {
 }
 
 export default function PublicAccountStatementPage() {
+  const { t } = useI18n();
   const { token } = useParams<{ token: string }>();
 
   const { data, isLoading, error } = useQuery<StatementData>({
@@ -41,8 +48,8 @@ export default function PublicAccountStatementPage() {
     queryFn: async () => {
       const res = await fetch(`/api/public/account-statement/${token}`);
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Error desconocido" }));
-        throw new Error(err.error ?? "No se pudo cargar el estado de cuenta");
+        const err = await res.json().catch(() => ({ error: t("public.error.unknown") }));
+        throw new Error(err.error ?? t("public.statement.load-error"));
       }
       return res.json();
     },
@@ -54,7 +61,7 @@ export default function PublicAccountStatementPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Cargando estado de cuenta...</p>
+          <p className="text-gray-500">{t("public.statement.loading")}</p>
         </div>
       </div>
     );
@@ -65,9 +72,9 @@ export default function PublicAccountStatementPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-xl shadow p-8 max-w-md w-full text-center">
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Enlace no disponible</h2>
-          <p className="text-gray-500">{(error as Error)?.message ?? "Este enlace ha expirado o no es válido."}</p>
-          <p className="text-sm text-gray-400 mt-4">Los enlaces de estado de cuenta son válidos por 7 días.</p>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">{t("public.link-unavailable")}</h2>
+          <p className="text-gray-500">{(error as Error)?.message ?? t("public.statement.link-invalid")}</p>
+          <p className="text-sm text-gray-400 mt-4">{t("public.statement.links-valid-7days")}</p>
         </div>
       </div>
     );
@@ -95,18 +102,18 @@ export default function PublicAccountStatementPage() {
         <div style={{ background: primaryColor }} className="px-8 py-7 flex justify-between items-start">
           <div>
             <h1 className="text-white text-xl font-bold tracking-wide">{companyName.toUpperCase()}</h1>
-            <p className="text-white/70 text-sm mt-1">Estado de Cuenta</p>
+            <p className="text-white/70 text-sm mt-1">{t("public.statement.title")}</p>
             {tenant?.rfc && <p className="text-white/60 text-xs mt-0.5">RFC: {tenant.rfc}</p>}
           </div>
           <div className="text-right">
-            <p className="text-white/60 text-xs">Corte al</p>
+            <p className="text-white/60 text-xs">{t("public.statement.cutoff")}</p>
             <p className="text-white font-semibold text-sm">{fmtDate(now.toISOString())}</p>
           </div>
         </div>
 
         {/* Customer */}
         <div className="px-8 py-5 bg-gray-50 border-b">
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Cliente</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{t("label.client")}</p>
           <p className="text-lg font-bold text-gray-900">{customer.name}</p>
           {customer.rfc && <p className="text-sm text-gray-500 mt-0.5">RFC: {customer.rfc}</p>}
           {customer.email && <p className="text-sm text-gray-500">{customer.email}</p>}
@@ -115,17 +122,17 @@ export default function PublicAccountStatementPage() {
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 px-8 py-5 border-b">
           <div className="bg-red-50 border border-red-100 rounded-lg p-4">
-            <p className="text-xs font-semibold text-red-500 uppercase mb-1">Saldo Total</p>
+            <p className="text-xs font-semibold text-red-500 uppercase mb-1">{t("public.statement.total-balance")}</p>
             <p className="text-xl font-bold text-red-600">{fmt(totalBalance)}</p>
           </div>
           {totalOverdue > 0 && (
             <div className="bg-orange-50 border border-orange-100 rounded-lg p-4">
-              <p className="text-xs font-semibold text-orange-500 uppercase mb-1">Saldo Vencido</p>
+              <p className="text-xs font-semibold text-orange-500 uppercase mb-1">{t("public.statement.overdue-balance")}</p>
               <p className="text-xl font-bold text-orange-600">{fmt(totalOverdue)}</p>
             </div>
           )}
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-            <p className="text-xs font-semibold text-blue-500 uppercase mb-1">Facturas Activas</p>
+            <p className="text-xs font-semibold text-blue-500 uppercase mb-1">{t("public.statement.active-invoices")}</p>
             <p className="text-xl font-bold text-blue-700">{activeInvoices.length}</p>
           </div>
         </div>
@@ -133,21 +140,21 @@ export default function PublicAccountStatementPage() {
         {/* Invoices */}
         <div className="px-8 py-6">
           <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-            <FileText className="w-4 h-4" /> Facturas Pendientes
+            <FileText className="w-4 h-4" /> {t("public.statement.pending-invoices")}
           </h2>
           {activeInvoices.length === 0 ? (
-            <p className="text-gray-400 italic text-sm">Sin facturas pendientes.</p>
+            <p className="text-gray-400 italic text-sm">{t("public.statement.no-pending")}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b-2 border-gray-100">
-                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">Folio</th>
-                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">Emisión</th>
-                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">Vencimiento</th>
-                    <th className="text-right py-2 text-xs text-gray-400 font-semibold">Total</th>
-                    <th className="text-right py-2 text-xs text-gray-400 font-semibold">Saldo</th>
-                    <th className="text-left py-2 text-xs text-gray-400 font-semibold pl-3">Estado</th>
+                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">{t("label.folio")}</th>
+                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">{t("public.statement.issued")}</th>
+                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">{t("public.statement.due")}</th>
+                    <th className="text-right py-2 text-xs text-gray-400 font-semibold">{t("label.total")}</th>
+                    <th className="text-right py-2 text-xs text-gray-400 font-semibold">{t("label.balance")}</th>
+                    <th className="text-left py-2 text-xs text-gray-400 font-semibold pl-3">{t("label.status")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -170,7 +177,7 @@ export default function PublicAccountStatementPage() {
                             className="text-xs font-semibold px-2 py-0.5 rounded-full"
                             style={{ background: statusColor(inv.status) + "20", color: statusColor(inv.status) }}
                           >
-                            {statusLabel(inv.status)}
+                            {statusLabel(inv.status, t)}
                           </span>
                         </td>
                       </tr>
@@ -186,16 +193,16 @@ export default function PublicAccountStatementPage() {
         {recentPayments.length > 0 && (
           <div className="px-8 pb-6">
             <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-              <Building2 className="w-4 h-4" /> Últimos Pagos
+              <Building2 className="w-4 h-4" /> {t("public.statement.recent-payments")}
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b-2 border-gray-100">
-                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">Fecha</th>
-                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">Referencia</th>
-                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">Factura</th>
-                    <th className="text-right py-2 text-xs text-gray-400 font-semibold">Importe</th>
+                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">{t("label.date")}</th>
+                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">{t("label.reference")}</th>
+                    <th className="text-left py-2 text-xs text-gray-400 font-semibold">{t("label.invoice")}</th>
+                    <th className="text-right py-2 text-xs text-gray-400 font-semibold">{t("label.amount")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -218,8 +225,8 @@ export default function PublicAccountStatementPage() {
 
         {/* Footer */}
         <div style={{ background: primaryColor }} className="px-8 py-4 text-center">
-          <p className="text-white/60 text-xs">Estado de cuenta generado automáticamente · {companyName}</p>
-          <p className="text-white/40 text-xs mt-1">Este enlace es válido por 7 días · No requiere contraseña</p>
+          <p className="text-white/60 text-xs">{t("public.statement.auto-generated")} · {companyName}</p>
+          <p className="text-white/40 text-xs mt-1">{t("public.statement.footer-note")}</p>
         </div>
       </div>
     </div>

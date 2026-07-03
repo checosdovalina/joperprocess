@@ -105,7 +105,7 @@ export default function ProductsPage() {
   const createMutation = useEntityMutation<Product, InsertProduct>({
     endpoint: "/api/products",
     method: "POST",
-    successMessage: "Producto creado exitosamente",
+    successMessage: t("products.created"),
     invalidateQueries: ["/api/products"],
     onSuccessCallback: () => {
       setDialogOpen(false);
@@ -116,7 +116,7 @@ export default function ProductsPage() {
   const updateMutation = useEntityMutation<Product, Partial<InsertProduct>>({
     endpoint: editingProduct ? `/api/products/${editingProduct.id}` : "",
     method: "PATCH",
-    successMessage: "Producto actualizado exitosamente",
+    successMessage: t("products.updated"),
     invalidateQueries: ["/api/products"],
     onSuccessCallback: () => {
       setDialogOpen(false);
@@ -127,7 +127,7 @@ export default function ProductsPage() {
   const createCategoryMutation = useEntityMutation<ProductCategory, InsertProductCategory>({
     endpoint: "/api/product-categories",
     method: "POST",
-    successMessage: "Categoría creada exitosamente",
+    successMessage: t("products.category-created"),
     invalidateQueries: ["/api/product-categories"],
     onSuccessCallback: () => {
       setCategoryDialogOpen(false);
@@ -140,7 +140,7 @@ export default function ProductsPage() {
   const updateCategoryMutation = useEntityMutation<ProductCategory, Partial<InsertProductCategory>>({
     endpoint: editingCategory ? `/api/product-categories/${editingCategory.id}` : "",
     method: "PATCH",
-    successMessage: "Categoría actualizada exitosamente",
+    successMessage: t("products.category-updated"),
     invalidateQueries: ["/api/product-categories", "/api/products"],
     onSuccessCallback: () => {
       setCategoryDialogOpen(false);
@@ -233,11 +233,11 @@ export default function ProductsPage() {
         <TabsList>
           <TabsTrigger value="products" data-testid="tab-products">
             <Package className="h-4 w-4 mr-2" />
-            Productos
+            {t("products.tab.products")}
           </TabsTrigger>
           <TabsTrigger value="categories" data-testid="tab-categories">
             <FolderOpen className="h-4 w-4 mr-2" />
-            Categorías
+            {t("products.tab.categories")}
           </TabsTrigger>
         </TabsList>
 
@@ -247,16 +247,16 @@ export default function ProductsPage() {
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
-                    <CardTitle>Catálogo de Productos</CardTitle>
+                    <CardTitle>{t("products.catalog")}</CardTitle>
                     <CardDescription>
-                      {filteredProducts?.length || 0} de {products?.length || 0} productos
+                      {filteredProducts?.length || 0} {t("label.of")} {products?.length || 0} {t("products.count-noun")}
                     </CardDescription>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative w-full sm:w-64">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Buscar..."
+                        placeholder={t("label.search")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10"
@@ -276,11 +276,11 @@ export default function ProductsPage() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                     <SelectTrigger className="w-[180px]" data-testid="select-category-filter">
-                      <SelectValue placeholder="Categoría" />
+                      <SelectValue placeholder={t("label.category")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t("products.all-categories")}</SelectItem>
-                      <SelectItem value="none">Sin categoría</SelectItem>
+                      <SelectItem value="none">{t("products.no-category")}</SelectItem>
                       {categories?.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id}>
                           {cat.name}
@@ -291,10 +291,10 @@ export default function ProductsPage() {
                   
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
-                      <SelectValue placeholder="Estado" />
+                      <SelectValue placeholder={t("label.status")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="all">{t("label.all")}</SelectItem>
                       <SelectItem value="active">{t("status.active")}</SelectItem>
                       <SelectItem value="inactive">{t("status.inactive")}</SelectItem>
                     </SelectContent>
@@ -302,15 +302,15 @@ export default function ProductsPage() {
                   
                   <Select value={sortOrder} onValueChange={setSortOrder}>
                     <SelectTrigger className="w-[160px]" data-testid="select-sort-order">
-                      <SelectValue placeholder="Ordenar por" />
+                      <SelectValue placeholder={t("products.sort-by")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="name-asc">Nombre A-Z</SelectItem>
-                      <SelectItem value="name-desc">Nombre Z-A</SelectItem>
-                      <SelectItem value="code-asc">Código A-Z</SelectItem>
-                      <SelectItem value="code-desc">Código Z-A</SelectItem>
-                      <SelectItem value="price-asc">Precio menor</SelectItem>
-                      <SelectItem value="price-desc">Precio mayor</SelectItem>
+                      <SelectItem value="name-asc">{t("products.sort.name-az")}</SelectItem>
+                      <SelectItem value="name-desc">{t("products.sort.name-za")}</SelectItem>
+                      <SelectItem value="code-asc">{t("products.sort.code-az")}</SelectItem>
+                      <SelectItem value="code-desc">{t("products.sort.code-za")}</SelectItem>
+                      <SelectItem value="price-asc">{t("products.sort.price-low")}</SelectItem>
+                      <SelectItem value="price-desc">{t("products.sort.price-high")}</SelectItem>
                     </SelectContent>
                   </Select>
                   
@@ -366,7 +366,7 @@ export default function ProductsPage() {
                           </TableCell>
                           <TableCell>
                             {product.category?.name || (
-                              <span className="text-muted-foreground">Sin categoría</span>
+                              <span className="text-muted-foreground">{t("products.no-category")}</span>
                             )}
                           </TableCell>
                           <TableCell>{product.brand || "-"}</TableCell>
@@ -380,7 +380,7 @@ export default function ProductsPage() {
                           </TableCell>
                           <TableCell>
                             <Badge variant={product.active ? "default" : "secondary"}>
-                              {product.active ? "Activo" : "Inactivo"}
+                              {product.active ? t("status.active") : t("status.inactive")}
                             </Badge>
                           </TableCell>
                           {isAdmin && (
@@ -411,7 +411,7 @@ export default function ProductsPage() {
                       data-testid="button-add-first-product"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Agregar Primer Producto
+                      {t("products.add-first")}
                     </Button>
                   )}
                 </div>
@@ -425,15 +425,15 @@ export default function ProductsPage() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <CardTitle>Categorías de Productos</CardTitle>
+                  <CardTitle>{t("products.categories-title")}</CardTitle>
                   <CardDescription>
-                    {categories?.length || 0} categorías registradas. Crea categorías antes de agregar productos.
+                    {categories?.length || 0} {t("products.categories-registered")}
                   </CardDescription>
                 </div>
                 {isAdmin && (
                   <Button onClick={openNewCategoryDialog} data-testid="button-add-category">
                     <Plus className="h-4 w-4 mr-2" />
-                    Nueva Categoría
+                    {t("products.new-category")}
                   </Button>
                 )}
               </div>
@@ -450,10 +450,10 @@ export default function ProductsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Descripción</TableHead>
-                        <TableHead>Estado</TableHead>
-                        {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
+                        <TableHead>{t("label.name")}</TableHead>
+                        <TableHead>{t("label.description")}</TableHead>
+                        <TableHead>{t("label.status")}</TableHead>
+                        {isAdmin && <TableHead className="text-right">{t("label.actions")}</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -471,7 +471,7 @@ export default function ProductsPage() {
                           </TableCell>
                           <TableCell>
                             <Badge variant={category.active ? "default" : "secondary"} data-testid={`status-category-${category.id}`}>
-                              {category.active ? "Activa" : "Inactiva"}
+                              {category.active ? t("products.category-active") : t("products.category-inactive")}
                             </Badge>
                           </TableCell>
                           {isAdmin && (
@@ -482,7 +482,7 @@ export default function ProductsPage() {
                                   size="icon"
                                   onClick={() => handleToggleCategory(category)}
                                   disabled={togglingCategoryId === category.id}
-                                  title={category.active ? "Desactivar categoría" : "Activar categoría"}
+                                  title={category.active ? t("products.deactivate-category") : t("products.activate-category")}
                                   data-testid={`button-toggle-category-${category.id}`}
                                 >
                                   {togglingCategoryId === category.id ? (
@@ -512,14 +512,14 @@ export default function ProductsPage() {
               ) : (
                 <div className="text-center py-12">
                   <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-2">No hay categorías registradas</p>
+                  <p className="text-muted-foreground mb-2">{t("products.no-categories")}</p>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Crea categorías primero para poder asignarlas a los productos
+                    {t("products.no-categories-hint")}
                   </p>
                   {isAdmin && (
                     <Button onClick={openNewCategoryDialog} data-testid="button-add-first-category">
                       <Plus className="h-4 w-4 mr-2" />
-                      Crear Primera Categoría
+                      {t("products.create-first-category")}
                     </Button>
                   )}
                 </div>
@@ -547,32 +547,32 @@ export default function ProductsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingCategory ? "Editar Categoría" : "Nueva Categoría"}
+              {editingCategory ? t("products.edit-category") : t("products.new-category")}
             </DialogTitle>
             <DialogDescription>
               {editingCategory
-                ? "Modifica los datos de la categoría"
-                : "Ingresa los datos de la nueva categoría"}
+                ? t("products.edit-category-desc")
+                : t("products.new-category-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="category-name">Nombre *</Label>
+              <Label htmlFor="category-name">{t("products.name-required")}</Label>
               <Input
                 id="category-name"
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
-                placeholder="Ej: Electrónicos, Herramientas, etc."
+                placeholder={t("products.category-name-ph")}
                 data-testid="input-category-name"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="category-description">Descripción</Label>
+              <Label htmlFor="category-description">{t("label.description")}</Label>
               <Textarea
                 id="category-description"
                 value={categoryDescription}
                 onChange={(e) => setCategoryDescription(e.target.value)}
-                placeholder="Descripción opcional de la categoría..."
+                placeholder={t("products.category-desc-ph")}
                 data-testid="textarea-category-description"
               />
             </div>
@@ -583,7 +583,7 @@ export default function ProductsPage() {
               onClick={() => setCategoryDialogOpen(false)}
               data-testid="button-cancel-category"
             >
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               onClick={handleCategorySubmit}
@@ -593,7 +593,7 @@ export default function ProductsPage() {
               {(createCategoryMutation.isPending || updateCategoryMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {editingCategory ? "Guardar Cambios" : "Crear Categoría"}
+              {editingCategory ? t("btn.save-changes") : t("products.create-category")}
             </Button>
           </DialogFooter>
         </DialogContent>

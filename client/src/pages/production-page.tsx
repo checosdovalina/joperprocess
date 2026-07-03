@@ -370,7 +370,7 @@ export default function ProductionPage() {
       <div className="relative w-full sm:w-72">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por folio o cliente..."
+          placeholder={t("search.folio-client")}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-8"

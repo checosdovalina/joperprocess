@@ -6,11 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Lock, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 
 export default function ResetPasswordPage() {
+  const { t } = useI18n();
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
   const token = urlParams.get("token");
@@ -25,7 +27,7 @@ export default function ResetPasswordPage() {
   const { data: tokenStatus, isLoading: isVerifying } = useQuery<{ valid: boolean; error?: string }>({
     queryKey: ["/api/verify-reset-token", token],
     queryFn: async () => {
-      if (!token) return { valid: false, error: "Token no proporcionado" };
+      if (!token) return { valid: false, error: t("auth.token-not-provided") };
       const res = await fetch(`/api/verify-reset-token?token=${encodeURIComponent(token)}`);
       return res.json();
     },
@@ -37,8 +39,8 @@ export default function ResetPasswordPage() {
     
     if (!newPassword || !confirmPassword) {
       toast({
-        title: "Error",
-        description: "Por favor completa todos los campos",
+        title: t("label.error"),
+        description: t("auth.complete-fields"),
         variant: "destructive",
       });
       return;
@@ -46,8 +48,8 @@ export default function ResetPasswordPage() {
 
     if (newPassword !== confirmPassword) {
       toast({
-        title: "Error",
-        description: "Las contraseñas no coinciden",
+        title: t("label.error"),
+        description: t("auth.passwords-no-match"),
         variant: "destructive",
       });
       return;
@@ -55,8 +57,8 @@ export default function ResetPasswordPage() {
 
     if (newPassword.length < 6) {
       toast({
-        title: "Error",
-        description: "La contraseña debe tener al menos 6 caracteres",
+        title: t("label.error"),
+        description: t("auth.password-min"),
         variant: "destructive",
       });
       return;
@@ -67,13 +69,13 @@ export default function ResetPasswordPage() {
       await apiRequest("POST", "/api/reset-password", { token, newPassword });
       setIsSuccess(true);
       toast({
-        title: "Contraseña actualizada",
-        description: "Tu contraseña ha sido restablecida exitosamente",
+        title: t("auth.password-updated"),
+        description: t("auth.password-updated-desc"),
       });
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Error al restablecer la contraseña",
+        title: t("label.error"),
+        description: error.message || t("auth.reset-error"),
         variant: "destructive",
       });
     } finally {
@@ -91,13 +93,13 @@ export default function ResetPasswordPage() {
                 <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center mb-4">
                   <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Enlace inválido</h3>
+                <h3 className="text-lg font-semibold mb-2">{t("auth.invalid-link")}</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  El enlace de recuperación no es válido. Por favor solicita uno nuevo.
+                  {t("auth.invalid-link-desc")}
                 </p>
                 <Link href="/forgot-password">
                   <Button className="w-full">
-                    Solicitar nuevo enlace
+                    {t("auth.request-new-link")}
                   </Button>
                 </Link>
               </div>
@@ -113,7 +115,7 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen flex items-center justify-center p-8 bg-background">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="mt-4 text-muted-foreground">Verificando enlace...</p>
+          <p className="mt-4 text-muted-foreground">{t("auth.verifying-link")}</p>
         </div>
       </div>
     );
@@ -129,13 +131,13 @@ export default function ResetPasswordPage() {
                 <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center mb-4">
                   <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Enlace expirado</h3>
+                <h3 className="text-lg font-semibold mb-2">{t("auth.expired-link")}</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  {tokenStatus?.error || "El enlace ha expirado o ya fue utilizado. Por favor solicita uno nuevo."}
+                  {tokenStatus?.error || t("auth.expired-link-desc")}
                 </p>
                 <Link href="/forgot-password">
                   <Button className="w-full">
-                    Solicitar nuevo enlace
+                    {t("auth.request-new-link")}
                   </Button>
                 </Link>
               </div>
@@ -151,14 +153,14 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-md">
         <Link href="/auth" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" />
-          Volver a iniciar sesión
+          {t("auth.back-to-login")}
         </Link>
         
         <div className="flex items-center gap-3 mb-8">
           <img src={nexxoLogo} alt="Nexxo" className="h-12 w-12" />
           <div>
             <h1 className="text-2xl font-bold text-primary">NEXXO</h1>
-            <p className="text-sm text-muted-foreground">Sistema Comercial</p>
+            <p className="text-sm text-muted-foreground">{t("auth.system-name")}</p>
           </div>
         </div>
 
@@ -166,10 +168,10 @@ export default function ResetPasswordPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Lock className="h-5 w-5" />
-              Nueva Contraseña
+              {t("auth.new-password-title")}
             </CardTitle>
             <CardDescription>
-              Ingresa tu nueva contraseña para restablecer el acceso a tu cuenta
+              {t("auth.new-password-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -178,25 +180,25 @@ export default function ResetPasswordPage() {
                 <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mb-4">
                   <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">¡Contraseña actualizada!</h3>
+                <h3 className="text-lg font-semibold mb-2">{t("auth.password-updated-title")}</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Tu contraseña ha sido restablecida exitosamente. Ya puedes iniciar sesión con tu nueva contraseña.
+                  {t("auth.password-updated-full")}
                 </p>
                 <Link href="/auth">
                   <Button className="w-full">
-                    Ir a iniciar sesión
+                    {t("auth.go-to-login")}
                   </Button>
                 </Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="newPassword">Nueva Contraseña</Label>
+                  <Label htmlFor="newPassword">{t("auth.new-password")}</Label>
                   <Input
                     id="newPassword"
                     data-testid="input-new-password"
                     type="password"
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder={t("auth.min-6-chars")}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -204,12 +206,12 @@ export default function ResetPasswordPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                  <Label htmlFor="confirmPassword">{t("auth.confirm-password")}</Label>
                   <Input
                     id="confirmPassword"
                     data-testid="input-confirm-password"
                     type="password"
-                    placeholder="Repite tu nueva contraseña"
+                    placeholder={t("auth.repeat-password")}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
@@ -225,10 +227,10 @@ export default function ResetPasswordPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Actualizando...
+                      {t("auth.updating")}
                     </>
                   ) : (
-                    "Restablecer Contraseña"
+                    t("auth.reset-password-btn")
                   )}
                 </Button>
               </form>

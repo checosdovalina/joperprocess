@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { EntityFormDialog } from "@/components/entity-form-dialog";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface OrderFormProps {
   open: boolean;
@@ -41,6 +42,7 @@ export function OrderForm({
   quotations = [],
   userId,
 }: OrderFormProps) {
+  const { t } = useI18n();
   const form = useForm<InsertOrder>({
     resolver: zodResolver(insertOrderSchema),
     defaultValues: {
@@ -80,8 +82,8 @@ export function OrderForm({
     <EntityFormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Nueva Orden de Producción"
-      description="Crea una nueva orden de producción desde una cotización autorizada"
+      title={t("orders.new-production")}
+      description={t("orders.new-production-desc")}
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -90,11 +92,11 @@ export function OrderForm({
             name="quotationId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Cotización</FormLabel>
+                <FormLabel>{t("orders.quotation")}</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger data-testid="select-quotation">
-                      <SelectValue placeholder="Seleccionar cotización" />
+                      <SelectValue placeholder={t("orders.select-quotation")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -119,19 +121,19 @@ export function OrderForm({
             name="status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Estado</FormLabel>
+                <FormLabel>{t("label.status")}</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger data-testid="select-status">
-                      <SelectValue placeholder="Seleccionar estado" />
+                      <SelectValue placeholder={t("orders.select-status")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value={OrderStatus.PENDING}>Pendiente</SelectItem>
-                    <SelectItem value={OrderStatus.IN_PRODUCTION}>En Producción</SelectItem>
-                    <SelectItem value={OrderStatus.READY}>Lista</SelectItem>
-                    <SelectItem value={OrderStatus.SHIPPED}>Enviada</SelectItem>
-                    <SelectItem value={OrderStatus.DELIVERED}>Entregada</SelectItem>
+                    <SelectItem value={OrderStatus.PENDING}>{t("status.pending")}</SelectItem>
+                    <SelectItem value={OrderStatus.IN_PRODUCTION}>{t("orders.in-production")}</SelectItem>
+                    <SelectItem value={OrderStatus.READY}>{t("orders.status.ready-fem")}</SelectItem>
+                    <SelectItem value={OrderStatus.SHIPPED}>{t("orders.status.shipped-fem")}</SelectItem>
+                    <SelectItem value={OrderStatus.DELIVERED}>{t("orders.status.delivered-fem")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -144,7 +146,7 @@ export function OrderForm({
             name="productionProgress"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Progreso de Producción (%)</FormLabel>
+                <FormLabel>{t("orders.production-progress")}</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -166,12 +168,12 @@ export function OrderForm({
             name="factoryNotes"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Notas de Fábrica</FormLabel>
+                <FormLabel>{t("orders.factory-notes")}</FormLabel>
                 <FormControl>
                   <Textarea
                     {...field}
                     value={field.value || ""}
-                    placeholder="Notas de producción (opcional)"
+                    placeholder={t("orders.factory-notes-ph")}
                     data-testid="input-factory-notes"
                   />
                 </FormControl>
@@ -188,11 +190,11 @@ export function OrderForm({
               disabled={isPending}
               data-testid="button-cancel"
             >
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button type="submit" disabled={isPending} data-testid="button-submit">
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
+              {t("btn.save")}
             </Button>
           </div>
         </form>

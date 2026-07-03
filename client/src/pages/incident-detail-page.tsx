@@ -64,6 +64,7 @@ import { es } from "date-fns/locale";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useI18n } from "@/hooks/use-i18n";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 
@@ -127,43 +128,43 @@ function formatFileSize(bytes: number): string {
 }
 
 const typeLabels: Record<string, string> = {
-  [IncidentType.GARANTIA]: "Garantía",
-  [IncidentType.RETRABAJO]: "Retrabajo",
-  [IncidentType.QUEJA]: "Queja",
-  [IncidentType.CONSULTA]: "Consulta",
-  [IncidentType.ADMINISTRATIVO]: "Administrativo",
+  [IncidentType.GARANTIA]: "incidents.type.warranty",
+  [IncidentType.RETRABAJO]: "incidents.type.rework",
+  [IncidentType.QUEJA]: "incidents.type.complaint",
+  [IncidentType.CONSULTA]: "incidents.type.inquiry",
+  [IncidentType.ADMINISTRATIVO]: "incidents.type.admin",
 };
 
 const statusLabels: Record<string, string> = {
-  [IncidentStatus.NUEVO]: "Nuevo",
-  [IncidentStatus.ASIGNADO]: "Asignado",
-  [IncidentStatus.EN_PROCESO]: "En Proceso",
-  [IncidentStatus.ESPERANDO_CLIENTE]: "Esperando Cliente",
-  [IncidentStatus.ESPERANDO_INTERNO]: "Esperando Interno",
-  [IncidentStatus.RESUELTO]: "Resuelto",
-  [IncidentStatus.CERRADO]: "Cerrado",
-  [IncidentStatus.CANCELADO]: "Cancelado",
+  [IncidentStatus.NUEVO]: "status.new",
+  [IncidentStatus.ASIGNADO]: "status.assigned",
+  [IncidentStatus.EN_PROCESO]: "status.in-progress",
+  [IncidentStatus.ESPERANDO_CLIENTE]: "status.waiting-client",
+  [IncidentStatus.ESPERANDO_INTERNO]: "status.waiting-internal",
+  [IncidentStatus.RESUELTO]: "status.resolved",
+  [IncidentStatus.CERRADO]: "status.closed",
+  [IncidentStatus.CANCELADO]: "status.cancelled",
 };
 
 const urgencyLabels: Record<string, string> = {
-  [IncidentUrgency.BAJA]: "Baja",
-  [IncidentUrgency.MEDIA]: "Media",
-  [IncidentUrgency.ALTA]: "Alta",
-  [IncidentUrgency.CRITICA]: "Crítica",
+  [IncidentUrgency.BAJA]: "incidents.urgency.low",
+  [IncidentUrgency.MEDIA]: "incidents.urgency.medium",
+  [IncidentUrgency.ALTA]: "incidents.urgency.high",
+  [IncidentUrgency.CRITICA]: "incidents.urgency.critical",
 };
 
 const actionLabels: Record<string, string> = {
-  created: "Creación",
-  status_change: "Cambio de estado",
-  assignment_change: "Asignación",
-  type_change: "Cambio de tipo",
-  urgency_change: "Cambio de urgencia",
-  comment_added: "Comentario agregado",
-  customer_comment: "Comentario del cliente",
-  customer_confirmed_close: "Cliente confirmó cierre",
+  created: "incidents.action.created",
+  status_change: "incidents.action.status-change",
+  assignment_change: "incidents.action.assignment-change",
+  type_change: "incidents.action.type-change",
+  urgency_change: "incidents.action.urgency-change",
+  comment_added: "incidents.action.comment-added",
+  customer_comment: "incidents.action.customer-comment",
+  customer_confirmed_close: "incidents.action.customer-confirmed-close",
 };
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     [IncidentStatus.NUEVO]: "default",
     [IncidentStatus.ASIGNADO]: "secondary",
@@ -191,12 +192,12 @@ function getStatusBadge(status: string) {
   return (
     <Badge variant={variants[status] || "default"} className="gap-1">
       <Icon className="h-3 w-3" />
-      {statusLabels[status] || status}
+      {statusLabels[status] ? t(statusLabels[status]) : status}
     </Badge>
   );
 }
 
-function getTypeBadge(type: string) {
+function getTypeBadge(type: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     [IncidentType.GARANTIA]: "destructive",
     [IncidentType.RETRABAJO]: "destructive",
@@ -207,12 +208,12 @@ function getTypeBadge(type: string) {
 
   return (
     <Badge variant={variants[type] || "secondary"}>
-      {typeLabels[type] || type}
+      {typeLabels[type] ? t(typeLabels[type]) : type}
     </Badge>
   );
 }
 
-function getUrgencyBadge(urgency: string) {
+function getUrgencyBadge(urgency: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     [IncidentUrgency.BAJA]: "secondary",
     [IncidentUrgency.MEDIA]: "outline",
@@ -222,7 +223,7 @@ function getUrgencyBadge(urgency: string) {
 
   return (
     <Badge variant={variants[urgency] || "secondary"}>
-      {urgencyLabels[urgency] || urgency}
+      {urgencyLabels[urgency] ? t(urgencyLabels[urgency]) : urgency}
     </Badge>
   );
 }
@@ -232,6 +233,7 @@ export default function IncidentDetailPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [newComment, setNewComment] = useState("");
   const [commentVisibility, setCommentVisibility] = useState<string>(CommentVisibility.INTERNAL);
   const [resolution, setResolution] = useState("");
@@ -312,7 +314,7 @@ export default function IncidentDetailPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: t("label.error"), description: err.message, variant: "destructive" });
     } finally {
       setIsDownloadingWarranty(false);
     }
@@ -325,7 +327,7 @@ export default function IncidentDetailPage() {
     const total = files.length;
     try {
       for (const file of Array.from(files)) {
-        setUploadProgress(`Subiendo ${uploaded + 1} de ${total}: ${file.name}`);
+        setUploadProgress(`${t("incidents.uploading")} ${uploaded + 1}/${total}: ${file.name}`);
         // Step 1: get upload URL
         const urlResp = await apiRequest("POST", `/api/incidents/${id}/attachments/upload-url`, {
           filename: file.name,
@@ -361,9 +363,9 @@ export default function IncidentDetailPage() {
         uploaded++;
       }
       queryClient.invalidateQueries({ queryKey: ["/api/incidents", id] });
-      toast({ title: `${uploaded} archivo(s) subido(s)`, description: "Los archivos se adjuntaron al incidente." });
+      toast({ title: `${uploaded} ${t("incidents.files-uploaded")}`, description: t("incidents.files-attached-desc") });
     } catch (err: any) {
-      toast({ title: "Error al subir", description: err.message, variant: "destructive" });
+      toast({ title: t("incidents.upload-error"), description: err.message, variant: "destructive" });
     } finally {
       setIsUploadingFiles(false);
       setUploadProgress(null);
@@ -375,15 +377,15 @@ export default function IncidentDetailPage() {
     try {
       await apiRequest("DELETE", `/api/incidents/${id}/attachments/${attachmentId}`);
       queryClient.invalidateQueries({ queryKey: ["/api/incidents", id] });
-      toast({ title: "Archivo eliminado" });
+      toast({ title: t("incidents.file-deleted") });
     } catch {
-      toast({ title: "Error", description: "No se pudo eliminar el archivo.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("incidents.file-delete-error"), variant: "destructive" });
     }
   };
 
   const handleSendWarrantyEmail = async () => {
     if (!warrantyForm.contactEmail) {
-      toast({ title: "Correo requerido", description: "Ingresa el correo del destinatario", variant: "destructive" });
+      toast({ title: t("incidents.email-required"), description: t("incidents.email-required-desc"), variant: "destructive" });
       return;
     }
     setIsSendingWarrantyEmail(true);
@@ -396,11 +398,11 @@ export default function IncidentDetailPage() {
       });
       const result = await resp.json();
       toast({
-        title: "Correo enviado",
-        description: `Enviado a ${result.sentTo}${result.cc?.length ? ` (CC: ${result.cc.join(", ")})` : ""}`,
+        title: t("incidents.email-sent"),
+        description: `${t("incidents.sent-to")} ${result.sentTo}${result.cc?.length ? ` (CC: ${result.cc.join(", ")})` : ""}`,
       });
     } catch (err: any) {
-      toast({ title: "Error al enviar", description: err.message, variant: "destructive" });
+      toast({ title: t("incidents.email-send-error"), description: err.message, variant: "destructive" });
     } finally {
       setIsSendingWarrantyEmail(false);
     }
@@ -414,14 +416,14 @@ export default function IncidentDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/incidents", id] });
       toast({
-        title: "Incidente actualizado",
-        description: "Los cambios se han guardado correctamente.",
+        title: t("incidents.updated"),
+        description: t("incidents.updated-desc"),
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "No se pudo actualizar el incidente.",
+        title: t("label.error"),
+        description: t("incidents.update-error"),
         variant: "destructive",
       });
     },
@@ -436,14 +438,14 @@ export default function IncidentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/incidents", id] });
       setNewComment("");
       toast({
-        title: "Comentario agregado",
-        description: "El comentario se ha guardado correctamente.",
+        title: t("incidents.comment-added"),
+        description: t("incidents.comment-added-desc"),
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "No se pudo agregar el comentario.",
+        title: t("label.error"),
+        description: t("incidents.comment-add-error"),
         variant: "destructive",
       });
     },
@@ -457,8 +459,8 @@ export default function IncidentDetailPage() {
   const handleResolve = () => {
     if (!resolution.trim()) {
       toast({
-        title: "Resolución requerida",
-        description: "Por favor escribe la resolución del incidente.",
+        title: t("incidents.resolution-required"),
+        description: t("incidents.resolution-required-desc"),
         variant: "destructive",
       });
       return;
@@ -472,8 +474,8 @@ export default function IncidentDetailPage() {
     const url = `${window.location.origin}/public/incidents/${incident.accessToken}`;
     navigator.clipboard.writeText(url);
     toast({
-      title: "Enlace copiado",
-      description: "El enlace de acceso se ha copiado al portapapeles.",
+      title: t("incidents.link-copied"),
+      description: t("incidents.link-copied-desc"),
     });
   };
 
@@ -501,10 +503,10 @@ export default function IncidentDetailPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">Incidente no encontrado</p>
+            <p className="text-muted-foreground">{t("incidents.not-found")}</p>
             <Button variant="outline" className="mt-4" onClick={() => navigate("/incidents")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver a Incidentes
+              {t("incidents.back-to-incidents")}
             </Button>
           </CardContent>
         </Card>
@@ -528,7 +530,7 @@ export default function IncidentDetailPage() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-3" data-testid="text-ticket-number">
               <span className="font-mono">{incident.ticketNumber}</span>
-              {getStatusBadge(incident.status)}
+              {getStatusBadge(incident.status, t)}
             </h1>
             <p className="text-muted-foreground">{incident.subject}</p>
           </div>
@@ -536,7 +538,7 @@ export default function IncidentDetailPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={copyAccessLink} data-testid="button-copy-link">
             <Link2 className="h-4 w-4 mr-2" />
-            Copiar Enlace Cliente
+            {t("incidents.copy-client-link")}
           </Button>
           {incident.accessToken && (
             <Button
@@ -550,7 +552,7 @@ export default function IncidentDetailPage() {
               data-testid="button-download-pdf"
             >
               <Download className="h-4 w-4 mr-2" />
-              Descargar PDF
+              {t("incidents.download-pdf")}
             </Button>
           )}
         </div>
@@ -563,21 +565,21 @@ export default function IncidentDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Información del Incidente
+                {t("incidents.info-title")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-muted-foreground text-xs">Tipo</Label>
-                  <div className="mt-1">{getTypeBadge(incident.type)}</div>
+                  <Label className="text-muted-foreground text-xs">{t("label.type")}</Label>
+                  <div className="mt-1">{getTypeBadge(incident.type, t)}</div>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground text-xs">Urgencia</Label>
-                  <div className="mt-1">{getUrgencyBadge(incident.urgency)}</div>
+                  <Label className="text-muted-foreground text-xs">{t("label.urgency")}</Label>
+                  <div className="mt-1">{getUrgencyBadge(incident.urgency, t)}</div>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground text-xs">Fecha de Creación</Label>
+                  <Label className="text-muted-foreground text-xs">{t("incidents.creation-date")}</Label>
                   <p className="text-sm mt-1 flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
                     {format(new Date(incident.createdAt), "PPP 'a las' HH:mm", { locale: es })}
@@ -588,7 +590,7 @@ export default function IncidentDetailPage() {
               <Separator />
 
               <div>
-                <Label className="text-muted-foreground text-xs">Descripción</Label>
+                <Label className="text-muted-foreground text-xs">{t("label.description")}</Label>
                 <p className="text-sm mt-2 whitespace-pre-wrap">{incident.description}</p>
               </div>
 
@@ -597,7 +599,7 @@ export default function IncidentDetailPage() {
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <Label className="text-muted-foreground text-xs flex items-center gap-1">
                     <Paperclip className="h-3 w-3" />
-                    Archivos Adjuntos ({incident.attachments?.length || 0})
+                    {t("incidents.attachments")} ({incident.attachments?.length || 0})
                   </Label>
                   <div className="flex items-center gap-2">
                     {uploadProgress && (
@@ -624,7 +626,7 @@ export default function IncidentDetailPage() {
                       ) : (
                         <Plus className="h-3 w-3 mr-1" />
                       )}
-                      Agregar imagen
+                      {t("incidents.add-image")}
                     </Button>
                   </div>
                 </div>
@@ -654,7 +656,7 @@ export default function IncidentDetailPage() {
                             className="opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded p-0.5"
                             onClick={e => { e.preventDefault(); handleDeleteAttachment(attachment.id); }}
                             data-testid={`button-delete-attachment-${attachment.id}`}
-                            title="Eliminar"
+                            title={t("btn.delete")}
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -676,7 +678,7 @@ export default function IncidentDetailPage() {
                             <p className="text-sm font-medium truncate">{attachment.originalName}</p>
                             <p className="text-xs text-muted-foreground">
                               {formatFileSize(attachment.size)} · {format(new Date(attachment.createdAt), "d MMM, HH:mm", { locale: es })}
-                              {attachment.isFromCustomer && <span className="ml-1 text-blue-500">(cliente)</span>}
+                              {attachment.isFromCustomer && <span className="ml-1 text-blue-500">({t("incidents.customer-lower")})</span>}
                             </p>
                           </div>
                           <a
@@ -691,7 +693,7 @@ export default function IncidentDetailPage() {
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
                             style={{ visibility: "visible" }}
                             data-testid={`button-delete-file-${attachment.id}`}
-                            title="Eliminar"
+                            title={t("btn.delete")}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </button>
@@ -703,7 +705,7 @@ export default function IncidentDetailPage() {
 
                 {(!incident.attachments || incident.attachments.length === 0) && (
                   <p className="text-xs text-muted-foreground py-2">
-                    No hay archivos adjuntos. Haz clic en "Agregar imagen" para subir.
+                    {t("incidents.no-attachments")}
                   </p>
                 )}
               </div>
@@ -714,13 +716,13 @@ export default function IncidentDetailPage() {
                   <div className="bg-muted/50 p-4 rounded-lg">
                     <Label className="text-muted-foreground text-xs flex items-center gap-1">
                       <CheckCircle2 className="h-3 w-3" />
-                      Resolución
+                      {t("incidents.resolution")}
                     </Label>
                     <p className="text-sm mt-2 whitespace-pre-wrap">{incident.resolution}</p>
                     {incident.resolvedAt && (
                       <p className="text-xs text-muted-foreground mt-2">
-                        Resuelto el {format(new Date(incident.resolvedAt), "PPP 'a las' HH:mm", { locale: es })}
-                        {incident.resolver && ` por ${incident.resolver.fullName}`}
+                        {t("incidents.resolved-on")} {format(new Date(incident.resolvedAt), "PPP 'a las' HH:mm", { locale: es })}
+                        {incident.resolver && ` ${t("incidents.by")} ${incident.resolver.fullName}`}
                       </p>
                     )}
                   </div>
@@ -736,16 +738,16 @@ export default function IncidentDetailPage() {
                 <TabsList>
                   <TabsTrigger value="comments" className="gap-1" data-testid="tab-comments">
                     <MessageSquare className="h-4 w-4" />
-                    Comentarios ({incident.comments?.length || 0})
-                    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse ml-1" title="Actualización automática activa" />
+                    {t("incidents.comments")} ({incident.comments?.length || 0})
+                    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse ml-1" title={t("incidents.auto-refresh-active")} />
                   </TabsTrigger>
                   <TabsTrigger value="activity" className="gap-1" data-testid="tab-activity">
                     <Activity className="h-4 w-4" />
-                    Actividad ({incident.activities?.length || 0})
+                    {t("incidents.activity")} ({incident.activities?.length || 0})
                   </TabsTrigger>
                   <TabsTrigger value="warranty" className="gap-1" data-testid="tab-warranty">
                     <ShieldCheck className="h-4 w-4" />
-                    Hoja de Garantía
+                    {t("incidents.warranty-sheet")}
                   </TabsTrigger>
                 </TabsList>
               </CardHeader>
@@ -754,7 +756,7 @@ export default function IncidentDetailPage() {
                   <ScrollArea className="h-64 pr-4">
                     {incident.comments?.length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">
-                        No hay comentarios aún
+                        {t("incidents.no-comments")}
                       </p>
                     ) : (
                       <div className="space-y-4">
@@ -773,12 +775,12 @@ export default function IncidentDetailPage() {
                                 <User2 className="h-3 w-3" />
                                 <span className="text-sm font-medium">
                                   {comment.isFromCustomer
-                                    ? "Cliente"
-                                    : comment.user?.fullName || "Sistema"}
+                                    ? t("label.client")
+                                    : comment.user?.fullName || t("incidents.system")}
                                 </span>
                                 {comment.visibility === CommentVisibility.CUSTOMER && !comment.isFromCustomer && (
                                   <Badge variant="outline" className="text-xs">
-                                    Visible para cliente
+                                    {t("incidents.visible-to-customer")}
                                   </Badge>
                                 )}
                               </div>
@@ -797,7 +799,7 @@ export default function IncidentDetailPage() {
                   {canManage && !isResolved && (
                     <div className="mt-4 space-y-3 border-t pt-4">
                       <Textarea
-                        placeholder="Escribe un comentario..."
+                        placeholder={t("incidents.comment-placeholder")}
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         rows={3}
@@ -814,7 +816,7 @@ export default function IncidentDetailPage() {
                             data-testid="switch-visibility"
                           />
                           <Label htmlFor="visibility" className="text-sm">
-                            Visible para cliente
+                            {t("incidents.visible-to-customer")}
                           </Label>
                         </div>
                         <Button
@@ -828,7 +830,7 @@ export default function IncidentDetailPage() {
                           ) : (
                             <Send className="h-4 w-4 mr-2" />
                           )}
-                          Enviar
+                          {t("incidents.send")}
                         </Button>
                       </div>
                     </div>
@@ -839,7 +841,7 @@ export default function IncidentDetailPage() {
                   <ScrollArea className="h-64 pr-4">
                     {incident.activities?.length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">
-                        No hay actividad registrada
+                        {t("incidents.no-activity")}
                       </p>
                     ) : (
                       <div className="relative">
@@ -855,7 +857,7 @@ export default function IncidentDetailPage() {
                               <div className="bg-muted/50 p-3 rounded-lg">
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-sm font-medium">
-                                    {actionLabels[activity.action] || activity.action}
+                                    {actionLabels[activity.action] ? t(actionLabels[activity.action]) : activity.action}
                                   </span>
                                   <span className="text-xs text-muted-foreground">
                                     {format(new Date(activity.createdAt), "dd/MM/yy HH:mm")}
@@ -871,8 +873,8 @@ export default function IncidentDetailPage() {
                                 )}
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {activity.isFromCustomer
-                                    ? "Cliente"
-                                    : activity.user?.fullName || "Sistema"}
+                                    ? t("label.client")
+                                    : activity.user?.fullName || t("incidents.system")}
                                 </p>
                               </div>
                             </div>
@@ -887,55 +889,55 @@ export default function IncidentDetailPage() {
                 <TabsContent value="warranty" className="m-0">
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Completa o ajusta los datos antes de descargar o enviar la Hoja de Garantía. Los campos se pre-llenan desde el incidente.
+                      {t("incidents.warranty-intro")}
                     </p>
 
                     {/* Product / Equipment */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Producto / Equipo</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t("incidents.product-equipment")}</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <Label className="text-xs">Nombre del producto</Label>
+                          <Label className="text-xs">{t("incidents.product-name")}</Label>
                           <Input
                             value={warrantyForm.productName}
                             onChange={e => setWarrantyForm(f => ({ ...f, productName: e.target.value }))}
-                            placeholder="Ej: Bomba centrífuga modelo X"
+                            placeholder={t("incidents.ph-product-name")}
                             data-testid="input-warranty-product-name"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">SKU / Modelo</Label>
+                          <Label className="text-xs">{t("incidents.sku-model")}</Label>
                           <Input
                             value={warrantyForm.productSku}
                             onChange={e => setWarrantyForm(f => ({ ...f, productSku: e.target.value }))}
-                            placeholder="Ej: BCX-2200"
+                            placeholder={t("incidents.ph-sku")}
                             data-testid="input-warranty-product-sku"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Número de serie</Label>
+                          <Label className="text-xs">{t("incidents.serial-number")}</Label>
                           <Input
                             value={warrantyForm.warrantySerialNumber}
                             onChange={e => setWarrantyForm(f => ({ ...f, warrantySerialNumber: e.target.value }))}
-                            placeholder="Ej: SN-2024-00123"
+                            placeholder={t("incidents.ph-serial")}
                             data-testid="input-warranty-serial"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Referencia / No. parte</Label>
+                          <Label className="text-xs">{t("incidents.reference-part")}</Label>
                           <Input
                             value={warrantyForm.referenceNumber}
                             onChange={e => setWarrantyForm(f => ({ ...f, referenceNumber: e.target.value }))}
-                            placeholder="Ej: REF-4567"
+                            placeholder={t("incidents.ph-reference")}
                             data-testid="input-warranty-reference"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Número de factura</Label>
+                          <Label className="text-xs">{t("incidents.invoice-number")}</Label>
                           <Input
                             value={warrantyForm.invoiceNumber}
                             onChange={e => setWarrantyForm(f => ({ ...f, invoiceNumber: e.target.value }))}
-                            placeholder="Ej: F-12345"
+                            placeholder={t("incidents.ph-invoice")}
                             data-testid="input-warranty-invoice"
                           />
                         </div>
@@ -946,19 +948,19 @@ export default function IncidentDetailPage() {
 
                     {/* Contact */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Contacto del cliente</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t("incidents.customer-contact")}</p>
                       <div className="grid grid-cols-3 gap-3">
                         <div className="space-y-1">
-                          <Label className="text-xs">Nombre contacto</Label>
+                          <Label className="text-xs">{t("incidents.contact-name")}</Label>
                           <Input
                             value={warrantyForm.contactName}
                             onChange={e => setWarrantyForm(f => ({ ...f, contactName: e.target.value }))}
-                            placeholder="Nombre"
+                            placeholder={t("label.name")}
                             data-testid="input-warranty-contact-name"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Correo electrónico</Label>
+                          <Label className="text-xs">{t("incidents.email-address")}</Label>
                           <Input
                             type="email"
                             value={warrantyForm.contactEmail}
@@ -968,11 +970,11 @@ export default function IncidentDetailPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Teléfono</Label>
+                          <Label className="text-xs">{t("label.phone")}</Label>
                           <Input
                             value={warrantyForm.contactPhone}
                             onChange={e => setWarrantyForm(f => ({ ...f, contactPhone: e.target.value }))}
-                            placeholder="Ej: 55 1234 5678"
+                            placeholder={t("incidents.ph-phone")}
                             data-testid="input-warranty-contact-phone"
                           />
                         </div>
@@ -983,11 +985,11 @@ export default function IncidentDetailPage() {
 
                     {/* Observations */}
                     <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observaciones / Condición del equipo</Label>
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("incidents.observations-condition")}</Label>
                       <Textarea
                         value={warrantyForm.observations}
                         onChange={e => setWarrantyForm(f => ({ ...f, observations: e.target.value }))}
-                        placeholder="Describe el estado del equipo al momento de la recepción, daños visibles, accesorios incluidos, etc."
+                        placeholder={t("incidents.observations-placeholder")}
                         rows={3}
                         data-testid="input-warranty-observations"
                       />
@@ -1004,7 +1006,7 @@ export default function IncidentDetailPage() {
                         data-testid="switch-cc-admins"
                       />
                       <Label htmlFor="cc-admins" className="text-sm cursor-pointer">
-                        Enviar copia (CC) a administradores
+                        {t("incidents.cc-admins")}
                       </Label>
                     </div>
 
@@ -1021,7 +1023,7 @@ export default function IncidentDetailPage() {
                         ) : (
                           <Download className="h-4 w-4 mr-2" />
                         )}
-                        Descargar PDF
+                        {t("incidents.download-pdf")}
                       </Button>
                       <Button
                         onClick={handleSendWarrantyEmail}
@@ -1033,7 +1035,7 @@ export default function IncidentDetailPage() {
                         ) : (
                           <Mail className="h-4 w-4 mr-2" />
                         )}
-                        Enviar por correo
+                        {t("incidents.send-by-email")}
                       </Button>
                     </div>
                   </div>
@@ -1050,7 +1052,7 @@ export default function IncidentDetailPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
-                Cliente
+                {t("label.client")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1082,12 +1084,12 @@ export default function IncidentDetailPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <User2 className="h-4 w-4" />
-                  Gestión
+                  {t("incidents.management")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label className="text-xs">Estado</Label>
+                  <Label className="text-xs">{t("label.status")}</Label>
                   <Select
                     value={incident.status}
                     onValueChange={(value) => updateMutation.mutate({ status: value })}
@@ -1098,24 +1100,24 @@ export default function IncidentDetailPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {Object.entries(statusLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                        <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label className="text-xs">Asignado a</Label>
+                  <Label className="text-xs">{t("incidents.assigned-to")}</Label>
                   <Select
                     value={incident.assignedTo || "_none"}
                     onValueChange={(value) => updateMutation.mutate({ assignedTo: value === "_none" ? null : value })}
                     disabled={updateMutation.isPending}
                   >
                     <SelectTrigger className="mt-1" data-testid="select-assignee">
-                      <SelectValue placeholder="Sin asignar" />
+                      <SelectValue placeholder={t("incidents.unassigned")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_none">Sin asignar</SelectItem>
+                      <SelectItem value="_none">{t("incidents.unassigned")}</SelectItem>
                       {allUsers
                         ?.filter(u => u.active)
                         .map((u) => (
@@ -1126,7 +1128,7 @@ export default function IncidentDetailPage() {
                 </div>
 
                 <div>
-                  <Label className="text-xs">Urgencia</Label>
+                  <Label className="text-xs">{t("label.urgency")}</Label>
                   <Select
                     value={incident.urgency}
                     onValueChange={(value) => updateMutation.mutate({ urgency: value })}
@@ -1137,14 +1139,14 @@ export default function IncidentDetailPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {Object.entries(urgencyLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                        <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label className="text-xs">Tipo</Label>
+                  <Label className="text-xs">{t("label.type")}</Label>
                   <Select
                     value={incident.type}
                     onValueChange={(value) => updateMutation.mutate({ type: value })}
@@ -1155,7 +1157,7 @@ export default function IncidentDetailPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {Object.entries(typeLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                        <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1170,12 +1172,12 @@ export default function IncidentDetailPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4" />
-                  Resolver Incidente
+                  {t("incidents.resolve-incident")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Textarea
-                  placeholder="Describe la resolución del incidente..."
+                  placeholder={t("incidents.resolution-placeholder")}
                   value={resolution}
                   onChange={(e) => setResolution(e.target.value)}
                   rows={4}
@@ -1192,7 +1194,7 @@ export default function IncidentDetailPage() {
                   ) : (
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                   )}
-                  Marcar como Resuelto
+                  {t("incidents.mark-resolved")}
                 </Button>
               </CardContent>
             </Card>
@@ -1203,23 +1205,23 @@ export default function IncidentDetailPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Tag className="h-4 w-4" />
-                Información Adicional
+                {t("incidents.additional-info")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Creado por</span>
-                <span>{incident.creator?.fullName || "Sistema"}</span>
+                <span className="text-muted-foreground">{t("incidents.created-by")}</span>
+                <span>{incident.creator?.fullName || t("incidents.system")}</span>
               </div>
               {incident.referenceNumber && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Referencia</span>
+                  <span className="text-muted-foreground">{t("incidents.reference")}</span>
                   <span>{incident.referenceNumber}</span>
                 </div>
               )}
               {incident.closedAt && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Cerrado</span>
+                  <span className="text-muted-foreground">{t("incidents.closed")}</span>
                   <span>{format(new Date(incident.closedAt), "dd/MM/yy")}</span>
                 </div>
               )}

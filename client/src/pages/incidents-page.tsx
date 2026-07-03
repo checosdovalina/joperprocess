@@ -113,8 +113,8 @@ type IncidentWithDetails = Incident & {
   creator: User | null;
 };
 
-const incidentFormSchema = z.object({
-  customerId: z.string().min(1, "Selecciona un cliente"),
+const makeIncidentFormSchema = (t: (key: string) => string) => z.object({
+  customerId: z.string().min(1, t("incidents.customer-required")),
   productInstanceId: z.string().optional(),
   type: z.enum([
     IncidentType.GARANTIA,
@@ -129,8 +129,8 @@ const incidentFormSchema = z.object({
     IncidentUrgency.ALTA,
     IncidentUrgency.CRITICA,
   ]),
-  subject: z.string().min(5, "El asunto debe tener al menos 5 caracteres"),
-  description: z.string().min(10, "La descripción debe tener al menos 10 caracteres"),
+  subject: z.string().min(5, t("incidents.subject-min")),
+  description: z.string().min(10, t("incidents.description-min")),
   contactName: z.string().optional(),
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().optional(),
@@ -138,35 +138,35 @@ const incidentFormSchema = z.object({
 
 type ProductInstanceWithProduct = ShipmentProductInstance & { product: Product };
 
-type IncidentFormData = z.infer<typeof incidentFormSchema>;
+type IncidentFormData = z.infer<ReturnType<typeof makeIncidentFormSchema>>;
 
 const typeLabels: Record<string, string> = {
-  [IncidentType.GARANTIA]: "Garantía",
-  [IncidentType.RETRABAJO]: "Retrabajo",
-  [IncidentType.QUEJA]: "Queja",
-  [IncidentType.CONSULTA]: "Consulta",
-  [IncidentType.ADMINISTRATIVO]: "Administrativo",
+  [IncidentType.GARANTIA]: "incidents.type.warranty",
+  [IncidentType.RETRABAJO]: "incidents.type.rework",
+  [IncidentType.QUEJA]: "incidents.type.complaint",
+  [IncidentType.CONSULTA]: "incidents.type.inquiry",
+  [IncidentType.ADMINISTRATIVO]: "incidents.type.admin",
 };
 
 const statusLabels: Record<string, string> = {
-  [IncidentStatus.NUEVO]: "Nuevo",
-  [IncidentStatus.ASIGNADO]: "Asignado",
-  [IncidentStatus.EN_PROCESO]: "En Proceso",
-  [IncidentStatus.ESPERANDO_CLIENTE]: "Esperando Cliente",
-  [IncidentStatus.ESPERANDO_INTERNO]: "Esperando Interno",
-  [IncidentStatus.RESUELTO]: "Resuelto",
-  [IncidentStatus.CERRADO]: "Cerrado",
-  [IncidentStatus.CANCELADO]: "Cancelado",
+  [IncidentStatus.NUEVO]: "status.new",
+  [IncidentStatus.ASIGNADO]: "status.assigned",
+  [IncidentStatus.EN_PROCESO]: "status.in-progress",
+  [IncidentStatus.ESPERANDO_CLIENTE]: "status.waiting-client",
+  [IncidentStatus.ESPERANDO_INTERNO]: "status.waiting-internal",
+  [IncidentStatus.RESUELTO]: "status.resolved",
+  [IncidentStatus.CERRADO]: "status.closed",
+  [IncidentStatus.CANCELADO]: "status.cancelled",
 };
 
 const urgencyLabels: Record<string, string> = {
-  [IncidentUrgency.BAJA]: "Baja",
-  [IncidentUrgency.MEDIA]: "Media",
-  [IncidentUrgency.ALTA]: "Alta",
-  [IncidentUrgency.CRITICA]: "Crítica",
+  [IncidentUrgency.BAJA]: "incidents.urgency.low",
+  [IncidentUrgency.MEDIA]: "incidents.urgency.medium",
+  [IncidentUrgency.ALTA]: "incidents.urgency.high",
+  [IncidentUrgency.CRITICA]: "incidents.urgency.critical",
 };
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     [IncidentStatus.NUEVO]: "default",
     [IncidentStatus.ASIGNADO]: "secondary",
@@ -194,12 +194,12 @@ function getStatusBadge(status: string) {
   return (
     <Badge variant={variants[status] || "default"} className="gap-1">
       <Icon className="h-3 w-3" />
-      {statusLabels[status] || status}
+      {statusLabels[status] ? t(statusLabels[status]) : status}
     </Badge>
   );
 }
 
-function getTypeBadge(type: string) {
+function getTypeBadge(type: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     [IncidentType.GARANTIA]: "destructive",
     [IncidentType.RETRABAJO]: "destructive",
@@ -210,12 +210,12 @@ function getTypeBadge(type: string) {
 
   return (
     <Badge variant={variants[type] || "secondary"}>
-      {typeLabels[type] || type}
+      {typeLabels[type] ? t(typeLabels[type]) : type}
     </Badge>
   );
 }
 
-function getUrgencyBadge(urgency: string) {
+function getUrgencyBadge(urgency: string, t: (key: string) => string) {
   const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     [IncidentUrgency.BAJA]: "secondary",
     [IncidentUrgency.MEDIA]: "outline",
@@ -225,7 +225,7 @@ function getUrgencyBadge(urgency: string) {
 
   return (
     <Badge variant={variants[urgency] || "secondary"}>
-      {urgencyLabels[urgency] || urgency}
+      {urgencyLabels[urgency] ? t(urgencyLabels[urgency]) : urgency}
     </Badge>
   );
 }
@@ -248,6 +248,7 @@ export default function IncidentsPage() {
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const { toast } = useToast();
+  const incidentFormSchema = useMemo(() => makeIncidentFormSchema(t), [t]);
 
   const form = useForm<IncidentFormData>({
     resolver: zodResolver(incidentFormSchema),
@@ -317,14 +318,14 @@ export default function IncidentsPage() {
       setCreateDialogOpen(false);
       form.reset();
       toast({
-        title: "Incidente creado",
-        description: `Se ha creado el incidente ${data.ticketNumber}.`,
+        title: t("incidents.toast.created"),
+        description: `${t("incidents.toast.created-desc")} ${data.ticketNumber}.`,
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "No se pudo crear el incidente.",
+        title: t("label.error"),
+        description: t("incidents.toast.create-error"),
         variant: "destructive",
       });
     },
@@ -338,8 +339,8 @@ export default function IncidentsPage() {
     const url = `${window.location.origin}/public/incidents/${incident.accessToken}`;
     navigator.clipboard.writeText(url);
     toast({
-      title: "Enlace copiado",
-      description: "El enlace de acceso se ha copiado al portapapeles.",
+      title: t("incidents.toast.link-copied"),
+      description: t("incidents.toast.link-copied-desc"),
     });
   };
 
@@ -353,12 +354,12 @@ export default function IncidentsPage() {
       const url = `${window.location.origin}/public/incidents/${data.accessToken}`;
       navigator.clipboard.writeText(url).catch(() => {});
       toast({
-        title: "Enlace renovado",
-        description: "Se generó un nuevo enlace y se copió al portapapeles.",
+        title: t("incidents.toast.link-renewed"),
+        description: t("incidents.toast.link-renewed-desc"),
       });
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo renovar el enlace.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("incidents.toast.renew-error"), variant: "destructive" });
     },
   });
 
@@ -369,10 +370,10 @@ export default function IncidentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
       setIncidentToDelete(null);
-      toast({ title: "Incidencia eliminada", description: "Se eliminó correctamente." });
+      toast({ title: t("incidents.toast.deleted"), description: t("incidents.toast.deleted-desc") });
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo eliminar la incidencia.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("incidents.toast.delete-error"), variant: "destructive" });
     },
   });
 
@@ -416,7 +417,7 @@ export default function IncidentsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast({ title: "Error", description: "No se pudo generar el reporte.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("incidents.toast.report-error"), variant: "destructive" });
     } finally {
       setIsDownloadingPdf(false);
     }
@@ -463,7 +464,7 @@ export default function IncidentsPage() {
             ) : (
               <FileDown className="h-4 w-4 mr-2" />
             )}
-            Reporte Vigentes
+            {t("incidents.active-report")}
           </Button>
           <Button
             onClick={() => setCreateDialogOpen(true)}
@@ -484,7 +485,7 @@ export default function IncidentsPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por ticket, asunto..."
+                  placeholder={t("incidents.search-placeholder")}
                   className="pl-9 w-64"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -497,7 +498,7 @@ export default function IncidentsPage() {
                 onClick={() => setShowResolved(!showResolved)}
                 data-testid="button-toggle-resolved"
               >
-                {showResolved ? "Ocultar resueltas" : "Ver resueltas"}
+                {showResolved ? t("incidents.hide-resolved") : t("incidents.show-resolved")}
               </Button>
               <Button
                 variant={showFilters ? "default" : "outline"}
@@ -515,7 +516,7 @@ export default function IncidentsPage() {
                   data-testid="button-clear-filters"
                 >
                   <X className="h-4 w-4 mr-1" />
-                  Limpiar
+                  {t("btn.clear")}
                 </Button>
               )}
             </div>
@@ -526,12 +527,12 @@ export default function IncidentsPage() {
               <div className="w-48">
                 <Select value={filterStatus || "_all"} onValueChange={(v) => setFilterStatus(v === "_all" ? "" : v)}>
                   <SelectTrigger data-testid="select-filter-status">
-                    <SelectValue placeholder="Estado" />
+                    <SelectValue placeholder={t("label.status")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_all">Todos</SelectItem>
+                    <SelectItem value="_all">{t("label.all")}</SelectItem>
                     {Object.entries(statusLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                      <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -539,12 +540,12 @@ export default function IncidentsPage() {
               <div className="w-48">
                 <Select value={filterType || "_all"} onValueChange={(v) => setFilterType(v === "_all" ? "" : v)}>
                   <SelectTrigger data-testid="select-filter-type">
-                    <SelectValue placeholder="Tipo" />
+                    <SelectValue placeholder={t("label.type")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_all">Todos</SelectItem>
+                    <SelectItem value="_all">{t("label.all")}</SelectItem>
                     {Object.entries(typeLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                      <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -552,12 +553,12 @@ export default function IncidentsPage() {
               <div className="w-48">
                 <Select value={filterUrgency || "_all"} onValueChange={(v) => setFilterUrgency(v === "_all" ? "" : v)}>
                   <SelectTrigger data-testid="select-filter-urgency">
-                    <SelectValue placeholder="Urgencia" />
+                    <SelectValue placeholder={t("label.urgency")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_all">Todas</SelectItem>
+                    <SelectItem value="_all">{t("label.all-f")}</SelectItem>
                     {Object.entries(urgencyLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                      <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -577,7 +578,7 @@ export default function IncidentsPage() {
               <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>
                 {incidents && incidents.length > 0 && !hasActiveFilters && !showResolved
-                  ? 'No hay incidencias abiertas. Activa "Ver resueltas" para ver las cerradas.'
+                  ? t("incidents.empty-open")
                   : hasActiveFilters
                   ? t("incidents.no-results-filter")
                   : t("incidents.no-results")}
@@ -598,7 +599,7 @@ export default function IncidentsPage() {
                     <span className="font-mono font-medium text-sm" data-testid={`text-ticket-mobile-${incident.id}`}>
                       {incident.ticketNumber}
                     </span>
-                    {getStatusBadge(incident.status)}
+                    {getStatusBadge(incident.status, t)}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -606,8 +607,8 @@ export default function IncidentsPage() {
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{incident.subject}</p>
                   <div className="flex flex-wrap items-center gap-2">
-                    {getTypeBadge(incident.type)}
-                    {getUrgencyBadge(incident.urgency)}
+                    {getTypeBadge(incident.type, t)}
+                    {getUrgencyBadge(incident.urgency, t)}
                   </div>
                   <div className="flex items-center justify-between gap-2 pt-1">
                     <span className="text-xs text-muted-foreground">
@@ -632,7 +633,7 @@ export default function IncidentsPage() {
                           e.stopPropagation();
                           copyAccessLink(incident);
                         }}
-                        title="Copiar enlace"
+                        title={t("incidents.copy-link")}
                         data-testid={`button-copy-link-mobile-${incident.id}`}
                       >
                         <Link2 className="h-4 w-4" />
@@ -645,7 +646,7 @@ export default function IncidentsPage() {
                             e.stopPropagation();
                             setIncidentToDelete(incident);
                           }}
-                          title="Eliminar"
+                          title={t("btn.delete")}
                           className="text-destructive"
                           data-testid={`button-delete-mobile-${incident.id}`}
                         >
@@ -691,9 +692,9 @@ export default function IncidentsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">{incident.subject}</TableCell>
-                      <TableCell>{getTypeBadge(incident.type)}</TableCell>
-                      <TableCell>{getUrgencyBadge(incident.urgency)}</TableCell>
-                      <TableCell>{getStatusBadge(incident.status)}</TableCell>
+                      <TableCell>{getTypeBadge(incident.type, t)}</TableCell>
+                      <TableCell>{getUrgencyBadge(incident.urgency, t)}</TableCell>
+                      <TableCell>{getStatusBadge(incident.status, t)}</TableCell>
                       <TableCell>
                         {incident.assignee ? (
                           <div className="flex items-center gap-1">
@@ -701,7 +702,7 @@ export default function IncidentsPage() {
                             <span className="text-sm">{incident.assignee.fullName}</span>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground text-sm">Sin asignar</span>
+                          <span className="text-muted-foreground text-sm">{t("incidents.unassigned")}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
@@ -727,7 +728,7 @@ export default function IncidentsPage() {
                               e.stopPropagation();
                               copyAccessLink(incident);
                             }}
-                            title="Copiar enlace"
+                            title={t("incidents.copy-link")}
                             data-testid={`button-copy-link-${incident.id}`}
                           >
                             <Link2 className="h-4 w-4" />
@@ -739,7 +740,7 @@ export default function IncidentsPage() {
                               e.stopPropagation();
                               renewTokenMutation.mutate(incident.id);
                             }}
-                            title="Renovar enlace"
+                            title={t("incidents.renew-link")}
                             disabled={renewTokenMutation.isPending}
                             data-testid={`button-renew-link-${incident.id}`}
                           >
@@ -757,7 +758,7 @@ export default function IncidentsPage() {
                                 e.stopPropagation();
                                 setIncidentToDelete(incident);
                               }}
-                              title="Eliminar"
+                              title={t("btn.delete")}
                               className="text-destructive"
                               data-testid={`button-delete-${incident.id}`}
                             >
@@ -784,7 +785,7 @@ export default function IncidentsPage() {
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   <span className="font-mono">{previewIncident.ticketNumber}</span>
-                  {getStatusBadge(previewIncident.status)}
+                  {getStatusBadge(previewIncident.status, t)}
                 </SheetTitle>
               </SheetHeader>
               <div className="mt-6 space-y-6">
@@ -795,19 +796,19 @@ export default function IncidentsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-muted-foreground text-xs">Tipo</Label>
-                    <div className="mt-1">{getTypeBadge(previewIncident.type)}</div>
+                    <Label className="text-muted-foreground text-xs">{t("label.type")}</Label>
+                    <div className="mt-1">{getTypeBadge(previewIncident.type, t)}</div>
                   </div>
                   <div>
                     <Label className="text-muted-foreground text-xs">{t("label.urgency")}</Label>
-                    <div className="mt-1">{getUrgencyBadge(previewIncident.urgency)}</div>
+                    <div className="mt-1">{getUrgencyBadge(previewIncident.urgency, t)}</div>
                   </div>
                 </div>
 
                 <Separator />
 
                 <div>
-                  <Label className="text-muted-foreground text-xs">Cliente</Label>
+                  <Label className="text-muted-foreground text-xs">{t("label.client")}</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <Building2 className="h-4 w-4 text-muted-foreground" />
                     <span>{previewIncident.customer?.name}</span>
@@ -815,13 +816,13 @@ export default function IncidentsPage() {
                 </div>
 
                 <div>
-                  <Label className="text-muted-foreground text-xs">Descripción</Label>
+                  <Label className="text-muted-foreground text-xs">{t("label.description")}</Label>
                   <p className="text-sm mt-1 whitespace-pre-wrap">{previewIncident.description}</p>
                 </div>
 
                 {previewIncident.contactName && (
                   <div>
-                    <Label className="text-muted-foreground text-xs">Contacto</Label>
+                    <Label className="text-muted-foreground text-xs">{t("label.contact")}</Label>
                     <p className="text-sm mt-1">
                       {previewIncident.contactName}
                       {previewIncident.contactEmail && ` - ${previewIncident.contactEmail}`}
@@ -839,7 +840,7 @@ export default function IncidentsPage() {
                     data-testid="button-view-details"
                   >
                     <Eye className="h-4 w-4 mr-2" />
-                    Ver Detalles
+                    {t("btn.view-details")}
                   </Button>
                   <Button
                     variant="outline"
@@ -847,7 +848,7 @@ export default function IncidentsPage() {
                     data-testid="button-copy-link-preview"
                   >
                     <Copy className="h-4 w-4 mr-2" />
-                    Copiar Enlace
+                    {t("btn.copy-link")}
                   </Button>
                 </div>
               </div>
@@ -873,7 +874,7 @@ export default function IncidentsPage() {
                 name="customerId"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Cliente</FormLabel>
+                    <FormLabel>{t("label.client")}</FormLabel>
                     <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -891,7 +892,7 @@ export default function IncidentsPage() {
                             <span className="truncate">
                               {field.value
                                 ? customers?.find((c) => c.id === field.value)?.name
-                                : "Selecciona un cliente"}
+                                : t("incidents.select-customer")}
                             </span>
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
@@ -900,13 +901,13 @@ export default function IncidentsPage() {
                       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                         <Command shouldFilter={false}>
                           <CommandInput
-                            placeholder="Escribe el nombre del cliente..."
+                            placeholder={t("incidents.search-customer")}
                             value={customerSearch}
                             onValueChange={setCustomerSearch}
                             data-testid="input-customer-search"
                           />
                           <CommandList>
-                            <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                            <CommandEmpty>{t("incidents.no-customers-found")}</CommandEmpty>
                             <CommandGroup>
                               {filteredCustomers.map((customer) => (
                                 <CommandItem
@@ -947,7 +948,7 @@ export default function IncidentsPage() {
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
                         <Barcode className="h-4 w-4" />
-                        Número de Serie (Opcional)
+                        {t("incidents.serial-optional")}
                       </FormLabel>
                       <Select 
                         onValueChange={(v) => field.onChange(v === "_none" ? "" : v)} 
@@ -955,11 +956,11 @@ export default function IncidentsPage() {
                       >
                         <FormControl>
                           <SelectTrigger data-testid="select-product-instance">
-                            <SelectValue placeholder="Selecciona un número de serie" />
+                            <SelectValue placeholder={t("incidents.select-serial")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="_none">Sin número de serie</SelectItem>
+                          <SelectItem value="_none">{t("incidents.no-serial")}</SelectItem>
                           {customerProductInstances.map((instance) => (
                             <SelectItem key={instance.id} value={instance.id}>
                               <div className="flex items-center gap-2">
@@ -984,16 +985,16 @@ export default function IncidentsPage() {
                   name="type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Tipo</FormLabel>
+                      <FormLabel>{t("label.type")}</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-type">
-                            <SelectValue placeholder="Tipo de incidente" />
+                            <SelectValue placeholder={t("incidents.type-placeholder")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {Object.entries(typeLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                            <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -1011,12 +1012,12 @@ export default function IncidentsPage() {
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-urgency">
-                            <SelectValue placeholder="Nivel de urgencia" />
+                            <SelectValue placeholder={t("incidents.urgency-placeholder")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {Object.entries(urgencyLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                            <SelectItem key={value} value={value}>{t(label)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -1033,7 +1034,7 @@ export default function IncidentsPage() {
                   <FormItem>
                     <FormLabel>{t("label.subject")}</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Breve descripción del problema" data-testid="input-subject" />
+                      <Input {...field} placeholder={t("incidents.subject-placeholder")} data-testid="input-subject" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1045,11 +1046,11 @@ export default function IncidentsPage() {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descripción</FormLabel>
+                    <FormLabel>{t("label.description")}</FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
-                        placeholder="Describe el problema en detalle"
+                        placeholder={t("incidents.desc-placeholder")}
                         rows={4}
                         data-testid="input-description"
                       />
@@ -1062,16 +1063,16 @@ export default function IncidentsPage() {
               <Separator />
 
               <div>
-                <h4 className="font-medium mb-3">Información de Contacto (Opcional)</h4>
+                <h4 className="font-medium mb-3">{t("incidents.contact-info-optional")}</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="contactName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nombre</FormLabel>
+                        <FormLabel>{t("label.name")}</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Nombre del contacto" data-testid="input-contact-name" />
+                          <Input {...field} placeholder={t("incidents.form.contact-name")} data-testid="input-contact-name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1083,7 +1084,7 @@ export default function IncidentsPage() {
                     name="contactEmail"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>{t("label.email")}</FormLabel>
                         <FormControl>
                           <Input {...field} type="email" placeholder="email@ejemplo.com" data-testid="input-contact-email" />
                         </FormControl>
@@ -1097,7 +1098,7 @@ export default function IncidentsPage() {
                     name="contactPhone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Teléfono</FormLabel>
+                        <FormLabel>{t("label.phone")}</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="(000) 000-0000" data-testid="input-contact-phone" />
                         </FormControl>
@@ -1115,7 +1116,7 @@ export default function IncidentsPage() {
                   onClick={() => setCreateDialogOpen(false)}
                   data-testid="button-cancel-create"
                 >
-                  Cancelar
+                  {t("btn.cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -1127,7 +1128,7 @@ export default function IncidentsPage() {
                   ) : (
                     <Plus className="h-4 w-4 mr-2" />
                   )}
-                  Crear Incidente
+                  {t("incidents.create-btn")}
                 </Button>
               </DialogFooter>
             </form>
@@ -1138,15 +1139,15 @@ export default function IncidentsPage() {
       <AlertDialog open={!!incidentToDelete} onOpenChange={(open) => !open && setIncidentToDelete(null)}>
         <AlertDialogContent data-testid="dialog-delete-incident">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar esta incidencia?</AlertDialogTitle>
+            <AlertDialogTitle>{t("incidents.delete-title")}</AlertDialogTitle>
             <AlertDialogDescription>
               {incidentToDelete?.ticketNumber} — {incidentToDelete?.subject}
               <br />
-              Esta acción no se puede deshacer. Se eliminará la incidencia junto con sus comentarios y archivos.
+              {t("incidents.delete-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete">{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => incidentToDelete && deleteMutation.mutate(incidentToDelete.id)}
               disabled={deleteMutation.isPending}
@@ -1158,7 +1159,7 @@ export default function IncidentsPage() {
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
-              Eliminar
+              {t("btn.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

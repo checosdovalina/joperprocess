@@ -16,55 +16,57 @@ import {
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import { useTenant } from "@/hooks/use-tenant";
+import { useI18n } from "@/hooks/use-i18n";
 
 export default function LandingPage() {
   const { tenant, isLoading: tenantLoading } = useTenant();
+  const { t } = useI18n();
   
   const isSubdomain = tenant && tenant.subdomain && tenant.subdomain !== "main";
   const displayName = isSubdomain ? tenant.name : "NEXXO";
   const hasCustomLogo = isSubdomain && tenant?.logoUrl && tenant.logoUrl.trim() !== "";
   const displayLogo = hasCustomLogo ? tenant.logoUrl : (isSubdomain ? null : nexxoLogo);
-  const tagline = isSubdomain ? `Bienvenido a ${tenant.name}` : "Sistema Comercial de Nueva Generación";
+  const tagline = isSubdomain ? `${t("landing.welcome-to")} ${tenant.name}` : t("landing.tagline-default");
   const features = [
     {
       icon: Users,
-      title: "Gestión de Clientes",
-      description: "Control completo de tu cartera de clientes con historial de visitas, créditos y transacciones."
+      titleKey: "landing.feature-customers.title",
+      descKey: "landing.feature-customers.desc"
     },
     {
       icon: FileText,
-      title: "Cotizaciones Inteligentes",
-      description: "Crea cotizaciones con precios dinámicos, descuentos y aprobaciones automatizadas."
+      titleKey: "landing.feature-quotations.title",
+      descKey: "landing.feature-quotations.desc"
     },
     {
       icon: CreditCard,
-      title: "Autorización de Crédito",
-      description: "Análisis automático y asistido por IA para decisiones de crédito más precisas."
+      titleKey: "landing.feature-credit.title",
+      descKey: "landing.feature-credit.desc"
     },
     {
       icon: Truck,
-      title: "Control de Embarques",
-      description: "Seguimiento de envíos con números de serie, firmas digitales y trazabilidad completa."
+      titleKey: "landing.feature-shipments.title",
+      descKey: "landing.feature-shipments.desc"
     },
     {
       icon: BarChart3,
-      title: "Facturación y Cobranza",
-      description: "Gestión de facturas, pagos y cuentas por cobrar con estados de cuenta automáticos."
+      titleKey: "landing.feature-billing.title",
+      descKey: "landing.feature-billing.desc"
     },
     {
       icon: Shield,
-      title: "Gestión de Incidencias",
-      description: "Portal de soporte para clientes con seguimiento de tickets y adjuntos de evidencia."
+      titleKey: "landing.feature-incidents.title",
+      descKey: "landing.feature-incidents.desc"
     }
   ];
 
   const benefits = [
-    "Automatiza tu proceso comercial completo",
-    "Reduce tiempos de respuesta hasta un 70%",
-    "Visibilidad en tiempo real de todas las operaciones",
-    "Acceso móvil optimizado para vendedores en campo",
-    "Reportes y análisis para mejores decisiones",
-    "Integración con sistemas de facturación CFDI"
+    "landing.benefit-1",
+    "landing.benefit-2",
+    "landing.benefit-3",
+    "landing.benefit-4",
+    "landing.benefit-5",
+    "landing.benefit-6"
   ];
 
   return (
@@ -84,12 +86,12 @@ export default function LandingPage() {
           <nav className="flex items-center gap-4">
             <Link href="/auth">
               <Button variant="ghost" data-testid="link-login">
-                Iniciar Sesión
+                {t("auth.login")}
               </Button>
             </Link>
             <Link href="/auth?tab=register">
               <Button className="bg-primary hover:bg-primary/90" data-testid="link-register">
-                Comenzar
+                {t("landing.get-started")}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
@@ -109,36 +111,36 @@ export default function LandingPage() {
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
               {isSubdomain ? (
                 <>
-                  Portal de{" "}
+                  {t("landing.portal-of")}{" "}
                   <span className="text-primary">{tenant?.name}</span>
                 </>
               ) : (
                 <>
-                  Gestiona todo tu proceso comercial en{" "}
-                  <span className="text-primary">un solo lugar</span>
+                  {t("landing.hero-title-1")}{" "}
+                  <span className="text-primary">{t("landing.hero-title-2")}</span>
                 </>
               )}
             </h1>
             
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               {isSubdomain ? (
-                `Accede a tu cuenta para gestionar ventas, crédito, producción, embarques y facturación.`
+                t("landing.hero-desc-subdomain")
               ) : (
-                `Nexxo es la plataforma integral que conecta ventas, crédito, producción, embarques y facturación. Diseñada para empresas que buscan eficiencia y control total.`
+                t("landing.hero-desc-default")
               )}
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href={isSubdomain ? "/auth?tab=register" : "/registro"}>
                 <Button size="lg" className="text-lg px-8" data-testid="button-hero-start">
-                  Comenzar Ahora
+                  {t("landing.start-now")}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
               {isSubdomain && (
                 <Link href="/soporte">
                   <Button size="lg" variant="outline" className="text-lg px-8" data-testid="button-hero-support">
-                    Portal de Soporte
+                    {t("landing.support-portal")}
                     <Globe className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
@@ -152,10 +154,10 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Todo lo que necesitas para tu operación comercial
+              {t("landing.features-title")}
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Módulos integrados que trabajan juntos para optimizar cada etapa de tu proceso de ventas
+              {t("landing.features-subtitle")}
             </p>
           </div>
           
@@ -166,8 +168,8 @@ export default function LandingPage() {
                   <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                     <feature.icon className="h-6 w-6 text-primary" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-muted-foreground">{feature.description}</p>
+                  <h3 className="text-xl font-semibold mb-2">{t(feature.titleKey)}</h3>
+                  <p className="text-muted-foreground">{t(feature.descKey)}</p>
                 </CardContent>
               </Card>
             ))}
@@ -180,17 +182,16 @@ export default function LandingPage() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                Impulsa la productividad de tu equipo comercial
+                {t("landing.productivity-title")}
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
-                Con Nexxo, tu equipo puede enfocarse en vender mientras el sistema 
-                automatiza las tareas administrativas y mantiene todo sincronizado.
+                {t("landing.productivity-desc")}
               </p>
               <ul className="space-y-4">
                 {benefits.map((benefit, index) => (
                   <li key={index} className="flex items-start gap-3">
                     <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-lg">{benefit}</span>
+                    <span className="text-lg">{t(benefit)}</span>
                   </li>
                 ))}
               </ul>
@@ -209,14 +210,14 @@ export default function LandingPage() {
       <section className="py-20 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Listo para transformar tu operación comercial?
+            {t("landing.cta-title")}
           </h2>
           <p className="text-xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-            Únete a las empresas que ya están optimizando sus procesos con Nexxo
+            {t("landing.cta-subtitle")}
           </p>
           <Link href="/auth?tab=register">
             <Button size="lg" variant="secondary" className="text-lg px-8" data-testid="button-cta-start">
-              Comenzar Gratis
+              {t("landing.start-free")}
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>
@@ -231,16 +232,16 @@ export default function LandingPage() {
               <span className="text-xl font-bold">NEXXO</span>
             </div>
             <p className="text-muted-foreground text-sm">
-              © {new Date().getFullYear()} Nexxo. Sistema Comercial Integral.
+              © {new Date().getFullYear()} Nexxo. {t("landing.footer-tagline")}
             </p>
             <div className="flex items-center gap-4">
               {isSubdomain && (
                 <Link href="/soporte" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Soporte
+                  {t("landing.support")}
                 </Link>
               )}
               <Link href="/auth" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Acceder
+                {t("landing.access")}
               </Link>
             </div>
           </div>

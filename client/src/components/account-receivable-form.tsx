@@ -29,7 +29,9 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 import { z } from "zod";
+import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
 
 interface AccountReceivableFormProps {
@@ -38,21 +40,25 @@ interface AccountReceivableFormProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const formSchema = insertInvoiceSchema.extend({
-  customerId: z.string().min(1, "Selecciona un cliente"),
-  serie: z.string().min(1, "Ingresa la serie"),
-  folio: z.string().min(1, "Ingresa el folio"),
-  subtotal: z.string().min(1, "Ingresa el subtotal"),
-  tax: z.string().min(1, "Ingresa el IVA"),
-  total: z.string().min(1, "Ingresa el total"),
+const buildFormSchema = (t: (key: string) => string) => insertInvoiceSchema.extend({
+  customerId: z.string().min(1, t("val.select-customer")),
+  serie: z.string().min(1, t("val.enter-serie")),
+  folio: z.string().min(1, t("val.enter-folio")),
+  subtotal: z.string().min(1, t("val.enter-subtotal")),
+  tax: z.string().min(1, t("val.enter-tax")),
+  total: z.string().min(1, t("val.enter-total")),
   issuedAt: z.string().optional(),
   dueDate: z.string().optional(),
 });
 
+type FormValues = z.infer<ReturnType<typeof buildFormSchema>>;
+
 export function AccountReceivableForm({ customers, open, onOpenChange }: AccountReceivableFormProps) {
   const { toast } = useToast();
+  const { t, locale } = useI18n();
+  const formSchema = useMemo(() => buildFormSchema(t), [locale]);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       customerId: "",
@@ -69,28 +75,28 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof formSchema>) => {
+    mutationFn: async (data: FormValues) => {
       return await apiRequest("POST", "/api/accounts-receivable", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/accounts-receivable"] });
       toast({
-        title: "Factura creada",
-        description: "La factura por cobrar se ha registrado exitosamente",
+        title: t("invoices.toast.created"),
+        description: t("invoices.toast.created-desc"),
       });
       onOpenChange(false);
       form.reset();
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "No se pudo crear la factura",
+        title: t("label.error"),
+        description: error.message || t("invoices.toast.create-error"),
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: z.infer<typeof formSchema>) => {
+  const onSubmit = (data: FormValues) => {
     createMutation.mutate(data);
   };
 
@@ -111,9 +117,9 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Nueva Factura por Cobrar</DialogTitle>
+          <DialogTitle>{t("invoices.new-receivable")}</DialogTitle>
           <DialogDescription>
-            Registra una nueva factura pendiente de pago
+            {t("invoices.form.desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -124,11 +130,11 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
               name="customerId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Cliente</FormLabel>
+                  <FormLabel>{t("label.client")}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-customer">
-                        <SelectValue placeholder="Selecciona un cliente" />
+                        <SelectValue placeholder={t("invoices.form.select-client")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -150,7 +156,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 name="serie"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Serie</FormLabel>
+                    <FormLabel>{t("invoices.form.serie")}</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="A" data-testid="input-serie" />
                     </FormControl>
@@ -164,7 +170,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 name="folio"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Folio</FormLabel>
+                    <FormLabel>{t("label.folio")}</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="0001" data-testid="input-folio" />
                     </FormControl>
@@ -180,7 +186,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 name="subtotal"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Subtotal</FormLabel>
+                    <FormLabel>{t("label.subtotal")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -201,7 +207,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 name="tax"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>IVA</FormLabel>
+                    <FormLabel>{t("label.tax")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -222,7 +228,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 name="total"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Total</FormLabel>
+                    <FormLabel>{t("label.total")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -245,7 +251,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 name="issuedAt"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Fecha de Emisión</FormLabel>
+                    <FormLabel>{t("invoices.form.issued")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -263,7 +269,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 name="dueDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Fecha de Vencimiento</FormLabel>
+                    <FormLabel>{t("invoices.form.due")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -282,12 +288,12 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notas (Opcional)</FormLabel>
+                  <FormLabel>{t("invoices.form.notes-optional")}</FormLabel>
                   <FormControl>
                     <Textarea
                       {...field}
                       value={field.value || ""}
-                      placeholder="Notas adicionales sobre la factura..."
+                      placeholder={t("invoices.form.notes-ph")}
                       data-testid="textarea-notes"
                     />
                   </FormControl>
@@ -303,7 +309,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 onClick={() => onOpenChange(false)}
                 data-testid="button-cancel"
               >
-                Cancelar
+                {t("btn.cancel")}
               </Button>
               <Button
                 type="submit"
@@ -313,7 +319,7 @@ export function AccountReceivableForm({ customers, open, onOpenChange }: Account
                 {createMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Guardar Factura
+                {t("invoices.form.save")}
               </Button>
             </div>
           </form>

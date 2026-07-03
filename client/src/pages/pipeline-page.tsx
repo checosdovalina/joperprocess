@@ -142,6 +142,7 @@ function ShortDate({ date }: { date: string | null | undefined }) {
 // ─── Expandable cards ────────────────────────────────────────────────────────
 
 function ItemsList({ type, id, showPrices }: { type: string; id: string; showPrices: boolean }) {
+  const { t } = useI18n();
   const { data: items = [], isLoading } = useQuery<PipelineItem[]>({
     queryKey: ["/api/pipeline/items", type, id],
     queryFn: async () => {
@@ -155,17 +156,17 @@ function ItemsList({ type, id, showPrices }: { type: string; id: string; showPri
   if (isLoading) {
     return (
       <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, padding: "6px 0" }}>
-        Cargando artículos...
+        {t("pipeline.loading-items")}
       </div>
     );
   }
   if (!items.length) {
-    return <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>Sin artículos</div>;
+    return <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>{t("reports.no-items")}</div>;
   }
   return (
     <div>
       <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 600, marginBottom: 5, letterSpacing: "0.06em" }}>
-        ARTÍCULOS
+        {t("board.items")}
       </div>
       {items.map((item, i) => (
         <div key={item.id ?? i} style={{ display: "flex", gap: 6, fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 4, alignItems: "baseline" }}>
@@ -407,7 +408,7 @@ function ShipmentCard({ s }: { s: PipelineShipment }) {
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 3 }}>
         <span style={{ fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {s.trackingNumber ?? <em>Sin guía</em>}
+          {s.trackingNumber ?? <em>{t("pipeline.no-tracking")}</em>}
         </span>
         <ShortDate date={s.shippedAt ?? s.createdAt} />
       </div>

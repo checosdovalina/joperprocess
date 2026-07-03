@@ -26,15 +26,15 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-const STATUS_LABELS: Record<string, string> = {
-  all: "Todos",
-  pending: "Pendiente",
-  in_production: "En Producción",
-  ready: "Listo",
-  partially_released: "Parcialmente Surtido",
-  released: "Surtido",
-  shipped: "Embarcado",
-  delivered: "Entregado",
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  all: "label.all",
+  pending: "status.pending",
+  in_production: "reports.status.in-production",
+  ready: "status.ready",
+  partially_released: "reports.status.partially-released",
+  released: "reports.status.fulfilled",
+  shipped: "reports.status.shipped",
+  delivered: "status.delivered",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -77,6 +77,7 @@ function formatDateStr(d: string | null | undefined): string {
 }
 
 function OrderCard({ order }: { order: ReportOrder }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -96,24 +97,24 @@ function OrderCard({ order }: { order: ReportOrder }) {
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="font-semibold text-sm" data-testid={`text-folio-${order.id}`}>{order.folio}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[order.status] || "bg-muted text-muted-foreground"}`}>
-              {STATUS_LABELS[order.status] || order.status}
+              {STATUS_LABEL_KEYS[order.status] ? t(STATUS_LABEL_KEYS[order.status]) : order.status}
             </span>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
             {order.creditReleaseDate && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                Lib. C&amp;C: {formatDateStr(order.creditReleaseDate)}
+                {t("reports.credit-release-short")}: {formatDateStr(order.creditReleaseDate)}
               </span>
             )}
             {order.shippingDate && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                Embarque: {formatDateStr(order.shippingDate)}
+                {t("reports.shipment")}: {formatDateStr(order.shippingDate)}
               </span>
             )}
             {order.purchaseOrder && (
-              <span>OC: {order.purchaseOrder}</span>
+              <span>{t("reports.po-abbr")}: {order.purchaseOrder}</span>
             )}
           </div>
           {order.notes && (
@@ -124,7 +125,7 @@ function OrderCard({ order }: { order: ReportOrder }) {
         {/* Right: item count + expand */}
         <div className="flex items-center gap-3 shrink-0">
           <Badge variant="secondary" className="text-xs">
-            {order.items.length} art{order.items.length !== 1 ? "ículos" : "ículo"}
+            {order.items.length} {t("reports.items")}
           </Badge>
           {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </div>
@@ -137,34 +138,34 @@ function OrderCard({ order }: { order: ReportOrder }) {
             {/* Full detail grid */}
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm mb-4">
               <div>
-                <span className="text-muted-foreground font-medium">Folio:</span>{" "}
+                <span className="text-muted-foreground font-medium">{t("reports.col.folio")}:</span>{" "}
                 <span className="font-semibold">{order.folio}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-medium">Fecha de Embarque:</span>{" "}
+                <span className="text-muted-foreground font-medium">{t("reports.shipping-date")}:</span>{" "}
                 <span>{formatDateStr(order.shippingDate)}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-medium">Orden de Compra:</span>{" "}
+                <span className="text-muted-foreground font-medium">{t("reports.col.purchase-order")}:</span>{" "}
                 <span>{order.purchaseOrder || "—"}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-medium">Lib. Crédito y Cobranza:</span>{" "}
+                <span className="text-muted-foreground font-medium">{t("reports.credit-release")}:</span>{" "}
                 <span>{formatDateStr(order.creditReleaseDate)}</span>
               </div>
               {order.customerRfc && (
                 <div>
-                  <span className="text-muted-foreground font-medium">RFC:</span>{" "}
+                  <span className="text-muted-foreground font-medium">{t("label.rfc")}:</span>{" "}
                   <span>{order.customerRfc}</span>
                 </div>
               )}
               <div>
-                <span className="text-muted-foreground font-medium">Estatus:</span>{" "}
-                <span>{STATUS_LABELS[order.status] || order.status}</span>
+                <span className="text-muted-foreground font-medium">{t("reports.status-label")}:</span>{" "}
+                <span>{STATUS_LABEL_KEYS[order.status] ? t(STATUS_LABEL_KEYS[order.status]) : order.status}</span>
               </div>
               {order.notes && (
                 <div className="col-span-2">
-                  <span className="text-muted-foreground font-medium">Notas:</span>{" "}
+                  <span className="text-muted-foreground font-medium">{t("label.notes")}:</span>{" "}
                   <span>{order.notes}</span>
                 </div>
               )}
@@ -175,15 +176,15 @@ function OrderCard({ order }: { order: ReportOrder }) {
               <table className="w-full text-xs">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-24">Cantidad</th>
-                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Clave de Producto</th>
-                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Descripción</th>
+                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-24">{t("reports.col.quantity")}</th>
+                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">{t("reports.col.product-key")}</th>
+                    <th className="text-left px-3 py-2 font-semibold text-muted-foreground">{t("reports.col.description")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {order.items.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-3 py-3 text-center text-muted-foreground">Sin artículos</td>
+                      <td colSpan={3} className="px-3 py-3 text-center text-muted-foreground">{t("reports.no-items")}</td>
                     </tr>
                   ) : (
                     order.items.map((item, i) => (
@@ -207,6 +208,7 @@ function OrderCard({ order }: { order: ReportOrder }) {
 }
 
 export default function ReportsPage() {
+  const { t } = useI18n();
   const { toast } = useToast();
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -256,7 +258,7 @@ export default function ReportsPage() {
           },
         }),
       });
-      if (!response.ok) throw new Error("Error generando PDF");
+      if (!response.ok) throw new Error(t("reports.pdf-error"));
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -266,7 +268,7 @@ export default function ReportsPage() {
       URL.revokeObjectURL(url);
     },
     onError: () => {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo generar el PDF" });
+      toast({ variant: "destructive", title: t("label.error"), description: t("reports.pdf-error") });
     },
   });
 
@@ -294,8 +296,8 @@ export default function ReportsPage() {
         <div className="flex items-center gap-3">
           <FileBarChart2 className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-xl font-bold">Reportes</h1>
-            <p className="text-sm text-muted-foreground">Genera y visualiza reportes de pedidos</p>
+            <h1 className="text-xl font-bold">{t("reports.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.subtitle")}</p>
           </div>
         </div>
 
@@ -306,7 +308,7 @@ export default function ReportsPage() {
             data-testid="button-download-pdf"
           >
             <Download className="h-4 w-4 mr-2" />
-            {pdfMutation.isPending ? "Generando..." : "Descargar PDF"}
+            {pdfMutation.isPending ? t("reports.generating") : t("btn.download-pdf")}
           </Button>
         )}
       </div>
@@ -316,14 +318,14 @@ export default function ReportsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <Filter className="h-4 w-4" />
-            Filtros
+            {t("reports.filters-title")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Date from */}
             <div className="space-y-1">
-              <Label className="text-xs">Fecha desde</Label>
+              <Label className="text-xs">{t("reports.date-from")}</Label>
               <Input
                 type="date"
                 value={dateFrom}
@@ -334,7 +336,7 @@ export default function ReportsPage() {
 
             {/* Date to */}
             <div className="space-y-1">
-              <Label className="text-xs">Fecha hasta</Label>
+              <Label className="text-xs">{t("reports.date-to")}</Label>
               <Input
                 type="date"
                 value={dateTo}
@@ -345,14 +347,14 @@ export default function ReportsPage() {
 
             {/* Status */}
             <div className="space-y-1">
-              <Label className="text-xs">Estatus</Label>
+              <Label className="text-xs">{t("reports.status-label")}</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger data-testid="select-status">
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue placeholder={t("label.all")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                    <SelectItem key={val} value={val}>{label}</SelectItem>
+                  {Object.entries(STATUS_LABEL_KEYS).map(([val, labelKey]) => (
+                    <SelectItem key={val} value={val}>{t(labelKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -360,12 +362,12 @@ export default function ReportsPage() {
 
             {/* Customer search */}
             <div className="space-y-1">
-              <Label className="text-xs">Cliente</Label>
+              <Label className="text-xs">{t("label.client")}</Label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   className="pl-8"
-                  placeholder="Buscar cliente..."
+                  placeholder={t("reports.search-customer")}
                   value={customerSearch}
                   onChange={e => { setCustomerSearch(e.target.value); setSelectedCustomerId(""); }}
                   data-testid="input-customer-search"
@@ -399,7 +401,7 @@ export default function ReportsPage() {
               )}
               {selectedCustomerId && (
                 <p className="text-xs text-muted-foreground">
-                  Cliente seleccionado
+                  {t("reports.customer-selected")}
                 </p>
               )}
             </div>
@@ -416,7 +418,7 @@ export default function ReportsPage() {
               data-testid="checkbox-active-only"
             />
             <label htmlFor="activeOnly" className="text-sm cursor-pointer select-none">
-              Solo pedidos vigentes en producción (ocultar embarcados y entregados)
+              {t("reports.active-only")}
             </label>
           </div>
 
@@ -424,12 +426,12 @@ export default function ReportsPage() {
           <div className="flex flex-wrap gap-2 mt-3">
             <Button onClick={handleApply} data-testid="button-apply-filters">
               <Search className="h-4 w-4 mr-2" />
-              Generar reporte
+              {t("reports.generate")}
             </Button>
             {hasFilters && (
               <Button variant="outline" onClick={handleClear} data-testid="button-clear-filters">
                 <X className="h-4 w-4 mr-2" />
-                Limpiar
+                {t("btn.clear")}
               </Button>
             )}
           </div>
@@ -440,7 +442,7 @@ export default function ReportsPage() {
       {!applied && (
         <div className="text-center py-16 text-muted-foreground">
           <FileBarChart2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Configura los filtros y presiona "Generar reporte"</p>
+          <p className="text-sm">{t("reports.configure-hint")}</p>
         </div>
       )}
 
@@ -458,7 +460,7 @@ export default function ReportsPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{reportOrders.length}</span>{" "}
-              pedido{reportOrders.length !== 1 ? "s" : ""} encontrado{reportOrders.length !== 1 ? "s" : ""}
+              {t("reports.orders-found")}
             </p>
             {reportOrders.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -473,7 +475,7 @@ export default function ReportsPage() {
                     variant="secondary"
                     className={`text-xs ${STATUS_COLORS[st] || ""}`}
                   >
-                    {STATUS_LABELS[st] || st}: {count}
+                    {STATUS_LABEL_KEYS[st] ? t(STATUS_LABEL_KEYS[st]) : st}: {count}
                   </Badge>
                 ))}
               </div>
@@ -483,7 +485,7 @@ export default function ReportsPage() {
           {reportOrders.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No se encontraron pedidos con los filtros aplicados</p>
+              <p className="text-sm">{t("reports.no-results")}</p>
             </div>
           ) : (
             <div className="space-y-3">

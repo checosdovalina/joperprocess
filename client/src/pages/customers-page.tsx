@@ -116,7 +116,7 @@ export default function CustomersPage() {
   const createCustomerMutation = useEntityMutation<Customer, InsertCustomer>({
     endpoint: "/api/customers",
     method: "POST",
-    successMessage: "Cliente creado exitosamente",
+    successMessage: t("customers.created-success"),
     invalidateQueries: ["/api/customers"],
     onSuccessCallback: () => {
       setFormOpen(false);
@@ -132,15 +132,15 @@ export default function CustomersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       toast({
-        title: "Éxito",
-        description: "Cliente actualizado exitosamente",
+        title: t("label.success"),
+        description: t("customers.updated-success"),
       });
       setFormOpen(false);
       setEditingCustomer(undefined);
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -154,10 +154,10 @@ export default function CustomersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       setCustomerToDelete(null);
-      toast({ title: "Cliente eliminado" });
+      toast({ title: t("customers.deleted") });
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo eliminar el cliente", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("customers.delete-error"), variant: "destructive" });
     },
   });
 
@@ -183,7 +183,7 @@ export default function CustomersPage() {
     setDownloadingStatementId(customer.id);
     try {
       const res = await fetch(`/api/customers/${customer.id}/account-statement-pdf`);
-      if (!res.ok) throw new Error("Error al generar PDF");
+      if (!res.ok) throw new Error(t("customers.pdf-error"));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -192,7 +192,7 @@ export default function CustomersPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast({ title: "Error", description: "No se pudo generar el estado de cuenta.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("customers.statement-error"), variant: "destructive" });
     } finally {
       setDownloadingStatementId(null);
     }
@@ -267,7 +267,7 @@ export default function CustomersPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre, RFC, clave, teléfono..."
+                placeholder={t("customers.combobox-search")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -276,7 +276,7 @@ export default function CustomersPage() {
             </div>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "blocked")}>
               <SelectTrigger className="w-full sm:w-[150px]" data-testid="select-status-filter">
-                <SelectValue placeholder="Estado" />
+                <SelectValue placeholder={t("customers.state")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("label.all")}</SelectItem>
@@ -287,10 +287,10 @@ export default function CustomersPage() {
             {uniqueCities.length > 0 && (
               <Select value={cityFilter} onValueChange={setCityFilter}>
                 <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-city-filter">
-                  <SelectValue placeholder="Ciudad" />
+                  <SelectValue placeholder={t("customers.city")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas las ciudades</SelectItem>
+                  <SelectItem value="all">{t("customers.all-cities")}</SelectItem>
                   {uniqueCities.map(city => (
                     <SelectItem key={city} value={city}>{city}</SelectItem>
                   ))}
@@ -367,7 +367,7 @@ export default function CustomersPage() {
                           })}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {customer.creditDays} días
+                          {customer.creditDays} {t("customers.days")}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -386,7 +386,7 @@ export default function CustomersPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Descargar Estado de Cuenta"
+                            title={t("customers.download-statement")}
                             onClick={(e) => { e.stopPropagation(); handleDownloadStatement(customer); }}
                             disabled={downloadingStatementId === customer.id}
                             data-testid={`button-statement-customer-${customer.id}`}
@@ -526,7 +526,7 @@ export default function CustomersPage() {
                   <div className="flex items-start gap-3">
                     <Phone className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium">Teléfono</p>
+                      <p className="text-sm font-medium">{t("label.phone")}</p>
                       <p className="text-sm text-muted-foreground">{viewingCustomer.phone}</p>
                     </div>
                   </div>
@@ -555,7 +555,7 @@ export default function CustomersPage() {
                   <p>
                     {[viewingCustomer?.city, viewingCustomer?.state, viewingCustomer?.zipCode]
                       .filter(Boolean)
-                      .join(", ") || "Sin dirección"}
+                      .join(", ") || t("customers.no-address")}
                   </p>
                   {viewingCustomer?.country && <p className="text-muted-foreground">{viewingCustomer.country}</p>}
                 </div>
@@ -583,7 +583,7 @@ export default function CustomersPage() {
                   <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div>
                     <p className="text-sm font-medium">{t("label.credit-days")}</p>
-                    <p className="text-lg font-semibold">{viewingCustomer?.creditDays || 0} días</p>
+                    <p className="text-lg font-semibold">{viewingCustomer?.creditDays || 0} {t("label.days")}</p>
                   </div>
                 </div>
               </div>

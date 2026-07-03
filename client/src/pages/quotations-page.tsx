@@ -68,7 +68,7 @@ type QuotationWithDetails = Quotation & {
 export default function QuotationsPage() {
   const { t } = useI18n();
   const { tenant } = useTenant();
-  const companyName = tenant?.name || "la empresa";
+  const companyName = tenant?.name || t("quotations.the-company");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -132,17 +132,17 @@ export default function QuotationsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
       if (quotation._sendEmail) {
         if (quotation._emailFailed) {
-          toast({ title: "Cotización guardada", description: "La cotización se guardó pero el correo no pudo enviarse. Intenta enviarlo manualmente.", variant: "destructive" });
+          toast({ title: t("quotations.saved-title"), description: t("quotations.saved-email-failed"), variant: "destructive" });
         } else {
-          toast({ title: "Cotización enviada", description: "La cotización se guardó y se envió al cliente por correo." });
+          toast({ title: t("quotations.sent-title"), description: t("quotations.sent-created-desc") });
         }
       } else {
-        toast({ title: "Borrador guardado", description: "Cotización guardada como borrador." });
+        toast({ title: t("quotations.draft-saved-title"), description: t("quotations.draft-saved-desc") });
       }
       setCreateDialogOpen(false);
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: t("label.error"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -166,18 +166,18 @@ export default function QuotationsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
       if (quotation._sendEmail) {
         if (quotation._emailFailed) {
-          toast({ title: "Cotización guardada", description: "La cotización se guardó pero el correo no pudo enviarse. Intenta enviarlo manualmente.", variant: "destructive" });
+          toast({ title: t("quotations.saved-title"), description: t("quotations.saved-email-failed"), variant: "destructive" });
         } else {
-          toast({ title: "Cotización enviada", description: "La cotización se actualizó y se envió al cliente por correo." });
+          toast({ title: t("quotations.sent-title"), description: t("quotations.sent-updated-desc") });
         }
       } else {
-        toast({ title: "Cotización actualizada", description: quotation._sendEmail === false ? "Borrador guardado." : "Cotización actualizada." });
+        toast({ title: t("quotations.updated-title"), description: quotation._sendEmail === false ? t("quotations.draft-saved-desc") : t("quotations.updated-desc") });
       }
       setEditDialogOpen(false);
       setSelectedQuotation(null);
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: t("label.error"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -193,8 +193,8 @@ export default function QuotationsPage() {
       setDetailsDialogOpen(true);
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudieron cargar los detalles",
+        title: t("label.error"),
+        description: t("quotations.load-details-error"),
         variant: "destructive",
       });
     } finally {
@@ -211,8 +211,8 @@ export default function QuotationsPage() {
   const handleEdit = async (quotation: QuotationWithDetails) => {
     if (!EDITABLE_STATUSES.includes(quotation.status as any)) {
       toast({
-        title: "No se puede editar",
-        description: "Solo se pueden editar cotizaciones en estado Borrador, Enviada o Pendiente de Aprobación",
+        title: t("quotations.cannot-edit-title"),
+        description: t("quotations.cannot-edit-desc"),
         variant: "destructive",
       });
       return;
@@ -228,8 +228,8 @@ export default function QuotationsPage() {
       setEditDialogOpen(true);
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudieron cargar los detalles para editar",
+        title: t("label.error"),
+        description: t("quotations.load-edit-error"),
         variant: "destructive",
       });
     } finally {
@@ -243,12 +243,12 @@ export default function QuotationsPage() {
     try {
       await apiRequest("DELETE", `/api/quotations/${quotationToDelete.id}`);
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
-      toast({ title: "Cotización eliminada", description: `${quotationToDelete.folio} eliminada correctamente` });
+      toast({ title: t("quotations.deleted-title"), description: t("quotations.deleted-desc").replace("{folio}", quotationToDelete.folio) });
       setDeleteDialogOpen(false);
       setQuotationToDelete(null);
     } catch (error: any) {
-      const msg = error?.message || "No se pudo eliminar la cotización";
-      toast({ title: "No se puede eliminar", description: msg, variant: "destructive" });
+      const msg = error?.message || t("quotations.delete-error");
+      toast({ title: t("quotations.cannot-delete-title"), description: msg, variant: "destructive" });
     } finally {
       setIsDeleting(false);
     }
@@ -278,13 +278,13 @@ export default function QuotationsPage() {
       document.body.removeChild(a);
       
       toast({
-        title: "PDF descargado",
-        description: `Cotización ${quotation.folio} descargada correctamente`,
+        title: t("quotations.pdf-downloaded-title"),
+        description: t("quotations.pdf-downloaded-desc").replace("{folio}", quotation.folio),
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudo descargar el PDF",
+        title: t("label.error"),
+        description: t("quotations.pdf-error"),
         variant: "destructive",
       });
     } finally {
@@ -331,19 +331,19 @@ export default function QuotationsPage() {
         setApprovalLink(data.approvalUrl);
         setApprovalLinkDialogOpen(true);
         toast({
-          title: "Enlace generado",
-          description: "El correo no pudo enviarse. Copia el enlace para compartirlo.",
+          title: t("quotations.link-generated-title"),
+          description: t("quotations.link-generated-desc"),
         });
       } else {
         toast({
-          title: "Cotización enviada",
+          title: t("quotations.sent-title"),
           description: data.message,
         });
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudo enviar la cotización por correo",
+        title: t("label.error"),
+        description: t("quotations.email-error"),
         variant: "destructive",
       });
     } finally {
@@ -354,8 +354,8 @@ export default function QuotationsPage() {
   const copyApprovalLink = () => {
     navigator.clipboard.writeText(approvalLink);
     toast({
-      title: "Enlace copiado",
-      description: "El enlace de aprobación ha sido copiado al portapapeles",
+      title: t("quotations.link-copied-title"),
+      description: t("quotations.link-copied-desc"),
     });
   };
 
@@ -366,15 +366,15 @@ export default function QuotationsPage() {
       const result = await response.json();
       
       toast({
-        title: "Envío aprobado",
-        description: result.message || "Se ha aprobado el envío sin costo",
+        title: t("quotations.shipping-approved-title"),
+        description: result.message || t("quotations.shipping-approved-desc"),
       });
       
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "No se pudo aprobar el envío",
+        title: t("label.error"),
+        description: error.message || t("quotations.shipping-approve-error"),
         variant: "destructive",
       });
     } finally {
@@ -387,13 +387,13 @@ export default function QuotationsPage() {
       const response = await apiRequest("POST", `/api/quotations/${quotation.id}/resend-shipping-notification`, {});
       const result = await response.json();
       toast({
-        title: "Notificación enviada",
-        description: `Correo enviado a: ${result.sentTo?.join(", ") || "admins"}`,
+        title: t("quotations.notification-sent-title"),
+        description: t("quotations.notification-sent-desc").replace("{recipients}", result.sentTo?.join(", ") || "admins"),
       });
     } catch (error: any) {
       toast({
-        title: "Error al reenviar",
-        description: error.message || "No se pudo enviar la notificación",
+        title: t("quotations.resend-error-title"),
+        description: error.message || t("quotations.notification-error"),
         variant: "destructive",
       });
     }
@@ -410,8 +410,8 @@ export default function QuotationsPage() {
       const result = await response.json();
       
       toast({
-        title: "Envío rechazado",
-        description: result.message || "Se ha rechazado el envío sin costo",
+        title: t("quotations.shipping-rejected-title"),
+        description: result.message || t("quotations.shipping-rejected-desc"),
       });
       
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
@@ -420,8 +420,8 @@ export default function QuotationsPage() {
       setSelectedQuotation(null);
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "No se pudo rechazar el envío",
+        title: t("label.error"),
+        description: error.message || t("quotations.shipping-reject-error"),
         variant: "destructive",
       });
     } finally {
@@ -446,14 +446,14 @@ export default function QuotationsPage() {
   const handleCopyApprovalLink = (quotation: QuotationWithDetails) => {
     const token = (quotation as any).approvalToken;
     if (!token) {
-      toast({ title: "Sin enlace", description: "Esta cotización aún no tiene un enlace generado. Envíala primero por correo.", variant: "destructive" });
+      toast({ title: t("quotations.no-link-title"), description: t("quotations.no-link-desc"), variant: "destructive" });
       return;
     }
     const link = `${window.location.origin}/aprobar-cotizacion/${token}`;
     navigator.clipboard.writeText(link).then(() => {
-      toast({ title: "Enlace copiado", description: "El enlace de aprobación fue copiado al portapapeles." });
+      toast({ title: t("quotations.link-copied-title"), description: t("quotations.link-copied-desc2") });
     }).catch(() => {
-      toast({ title: "Error", description: "No se pudo copiar. Enlace: " + link, variant: "destructive" });
+      toast({ title: t("label.error"), description: t("quotations.copy-error-link").replace("{link}", link), variant: "destructive" });
     });
   };
 
@@ -490,22 +490,22 @@ export default function QuotationsPage() {
   };
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
-    contado: "Contado",
-    "15_dias": "15 días",
-    "30_dias": "30 días",
-    "90_dias": "90 días",
-    "120_dias": "120 días",
-    "45_dias": "45 días",
-    "60_dias": "60 días",
+    contado: t("quotations.payment.cash"),
+    "15_dias": t("quotations.payment.15"),
+    "30_dias": t("quotations.payment.30"),
+    "90_dias": t("quotations.payment.90"),
+    "120_dias": t("quotations.payment.120"),
+    "45_dias": t("quotations.payment.45"),
+    "60_dias": t("quotations.payment.60"),
   };
 
   const DELIVERY_TIME_LABELS: Record<string, string> = {
-    inmediato: "Inmediato",
-    "1_semana": "1 semana",
-    "2_semanas": "2 semanas",
-    "3_semanas": "3 semanas",
-    "1_mes": "1 mes",
-    por_confirmar: "Por confirmar",
+    inmediato: t("quotations.delivery.immediate"),
+    "1_semana": t("quotations.delivery.1week"),
+    "2_semanas": t("quotations.delivery.2weeks"),
+    "3_semanas": t("quotations.delivery.3weeks"),
+    "1_mes": t("quotations.delivery.1month"),
+    por_confirmar: t("quotations.delivery.tbc"),
   };
 
   const convertedCount = quotations?.filter(q => q.status === QuotationStatus.CONVERTED).length ?? 0;
@@ -570,14 +570,14 @@ export default function QuotationsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
-                Cotizaciones
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Actualización automática cada 20 segundos" />
+                {t("quotations.title")}
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title={t("quotations.auto-refresh")} />
               </CardTitle>
               <CardDescription>
-                {filteredQuotations.length} de {quotations?.length || 0} cotizaciones
+                {t("quotations.count-summary").replace("{shown}", String(filteredQuotations.length)).replace("{total}", String(quotations?.length || 0))}
                 {activeTab === "active" && hideConverted && convertedCount > 0 && (
                   <span className="ml-1">
-                    ({convertedCount} convertida{convertedCount !== 1 ? "s" : ""} oculta{convertedCount !== 1 ? "s" : ""})
+                    {(convertedCount !== 1 ? t("quotations.converted-hidden-many") : t("quotations.converted-hidden-one")).replace("{count}", String(convertedCount))}
                   </span>
                 )}
               </CardDescription>
@@ -591,9 +591,9 @@ export default function QuotationsPage() {
                   data-testid="button-toggle-converted"
                 >
                   {hideConverted ? (
-                    <><Eye className="h-4 w-4 mr-2" />Mostrar convertidas ({convertedCount})</>
+                    <><Eye className="h-4 w-4 mr-2" />{t("quotations.show-converted")} ({convertedCount})</>
                   ) : (
-                    <><EyeOff className="h-4 w-4 mr-2" />Ocultar convertidas ({convertedCount})</>
+                    <><EyeOff className="h-4 w-4 mr-2" />{t("quotations.hide-converted")} ({convertedCount})</>
                   )}
                 </Button>
               )}
@@ -611,7 +611,7 @@ export default function QuotationsPage() {
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              En Proceso
+              {t("quotations.tab-active")}
               <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
                 {(quotations ?? []).filter(q =>
                   !INACTIVE_STATUSES.includes(q.status as any) &&
@@ -628,7 +628,7 @@ export default function QuotationsPage() {
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              Enviadas / Rechazadas
+              {t("quotations.tab-inactive")}
               {inactiveCount > 0 && (
                 <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
                   {inactiveCount}
@@ -641,7 +641,7 @@ export default function QuotationsPage() {
           <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
             <div className="relative flex-1 min-w-[180px]">
               <Input
-                placeholder="Buscar folio o cliente..."
+                placeholder={t("search.folio-client")}
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
                 className="pl-3"
@@ -650,7 +650,7 @@ export default function QuotationsPage() {
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus} data-testid="select-filter-status">
               <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Estado" />
+                <SelectValue placeholder={t("label.status")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("quotations.all-statuses")}</SelectItem>
@@ -666,10 +666,10 @@ export default function QuotationsPage() {
             </Select>
             <Select value={filterSeller} onValueChange={setFilterSeller} data-testid="select-filter-seller">
               <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Vendedor" />
+                <SelectValue placeholder={t("label.seller")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los vendedores</SelectItem>
+                <SelectItem value="all">{t("quotations.all-sellers")}</SelectItem>
                 {users?.map(u => (
                   <SelectItem key={u.id} value={u.id}>{u.name || u.username}</SelectItem>
                 ))}
@@ -682,7 +682,7 @@ export default function QuotationsPage() {
                 onChange={e => setFilterDateFrom(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-from"
-                title="Desde"
+                title={t("label.from")}
               />
               <span className="text-muted-foreground text-sm">—</span>
               <Input
@@ -691,13 +691,13 @@ export default function QuotationsPage() {
                 onChange={e => setFilterDateTo(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-to"
-                title="Hasta"
+                title={t("label.to")}
               />
             </div>
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
                 <RotateCcw className="h-4 w-4 mr-1" />
-                Limpiar
+                {t("btn.clear")}
               </Button>
             )}
           </div>
@@ -730,7 +730,7 @@ export default function QuotationsPage() {
                         <div className="font-mono font-medium">{quotation.folio}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{quotation.customer?.name || "Sin cliente"}</div>
+                        <div className="font-medium">{quotation.customer?.name || t("quotations.no-customer")}</div>
                         <div className="text-xs text-muted-foreground">{quotation.customer?.rfc || "-"}</div>
                       </TableCell>
                       <TableCell>
@@ -752,14 +752,14 @@ export default function QuotationsPage() {
                           {(quotation as any).shippingHandledByJoper && (quotation as any).shippingApprovalStatus === "pending" && (
                             <Badge variant="outline" className="text-orange-600 border-orange-600 text-xs">
                               <Truck className="h-3 w-3 mr-1" />
-                              Envío pendiente
+                              {t("quotations.shipping-pending")}
                             </Badge>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-xs text-muted-foreground">
-                          {quotation.items?.length || 0} productos
+                          {t("quotations.items-count").replace("{count}", String(quotation.items?.length || 0))}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -769,7 +769,7 @@ export default function QuotationsPage() {
                             size="icon"
                             onClick={() => handleViewDetails(quotation)}
                             disabled={isLoadingDetails}
-                            title="Ver detalles"
+                            title={t("btn.view-details")}
                             data-testid={`button-view-quotation-${quotation.id}`}
                           >
                             <Eye className="h-4 w-4" />
@@ -781,7 +781,7 @@ export default function QuotationsPage() {
                               size="icon"
                               onClick={() => handleEdit(quotation)}
                               disabled={isLoadingDetails}
-                              title="Editar"
+                              title={t("btn.edit")}
                               data-testid={`button-edit-quotation-${quotation.id}`}
                             >
                               <Pencil className="h-4 w-4" />
@@ -808,7 +808,7 @@ export default function QuotationsPage() {
                                 ) : (
                                   <Download className="h-4 w-4 mr-2" />
                                 )}
-                                Descargar PDF
+                                {t("btn.download-pdf")}
                               </DropdownMenuItem>
                               {quotation.status !== QuotationStatus.CONVERTED && (() => {
                                 const shippingPending = (quotation as any).shippingHandledByJoper && (quotation as any).shippingApprovalStatus === "pending";
@@ -819,23 +819,23 @@ export default function QuotationsPage() {
                                       onClick={shippingPending ? undefined : () => openSendEmailDialog(quotation)}
                                       disabled={shippingPending}
                                       data-testid={`menu-email-quotation-${quotation.id}`}
-                                      title={shippingPending ? "El envío a cargo de la empresa debe ser aprobado por el administrador antes de enviar al cliente" : undefined}
+                                      title={shippingPending ? t("quotations.shipping-locked-email") : undefined}
                                       className={shippingPending ? "opacity-50 cursor-not-allowed" : ""}
                                     >
                                       {shippingPending ? <Lock className="h-4 w-4 mr-2 text-amber-500" /> : <Mail className="h-4 w-4 mr-2" />}
-                                      <span>Enviar por correo</span>
-                                      {shippingPending && <span className="ml-auto text-xs text-amber-500">Pendiente</span>}
+                                      <span>{t("btn.send-email")}</span>
+                                      {shippingPending && <span className="ml-auto text-xs text-amber-500">{t("status.pending")}</span>}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={shippingPending ? undefined : () => handleCopyApprovalLink(quotation)}
                                       disabled={shippingPending}
                                       data-testid={`menu-copy-link-quotation-${quotation.id}`}
-                                      title={shippingPending ? "El envío a cargo de la empresa debe ser aprobado por el administrador antes de compartir el enlace" : undefined}
+                                      title={shippingPending ? t("quotations.shipping-locked-link") : undefined}
                                       className={shippingPending ? "opacity-50 cursor-not-allowed" : ""}
                                     >
                                       {shippingPending ? <Lock className="h-4 w-4 mr-2 text-amber-500" /> : <Copy className="h-4 w-4 mr-2" />}
-                                      <span>Copiar enlace de aprobación</span>
-                                      {shippingPending && <span className="ml-auto text-xs text-amber-500">Pendiente</span>}
+                                      <span>{t("quotations.copy-approval-link")}</span>
+                                      {shippingPending && <span className="ml-auto text-xs text-amber-500">{t("status.pending")}</span>}
                                     </DropdownMenuItem>
                                   </>
                                 );
@@ -854,7 +854,7 @@ export default function QuotationsPage() {
                                     ) : (
                                       <Check className="h-4 w-4 mr-2" />
                                     )}
-                                    Aprobar Envío Gratis
+                                    {t("quotations.approve-free-shipping")}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem 
                                     onClick={() => openShippingRejectDialog(quotation)}
@@ -863,14 +863,14 @@ export default function QuotationsPage() {
                                     className="text-destructive"
                                   >
                                     <X className="h-4 w-4 mr-2" />
-                                    Rechazar Envío Gratis
+                                    {t("quotations.reject-free-shipping")}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleResendShippingNotification(quotation)}
                                     data-testid={`menu-resend-shipping-notification-${quotation.id}`}
                                   >
                                     <Mail className="h-4 w-4 mr-2 text-blue-500" />
-                                    Reenviar notificación a admins
+                                    {t("quotations.resend-notification")}
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -883,7 +883,7 @@ export default function QuotationsPage() {
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" />
-                                    Eliminar cotización
+                                    {t("quotations.delete")}
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -899,7 +899,7 @@ export default function QuotationsPage() {
           ) : hideConverted && convertedCount > 0 ? (
             <div className="text-center py-12">
               <EyeOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Todas las cotizaciones están convertidas en pedido</p>
+              <p className="text-muted-foreground">{t("quotations.all-converted")}</p>
               <Button
                 variant="outline"
                 className="mt-4"
@@ -907,20 +907,20 @@ export default function QuotationsPage() {
                 data-testid="button-show-converted-empty"
               >
                 <Eye className="h-4 w-4 mr-2" />
-                Mostrar convertidas ({convertedCount})
+                {t("quotations.show-converted")} ({convertedCount})
               </Button>
             </div>
           ) : (
             <div className="text-center py-12">
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay cotizaciones registradas</p>
+              <p className="text-muted-foreground">{t("quotations.no-results")}</p>
               <Button
                 className="mt-4"
                 onClick={() => setCreateDialogOpen(true)}
                 data-testid="button-add-first-quotation"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Crear Primera Cotización
+                {t("quotations.create-first")}
               </Button>
             </div>
           )}
@@ -960,10 +960,10 @@ export default function QuotationsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Cotización {selectedQuotation?.folio}
+              {t("quotations.detail-title").replace("{folio}", selectedQuotation?.folio || "")}
             </DialogTitle>
             <DialogDescription>
-              Detalles completos de la cotización
+              {t("quotations.detail-desc")}
             </DialogDescription>
           </DialogHeader>
 
@@ -973,8 +973,8 @@ export default function QuotationsPage() {
                 {/* Header Info */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Cliente</h4>
-                    <p className="font-medium">{selectedQuotation.customer?.name || "Sin cliente"}</p>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("label.client")}</h4>
+                    <p className="font-medium">{selectedQuotation.customer?.name || t("quotations.no-customer")}</p>
                     {selectedQuotation.customer?.rfc && (
                       <p className="text-sm text-muted-foreground">{selectedQuotation.customer.rfc}</p>
                     )}
@@ -983,15 +983,15 @@ export default function QuotationsPage() {
                     )}
                   </div>
                   <div className="text-right">
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Estado</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("label.status")}</h4>
                     {getStatusBadge(selectedQuotation.status)}
                     <p className="text-sm text-muted-foreground mt-1">
-                      Creada: {format(new Date(selectedQuotation.createdAt), "PPP", { locale: es })}
+                      {t("quotations.created-on").replace("{date}", format(new Date(selectedQuotation.createdAt), "PPP", { locale: es }))}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {selectedQuotation.validUntil
-                        ? `Vigente hasta: ${format(new Date(selectedQuotation.validUntil), "PPP", { locale: es })}`
-                        : "Sin vencimiento"}
+                        ? t("quotations.valid-until-date").replace("{date}", format(new Date(selectedQuotation.validUntil), "PPP", { locale: es }))
+                        : t("quotations.no-expiry")}
                     </p>
                   </div>
                 </div>
@@ -1001,16 +1001,16 @@ export default function QuotationsPage() {
                 {/* Commercial Conditions */}
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Moneda</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("label.currency")}</h4>
                     <p>{selectedQuotation.currency || "MXN"}</p>
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Condiciones de Pago</h4>
-                    <p>{selectedQuotation.paymentTerms ? PAYMENT_TERMS_LABELS[selectedQuotation.paymentTerms] || selectedQuotation.paymentTerms : "No especificado"}</p>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("label.payment-terms")}</h4>
+                    <p>{selectedQuotation.paymentTerms ? PAYMENT_TERMS_LABELS[selectedQuotation.paymentTerms] || selectedQuotation.paymentTerms : t("quotations.not-specified")}</p>
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Tiempo de Entrega</h4>
-                    <p>{selectedQuotation.deliveryTime ? DELIVERY_TIME_LABELS[selectedQuotation.deliveryTime] || selectedQuotation.deliveryTime : "No especificado"}</p>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("label.delivery-time")}</h4>
+                    <p>{selectedQuotation.deliveryTime ? DELIVERY_TIME_LABELS[selectedQuotation.deliveryTime] || selectedQuotation.deliveryTime : t("quotations.not-specified")}</p>
                   </div>
                 </div>
 
@@ -1019,20 +1019,20 @@ export default function QuotationsPage() {
                   <div className="flex items-center gap-2 p-3 rounded-md bg-muted">
                     <Truck className="h-5 w-5" />
                     <div className="flex-1">
-                      <p className="font-medium">Envío por cuenta de {companyName}</p>
+                      <p className="font-medium">{t("quotations.shipping-by").replace("{company}", companyName)}</p>
                       {(selectedQuotation as any).shippingApprovalStatus === "pending" && (
                         <Badge variant="outline" className="text-orange-600 border-orange-600 mt-1">
-                          Pendiente de aprobación
+                          {t("quotations.pending-approval-badge")}
                         </Badge>
                       )}
                       {(selectedQuotation as any).shippingApprovalStatus === "approved" && (
                         <Badge variant="outline" className="text-green-600 border-green-600 mt-1">
-                          Aprobado
+                          {t("quotations.shipping-approved-badge")}
                         </Badge>
                       )}
                       {(selectedQuotation as any).shippingApprovalStatus === "rejected" && (
                         <Badge variant="destructive" className="mt-1">
-                          Rechazado
+                          {t("quotations.shipping-rejected-badge")}
                         </Badge>
                       )}
                     </div>
@@ -1070,18 +1070,18 @@ export default function QuotationsPage() {
                   return (
                     <>
                       <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-3">Productos</h4>
+                        <h4 className="text-sm font-medium text-muted-foreground mb-3">{t("quotations.products")}</h4>
                         <div className="rounded-md border">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Código</TableHead>
-                                <TableHead>Producto</TableHead>
-                                <TableHead className="text-center">Cantidad</TableHead>
-                                <TableHead className="text-right">P. Unitario</TableHead>
-                                <TableHead className="text-center">Desc %</TableHead>
-                                {hasMixed && <TableHead className="text-center">Mon.</TableHead>}
-                                <TableHead className="text-right">Subtotal</TableHead>
+                                <TableHead>{t("label.code")}</TableHead>
+                                <TableHead>{t("label.product")}</TableHead>
+                                <TableHead className="text-center">{t("label.quantity")}</TableHead>
+                                <TableHead className="text-right">{t("quotations.unit-price")}</TableHead>
+                                <TableHead className="text-center">{t("quotations.disc-pct")}</TableHead>
+                                {hasMixed && <TableHead className="text-center">{t("quotations.currency-short")}</TableHead>}
+                                <TableHead className="text-right">{t("label.subtotal")}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1117,30 +1117,30 @@ export default function QuotationsPage() {
                           {/* MXN box */}
                           <div className="w-full sm:w-64 rounded-md border overflow-hidden">
                             <div className="bg-primary px-3 py-1.5">
-                              <p className="text-xs font-semibold text-primary-foreground uppercase tracking-wide">Pesos (MXN)</p>
+                              <p className="text-xs font-semibold text-primary-foreground uppercase tracking-wide">{t("quotations.pesos-mxn")}</p>
                             </div>
                             <div className="p-3 space-y-1.5">
-                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span><span>{fmtMXN2(mxnT.sub)}</span></div>
-                              {mxnT.disc > 0 && <div className="flex justify-between text-sm text-red-600"><span>Desc. ({discPct}%):</span><span>-{fmtMXN2(mxnT.disc)}</span></div>}
-                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">IVA:</span><span>{fmtMXN2(mxnT.tax)}</span></div>
+                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t("label.subtotal")}:</span><span>{fmtMXN2(mxnT.sub)}</span></div>
+                              {mxnT.disc > 0 && <div className="flex justify-between text-sm text-red-600"><span>{t("quotations.disc-label").replace("{pct}", String(discPct))}:</span><span>-{fmtMXN2(mxnT.disc)}</span></div>}
+                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t("label.tax")}:</span><span>{fmtMXN2(mxnT.tax)}</span></div>
                               <Separator />
-                              <div className="flex justify-between font-bold"><span>Total MXN:</span><span>{fmtMXN2(mxnT.total)}</span></div>
+                              <div className="flex justify-between font-bold"><span>{t("quotations.total-mxn")}:</span><span>{fmtMXN2(mxnT.total)}</span></div>
                             </div>
                           </div>
                           {/* USD box */}
                           <div className="w-full sm:w-64 rounded-md border overflow-hidden">
                             <div className="bg-emerald-700 px-3 py-1.5">
-                              <p className="text-xs font-semibold text-white uppercase tracking-wide">Dólares (USD)</p>
+                              <p className="text-xs font-semibold text-white uppercase tracking-wide">{t("quotations.dollars-usd")}</p>
                             </div>
                             <div className="p-3 space-y-1.5">
-                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span><span>{fmtUSD2(usdT.sub)}</span></div>
-                              {usdT.disc > 0 && <div className="flex justify-between text-sm text-red-600"><span>Desc. ({discPct}%):</span><span>-{fmtUSD2(usdT.disc)}</span></div>}
-                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">IVA:</span><span>{fmtUSD2(usdT.tax)}</span></div>
+                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t("label.subtotal")}:</span><span>{fmtUSD2(usdT.sub)}</span></div>
+                              {usdT.disc > 0 && <div className="flex justify-between text-sm text-red-600"><span>{t("quotations.disc-label").replace("{pct}", String(discPct))}:</span><span>-{fmtUSD2(usdT.disc)}</span></div>}
+                              <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t("label.tax")}:</span><span>{fmtUSD2(usdT.tax)}</span></div>
                               <Separator />
-                              <div className="flex justify-between font-bold"><span>Total USD:</span><span>{fmtUSD2(usdT.total)}</span></div>
+                              <div className="flex justify-between font-bold"><span>{t("quotations.total-usd")}:</span><span>{fmtUSD2(usdT.total)}</span></div>
                             </div>
                             <div className="px-3 pb-2">
-                              <p className="text-xs text-muted-foreground">Tipo de cambio a convenir al momento del pedido.</p>
+                              <p className="text-xs text-muted-foreground">{t("quotations.exchange-rate-note")}</p>
                             </div>
                           </div>
                         </div>
@@ -1148,24 +1148,24 @@ export default function QuotationsPage() {
                         <div className="flex justify-end">
                           <div className="w-64 space-y-2">
                             <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Subtotal:</span>
+                              <span className="text-muted-foreground">{t("label.subtotal")}:</span>
                               <span>{formatCurrency(selectedQuotation.subtotal, selectedQuotation.currency || "MXN")}</span>
                             </div>
                             {parseFloat(selectedQuotation.globalDiscount || "0") > 0 && (
                               <div className="flex justify-between text-sm text-red-600">
-                                <span>Descuento Global ({selectedQuotation.globalDiscount}%):</span>
+                                <span>{t("quotations.global-discount-label").replace("{pct}", String(selectedQuotation.globalDiscount))}:</span>
                                 <span>-{formatCurrency(parseFloat(selectedQuotation.subtotal) * (parseFloat(selectedQuotation.globalDiscount || "0") / 100), selectedQuotation.currency || "MXN")}</span>
                               </div>
                             )}
                             {!isCustomerForeign && (
                               <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">IVA:</span>
+                                <span className="text-muted-foreground">{t("label.tax")}:</span>
                                 <span>{formatCurrency(selectedQuotation.tax, selectedQuotation.currency || "MXN")}</span>
                               </div>
                             )}
                             <Separator />
                             <div className="flex justify-between font-bold text-lg">
-                              <span>Total:</span>
+                              <span>{t("label.total")}:</span>
                               <span>{formatCurrency(
                                 isCustomerForeign
                                   ? parseFloat(selectedQuotation.subtotal) * (1 - parseFloat(selectedQuotation.globalDiscount || "0") / 100)
@@ -1175,7 +1175,7 @@ export default function QuotationsPage() {
                             </div>
                             {parseFloat(selectedQuotation.totalSavings || "0") > 0 && (
                               <div className="flex justify-between text-sm text-green-600">
-                                <span>Ahorro total:</span>
+                                <span>{t("quotations.total-savings")}:</span>
                                 <span>{formatCurrency(selectedQuotation.totalSavings || "0", selectedQuotation.currency || "MXN")}</span>
                               </div>
                             )}
@@ -1193,13 +1193,13 @@ export default function QuotationsPage() {
                     <div className="space-y-4">
                       {selectedQuotation.notes && (
                         <div>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-1">Notas</h4>
+                          <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("label.notes")}</h4>
                           <p className="text-sm">{selectedQuotation.notes}</p>
                         </div>
                       )}
                       {selectedQuotation.conditions && (
                         <div>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-1">Condiciones</h4>
+                          <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("quotations.form.conditions")}</h4>
                           <p className="text-sm">{selectedQuotation.conditions}</p>
                         </div>
                       )}
@@ -1212,7 +1212,7 @@ export default function QuotationsPage() {
 
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-              Cerrar
+              {t("btn.close")}
             </Button>
             <Button 
               onClick={() => selectedQuotation && handleDownloadPDF(selectedQuotation)}
@@ -1223,7 +1223,7 @@ export default function QuotationsPage() {
               ) : (
                 <Download className="h-4 w-4 mr-2" />
               )}
-              Descargar PDF
+              {t("btn.download-pdf")}
             </Button>
           </div>
         </DialogContent>
@@ -1237,10 +1237,10 @@ export default function QuotationsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
-              Enviar Cotización por Correo
+              {t("quotations.send-email-title")}
             </DialogTitle>
             <DialogDescription>
-              Cotización <strong>{selectedQuotation?.folio}</strong> —{" "}
+              {t("quotations.detail-title").replace("{folio}", selectedQuotation?.folio || "")} —{" "}
               {selectedQuotation?.customer?.name}
             </DialogDescription>
           </DialogHeader>
@@ -1248,10 +1248,10 @@ export default function QuotationsPage() {
           <div className="space-y-4 py-2">
             {/* Recipients list */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Destinatarios</Label>
+              <Label className="text-sm font-medium">{t("quotations.recipients")}</Label>
               {emailList.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">
-                  Agrega al menos un correo destinatario.
+                  {t("quotations.add-recipient-hint")}
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2 p-3 rounded-md border bg-muted/30 min-h-[48px]">
@@ -1278,11 +1278,11 @@ export default function QuotationsPage() {
 
             {/* Add email input */}
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Agregar correo</Label>
+              <Label className="text-sm font-medium">{t("quotations.add-email")}</Label>
               <div className="flex gap-2">
                 <Input
                   type="email"
-                  placeholder="correo@ejemplo.com"
+                  placeholder={t("quotations.email-placeholder")}
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
@@ -1300,15 +1300,14 @@ export default function QuotationsPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Presiona Enter o el botón para agregar. Puedes agregar múltiples correos.
+                {t("quotations.add-email-hint")}
               </p>
             </div>
 
             {/* Info box */}
             <div className="p-3 bg-muted rounded-md">
               <p className="text-sm text-muted-foreground">
-                El correo incluirá el PDF de la cotización con un enlace para que el cliente la apruebe.
-                Al enviar, la cotización pasará a proceso de autorización.
+                {t("quotations.send-email-info")}
               </p>
             </div>
           </div>
@@ -1320,7 +1319,7 @@ export default function QuotationsPage() {
               disabled={isSending}
               data-testid="button-cancel-send-email"
             >
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               onClick={handleSendEmail}
@@ -1330,12 +1329,12 @@ export default function QuotationsPage() {
               {isSending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enviando...
+                  {t("quotations.sending")}
                 </>
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Enviar y Solicitar Autorización
+                  {t("quotations.send-request-auth")}
                 </>
               )}
             </Button>
@@ -1347,10 +1346,9 @@ export default function QuotationsPage() {
       <Dialog open={approvalLinkDialogOpen} onOpenChange={setApprovalLinkDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Enlace de Aprobación Generado</DialogTitle>
+            <DialogTitle>{t("quotations.approval-link-title")}</DialogTitle>
             <DialogDescription>
-              El correo no pudo enviarse, pero el enlace de aprobación está listo. 
-              Copia este enlace y envíalo al cliente por WhatsApp u otro medio.
+              {t("quotations.approval-link-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1363,16 +1361,16 @@ export default function QuotationsPage() {
               />
               <Button onClick={copyApprovalLink} variant="outline" data-testid="button-copy-link">
                 <Copy className="h-4 w-4 mr-2" />
-                Copiar
+                {t("quotations.copy")}
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              Al abrir este enlace, el cliente podrá ver la cotización y aprobarla o rechazarla.
+              {t("quotations.approval-link-note")}
             </p>
           </div>
           <DialogFooter>
             <Button onClick={() => setApprovalLinkDialogOpen(false)} data-testid="button-close-link-dialog">
-              Cerrar
+              {t("btn.close")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1384,26 +1382,26 @@ export default function QuotationsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5" />
-              Rechazar Envío Gratuito
+              {t("quotations.reject-free-shipping-title")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
                 <p>
-                  ¿Estás seguro de rechazar el envío gratuito para la cotización{" "}
+                  {t("quotations.reject-shipping-confirm-prefix")}{" "}
                   <strong>{selectedQuotation?.folio}</strong>?
                 </p>
                 <div>
-                  <label className="text-sm font-medium">Motivo del rechazo:</label>
+                  <label className="text-sm font-medium">{t("quotations.reject-reason-label")}</label>
                   <Input
                     value={shippingRejectReason}
                     onChange={(e) => setShippingRejectReason(e.target.value)}
-                    placeholder="Ingresa el motivo del rechazo..."
+                    placeholder={t("quotations.reject-reason-placeholder")}
                     className="mt-2"
                     data-testid="input-shipping-reject-reason"
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  La cotización regresará a <strong>Borrador</strong> y se enviará un correo al vendedor con el motivo del rechazo para que retrabaje su propuesta.
+                  {t("quotations.reject-shipping-note-prefix")}<strong>{t("status.draft")}</strong>{t("quotations.reject-shipping-note-suffix")}
                 </p>
               </div>
             </AlertDialogDescription>
@@ -1416,7 +1414,7 @@ export default function QuotationsPage() {
               }}
               disabled={isProcessingShipping !== null}
             >
-              Cancelar
+              {t("btn.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleRejectShipping} 
@@ -1426,12 +1424,12 @@ export default function QuotationsPage() {
               {isProcessingShipping !== null ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Rechazando...
+                  {t("quotations.rejecting")}
                 </>
               ) : (
                 <>
                   <X className="h-4 w-4 mr-2" />
-                  Rechazar Envío
+                  {t("quotations.reject-free-shipping")}
                 </>
               )}
             </AlertDialogAction>
@@ -1445,10 +1443,10 @@ export default function QuotationsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Download className="h-5 w-5" />
-              Descargar PDF
+              {t("btn.download-pdf")}
             </DialogTitle>
             <DialogDescription>
-              {quotationForPDF?.folio} — ¿Cómo deseas generar el PDF para el cliente?
+              {t("quotations.pdf-desc").replace("{folio}", quotationForPDF?.folio || "")}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 pt-2">
@@ -1459,8 +1457,8 @@ export default function QuotationsPage() {
               data-testid="button-pdf-with-discount"
             >
               <div className="flex flex-col items-start text-left min-w-0">
-                <span className="font-medium">Con descuentos</span>
-                <span className="text-xs text-muted-foreground">Muestra la columna Desc% y el desglose de descuento en totales</span>
+                <span className="font-medium">{t("quotations.pdf-with-discount")}</span>
+                <span className="text-xs text-muted-foreground">{t("quotations.pdf-with-discount-desc")}</span>
               </div>
             </Button>
             <Button
@@ -1469,8 +1467,8 @@ export default function QuotationsPage() {
               data-testid="button-pdf-no-discount"
             >
               <div className="flex flex-col items-start text-left min-w-0">
-                <span className="font-medium">Sin descuentos</span>
-                <span className="text-xs text-primary-foreground/80">Oculta los descuentos — el cliente solo ve el precio final</span>
+                <span className="font-medium">{t("quotations.pdf-no-discount")}</span>
+                <span className="text-xs text-primary-foreground/80">{t("quotations.pdf-no-discount-desc")}</span>
               </div>
             </Button>
           </div>
@@ -1483,27 +1481,27 @@ export default function QuotationsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-destructive" />
-              Eliminar cotización
+              {t("quotations.delete")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
                 <p>
-                  ¿Estás seguro de eliminar la cotización{" "}
-                  <strong>{quotationToDelete?.folio}</strong>? Esta acción no se puede deshacer.
+                  {t("quotations.delete-confirm-prefix")}{" "}
+                  <strong>{quotationToDelete?.folio}</strong>? {t("customers.delete-confirm")}
                 </p>
                 {quotationToDelete?.status === QuotationStatus.CONVERTED && (
                   <p className="text-destructive font-medium">
-                    Esta cotización ya fue convertida en pedido. Al eliminarla se borrarán también el pedido, embarques y liberaciones asociadas. Las facturas e incidencias vinculadas quedarán desvinculadas pero no se eliminarán.
+                    {t("quotations.delete-converted-warning")}
                   </p>
                 )}
                 {quotationToDelete?.status !== QuotationStatus.CONVERTED && (
-                  <p>Se eliminarán también sus ítems y autorizaciones de crédito asociadas.</p>
+                  <p>{t("quotations.delete-items-note")}</p>
                 )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteQuotation}
               disabled={isDeleting}
@@ -1513,12 +1511,12 @@ export default function QuotationsPage() {
               {isDeleting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Eliminando...
+                  {t("quotations.deleting")}
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Eliminar
+                  {t("btn.delete")}
                 </>
               )}
             </AlertDialogAction>

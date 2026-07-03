@@ -156,8 +156,8 @@ export default function InvoicesPage() {
       setDetailsDialogOpen(true);
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudieron cargar los detalles",
+        title: t("label.error"),
+        description: t("invoices.toast.load-error"),
         variant: "destructive",
       });
     } finally {
@@ -184,13 +184,13 @@ export default function InvoicesPage() {
       document.body.removeChild(a);
 
       toast({
-        title: "PDF descargado",
-        description: `Factura ${invoice.serie}-${invoice.folio} descargada correctamente`,
+        title: t("invoices.toast.download-title"),
+        description: t("invoices.toast.download-desc"),
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudo descargar el PDF",
+        title: t("label.error"),
+        description: t("invoices.toast.download-error"),
         variant: "destructive",
       });
     } finally {
@@ -205,7 +205,7 @@ export default function InvoicesPage() {
       const response = await apiRequest("POST", `/api/invoices/${selectedInvoice.id}/send-email`, {});
       const data = await response.json();
       toast({
-        title: "Factura enviada",
+        title: t("invoices.toast.sent"),
         description: data.message,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
@@ -213,8 +213,8 @@ export default function InvoicesPage() {
       setSelectedInvoice(null);
     } catch (error) {
       toast({
-        title: "Error",
-        description: "No se pudo enviar la factura por correo",
+        title: t("label.error"),
+        description: t("invoices.toast.email-error"),
         variant: "destructive",
       });
     } finally {
@@ -246,9 +246,9 @@ export default function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Facturación</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("invoices.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Gestiona facturas CFDI y envío automático
+            {t("invoices.subtitle-cfdi")}
           </p>
         </div>
       </div>
@@ -257,19 +257,19 @@ export default function InvoicesPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Facturas</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("invoices.total")}</CardTitle>
             <FileSpreadsheet className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{filteredInvoices.length}</div>
             {hasActiveFilters && (
-              <p className="text-xs text-muted-foreground">de {invoices?.length || 0} total</p>
+              <p className="text-xs text-muted-foreground">{t("label.of")} {invoices?.length || 0} {t("invoices.total-word")}</p>
             )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vencidas</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("invoices.overdue")}</CardTitle>
             <FileSpreadsheet className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -278,7 +278,7 @@ export default function InvoicesPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("invoices.pending")}</CardTitle>
             <FileSpreadsheet className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
@@ -287,14 +287,14 @@ export default function InvoicesPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Facturado</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("invoices.total-billed")}</CardTitle>
             <FileSpreadsheet className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               ${totalFacturado.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </div>
-            <p className="text-xs text-muted-foreground">{pagadas} pagadas</p>
+            <p className="text-xs text-muted-foreground">{pagadas} {t("invoices.paid-count")}</p>
           </CardContent>
         </Card>
       </div>
@@ -318,25 +318,25 @@ export default function InvoicesPage() {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Folio / Factura</Label>
+              <Label className="text-xs text-muted-foreground">{t("invoices.filter.folio")}</Label>
               <Input
-                placeholder="Ej: F-1234"
+                placeholder={t("invoices.filter.folio-ph")}
                 value={searchFolio}
                 onChange={(e) => setSearchFolio(e.target.value)}
                 data-testid="input-filter-folio"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Cliente</Label>
+              <Label className="text-xs text-muted-foreground">{t("label.client")}</Label>
               <Input
-                placeholder="Nombre del cliente"
+                placeholder={t("invoices.filter.client-ph")}
                 value={searchCliente}
                 onChange={(e) => setSearchCliente(e.target.value)}
                 data-testid="input-filter-cliente"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Fecha desde</Label>
+              <Label className="text-xs text-muted-foreground">{t("invoices.filter.date-from")}</Label>
               <Input
                 type="date"
                 value={filterFechaDesde}
@@ -354,18 +354,18 @@ export default function InvoicesPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Estado</Label>
+              <Label className="text-xs text-muted-foreground">{t("label.status")}</Label>
               <Select value={filterEstado} onValueChange={setFilterEstado}>
                 <SelectTrigger data-testid="select-filter-estado">
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue placeholder={t("label.all")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value={InvoiceStatus.PENDING_PAYMENT}>Pendiente</SelectItem>
-                  <SelectItem value="overdue">Vencida</SelectItem>
-                  <SelectItem value={InvoiceStatus.PARTIALLY_PAID}>Pago Parcial</SelectItem>
-                  <SelectItem value={InvoiceStatus.PAID}>Pagada</SelectItem>
-                  <SelectItem value={InvoiceStatus.CANCELLED}>Cancelada</SelectItem>
+                  <SelectItem value="all">{t("label.all")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.PENDING_PAYMENT}>{t("status.pending")}</SelectItem>
+                  <SelectItem value="overdue">{t("status.overdue")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.PARTIALLY_PAID}>{t("status.partial-pay")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.PAID}>{t("status.paid")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.CANCELLED}>{t("status.cancelled")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -387,7 +387,7 @@ export default function InvoicesPage() {
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por folio o cliente..."
+                placeholder={t("search.folio-client")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -408,13 +408,13 @@ export default function InvoicesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Serie - Folio</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Fecha Emisión</TableHead>
-                    <TableHead>Fecha Vencimiento</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Saldo</TableHead>
-                    <TableHead>Estado</TableHead>
+                    <TableHead>{t("invoices.col.series-folio")}</TableHead>
+                    <TableHead>{t("invoices.col.client")}</TableHead>
+                    <TableHead>{t("invoices.col.issued")}</TableHead>
+                    <TableHead>{t("invoices.col.due")}</TableHead>
+                    <TableHead className="text-right">{t("invoices.col.total")}</TableHead>
+                    <TableHead className="text-right">{t("invoices.col.balance")}</TableHead>
+                    <TableHead>{t("invoices.col.status")}</TableHead>
                     <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -594,12 +594,12 @@ export default function InvoicesPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Método de Pago</h4>
-                    <p>{selectedInvoice.paymentMethod || "Por definir"}</p>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("invoices.payment-method")}</h4>
+                    <p>{selectedInvoice.paymentMethod || t("invoices.to-define")}</p>
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Forma de Pago</h4>
-                    <p>{selectedInvoice.paymentForm || "Por definir"}</p>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("invoices.payment-form")}</h4>
+                    <p>{selectedInvoice.paymentForm || t("invoices.to-define")}</p>
                   </div>
                 </div>
 
@@ -608,21 +608,21 @@ export default function InvoicesPage() {
                 <div className="flex justify-end">
                   <div className="w-64 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span className="text-muted-foreground">{t("label.subtotal")}:</span>
                       <span>{formatCurrency(selectedInvoice.subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">IVA (16%):</span>
+                      <span className="text-muted-foreground">{t("invoices.form.iva")}:</span>
                       <span>{formatCurrency(selectedInvoice.tax)}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between font-bold text-lg">
-                      <span>Total:</span>
+                      <span>{t("label.total")}:</span>
                       <span>{formatCurrency(selectedInvoice.total)}</span>
                     </div>
                     {selectedInvoice.balanceDue !== null && selectedInvoice.balanceDue !== undefined && (
                       <div className="flex justify-between text-sm font-medium text-orange-600">
-                        <span>Saldo pendiente:</span>
+                        <span>{t("invoices.balance-due")}:</span>
                         <span>{formatCurrency(selectedInvoice.balanceDue)}</span>
                       </div>
                     )}
@@ -633,7 +633,7 @@ export default function InvoicesPage() {
                   <>
                     <Separator />
                     <div>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-1">Notas</h4>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-1">{t("label.notes")}</h4>
                       <p className="text-sm">{selectedInvoice.notes}</p>
                     </div>
                   </>
@@ -644,7 +644,7 @@ export default function InvoicesPage() {
 
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-              Cerrar
+              {t("btn.close")}
             </Button>
             <Button
               onClick={() => selectedInvoice && handleDownloadPDF(selectedInvoice)}
@@ -655,7 +655,7 @@ export default function InvoicesPage() {
               ) : (
                 <Download className="h-4 w-4 mr-2" />
               )}
-              Descargar PDF
+              {t("invoices.download-pdf")}
             </Button>
           </div>
         </DialogContent>
@@ -665,27 +665,27 @@ export default function InvoicesPage() {
       <AlertDialog open={sendEmailDialogOpen} onOpenChange={setSendEmailDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Enviar Factura por Correo</AlertDialogTitle>
+            <AlertDialogTitle>{t("invoices.email.title")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>
-                  Se enviará la factura <strong>{selectedInvoice?.serie}-{selectedInvoice?.folio}</strong> al cliente{" "}
+                  {t("invoices.email.send-prefix")} <strong>{selectedInvoice?.serie}-{selectedInvoice?.folio}</strong> {t("invoices.email.send-mid")}{" "}
                   <strong>{selectedInvoice?.customer.name}</strong>.
                 </p>
                 {selectedInvoice?.customer.email ? (
                   <p className="text-sm">
-                    El correo se enviará a: <strong>{selectedInvoice.customer.email}</strong>
+                    {t("invoices.email.send-to")} <strong>{selectedInvoice.customer.email}</strong>
                   </p>
                 ) : (
                   <p className="text-sm text-red-600">
-                    El cliente no tiene correo electrónico configurado.
+                    {t("invoices.email.no-email")}
                   </p>
                 )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSending}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isSending}>{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleSendEmail}
               disabled={isSending || !selectedInvoice?.customer.email}
@@ -693,12 +693,12 @@ export default function InvoicesPage() {
               {isSending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enviando...
+                  {t("btn.sending")}
                 </>
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Enviar Factura
+                  {t("invoices.email.send")}
                 </>
               )}
             </AlertDialogAction>

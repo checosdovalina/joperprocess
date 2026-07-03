@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
+import { useI18n } from "@/hooks/use-i18n";
 import {
   Clock,
   Package,
@@ -44,15 +45,15 @@ interface BoardOrder {
 
 // Status columns to display (in order), excluding "delivered" from main board
 const COLUMNS = [
-  { key: "pending", label: "Pendiente", icon: Clock, color: "#f59e0b", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.4)" },
-  { key: "in_production", label: "En Producción", icon: Factory, color: "#3b82f6", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.4)" },
-  { key: "ready", label: "Listo", icon: CheckCircle2, color: "#22c55e", bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.4)" },
-  { key: "partially_released", label: "Parcial. Surtido", icon: Layers, color: "#f97316", bg: "rgba(249,115,22,0.12)", border: "rgba(249,115,22,0.4)" },
-  { key: "released", label: "Surtido", icon: Package, color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.4)" },
-  { key: "shipped", label: "Embarcado", icon: Truck, color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.4)" },
+  { key: "pending", labelKey: "board.col.pending", icon: Clock, color: "#f59e0b", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.4)" },
+  { key: "in_production", labelKey: "board.col.in-production", icon: Factory, color: "#3b82f6", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.4)" },
+  { key: "ready", labelKey: "board.col.ready", icon: CheckCircle2, color: "#22c55e", bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.4)" },
+  { key: "partially_released", labelKey: "board.col.partial", icon: Layers, color: "#f97316", bg: "rgba(249,115,22,0.12)", border: "rgba(249,115,22,0.4)" },
+  { key: "released", labelKey: "board.col.released", icon: Package, color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.4)" },
+  { key: "shipped", labelKey: "board.col.shipped", icon: Truck, color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.4)" },
 ];
 
-const DELIVERED_COL = { key: "delivered", label: "Entregados (7 días)", icon: CheckCircle2, color: "#6b7280", bg: "rgba(107,114,128,0.10)", border: "rgba(107,114,128,0.3)" };
+const DELIVERED_COL = { key: "delivered", labelKey: "board.col.delivered", icon: CheckCircle2, color: "#6b7280", bg: "rgba(107,114,128,0.10)", border: "rgba(107,114,128,0.3)" };
 
 function urgencyLevel(daysRemaining: number | null, status: string): "overdue" | "warning" | "soon" | "ok" | "done" {
   if (status === "delivered" || status === "shipped") return "done";
@@ -71,15 +72,15 @@ const URGENCY_STYLES = {
   done: { border: "rgba(255,255,255,0.06)", glow: "none", badge: { bg: "#6b7280", text: "#fff" } },
 };
 
-function daysBadge(daysRemaining: number | null, status: string) {
+function daysBadge(daysRemaining: number | null, status: string, t: (key: string) => string) {
   if (status === "delivered") return null;
   if (daysRemaining === null) return null;
   const level = urgencyLevel(daysRemaining, status);
   const style = URGENCY_STYLES[level];
   let label = "";
-  if (daysRemaining < 0) label = `${Math.abs(daysRemaining)}d vencido`;
-  else if (daysRemaining === 0) label = "Hoy";
-  else if (daysRemaining === 1) label = "Mañana";
+  if (daysRemaining < 0) label = `${Math.abs(daysRemaining)}${t("board.days-overdue")}`;
+  else if (daysRemaining === 0) label = t("board.legend.today");
+  else if (daysRemaining === 1) label = t("board.tomorrow");
   else label = `${daysRemaining}d`;
   return (
     <span
@@ -91,6 +92,7 @@ function daysBadge(daysRemaining: number | null, status: string) {
 }
 
 function OrderCard({ order }: { order: BoardOrder }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const urgency = urgencyLevel(order.daysRemaining, order.status);
   const style = URGENCY_STYLES[urgency];
@@ -129,15 +131,15 @@ function OrderCard({ order }: { order: BoardOrder }) {
             {hasBlock && (
               <span title={order.factoryNotes || ""} style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 11, fontWeight: 600 }}>
                 <ShieldAlert size={13} />
-                Bloqueo
+                {t("board.block")}
               </span>
             )}
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-          {daysBadge(order.daysRemaining, order.status)}
+          {daysBadge(order.daysRemaining, order.status, t)}
           <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 10 }}>
-            {order.itemCount} art.
+            {order.itemCount} {t("board.items-abbr")}
           </span>
         </div>
       </div>
@@ -146,7 +148,7 @@ function OrderCard({ order }: { order: BoardOrder }) {
       {order.status === "in_production" && (
         <div style={{ marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: 600 }}>PRODUCCIÓN</span>
+            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: 600 }}>{t("board.production")}</span>
             <span style={{ color: "#3b82f6", fontSize: 10, fontWeight: 700 }}>{order.productionProgress}%</span>
           </div>
           <div style={{ height: 5, background: "rgba(255,255,255,0.1)", borderRadius: 10, overflow: "hidden" }}>
@@ -159,13 +161,13 @@ function OrderCard({ order }: { order: BoardOrder }) {
       {order.estimatedDelivery && (
         <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.45)", fontSize: 11, marginBottom: 4 }}>
           <CalendarDays size={11} />
-          <span>Entrega: {format(new Date(order.estimatedDelivery), "dd MMM yyyy", { locale: es })}</span>
+          <span>{t("board.delivery")}: {format(new Date(order.estimatedDelivery), "dd MMM yyyy", { locale: es })}</span>
         </div>
       )}
       {order.actualDelivery && (
         <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#22c55e", fontSize: 11, marginBottom: 4 }}>
           <CheckCircle2 size={11} />
-          <span>Entregado: {format(new Date(order.actualDelivery), "dd MMM yyyy", { locale: es })}</span>
+          <span>{t("board.delivered-on")}: {format(new Date(order.actualDelivery), "dd MMM yyyy", { locale: es })}</span>
         </div>
       )}
 
@@ -196,11 +198,11 @@ function OrderCard({ order }: { order: BoardOrder }) {
             </div>
           )}
           {order.deliveryTime && (
-            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginBottom: 6 }}>Tiempo de entrega: {order.deliveryTime}</div>
+            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginBottom: 6 }}>{t("board.delivery-time")}: {order.deliveryTime}</div>
           )}
           {order.items.length > 0 && (
             <div>
-              <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontWeight: 600, marginBottom: 5, letterSpacing: "0.05em" }}>ARTÍCULOS</div>
+              <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontWeight: 600, marginBottom: 5, letterSpacing: "0.05em" }}>{t("board.items")}</div>
               {order.items.map((item, i) => (
                 <div key={i} style={{ display: "flex", gap: 6, fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 3 }}>
                   <span style={{ color: "#60a5fa", fontWeight: 600, flexShrink: 0 }}>
@@ -223,6 +225,7 @@ function OrderCard({ order }: { order: BoardOrder }) {
 }
 
 function Column({ col, orders }: { col: typeof COLUMNS[0]; orders: BoardOrder[] }) {
+  const { t } = useI18n();
   const Icon = col.icon;
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -238,7 +241,7 @@ function Column({ col, orders }: { col: typeof COLUMNS[0]; orders: BoardOrder[] 
         flexShrink: 0,
       }}>
         <Icon size={13} style={{ color: col.color, flexShrink: 0 }} />
-        <span style={{ color: col.color, fontWeight: 700, fontSize: 12, letterSpacing: "0.03em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.label}</span>
+        <span style={{ color: col.color, fontWeight: 700, fontSize: 12, letterSpacing: "0.03em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t(col.labelKey)}</span>
         <span style={{
           background: col.border,
           color: "#fff",
@@ -270,7 +273,7 @@ function Column({ col, orders }: { col: typeof COLUMNS[0]; orders: BoardOrder[] 
       }}>
         {orders.length === 0 ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 60, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
-            Sin pedidos
+            {t("board.no-orders")}
           </div>
         ) : (
           orders.map(order => <OrderCard key={order.id} order={order} />)
@@ -281,6 +284,7 @@ function Column({ col, orders }: { col: typeof COLUMNS[0]; orders: BoardOrder[] 
 }
 
 export default function ProductionBoardPage() {
+  const { t } = useI18n();
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -372,7 +376,7 @@ export default function ProductionBoardPage() {
           <Factory size={22} style={{ color: "#3b82f6" }} />
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "0.03em", color: "#fff" }}>
-              Tablero de Producción
+              {t("board.title")}
             </div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 1 }}>
               Nexxo — Sistema Comercial
@@ -384,50 +388,50 @@ export default function ProductionBoardPage() {
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: "#3b82f6" }}>{totalActive}</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>PEDIDOS ACTIVOS</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>{t("board.stat.active")}</div>
           </div>
           {totalOverdue > 0 && (
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: "#ef4444" }}>{totalOverdue}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>VENCIDOS</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>{t("board.stat.overdue")}</div>
             </div>
           )}
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: "#6b7280" }}>{grouped["delivered"]?.length || 0}</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>ENTREGADOS (7d)</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>{t("board.stat.delivered")}</div>
           </div>
         </div>
 
         {/* Right: controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", textAlign: "right" }}>
-            <div>Actualizado {format(lastUpdated, "HH:mm:ss")}</div>
+            <div>{t("board.updated")} {format(lastUpdated, "HH:mm:ss")}</div>
             <div style={{ color: countdown <= 10 ? "#f59e0b" : "rgba(255,255,255,0.3)" }}>
-              Refresco en {countdown}s
+              {t("board.refresh-in")} {countdown}s
             </div>
           </div>
 
           <button
             onClick={handleManualRefresh}
-            title="Actualizar ahora"
+            title={t("board.refresh-now")}
             style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "7px 10px", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", gap: 5 }}
           >
             <RefreshCw size={14} style={{ animation: isLoading ? "spin 1s linear infinite" : "none" }} />
-            <span style={{ fontSize: 12 }}>Actualizar</span>
+            <span style={{ fontSize: 12 }}>{t("board.refresh")}</span>
           </button>
 
           <button
             onClick={() => setShowDelivered(!showDelivered)}
-            title="Mostrar/ocultar entregados"
+            title={t("board.toggle-delivered-title")}
             style={{ background: showDelivered ? "rgba(107,114,128,0.3)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 10px", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", gap: 5 }}
           >
             <CheckCircle2 size={14} style={{ color: "#6b7280" }} />
-            <span style={{ fontSize: 12 }}>Entregados</span>
+            <span style={{ fontSize: 12 }}>{t("board.delivered-toggle")}</span>
           </button>
 
           <button
             onClick={toggleFullscreen}
-            title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+            title={isFullscreen ? t("btn.exit-fullscreen") : t("btn.fullscreen")}
             style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 9px", cursor: "pointer", color: "#fff" }}
           >
             {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
@@ -438,11 +442,11 @@ export default function ProductionBoardPage() {
       {/* Legend */}
       <div style={{ display: "flex", gap: 16, padding: "6px 20px", background: "rgba(0,0,0,0.2)", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0, flexWrap: "wrap" }}>
         {[
-          { color: "#ef4444", label: "Vencido" },
-          { color: "#f97316", label: "Hoy" },
-          { color: "#f59e0b", label: "≤ 3 días" },
-          { color: "#22c55e", label: "En tiempo" },
-          { color: "#ef4444", label: "Con bloqueo", icon: true },
+          { color: "#ef4444", label: t("board.legend.overdue") },
+          { color: "#f97316", label: t("board.legend.today") },
+          { color: "#f59e0b", label: t("board.legend.soon") },
+          { color: "#22c55e", label: t("board.legend.on-time") },
+          { color: "#ef4444", label: t("board.legend.blocked"), icon: true },
         ].map((l, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
             {l.icon ? <ShieldAlert size={11} style={{ color: l.color }} /> : <div style={{ width: 8, height: 8, borderRadius: "50%", background: l.color, flexShrink: 0 }} />}
@@ -450,7 +454,7 @@ export default function ProductionBoardPage() {
           </div>
         ))}
         <div style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
-          Haz clic en una tarjeta para ver los detalles
+          {t("board.hint")}
         </div>
       </div>
 
@@ -478,7 +482,7 @@ export default function ProductionBoardPage() {
       {isLoading && (
         <div style={{ position: "fixed", bottom: 16, right: 16, background: "rgba(59,130,246,0.9)", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
           <RotateCcw size={13} style={{ animation: "spin 1s linear infinite" }} />
-          Actualizando...
+          {t("board.updating")}
         </div>
       )}
 

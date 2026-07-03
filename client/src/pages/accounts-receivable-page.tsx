@@ -162,7 +162,7 @@ export default function AccountsReceivablePage() {
           <CardContent>
             <div className="text-2xl font-bold">{filteredInvoices.length}</div>
             {hasActiveFilters && (
-              <p className="text-xs text-muted-foreground">de {invoices?.length || 0} total</p>
+              <p className="text-xs text-muted-foreground">{t("label.of")} {invoices?.length || 0} {t("invoices.total-word")}</p>
             )}
           </CardContent>
         </Card>
@@ -194,7 +194,7 @@ export default function AccountsReceivablePage() {
               ${totalSaldo.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </div>
             <p className="text-xs text-muted-foreground">
-              de ${totalFacturado.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} facturado
+              {t("label.of")} ${totalFacturado.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {t("invoices.billed")}
             </p>
           </CardContent>
         </Card>
@@ -206,7 +206,7 @@ export default function AccountsReceivablePage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Search className="h-4 w-4" />
-              Filtros
+              {t("invoices.filters")}
             </CardTitle>
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters-ar">
@@ -219,25 +219,25 @@ export default function AccountsReceivablePage() {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Folio / Factura</Label>
+              <Label className="text-xs text-muted-foreground">{t("invoices.filter.folio")}</Label>
               <Input
-                placeholder="Ej: F-1234"
+                placeholder={t("invoices.filter.folio-ph")}
                 value={searchFolio}
                 onChange={(e) => setSearchFolio(e.target.value)}
                 data-testid="input-filter-folio-ar"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Cliente</Label>
+              <Label className="text-xs text-muted-foreground">{t("label.client")}</Label>
               <Input
-                placeholder="Nombre del cliente"
+                placeholder={t("invoices.filter.client-ph")}
                 value={searchCliente}
                 onChange={(e) => setSearchCliente(e.target.value)}
                 data-testid="input-filter-cliente-ar"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Fecha desde</Label>
+              <Label className="text-xs text-muted-foreground">{t("invoices.filter.date-from")}</Label>
               <Input
                 type="date"
                 value={filterFechaDesde}
@@ -246,7 +246,7 @@ export default function AccountsReceivablePage() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Fecha hasta</Label>
+              <Label className="text-xs text-muted-foreground">{t("invoices.filter.date-to")}</Label>
               <Input
                 type="date"
                 value={filterFechaHasta}
@@ -255,18 +255,18 @@ export default function AccountsReceivablePage() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Estado</Label>
+              <Label className="text-xs text-muted-foreground">{t("label.status")}</Label>
               <Select value={filterEstado} onValueChange={setFilterEstado}>
                 <SelectTrigger data-testid="select-filter-estado-ar">
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue placeholder={t("label.all")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value={InvoiceStatus.PENDING_PAYMENT}>Pendiente</SelectItem>
-                  <SelectItem value="overdue">Vencida</SelectItem>
-                  <SelectItem value={InvoiceStatus.PARTIALLY_PAID}>Pago Parcial</SelectItem>
-                  <SelectItem value={InvoiceStatus.PAID}>Pagada</SelectItem>
-                  <SelectItem value={InvoiceStatus.CANCELLED}>Cancelada</SelectItem>
+                  <SelectItem value="all">{t("label.all")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.PENDING_PAYMENT}>{t("status.pending")}</SelectItem>
+                  <SelectItem value="overdue">{t("status.overdue")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.PARTIALLY_PAID}>{t("status.partial-pay")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.PAID}>{t("status.paid")}</SelectItem>
+                  <SelectItem value={InvoiceStatus.CANCELLED}>{t("status.cancelled")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -279,16 +279,16 @@ export default function AccountsReceivablePage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <CardTitle>Facturas por Cobrar</CardTitle>
+              <CardTitle>{t("invoices.receivables")}</CardTitle>
               <CardDescription>
-                {filteredInvoices.length} factura{filteredInvoices.length !== 1 ? "s" : ""}
-                {hasActiveFilters ? " con los filtros aplicados" : " registradas"}
+                {filteredInvoices.length} {filteredInvoices.length !== 1 ? t("invoices.plural") : t("invoices.singular")}{" "}
+                {hasActiveFilters ? t("invoices.filtered-desc") : t("invoices.registered-desc")}
               </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por folio o cliente..."
+                placeholder={t("search.folio-client")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -309,13 +309,13 @@ export default function AccountsReceivablePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Serie/Folio</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Emisión</TableHead>
-                    <TableHead>Vencimiento</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Saldo</TableHead>
-                    <TableHead>Estado</TableHead>
+                    <TableHead>{t("invoices.col.series-folio")}</TableHead>
+                    <TableHead>{t("invoices.col.client")}</TableHead>
+                    <TableHead>{t("invoices.col.issued")}</TableHead>
+                    <TableHead>{t("invoices.col.due")}</TableHead>
+                    <TableHead className="text-right">{t("invoices.col.total")}</TableHead>
+                    <TableHead className="text-right">{t("invoices.col.balance")}</TableHead>
+                    <TableHead>{t("invoices.col.status")}</TableHead>
                     <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -379,7 +379,7 @@ export default function AccountsReceivablePage() {
                           data-testid={`button-view-invoice-${invoice.id}`}
                         >
                           <FileText className="h-4 w-4 mr-1" />
-                          Ver
+                          {t("btn.view")}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -399,7 +399,7 @@ export default function AccountsReceivablePage() {
                 </Button>
               ) : (
                 <p className="text-sm text-muted-foreground mt-2">
-                  Comienza creando tu primera factura por cobrar
+                  {t("invoices.empty-hint")}
                 </p>
               )}
             </div>
@@ -420,14 +420,14 @@ export default function AccountsReceivablePage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Detalle de Factura
+              {t("invoices.detail")}
             </DialogTitle>
           </DialogHeader>
           {selectedInvoice && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Serie/Folio</p>
+                  <p className="text-sm text-muted-foreground">{t("invoices.col.series-folio")}</p>
                   <p className="font-mono text-lg font-bold">{selectedInvoice.serie}-{selectedInvoice.folio}</p>
                 </div>
                 {getStatusBadge(selectedInvoice)}
@@ -437,27 +437,27 @@ export default function AccountsReceivablePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Cliente</p>
+                  <p className="text-sm text-muted-foreground">{t("label.client")}</p>
                   <p className="font-medium">{selectedInvoice.customer.name}</p>
                   <p className="text-xs text-muted-foreground">{selectedInvoice.customer.rfc}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Moneda</p>
+                  <p className="text-sm text-muted-foreground">{t("label.currency")}</p>
                   <p className="font-medium">{selectedInvoice.currency}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Fecha de Emisión</p>
+                  <p className="text-sm text-muted-foreground">{t("invoices.form.issued")}</p>
                   <p className="font-medium">{format(new Date(selectedInvoice.issuedAt), "PP", { locale: es })}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Fecha de Vencimiento</p>
+                  <p className="text-sm text-muted-foreground">{t("invoices.form.due")}</p>
                   <p className="font-medium">
                     {selectedInvoice.dueDate
                       ? format(new Date(selectedInvoice.dueDate), "PP", { locale: es })
-                      : "Sin definir"}
+                      : t("label.undefined")}
                   </p>
                 </div>
               </div>
@@ -466,7 +466,7 @@ export default function AccountsReceivablePage() {
 
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">{t("label.subtotal")}</span>
                   <span className="font-medium">
                     ${parseFloat(selectedInvoice.subtotal || "0").toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
@@ -475,7 +475,7 @@ export default function AccountsReceivablePage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">IVA (16%)</span>
+                  <span className="text-muted-foreground">{t("invoices.form.iva")}</span>
                   <span className="font-medium">
                     ${parseFloat(selectedInvoice.tax || "0").toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
@@ -485,7 +485,7 @@ export default function AccountsReceivablePage() {
                 </div>
                 <Separator />
                 <div className="flex justify-between text-lg">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">{t("label.total")}</span>
                   <span className="font-bold">
                     ${parseFloat(selectedInvoice.total).toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
@@ -494,7 +494,7 @@ export default function AccountsReceivablePage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Saldo Pendiente</span>
+                  <span className="text-muted-foreground">{t("invoices.pending-balance")}</span>
                   <span className="font-bold text-primary">
                     ${parseFloat(selectedInvoice.balanceDue || selectedInvoice.total).toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
@@ -508,7 +508,7 @@ export default function AccountsReceivablePage() {
                 <>
                   <Separator />
                   <div>
-                    <p className="text-sm text-muted-foreground">Notas</p>
+                    <p className="text-sm text-muted-foreground">{t("label.notes")}</p>
                     <p className="text-sm mt-1">{selectedInvoice.notes}</p>
                   </div>
                 </>

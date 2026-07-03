@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ interface Tenant {
 export default function TenantsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useI18n();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   
@@ -60,12 +62,12 @@ export default function TenantsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tenants"] });
-      toast({ title: "Empresa creada exitosamente" });
+      toast({ title: t("tenants.created-ok") });
       setIsDialogOpen(false);
       resetForm();
     },
     onError: (error: Error) => {
-      toast({ title: "Error al crear empresa", description: error.message, variant: "destructive" });
+      toast({ title: t("tenants.create-error"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -76,13 +78,13 @@ export default function TenantsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tenants"] });
-      toast({ title: "Empresa actualizada exitosamente" });
+      toast({ title: t("tenants.updated-ok") });
       setIsDialogOpen(false);
       setEditingTenant(null);
       resetForm();
     },
     onError: (error: Error) => {
-      toast({ title: "Error al actualizar empresa", description: error.message, variant: "destructive" });
+      toast({ title: t("tenants.update-error"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -132,9 +134,9 @@ export default function TenantsPage() {
       <div className="flex items-center justify-center min-h-[60vh]" data-testid="access-denied">
         <Card className="max-w-md">
           <CardHeader>
-            <CardTitle>Acceso Denegado</CardTitle>
+            <CardTitle>{t("tenants.access-denied")}</CardTitle>
             <CardDescription>
-              Solo los super administradores pueden acceder a esta sección.
+              {t("tenants.access-denied-desc")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -155,10 +157,10 @@ export default function TenantsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
-            Administración de Empresas
+            {t("tenants.title")}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Gestiona las empresas (tenants) que utilizan la plataforma Nexxo
+            {t("tenants.subtitle")}
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -171,36 +173,36 @@ export default function TenantsPage() {
           <DialogTrigger asChild>
             <Button data-testid="button-add-tenant">
               <Plus className="h-4 w-4 mr-2" />
-              Nueva Empresa
+              {t("tenants.new")}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>
-                {editingTenant ? "Editar Empresa" : "Nueva Empresa"}
+                {editingTenant ? t("tenants.edit") : t("tenants.new")}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nombre de la Empresa</Label>
+                  <Label htmlFor="name">{t("tenants.field.name")}</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Mi Empresa"
+                    placeholder={t("tenants.ph.name")}
                     required
                     data-testid="input-tenant-name"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="subdomain">Subdominio</Label>
+                  <Label htmlFor="subdomain">{t("tenants.field.subdomain")}</Label>
                   <div className="flex items-center gap-1">
                     <Input
                       id="subdomain"
                       value={formData.subdomain}
                       onChange={(e) => setFormData({ ...formData, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
-                      placeholder="mi-empresa"
+                      placeholder={t("tenants.ph.subdomain")}
                       required
                       disabled={!!editingTenant}
                       data-testid="input-tenant-subdomain"
@@ -212,7 +214,7 @@ export default function TenantsPage() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email de Contacto</Label>
+                  <Label htmlFor="email">{t("tenants.field.email")}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -223,7 +225,7 @@ export default function TenantsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono</Label>
+                  <Label htmlFor="phone">{t("label.phone")}</Label>
                   <Input
                     id="phone"
                     value={formData.phone}
@@ -236,7 +238,7 @@ export default function TenantsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="primaryColor">Color Primario</Label>
+                  <Label htmlFor="primaryColor">{t("settings.primary-color")}</Label>
                   <div className="flex gap-2">
                     <input
                       type="color"
@@ -253,7 +255,7 @@ export default function TenantsPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="secondaryColor">Color Secundario</Label>
+                  <Label htmlFor="secondaryColor">{t("settings.secondary-color")}</Label>
                   <div className="flex gap-2">
                     <input
                       type="color"
@@ -273,7 +275,7 @@ export default function TenantsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="plan">Plan</Label>
+                  <Label htmlFor="plan">{t("tenants.field.plan")}</Label>
                   <select
                     id="plan"
                     value={formData.plan}
@@ -281,13 +283,13 @@ export default function TenantsPage() {
                     className="w-full h-10 px-3 rounded-md border bg-background"
                     data-testid="select-plan"
                   >
-                    <option value="basic">Básico</option>
-                    <option value="professional">Profesional</option>
+                    <option value="basic">{t("tenants.plan.basic")}</option>
+                    <option value="professional">{t("tenants.plan.professional")}</option>
                     <option value="enterprise">Enterprise</option>
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="maxUsers">Máx. Usuarios</Label>
+                  <Label htmlFor="maxUsers">{t("tenants.field.max-users")}</Label>
                   <Input
                     id="maxUsers"
                     type="number"
@@ -300,7 +302,7 @@ export default function TenantsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="locale">Idioma de la Interfaz</Label>
+                <Label htmlFor="locale">{t("tenants.field.locale")}</Label>
                 <select
                   id="locale"
                   value={formData.locale}
@@ -321,12 +323,12 @@ export default function TenantsPage() {
                   onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
                   data-testid="switch-active"
                 />
-                <Label htmlFor="active">Empresa Activa</Label>
+                <Label htmlFor="active">{t("tenants.active-company")}</Label>
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
+                  {t("btn.cancel")}
                 </Button>
                 <Button 
                   type="submit" 
@@ -336,7 +338,7 @@ export default function TenantsPage() {
                   {(createMutation.isPending || updateMutation.isPending) && (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
-                  {editingTenant ? "Guardar Cambios" : "Crear Empresa"}
+                  {editingTenant ? t("btn.save-changes") : t("tenants.create")}
                 </Button>
               </div>
             </form>
@@ -365,7 +367,7 @@ export default function TenantsPage() {
                   </div>
                 </div>
                 <Badge variant={tenant.active ? "default" : "secondary"}>
-                  {tenant.active ? "Activo" : "Inactivo"}
+                  {tenant.active ? t("status.active") : t("status.inactive")}
                 </Badge>
               </div>
             </CardHeader>
@@ -374,7 +376,7 @@ export default function TenantsPage() {
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Palette className="h-3 w-3" />
-                    Colores
+                    {t("tenants.colors")}
                   </span>
                   <div className="flex gap-1">
                     <div 
@@ -390,14 +392,14 @@ export default function TenantsPage() {
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Users className="h-3 w-3" />
-                    Máx. Usuarios
+                    {t("tenants.field.max-users")}
                   </span>
                   <span>{tenant.maxUsers || 10}</span>
                 </div>
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Settings className="h-3 w-3" />
-                    Plan
+                    {t("tenants.field.plan")}
                   </span>
                   <Badge variant="outline" className="capitalize">
                     {tenant.plan || "basic"}
@@ -406,10 +408,10 @@ export default function TenantsPage() {
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Languages className="h-3 w-3" />
-                    Idioma
+                    {t("tenants.language")}
                   </span>
                   <Badge variant="outline">
-                    {LOCALE_LABELS[(tenant.locale as Locale) || "es"] || "Español"}
+                    {LOCALE_LABELS[(tenant.locale as Locale) || "es"] || LOCALE_LABELS.es}
                   </Badge>
                 </div>
               </div>
@@ -421,7 +423,7 @@ export default function TenantsPage() {
                   onClick={() => openEditDialog(tenant)}
                   data-testid={`button-edit-tenant-${tenant.id}`}
                 >
-                  Editar
+                  {t("btn.edit")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -441,13 +443,13 @@ export default function TenantsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium">No hay empresas registradas</h3>
+            <h3 className="text-lg font-medium">{t("tenants.empty-title")}</h3>
             <p className="text-muted-foreground mb-4">
-              Crea la primera empresa para comenzar a usar la plataforma
+              {t("tenants.empty-desc")}
             </p>
             <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Crear Primera Empresa
+              {t("tenants.create-first")}
             </Button>
           </CardContent>
         </Card>

@@ -42,6 +42,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, Trash2, Search, AlertTriangle, Calculator, Truck } from "lucide-react";
 import { useEntityQuery } from "@/hooks/use-entity-query";
 import { useTenant } from "@/hooks/use-tenant";
+import { useI18n } from "@/hooks/use-i18n";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CustomerCombobox } from "@/components/customer-combobox";
@@ -84,34 +85,34 @@ interface QuotationLineItem {
 }
 
 const PAYMENT_TERMS = [
-  { value: "contado", label: "Contado" },
-  { value: "15_dias", label: "15 días" },
-  { value: "30_dias", label: "30 días" },
-  { value: "45_dias", label: "45 días" },
-  { value: "60_dias", label: "60 días" },
-  { value: "90_dias", label: "90 días" },
-  { value: "120_dias", label: "120 días" },
+  { value: "contado", labelKey: "quotations.payment.cash" },
+  { value: "15_dias", labelKey: "quotations.payment.15" },
+  { value: "30_dias", labelKey: "quotations.payment.30" },
+  { value: "45_dias", labelKey: "quotations.payment.45" },
+  { value: "60_dias", labelKey: "quotations.payment.60" },
+  { value: "90_dias", labelKey: "quotations.payment.90" },
+  { value: "120_dias", labelKey: "quotations.payment.120" },
 ];
 
 const DELIVERY_TIMES = [
-  { value: "inmediato", label: "Inmediato" },
-  { value: "1_semana", label: "1 semana" },
-  { value: "2_semanas", label: "2 semanas" },
-  { value: "3_semanas", label: "3 semanas" },
-  { value: "1_mes", label: "1 mes" },
-  { value: "por_confirmar", label: "Por confirmar" },
+  { value: "inmediato", labelKey: "quotations.delivery.immediate" },
+  { value: "1_semana", labelKey: "quotations.delivery.1week" },
+  { value: "2_semanas", labelKey: "quotations.delivery.2weeks" },
+  { value: "3_semanas", labelKey: "quotations.delivery.3weeks" },
+  { value: "1_mes", labelKey: "quotations.delivery.1month" },
+  { value: "por_confirmar", labelKey: "quotations.delivery.tbc" },
 ];
 
 const FOREIGN_RFC = "XEXX010101000";
 
 const CURRENCIES = [
-  { value: "AMBAS", label: "Ambas (MXN + USD)" },
-  { value: "MXN", label: "MXN - Peso Mexicano" },
-  { value: "USD", label: "USD - Dólar Americano" },
+  { value: "AMBAS", labelKey: "quotations.currency.both" },
+  { value: "MXN", labelKey: "quotations.currency.mxn" },
+  { value: "USD", labelKey: "quotations.currency.usd" },
 ];
 
-const quotationFormSchema = z.object({
-  customerId: z.string().min(1, "Selecciona un cliente"),
+const buildQuotationFormSchema = (t: (key: string) => string) => z.object({
+  customerId: z.string().min(1, t("val.select-customer")),
   currency: z.string().default("MXN"),
   exchangeRate: z.string().default("18.00"),
   paymentTerms: z.string().optional(),
@@ -128,7 +129,7 @@ const quotationFormSchema = z.object({
   shippingCostStatus: z.string().default("confirmed"),
 });
 
-type QuotationFormData = z.infer<typeof quotationFormSchema>;
+type QuotationFormData = z.infer<ReturnType<typeof buildQuotationFormSchema>>;
 
 const createEmptyLineItem = (position: number): QuotationLineItem => ({
   productId: null,
@@ -163,8 +164,10 @@ export function QuotationForm({
   isEditing = false,
   adjustMode = false,
 }: QuotationFormProps) {
+  const { t, locale } = useI18n();
   const { tenant } = useTenant();
-  const companyName = tenant?.name || "la empresa";
+  const quotationFormSchema = useMemo(() => buildQuotationFormSchema(t), [locale]);
+  const companyName = tenant?.name || t("quotations.the-company");
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0)]);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -621,11 +624,11 @@ export function QuotationForm({
     // Build approval reason
     let approvalReason = null;
     if (hasExceedingDiscounts && requiresFreeShippingApproval) {
-      approvalReason = `Descuentos exceden el máximo permitido y envío sin costo por cuenta de ${companyName}`;
+      approvalReason = t("quotations.reason-discounts-and-shipping").replace("{company}", companyName);
     } else if (hasExceedingDiscounts) {
-      approvalReason = "Descuentos exceden el máximo permitido";
+      approvalReason = t("quotations.reason-discounts");
     } else if (requiresFreeShippingApproval) {
-      approvalReason = `Envío sin costo por cuenta de ${companyName} requiere autorización`;
+      approvalReason = t("quotations.reason-shipping").replace("{company}", companyName);
     }
 
     const quotationData: InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean } = {
@@ -712,11 +715,11 @@ export function QuotationForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full sm:max-w-6xl h-[100dvh] sm:h-[90vh] flex flex-col rounded-none sm:rounded-lg p-4 sm:p-6 gap-0">
         <DialogHeader className="flex-shrink-0 mb-3">
-          <DialogTitle>{isEditing ? "Editar Cotización" : "Nueva Cotización"}</DialogTitle>
+          <DialogTitle>{isEditing ? t("quotations.edit-title") : t("quotations.new")}</DialogTitle>
           <DialogDescription>
             {isEditing 
-              ? "Modifica los datos de la cotización y sus productos" 
-              : "Crea una cotización agregando productos y configurando términos comerciales"}
+              ? t("quotations.edit-desc") 
+              : t("quotations.create-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -782,7 +785,7 @@ export function QuotationForm({
                 {isForeignCustomer && (
                   <div className="flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                     <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                    <span>Cliente extranjero (RFC: {FOREIGN_RFC}) — IVA no aplica. Los productos se cotizarán sin IVA.</span>
+                    <span>{t("quotations.foreign-customer-note").replace("{rfc}", FOREIGN_RFC)}</span>
                   </div>
                 )}
 
@@ -793,7 +796,7 @@ export function QuotationForm({
                     name="currency"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Moneda de la Cotización</FormLabel>
+                        <FormLabel>{t("quotations.quote-currency")}</FormLabel>
                         <Select
                           value={field.value}
                           onValueChange={(newCurrency) => {
@@ -837,13 +840,13 @@ export function QuotationForm({
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-currency">
-                              <SelectValue placeholder="Seleccionar moneda" />
+                              <SelectValue placeholder={t("quotations.select-currency")} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {CURRENCIES.map((c) => (
                               <SelectItem key={c.value} value={c.value}>
-                                {c.label}
+                                {t(c.labelKey)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -858,7 +861,7 @@ export function QuotationForm({
                     name="exchangeRate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tipo de Cambio (MXN/USD)</FormLabel>
+                        <FormLabel>{t("quotations.exchange-rate-mxnusd")}</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
@@ -874,7 +877,7 @@ export function QuotationForm({
                             />
                           </div>
                         </FormControl>
-                        <p className="text-xs text-muted-foreground">Pesos mexicanos por 1 dólar</p>
+                        <p className="text-xs text-muted-foreground">{t("quotations.exchange-rate-hint")}</p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -887,17 +890,17 @@ export function QuotationForm({
                     name="paymentTerms"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Términos de Pago</FormLabel>
+                        <FormLabel>{t("quotations.payment-terms")}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger data-testid="select-payment-terms">
-                              <SelectValue placeholder="Seleccionar..." />
+                              <SelectValue placeholder={t("quotations.select-placeholder")} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {PAYMENT_TERMS.map((term) => (
                               <SelectItem key={term.value} value={term.value}>
-                                {term.label}
+                                {t(term.labelKey)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -912,17 +915,17 @@ export function QuotationForm({
                     name="deliveryTime"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tiempo de Entrega</FormLabel>
+                        <FormLabel>{t("label.delivery-time")}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger data-testid="select-delivery-time">
-                              <SelectValue placeholder="Seleccionar..." />
+                              <SelectValue placeholder={t("quotations.select-placeholder")} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {DELIVERY_TIMES.map((time) => (
                               <SelectItem key={time.value} value={time.value}>
-                                {time.label}
+                                {t(time.labelKey)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -938,7 +941,7 @@ export function QuotationForm({
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Truck className="h-4 w-4" />
-                      Envío
+                      {t("label.shipping")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -961,10 +964,10 @@ export function QuotationForm({
                           </FormControl>
                           <div className="space-y-1 leading-none">
                             <FormLabel className="cursor-pointer">
-                              Envío por cuenta de {companyName} (sin costo al cliente)
+                              {t("quotations.shipping-by-company").replace("{company}", companyName)}
                             </FormLabel>
                             <p className="text-xs text-muted-foreground">
-                              Requiere autorización del administrador antes de enviar al cliente
+                              {t("quotations.shipping-requires-auth")}
                             </p>
                           </div>
                         </FormItem>
@@ -977,19 +980,19 @@ export function QuotationForm({
                         name="shippingMethod"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Método de Envío</FormLabel>
+                            <FormLabel>{t("quotations.form.shipping-method")}</FormLabel>
                             <Select
                               value={field.value}
                               onValueChange={field.onChange}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-shipping-method">
-                                  <SelectValue placeholder="Seleccionar método" />
+                                  <SelectValue placeholder={t("quotations.select-method")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="truck">Camión</SelectItem>
-                                <SelectItem value="parcel">Paquetería</SelectItem>
+                                <SelectItem value="truck">{t("quotations.shipping.truck")}</SelectItem>
+                                <SelectItem value="parcel">{t("quotations.shipping.parcel")}</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1010,7 +1013,7 @@ export function QuotationForm({
                               />
                             </FormControl>
                             <FormLabel className="cursor-pointer text-sm font-normal">
-                              Requiere pallet
+                              {t("quotations.requires-pallet")}
                             </FormLabel>
                           </FormItem>
                         )}
@@ -1022,17 +1025,17 @@ export function QuotationForm({
                       name="shippingNotes"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Notas de Envío (uso interno)</FormLabel>
+                          <FormLabel>{t("quotations.shipping-notes-label")}</FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}
-                              placeholder="Notas internas sobre el envío (no se muestran en la cotización)"
+                              placeholder={t("quotations.shipping-notes-placeholder")}
                               className="resize-none min-h-[60px]"
                               data-testid="textarea-shipping-notes"
                             />
                           </FormControl>
                           <p className="text-xs text-muted-foreground">
-                            Estas notas no aparecen en la cotización enviada al cliente
+                            {t("quotations.shipping-notes-hint")}
                           </p>
                           <FormMessage />
                         </FormItem>
@@ -1046,7 +1049,7 @@ export function QuotationForm({
                           name="shippingCost"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Costo de Envío</FormLabel>
+                              <FormLabel>{t("label.shipping-cost")}</FormLabel>
                               <FormControl>
                                 <Input
                                   type="text"
@@ -1103,7 +1106,7 @@ export function QuotationForm({
                         data-testid="button-add-line"
                       >
                         <Plus className="h-4 w-4 mr-1" />
-                        Agregar Línea
+                        {t("quotations.add-line")}
                       </Button>
                     </div>
                   </CardHeader>
@@ -1113,13 +1116,13 @@ export function QuotationForm({
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-[200px]">Producto</TableHead>
-                            <TableHead className="w-[80px] text-center">Cant.</TableHead>
-                            <TableHead className="w-[100px] text-right">P. Lista</TableHead>
-                            <TableHead className="w-[80px] text-center">Desc %</TableHead>
-                            <TableHead className="w-[100px] text-right">P. Unitario</TableHead>
-                            <TableHead className="w-[100px] text-right">Subtotal</TableHead>
-                            <TableHead className="w-[60px] text-center">Mon.</TableHead>
+                            <TableHead className="w-[200px]">{t("label.product")}</TableHead>
+                            <TableHead className="w-[80px] text-center">{t("quotations.qty-short")}</TableHead>
+                            <TableHead className="w-[100px] text-right">{t("quotations.list-price-short")}</TableHead>
+                            <TableHead className="w-[80px] text-center">{t("quotations.disc-pct")}</TableHead>
+                            <TableHead className="w-[100px] text-right">{t("quotations.unit-price")}</TableHead>
+                            <TableHead className="w-[100px] text-right">{t("label.subtotal")}</TableHead>
+                            <TableHead className="w-[60px] text-center">{t("quotations.currency-short")}</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1143,14 +1146,14 @@ export function QuotationForm({
                                   ) : (
                                     <span className="text-muted-foreground flex items-center gap-1">
                                       <Search className="h-3 w-3" />
-                                      Buscar producto...
+                                      {t("quotations.search-product")}
                                     </span>
                                   )}
                                 </Button>
                                 {item.exceedsMaxDiscount && (
                                   <div className="flex items-center gap-1 mt-1 text-destructive text-xs">
                                     <AlertTriangle className="h-3 w-3" />
-                                    Excede máximo ({item.maxDiscount}%)
+                                    {t("quotations.exceeds-max")} ({item.maxDiscount}%)
                                   </div>
                                 )}
                               </TableCell>
@@ -1247,21 +1250,21 @@ export function QuotationForm({
                             ) : (
                               <span className="text-muted-foreground flex items-center gap-2">
                                 <Search className="h-4 w-4 shrink-0" />
-                                Buscar producto...
+                                {t("quotations.search-product")}
                               </span>
                             )}
                           </Button>
                           {item.exceedsMaxDiscount && (
                             <div className="flex items-center gap-1 text-destructive text-xs">
                               <AlertTriangle className="h-3 w-3" />
-                              Excede descuento máximo ({item.maxDiscount}%)
+                              {t("quotations.exceeds-max-discount")} ({item.maxDiscount}%)
                             </div>
                           )}
 
                           {/* Numeric fields: Cantidad + Desc% side by side, P.Unitario full width below */}
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
-                              <label className="text-xs text-muted-foreground">Cantidad</label>
+                              <label className="text-xs text-muted-foreground">{t("label.quantity")}</label>
                               <Input type="text" inputMode="decimal" value={item.quantity}
                                 onChange={(e) => updateLineItem(index, { quantity: normalizeDecimal2(e.target.value) })}
                                 onBlur={() => updateLineItem(index, {}, 'discountPercent')}
@@ -1269,7 +1272,7 @@ export function QuotationForm({
                                 className="w-full text-center text-sm" data-testid={`input-quantity-${index}`} />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-xs text-muted-foreground">Desc %</label>
+                              <label className="text-xs text-muted-foreground">{t("quotations.disc-pct")}</label>
                               <Input type="text" inputMode="decimal" value={item.discountPercent}
                                 onChange={(e) => updateLineItem(index, { discountPercent: normalizeDecimal2(e.target.value) })}
                                 onBlur={() => updateLineItem(index, {}, 'discountPercent')}
@@ -1279,7 +1282,7 @@ export function QuotationForm({
                             </div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">P. Unitario</label>
+                            <label className="text-xs text-muted-foreground">{t("quotations.unit-price")}</label>
                             <Input type="text" inputMode="decimal" value={item.unitPrice}
                               onChange={(e) => updateLineItem(index, { unitPrice: normalizeDecimal2(e.target.value) })}
                               onBlur={() => updateLineItem(index, {}, 'unitPrice')}
@@ -1306,7 +1309,7 @@ export function QuotationForm({
                                 </Badge>
                               )}
                               <span className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
-                                P. Lista: {formatItemCurrency(item.listPrice, item.currency)}
+                                {t("quotations.list-price-short")} {formatItemCurrency(item.listPrice, item.currency)}
                               </span>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
@@ -1332,11 +1335,11 @@ export function QuotationForm({
                       name="notes"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Notas</FormLabel>
+                          <FormLabel>{t("label.notes")}</FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}
-                              placeholder="Notas adicionales para el cliente..."
+                              placeholder={t("quotations.notes-placeholder")}
                               rows={3}
                               data-testid="textarea-notes"
                             />
@@ -1351,11 +1354,11 @@ export function QuotationForm({
                       name="conditions"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Condiciones</FormLabel>
+                          <FormLabel>{t("quotations.form.conditions")}</FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}
-                              placeholder="Condiciones comerciales..."
+                              placeholder={t("quotations.conditions-placeholder")}
                               rows={3}
                               data-testid="textarea-conditions"
                             />
@@ -1370,13 +1373,13 @@ export function QuotationForm({
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
                         <Calculator className="h-4 w-4" />
-                        Resumen
+                        {t("quotations.summary")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      {/* Descuento Global — siempre visible */}
+                      {/* Global discount — always visible */}
                       <div className="flex items-center justify-between text-sm gap-2">
-                        <span>Descuento Global:</span>
+                        <span>{t("quotations.global-discount-colon")}</span>
                         <div className="flex items-center gap-2">
                           <FormField
                             control={form.control}
@@ -1396,41 +1399,41 @@ export function QuotationForm({
                         </div>
                       </div>
 
-                      {/* ── Resumen unificado en moneda de la cotización ── */}
+                      {/* ── Unified summary in the quote currency ── */}
                       <div className="space-y-2">
-                        {/* Nota de conversión cuando hay productos en ambas monedas */}
+                        {/* Conversion note when there are products in both currencies */}
                         {totals.hasMixedCurrencies && (
                           <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-0.5">
-                            <p className="font-medium">Productos en monedas mixtas</p>
+                            <p className="font-medium">{t("quotations.mixed-currencies")}</p>
                             <p>MXN: ${parseFloat(totals.mxnSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} · USD: ${parseFloat(totals.usdSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                            <p>Convertido a {totals.quoteCurrency} al T/C ${totals.exRate.toFixed(4)}</p>
+                            <p>{t("quotations.converted-to").replace("{currency}", totals.quoteCurrency).replace("{rate}", totals.exRate.toFixed(4))}</p>
                           </div>
                         )}
 
                         <div className="flex justify-between text-sm">
-                          <span>Subtotal:</span>
+                          <span>{t("label.subtotal")}:</span>
                           <span className="font-mono">{formatCurrency(totals.subtotal)}</span>
                         </div>
 
                         {parseFloat(totals.globalDiscountAmount) > 0 && (
                           <div className="flex justify-between text-sm text-destructive">
-                            <span>Descuento:</span>
+                            <span>{t("label.discount")}:</span>
                             <span className="font-mono">-{formatCurrency(totals.globalDiscountAmount)}</span>
                           </div>
                         )}
 
                         <div className="flex justify-between text-sm">
-                          <span>IVA:</span>
+                          <span>{t("label.tax")}:</span>
                           <span className="font-mono">{formatCurrency(totals.tax)}</span>
                         </div>
 
                         <div className="flex justify-between text-sm">
-                          <span>Envío:</span>
+                          <span>{t("label.shipping")}:</span>
                           <span className="font-mono">
                             {form.watch("shippingHandledByJoper")
                               ? `$0.00 (${companyName})`
                               : form.watch("shippingCostStatus") === "pending"
-                                ? "Por cotizar"
+                                ? t("quotations.to-quote")
                                 : formatCurrency(form.watch("shippingCost") || "0")}
                           </span>
                         </div>
@@ -1438,7 +1441,7 @@ export function QuotationForm({
                         <Separator />
 
                         <div className="flex justify-between items-center text-lg font-bold gap-2">
-                          <span>Total {totals.quoteCurrency}:</span>
+                          <span>{t("quotations.total-currency").replace("{currency}", totals.quoteCurrency)}</span>
                           <div className="flex items-center gap-1">
                             <span className="text-sm text-muted-foreground">$</span>
                             <Input
@@ -1456,12 +1459,12 @@ export function QuotationForm({
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Edita el total para ajustar el descuento global automáticamente
+                          {t("quotations.edit-total-hint")}
                         </p>
 
                         {parseFloat(totals.totalSavings) > 0 && (
                           <div className="flex justify-between text-sm text-green-600">
-                            <span>Ahorro Total:</span>
+                            <span>{t("quotations.total-savings-colon")}</span>
                             <span className="font-mono">{formatCurrency(totals.totalSavings)}</span>
                           </div>
                         )}
@@ -1471,14 +1474,14 @@ export function QuotationForm({
                         <div className="mt-4 p-3 bg-destructive/10 rounded-lg">
                           <div className="flex items-center gap-2 text-destructive text-sm font-medium">
                             <AlertTriangle className="h-4 w-4" />
-                            Requiere Aprobación
+                            {t("quotations.requires-approval")}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
                             {hasExceedingDiscounts && form.watch("shippingHandledByJoper")
-                              ? "Descuentos exceden el máximo y envío sin costo requiere autorización."
+                              ? t("quotations.approval-both")
                               : hasExceedingDiscounts
-                                ? "Algunos descuentos exceden el máximo permitido."
-                                : `Envío sin costo por cuenta de ${companyName} requiere autorización del administrador.`}
+                                ? t("quotations.approval-discounts")
+                                : t("quotations.approval-shipping").replace("{company}", companyName)}
                           </p>
                         </div>
                       )}
@@ -1492,7 +1495,7 @@ export function QuotationForm({
 
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-shrink-0">
               <div className="text-xs text-muted-foreground">
-                {lineItems.filter(i => i.productName).length} producto(s)
+                {lineItems.filter(i => i.productName).length} {t("quotations.products-suffix")}
                 {totals.hasMixedCurrencies
                   ? ` · MXN equiv.: ${formatCurrency(totals.total)} (T/C ${totals.exRate.toFixed(2)})`
                   : ` · Total: ${formatCurrency(totals.total)}`}
@@ -1505,7 +1508,7 @@ export function QuotationForm({
                   disabled={isPending}
                   data-testid="button-cancel"
                 >
-                  Cancelar
+                  {t("btn.cancel")}
                 </Button>
                 {adjustMode ? (
                   <Button
@@ -1515,7 +1518,7 @@ export function QuotationForm({
                     data-testid="button-submit"
                   >
                     {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Ajustes
+                    {t("quotations.save-adjustments")}
                   </Button>
                 ) : (
                   <>
@@ -1527,7 +1530,7 @@ export function QuotationForm({
                       data-testid="button-save-draft"
                     >
                       {isPending && saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Guardar Borrador
+                      {t("quotations.save-draft")}
                     </Button>
                     {(hasExceedingDiscounts || form.watch("shippingHandledByJoper")) ? (
                       <Button
@@ -1537,7 +1540,7 @@ export function QuotationForm({
                         data-testid="button-submit"
                       >
                         {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Enviar a Autorización
+                        {t("quotations.send-to-auth")}
                       </Button>
                     ) : (
                       <Button
@@ -1547,7 +1550,7 @@ export function QuotationForm({
                         data-testid="button-submit"
                       >
                         {isPending && !saveAsDraftRef.current && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Guardar Cotización
+                        {t("quotations.save-quotation")}
                       </Button>
                     )}
                   </>
@@ -1572,9 +1575,9 @@ export function QuotationForm({
     >
       <DialogContent className="w-full sm:max-w-3xl h-[100dvh] sm:h-[80vh] flex flex-col p-0 rounded-none sm:rounded-lg">
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 flex-shrink-0">
-          <DialogTitle>Seleccionar Producto</DialogTitle>
+          <DialogTitle>{t("quotations.select-product-title")}</DialogTitle>
           <DialogDescription>
-            Busca por código, nombre o filtra por categoría
+            {t("quotations.product-search-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1584,7 +1587,7 @@ export function QuotationForm({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9"
-              placeholder="Buscar por código o nombre..."
+              placeholder={t("quotations.search-code-name")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus
@@ -1593,10 +1596,10 @@ export function QuotationForm({
           </div>
           <Select value={productCategoryFilter || "all"} onValueChange={(v) => setProductCategoryFilter(v === "all" ? "" : v)}>
             <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-product-category-filter">
-              <SelectValue placeholder="Todas las categorías" />
+              <SelectValue placeholder={t("quotations.all-categories")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas las categorías</SelectItem>
+              <SelectItem value="all">{t("quotations.all-categories")}</SelectItem>
               {categories?.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
                   {cat.name}
@@ -1612,8 +1615,8 @@ export function QuotationForm({
         <div className="px-6 py-2 flex-shrink-0">
           <span className="text-xs text-muted-foreground">
             {productsLoading
-              ? "Buscando..."
-              : `${displayedProducts.length} producto(s)${products && products.length > 150 ? " (mostrando primeros 150)" : ""}`}
+              ? t("quotations.searching")
+              : `${displayedProducts.length} ${t("quotations.products-suffix")}${products && products.length > 150 ? " " + t("quotations.showing-first-150") : ""}`}
           </span>
         </div>
 
@@ -1626,8 +1629,8 @@ export function QuotationForm({
           ) : displayedProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Search className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">No se encontraron productos</p>
-              {searchQuery && <p className="text-xs mt-1">Intenta con otro término de búsqueda</p>}
+              <p className="text-sm">{t("quotations.no-products-found")}</p>
+              {searchQuery && <p className="text-xs mt-1">{t("quotations.try-another-search")}</p>}
             </div>
           ) : (
             <div className="space-y-1">
@@ -1666,7 +1669,7 @@ export function QuotationForm({
                     <span className="text-sm font-semibold">{formatItemCurrency(product.listPrice, product.currency || "MXN")}</span>
                     {parseFloat(product.maxDiscount || "0") > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        Desc. máx: {product.maxDiscount}%
+                        {t("quotations.max-disc-short")} {product.maxDiscount}%
                       </span>
                     )}
                   </div>

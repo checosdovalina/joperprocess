@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useI18n } from "@/hooks/use-i18n";
 import { Redirect, useSearch, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 
 export default function AuthPage() {
+  const { t } = useI18n();
   const { user, loginMutation, registerMutation } = useAuth();
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
@@ -61,13 +63,13 @@ export default function AuthPage() {
   };
 
   const roleOptions = [
-    { value: UserRole.VENDEDOR, label: "Vendedor" },
-    { value: UserRole.CREDITO_COBRANZA, label: "Crédito y Cobranza" },
-    { value: UserRole.VENTAS_LOGISTICA, label: "Ventas/Logística" },
-    { value: UserRole.FABRICA, label: "Fábrica" },
-    { value: UserRole.EMBARQUES, label: "Embarques" },
-    { value: UserRole.FACTURACION, label: "Facturación" },
-    { value: UserRole.ADMIN, label: "Administrador" },
+    { value: UserRole.VENDEDOR, labelKey: "role.vendedor" },
+    { value: UserRole.CREDITO_COBRANZA, labelKey: "role.credito_cobranza" },
+    { value: UserRole.VENTAS_LOGISTICA, labelKey: "role.ventas_logistica" },
+    { value: UserRole.FABRICA, labelKey: "role.fabrica" },
+    { value: UserRole.EMBARQUES, labelKey: "role.embarques" },
+    { value: UserRole.FACTURACION, labelKey: "role.facturacion" },
+    { value: UserRole.ADMIN, labelKey: "role.admin" },
   ];
 
   return (
@@ -76,41 +78,41 @@ export default function AuthPage() {
         <div className="w-full max-w-md">
           <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
             <ArrowLeft className="h-4 w-4" />
-            Volver al inicio
+            {t("auth.back-home")}
           </Link>
           
           <div className="flex items-center gap-3 mb-8">
             <img src={nexxoLogo} alt="Nexxo" className="h-12 w-12" />
             <div>
               <h1 className="text-2xl font-bold text-primary">NEXXO</h1>
-              <p className="text-sm text-muted-foreground">Sistema Comercial</p>
+              <p className="text-sm text-muted-foreground">{t("auth.system-name")}</p>
             </div>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {allowRegistration ? (
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
-                <TabsTrigger value="register" data-testid="tab-register">Registro</TabsTrigger>
+                <TabsTrigger value="login" data-testid="tab-login">{t("auth.login")}</TabsTrigger>
+                <TabsTrigger value="register" data-testid="tab-register">{t("auth.register-tab")}</TabsTrigger>
               </TabsList>
             ) : (
               <TabsList className="grid w-full grid-cols-1">
-                <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
+                <TabsTrigger value="login" data-testid="tab-login">{t("auth.login")}</TabsTrigger>
               </TabsList>
             )}
 
             <TabsContent value="login">
               <Card>
                 <CardHeader>
-                  <CardTitle>Iniciar Sesión</CardTitle>
+                  <CardTitle>{t("auth.login")}</CardTitle>
                   <CardDescription>
-                    Ingresa tus credenciales para acceder al sistema
+                    {t("auth.login-desc")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="login-username">Usuario</Label>
+                      <Label htmlFor="login-username">{t("label.user")}</Label>
                       <Input
                         id="login-username"
                         data-testid="input-login-username"
@@ -123,7 +125,7 @@ export default function AuthPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="login-password">Contraseña</Label>
+                      <Label htmlFor="login-password">{t("auth.password")}</Label>
                       <Input
                         id="login-password"
                         data-testid="input-login-password"
@@ -144,10 +146,10 @@ export default function AuthPage() {
                       {loginMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Iniciando sesión...
+                          {t("auth.logging-in")}
                         </>
                       ) : (
-                        "Iniciar Sesión"
+                        t("auth.login")
                       )}
                     </Button>
                     <div className="text-center mt-4">
@@ -156,7 +158,7 @@ export default function AuthPage() {
                         className="text-sm text-primary hover:underline"
                         data-testid="link-forgot-password"
                       >
-                        ¿Olvidaste tu contraseña?
+                        {t("auth.forgot-password")}
                       </Link>
                     </div>
                   </form>
@@ -168,15 +170,15 @@ export default function AuthPage() {
               <TabsContent value="register">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Crear Cuenta</CardTitle>
+                    <CardTitle>{t("auth.create-account")}</CardTitle>
                     <CardDescription>
-                      Configuración inicial del sistema - Crear primer usuario administrador
+                      {t("auth.register-desc")}
                     </CardDescription>
                   </CardHeader>
                 <CardContent>
                   <form onSubmit={handleRegister} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="register-fullName">Nombre Completo</Label>
+                      <Label htmlFor="register-fullName">{t("auth.full-name")}</Label>
                       <Input
                         id="register-fullName"
                         data-testid="input-register-fullname"
@@ -189,7 +191,7 @@ export default function AuthPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="register-email">Correo Electrónico</Label>
+                      <Label htmlFor="register-email">{t("auth.email")}</Label>
                       <Input
                         id="register-email"
                         data-testid="input-register-email"
@@ -202,7 +204,7 @@ export default function AuthPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="register-username">Usuario</Label>
+                      <Label htmlFor="register-username">{t("label.user")}</Label>
                       <Input
                         id="register-username"
                         data-testid="input-register-username"
@@ -215,7 +217,7 @@ export default function AuthPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="register-password">Contraseña</Label>
+                      <Label htmlFor="register-password">{t("auth.password")}</Label>
                       <Input
                         id="register-password"
                         data-testid="input-register-password"
@@ -228,7 +230,7 @@ export default function AuthPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="register-role">Rol</Label>
+                      <Label htmlFor="register-role">{t("label.role")}</Label>
                       <Select
                         value={registerData.role}
                         onValueChange={(value) =>
@@ -236,12 +238,12 @@ export default function AuthPage() {
                         }
                       >
                         <SelectTrigger id="register-role" data-testid="select-register-role">
-                          <SelectValue placeholder="Selecciona un rol" />
+                          <SelectValue placeholder={t("auth.select-role")} />
                         </SelectTrigger>
                         <SelectContent>
                           {roleOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                              {t(option.labelKey)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -256,10 +258,10 @@ export default function AuthPage() {
                       {registerMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Registrando...
+                          {t("auth.registering")}
                         </>
                       ) : (
-                        "Crear Cuenta"
+                        t("auth.create-account")
                       )}
                     </Button>
                   </form>
@@ -278,8 +280,7 @@ export default function AuthPage() {
             <h2 className="text-4xl font-bold">NEXXO</h2>
           </div>
           <p className="text-lg text-white/90">
-            Sistema comercial de nueva generación. Gestiona todo tu proceso 
-            comercial desde un solo lugar, de manera eficiente y segura.
+            {t("auth.hero-desc")}
           </p>
           <ul className="space-y-3 text-white/80">
             <li className="flex items-start gap-2">
@@ -288,7 +289,7 @@ export default function AuthPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span>Cotizaciones con precios dinámicos y aprobaciones</span>
+              <span>{t("auth.feature-1")}</span>
             </li>
             <li className="flex items-start gap-2">
               <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center mt-0.5 flex-shrink-0 text-white">
@@ -296,7 +297,7 @@ export default function AuthPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span>Autorización de crédito con análisis automático e IA</span>
+              <span>{t("auth.feature-2")}</span>
             </li>
             <li className="flex items-start gap-2">
               <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center mt-0.5 flex-shrink-0 text-white">
@@ -304,7 +305,7 @@ export default function AuthPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span>Control de embarques con trazabilidad completa</span>
+              <span>{t("auth.feature-3")}</span>
             </li>
             <li className="flex items-start gap-2">
               <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center mt-0.5 flex-shrink-0 text-white">
@@ -312,7 +313,7 @@ export default function AuthPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span>Facturación y cobranza con estados de cuenta</span>
+              <span>{t("auth.feature-4")}</span>
             </li>
           </ul>
         </div>

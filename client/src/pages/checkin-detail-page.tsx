@@ -19,6 +19,7 @@ import { es } from "date-fns/locale";
 import { CheckinPhotoUploader } from "@/components/checkin-photo-uploader";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface CustomerSummary {
   customer: Customer;
@@ -78,6 +79,7 @@ function safeNumber(value: number | undefined | null): number {
 export default function CheckinDetailPage() {
   const { id } = useParams();
   const { toast } = useToast();
+  const { t } = useI18n();
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [checkoutNotes, setCheckoutNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
@@ -147,10 +149,10 @@ export default function CheckinDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
-      toast({ title: "Notas guardadas", description: "Los acuerdos se guardaron correctamente." });
+      toast({ title: t("checkins.toast-notes-saved"), description: t("checkins.toast-notes-saved-desc") });
     },
     onError: (error: Error) => {
-      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo guardar" });
+      toast({ variant: "destructive", title: t("label.error"), description: error.message || t("label.error-save") });
     },
   });
 
@@ -169,15 +171,15 @@ export default function CheckinDetailPage() {
       setEmailList([]);
       setEmailInput("");
       toast({
-        title: "Visita finalizada",
-        description: "La minuta PDF se ha generado correctamente",
+        title: t("checkins.toast-visit-finished"),
+        description: t("checkins.toast-visit-finished-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo finalizar la visita",
+        title: t("label.error"),
+        description: error.message || t("checkins.toast-finish-error"),
       });
     },
   });
@@ -190,15 +192,15 @@ export default function CheckinDetailPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
       toast({
-        title: "Tipo de reunión actualizado",
-        description: "El cambio se guardó correctamente",
+        title: t("checkins.toast-type-updated"),
+        description: t("checkins.toast-type-updated-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo actualizar el tipo de reunión",
+        title: t("label.error"),
+        description: error.message || t("checkins.toast-type-error"),
       });
     },
   });
@@ -209,13 +211,13 @@ export default function CheckinDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
-      toast({ title: "Foto eliminada", description: "La foto se eliminó correctamente" });
+      toast({ title: t("checkins.toast-photo-deleted"), description: t("checkins.toast-photo-deleted-desc") });
     },
     onError: (error: Error) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo eliminar la foto",
+        title: t("label.error"),
+        description: error.message || t("checkins.toast-photo-delete-error"),
       });
     },
   });
@@ -237,12 +239,12 @@ export default function CheckinDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Check-in no encontrado</h2>
-        <p className="text-muted-foreground mb-6">El check-in que buscas no existe</p>
+        <h2 className="text-2xl font-semibold mb-2">{t("checkins.not-found")}</h2>
+        <p className="text-muted-foreground mb-6">{t("checkins.not-found-desc")}</p>
         <Link href="/checkins">
           <Button>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver a Check-ins
+            {t("checkins.back-to-checkins")}
           </Button>
         </Link>
       </div>
@@ -258,7 +260,7 @@ export default function CheckinDetailPage() {
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">Detalle de Check-in</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("checkins.detail-title")}</h1>
           <p className="text-muted-foreground mt-1">
             {checkin.customer.name} - {format(new Date(checkin.checkinAt), "PPP", { locale: es })}
           </p>
@@ -272,7 +274,7 @@ export default function CheckinDetailPage() {
             >
               <a href={`/api/checkins/${id}/pdf`} download>
                 <Download className="h-4 w-4 mr-2" />
-                Descargar PDF
+                {t("btn.download-pdf")}
               </a>
             </Button>
           )}
@@ -282,7 +284,7 @@ export default function CheckinDetailPage() {
               onClick={() => setCheckoutDialogOpen(true)}
             >
               <FileText className="h-4 w-4 mr-2" />
-              Finalizar Visita
+              {t("checkins.finish-visit")}
             </Button>
           )}
         </div>
@@ -293,27 +295,27 @@ export default function CheckinDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-blue-600" />
-              Información de la Visita
+              {t("checkins.visit-info")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <div className="text-sm font-medium text-muted-foreground">Estado</div>
+              <div className="text-sm font-medium text-muted-foreground">{t("label.status")}</div>
               <div className="mt-1">
                 {checkin.checkoutAt ? (
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
-                    Finalizado
+                    {t("status.done")}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                    En curso
+                    {t("status.ongoing")}
                   </Badge>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="text-sm font-medium text-muted-foreground">Tipo de Reunión</div>
+              <div className="text-sm font-medium text-muted-foreground">{t("checkins.meeting-type")}</div>
               <div className="mt-1">
                 {!checkin.checkoutAt ? (
                   <Select
@@ -328,19 +330,19 @@ export default function CheckinDetailPage() {
                       <SelectItem value={MeetingType.LLAMADA}>
                         <span className="flex items-center gap-2">
                           <Phone className="h-4 w-4" />
-                          Llamada
+                          {t("checkins.type.call")}
                         </span>
                       </SelectItem>
                       <SelectItem value={MeetingType.VISITA}>
                         <span className="flex items-center gap-2">
                           <Users className="h-4 w-4" />
-                          Visita
+                          {t("checkins.type.visit")}
                         </span>
                       </SelectItem>
                       <SelectItem value={MeetingType.VIDEOLLAMADA}>
                         <span className="flex items-center gap-2">
                           <Video className="h-4 w-4" />
-                          Videollamada
+                          {t("checkins.type.video")}
                         </span>
                       </SelectItem>
                     </SelectContent>
@@ -350,17 +352,17 @@ export default function CheckinDetailPage() {
                     {checkin.meetingType === MeetingType.LLAMADA && <Phone className="h-4 w-4" />}
                     {checkin.meetingType === MeetingType.VISITA && <Users className="h-4 w-4" />}
                     {checkin.meetingType === MeetingType.VIDEOLLAMADA && <Video className="h-4 w-4" />}
-                    {checkin.meetingType === MeetingType.LLAMADA && "Llamada"}
-                    {checkin.meetingType === MeetingType.VISITA && "Visita"}
-                    {checkin.meetingType === MeetingType.VIDEOLLAMADA && "Videollamada"}
-                    {!checkin.meetingType && "Visita"}
+                    {checkin.meetingType === MeetingType.LLAMADA && t("checkins.type.call")}
+                    {checkin.meetingType === MeetingType.VISITA && t("checkins.type.visit")}
+                    {checkin.meetingType === MeetingType.VIDEOLLAMADA && t("checkins.type.video")}
+                    {!checkin.meetingType && t("checkins.type.visit")}
                   </div>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="text-sm font-medium text-muted-foreground">Check-in</div>
+              <div className="text-sm font-medium text-muted-foreground">{t("checkins.checkin-label")}</div>
               <div className="mt-1 text-sm">
                 {format(new Date(checkin.checkinAt), "PPP 'a las' p", { locale: es })}
               </div>
@@ -368,7 +370,7 @@ export default function CheckinDetailPage() {
 
             {checkin.checkoutAt && (
               <div>
-                <div className="text-sm font-medium text-muted-foreground">Checkout</div>
+                <div className="text-sm font-medium text-muted-foreground">{t("checkins.checkout-label")}</div>
                 <div className="mt-1 text-sm">
                   {format(new Date(checkin.checkoutAt), "PPP 'a las' p", { locale: es })}
                 </div>
@@ -377,7 +379,7 @@ export default function CheckinDetailPage() {
 
             {checkin.latitude && checkin.longitude && (
               <div>
-                <div className="text-sm font-medium text-muted-foreground">Ubicación GPS</div>
+                <div className="text-sm font-medium text-muted-foreground">{t("label.gps")}</div>
                 <div className="mt-1 text-xs font-mono bg-muted p-2 rounded">
                   Lat: {parseFloat(checkin.latitude).toFixed(6)}<br />
                   Lng: {parseFloat(checkin.longitude).toFixed(6)}
@@ -387,7 +389,7 @@ export default function CheckinDetailPage() {
 
             {checkin.notes && (
               <div>
-                <div className="text-sm font-medium text-muted-foreground">Notas</div>
+                <div className="text-sm font-medium text-muted-foreground">{t("label.notes")}</div>
                 <div className="mt-1 text-sm">{checkin.notes}</div>
               </div>
             )}
@@ -396,7 +398,7 @@ export default function CheckinDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Resumen del Cliente</CardTitle>
+            <CardTitle>{t("checkins.customer-summary")}</CardTitle>
             <CardDescription>{checkin.customer.name}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -408,22 +410,22 @@ export default function CheckinDetailPage() {
               </div>
             ) : summaryError ? (
               <div className="text-center py-6">
-                <p className="text-destructive mb-2">Error al cargar información del cliente</p>
+                <p className="text-destructive mb-2">{t("checkins.summary-error")}</p>
                 <p className="text-xs text-muted-foreground">
-                  {summaryError instanceof Error ? summaryError.message : "Error desconocido"}
+                  {summaryError instanceof Error ? summaryError.message : t("checkins.unknown-error")}
                 </p>
               </div>
             ) : summary?.creditSummary ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-sm font-medium text-muted-foreground">Límite de Crédito</div>
+                    <div className="text-sm font-medium text-muted-foreground">{t("label.credit-limit")}</div>
                     <div className="mt-1 text-lg font-semibold">
                       ${safeNumber(summary.creditSummary?.creditLimit).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-muted-foreground">Crédito Disponible</div>
+                    <div className="text-sm font-medium text-muted-foreground">{t("checkins.credit-available")}</div>
                     <div className="mt-1 text-lg font-semibold text-green-600">
                       ${safeNumber(summary.creditSummary?.creditAvailable).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                     </div>
@@ -432,13 +434,13 @@ export default function CheckinDetailPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-sm font-medium text-muted-foreground">Crédito Usado</div>
+                    <div className="text-sm font-medium text-muted-foreground">{t("checkins.credit-used")}</div>
                     <div className="mt-1 text-lg font-semibold text-orange-600">
                       ${safeNumber(summary.creditSummary?.creditUsed).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-muted-foreground">Facturas Vencidas</div>
+                    <div className="text-sm font-medium text-muted-foreground">{t("checkins.overdue-invoices")}</div>
                     <div className="mt-1 flex items-center gap-2">
                       <Badge variant={(summary.creditSummary?.overdueCount || 0) > 0 ? "destructive" : "outline"}>
                         {summary.creditSummary?.overdueCount || 0}
@@ -454,7 +456,7 @@ export default function CheckinDetailPage() {
 
                 {summary.overdueInvoices && summary.overdueInvoices.length > 0 && (
                   <div className="pt-2 border-t">
-                    <div className="text-sm font-medium mb-2">Facturas Vencidas</div>
+                    <div className="text-sm font-medium mb-2">{t("checkins.overdue-invoices")}</div>
                     <div className="space-y-1">
                       {summary.overdueInvoices.slice(0, 3).map((invoice) => (
                         <div key={invoice.id} className="text-xs flex justify-between">
@@ -470,7 +472,7 @@ export default function CheckinDetailPage() {
               </div>
             ) : (
               <div className="text-center py-6 text-muted-foreground">
-                No hay información disponible
+                {t("checkins.no-info")}
               </div>
             )}
           </CardContent>
@@ -481,13 +483,13 @@ export default function CheckinDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              Facturas por Cobrar
+              {t("checkins.receivable-invoices")}
               <Badge variant="destructive" data-testid="badge-pending-invoices">
                 {summary.pendingInvoices.length}
               </Badge>
             </CardTitle>
             <CardDescription>
-              Total pendiente: ${safeNumber(summary.totalBalanceDue).toLocaleString("es-MX", {
+              {t("checkins.total-pending")} ${safeNumber(summary.totalBalanceDue).toLocaleString("es-MX", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -497,7 +499,7 @@ export default function CheckinDetailPage() {
             <div className="space-y-3">
               {summary.overdueInvoices && summary.overdueInvoices.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold text-red-600 mb-2">Facturas Vencidas</h4>
+                  <h4 className="text-sm font-semibold text-red-600 mb-2">{t("checkins.overdue-invoices")}</h4>
                   <div className="space-y-2">
                     {summary.overdueInvoices.map((invoice) => (
                       <div
@@ -532,7 +534,7 @@ export default function CheckinDetailPage() {
 
               {summary.upcomingInvoices && summary.upcomingInvoices.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold mb-2">Facturas Próximas a Vencer</h4>
+                  <h4 className="text-sm font-semibold mb-2">{t("checkins.upcoming-invoices")}</h4>
                   <div className="space-y-2">
                     {summary.upcomingInvoices.map((invoice) => (
                       <div
@@ -575,12 +577,12 @@ export default function CheckinDetailPage() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <NotebookPen className="h-5 w-5 text-blue-600" />
-              Acuerdos y Comentarios
+              {t("checkins.agreements")}
             </CardTitle>
             <CardDescription className="mt-1">
               {checkin.checkoutAt
-                ? "Notas registradas durante la visita"
-                : "Agrega los acuerdos y comentarios antes de finalizar la visita"}
+                ? t("checkins.notes-registered")
+                : t("checkins.add-agreements")}
             </CardDescription>
           </div>
           {!checkin.checkoutAt && (
@@ -604,8 +606,8 @@ export default function CheckinDetailPage() {
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5 text-sm font-semibold">
               <FileText className="h-3.5 w-3.5 text-blue-600" />
-              Acuerdos y Comentarios
-              <span className="text-xs font-normal text-muted-foreground ml-1">— van en la minuta PDF al cliente</span>
+              {t("checkins.agreements")}
+              <span className="text-xs font-normal text-muted-foreground ml-1">{t("checkins.go-in-minute")}</span>
             </Label>
             {checkin.checkoutAt ? (
               checkin.checkoutNotes ? (
@@ -619,13 +621,13 @@ export default function CheckinDetailPage() {
               <>
                 <Textarea
                   data-testid="textarea-notes-agreements"
-                  placeholder="Ej: Se acordó revisar cotización la próxima semana. El cliente solicitó descuento en pedido mayor a $50,000..."
+                  placeholder={t("checkins.agreements-ph")}
                   value={checkoutNotes}
                   onChange={(e) => setCheckoutNotes(e.target.value)}
                   className="min-h-[110px] text-sm"
                 />
                 <p className="text-xs font-medium text-destructive">
-                  Esta información aparecerá en la minuta PDF que se envía al cliente.
+                  {t("checkins.agreements-hint")}
                 </p>
               </>
             )}
@@ -635,8 +637,8 @@ export default function CheckinDetailPage() {
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5 text-sm font-semibold">
               <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-              Notas Internas
-              <span className="text-xs font-normal text-muted-foreground ml-1">— no se envían al cliente</span>
+              {t("checkins.internal-notes")}
+              <span className="text-xs font-normal text-muted-foreground ml-1">{t("checkins.internal-not-sent")}</span>
             </Label>
             {checkin.checkoutAt ? (
               checkin.internalNotes ? (
@@ -647,19 +649,19 @@ export default function CheckinDetailPage() {
                   {checkin.internalNotes}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground italic">Sin notas internas.</p>
+                <p className="text-sm text-muted-foreground italic">{t("checkins.no-internal-notes")}</p>
               )
             ) : (
               <>
                 <Textarea
                   data-testid="textarea-notes-internal"
-                  placeholder="Ej: El cliente mencionó estar evaluando otro proveedor. Seguimiento urgente..."
+                  placeholder={t("checkins.internal-ph")}
                   value={internalNotes}
                   onChange={(e) => setInternalNotes(e.target.value)}
                   className="min-h-[80px] text-sm border-dashed"
                 />
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Lock className="h-3 w-3" /> Estas notas son privadas y NO se incluyen en la minuta al cliente.
+                  <Lock className="h-3 w-3" /> {t("checkins.private-notes-hint")}
                 </p>
               </>
             )}
@@ -669,9 +671,9 @@ export default function CheckinDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Fotografías de la Visita</CardTitle>
+          <CardTitle>{t("checkins.photos-title")}</CardTitle>
           <CardDescription>
-            {checkin.photos?.length || 0} de 20 fotos capturadas
+            {checkin.photos?.length || 0} {t("checkins.photos-count-suffix")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -697,7 +699,7 @@ export default function CheckinDetailPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm("¿Eliminar esta foto? Esta acción no se puede deshacer.")) {
+                        if (confirm(t("checkins.delete-photo-confirm"))) {
                           deletePhotoMutation.mutate(photoEntityId);
                         }
                       }}
@@ -716,7 +718,7 @@ export default function CheckinDetailPage() {
 
           {!checkin.checkoutAt && (
             <div>
-              <h3 className="text-sm font-medium mb-3">Agregar Fotos</h3>
+              <h3 className="text-sm font-medium mb-3">{t("checkins.add-photos")}</h3>
               <CheckinPhotoUploader
                 checkinId={checkin.id}
                 currentPhotoCount={checkin.photos?.length || 0}
@@ -736,16 +738,16 @@ export default function CheckinDetailPage() {
       <Dialog open={checkoutDialogOpen} onOpenChange={(open) => { setCheckoutDialogOpen(open); if (!open) { setEmailList([]); setEmailInput(""); } }}>
         <DialogContent data-testid="dialog-checkout" className="max-w-lg max-h-[90dvh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Finalizar Visita</DialogTitle>
+            <DialogTitle>{t("checkins.finish-visit")}</DialogTitle>
             <DialogDescription>
-              Se generará una minuta PDF con las fotos y la información de la visita.
+              {t("checkins.pdf-will-generate")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0 pr-1">
             {/* Leyenda de advertencia */}
             <div className="bg-red-600 text-white p-3 rounded-md text-sm font-medium">
-              Esta información se enviará al cliente, directivos y personas agregadas en administración.
+              {t("checkins.pdf-sent-to")}
             </div>
 
             {/* Destinatarios de la minuta */}
@@ -758,7 +760,7 @@ export default function CheckinDetailPage() {
               {/* Chips — todos los destinatarios (precargados + extras) */}
               <div className="flex flex-wrap gap-2 p-3 rounded-md border bg-muted/30 min-h-[52px]">
                 {emailList.length === 0 && (
-                  <span className="text-xs text-muted-foreground self-center">Cargando destinatarios...</span>
+                  <span className="text-xs text-muted-foreground self-center">{t("checkins.loading-recipients")}</span>
                 )}
                 {emailList.map((email) => {
                   const defaultRecipient = recipientsData?.recipients?.find(r => r.email === email);
@@ -792,7 +794,7 @@ export default function CheckinDetailPage() {
               <div className="flex gap-2">
                 <Input
                   type="email"
-                  placeholder="Agregar otro correo..."
+                  placeholder={t("checkins.add-email")}
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCheckinEmail(); } }}
@@ -816,35 +818,35 @@ export default function CheckinDetailPage() {
             
             <div className="space-y-2">
               <Label htmlFor="checkout-notes">
-                Acuerdos y Comentarios (para el cliente)
+                {t("checkins.agreements-for-client")}
               </Label>
               <Textarea
                 id="checkout-notes"
                 data-testid="textarea-checkout-notes"
-                placeholder="Describe los acuerdos alcanzados, próximos pasos, o cualquier comentario relevante..."
+                placeholder={t("checkins.notes-ph")}
                 value={checkoutNotes}
                 onChange={(e) => setCheckoutNotes(e.target.value)}
                 className="min-h-[100px]"
               />
               <p className="text-xs font-medium text-destructive">
-                Esta información aparecerá en la minuta PDF que se envía al cliente.
+                {t("checkins.agreements-hint")}
               </p>
             </div>
             
             <div className="space-y-2">
               <Label htmlFor="internal-notes">
-                Notas Internas de Reunión
+                {t("checkins.internal-title")}
               </Label>
               <Textarea
                 id="internal-notes"
                 data-testid="textarea-internal-notes"
-                placeholder="Notas privadas que NO se envían al cliente..."
+                placeholder={t("checkins.internal-private-ph")}
                 value={internalNotes}
                 onChange={(e) => setInternalNotes(e.target.value)}
                 className="min-h-[80px] border-dashed"
               />
               <p className="text-xs text-muted-foreground">
-                Estas notas son internas y NO se incluyen en la minuta que se envía al cliente.
+                {t("checkins.internal-hint")}
               </p>
             </div>
           </div>
@@ -856,7 +858,7 @@ export default function CheckinDetailPage() {
               disabled={checkoutMutation.isPending}
               data-testid="button-cancel-checkout"
             >
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               onClick={() => checkoutMutation.mutate()}

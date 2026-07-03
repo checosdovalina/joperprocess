@@ -137,14 +137,14 @@ export default function ShipmentsPage() {
       refetchInstances();
       setNewSerials([]);
       toast({
-        title: "Números de serie registrados",
-        description: "Los números de serie se guardaron correctamente.",
+        title: t("shipments.toast.serials-saved"),
+        description: t("shipments.toast.serials-saved-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: error.message || "No se pudieron guardar los números de serie",
+        title: t("label.error"),
+        description: error.message || t("shipments.toast.serials-save-error"),
         variant: "destructive",
       });
     },
@@ -158,10 +158,10 @@ export default function ShipmentsPage() {
     onSuccess: () => {
       setDeletingInstanceId(null);
       refetchInstances();
-      toast({ title: "Serie eliminada", description: "El número de serie fue eliminado correctamente." });
+      toast({ title: t("shipments.toast.serial-deleted"), description: t("shipments.toast.serial-deleted-desc") });
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo eliminar el número de serie", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("shipments.toast.serial-delete-error"), variant: "destructive" });
     },
   });
 
@@ -170,17 +170,17 @@ export default function ShipmentsPage() {
       const res = await apiRequest("PATCH", `/api/product-instances/${id}`, { serialNumber });
       if (!res.ok) {
         const body = await res.json();
-        throw new Error(body.error || "Error al actualizar");
+        throw new Error(body.error || t("shipments.toast.update-error"));
       }
     },
     onSuccess: () => {
       setEditingInstanceId(null);
       setEditingSerialValue("");
       refetchInstances();
-      toast({ title: "Serie actualizada", description: "El número de serie fue corregido correctamente." });
+      toast({ title: t("shipments.toast.serial-updated"), description: t("shipments.toast.serial-updated-desc") });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: t("label.error"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -192,7 +192,7 @@ export default function ShipmentsPage() {
       return res.json();
     },
     onSuccess: (updated) => {
-      toast({ title: "Embarque actualizado", description: "La información se guardó correctamente" });
+      toast({ title: t("shipments.toast.updated"), description: t("shipments.toast.updated-desc") });
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
       setEditMode(false);
       // Update local state so status buttons reflect the new status immediately
@@ -201,7 +201,7 @@ export default function ShipmentsPage() {
       }
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo actualizar el embarque", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("shipments.toast.update-error"), variant: "destructive" });
     },
   });
 
@@ -262,8 +262,8 @@ export default function ShipmentsPage() {
     const captured = (productInstances?.length ?? 0) + newSerials.length;
     if (totalNeeded > 0 && captured >= totalNeeded) {
       toast({
-        title: "Límite alcanzado",
-        description: `Ya se tienen ${totalNeeded} de ${totalNeeded} series requeridas. Elimina una existente si necesitas corregirla.`,
+        title: t("shipments.toast.limit-reached"),
+        description: `${t("shipments.toast.limit-desc-1")} ${totalNeeded} ${t("label.of")} ${totalNeeded} ${t("shipments.toast.limit-desc-2")}`,
         variant: "destructive",
       });
       return;
@@ -286,8 +286,8 @@ export default function ShipmentsPage() {
     const validSerials = newSerials.filter(s => s.productId && s.serialNumber.trim());
     if (validSerials.length === 0) {
       toast({
-        title: "Sin datos",
-        description: "Agrega al menos un número de serie válido",
+        title: t("shipments.toast.no-data"),
+        description: t("shipments.toast.no-data-desc"),
         variant: "destructive",
       });
       return;
@@ -339,7 +339,7 @@ export default function ShipmentsPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("status.pending")}</CardTitle>
             <Truck className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
@@ -378,10 +378,10 @@ export default function ShipmentsPage() {
             <div>
               <CardTitle>{t("shipments.all")}</CardTitle>
               <CardDescription>
-                {filteredShipments.length} de {shipments?.length || 0} embarques
+                {filteredShipments.length} {t("label.of")} {shipments?.length || 0} {t("shipments.count-label")}
                 {hideDelivered && (shipments?.filter(s => s.status === ShipmentStatus.DELIVERED).length ?? 0) > 0 && (
                   <span className="ml-1">
-                    ({shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length} entregado{shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length !== 1 ? "s" : ""} oculto{shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length !== 1 ? "s" : ""})
+                    ({shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length} {shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length !== 1 ? t("shipments.delivered-plural") : t("shipments.delivered-singular")} {shipments!.filter(s => s.status === ShipmentStatus.DELIVERED).length !== 1 ? t("shipments.hidden-plural") : t("shipments.hidden-singular")})
                   </span>
                 )}
               </CardDescription>
@@ -397,7 +397,7 @@ export default function ShipmentsPage() {
           <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
             <div className="flex-1 min-w-[180px]">
               <Input
-                placeholder="Buscar cliente, folio o transportista..."
+                placeholder={t("shipments.search-ph")}
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
                 data-testid="input-search-shipment"
@@ -405,11 +405,11 @@ export default function ShipmentsPage() {
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[160px]" data-testid="select-filter-status">
-                <SelectValue placeholder="Estado" />
+                <SelectValue placeholder={t("label.status")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value={ShipmentStatus.PENDING}>Pendiente</SelectItem>
+                <SelectItem value="all">{t("shipments.all-statuses")}</SelectItem>
+                <SelectItem value={ShipmentStatus.PENDING}>{t("status.pending")}</SelectItem>
                 <SelectItem value={ShipmentStatus.IN_TRANSIT}>{t("status.in-transit")}</SelectItem>
                 <SelectItem value={ShipmentStatus.DELIVERED}>{t("status.delivered")}</SelectItem>
               </SelectContent>
@@ -421,7 +421,7 @@ export default function ShipmentsPage() {
                 onChange={e => setFilterDateFrom(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-from"
-                title="Desde"
+                title={t("shipments.date-from")}
               />
               <span className="text-muted-foreground text-sm">—</span>
               <Input
@@ -430,13 +430,13 @@ export default function ShipmentsPage() {
                 onChange={e => setFilterDateTo(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-to"
-                title="Hasta"
+                title={t("shipments.date-to")}
               />
             </div>
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
                 <RotateCcw className="h-4 w-4 mr-1" />
-                Limpiar
+                {t("btn.clear")}
               </Button>
             )}
           </div>
@@ -486,7 +486,7 @@ export default function ShipmentsPage() {
                             {format(new Date(shipment.shippedAt), "PP", { locale: es })}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">No embarcado</span>
+                          <span className="text-xs text-muted-foreground">{t("shipments.not-shipped")}</span>
                         )}
                       </TableCell>
                       <TableCell>{getStatusBadge(shipment.status)}</TableCell>
@@ -499,7 +499,7 @@ export default function ShipmentsPage() {
                             data-testid={`button-serial-${shipment.id}`}
                           >
                             <Barcode className="h-4 w-4 mr-1" />
-                            Series
+                            {t("shipments.serials")}
                           </Button>
                           <Button
                             variant="ghost"
@@ -507,7 +507,7 @@ export default function ShipmentsPage() {
                             onClick={() => openDetailsDialog(shipment)}
                             data-testid={`button-view-shipment-${shipment.id}`}
                           >
-                            Ver Detalles
+                            {t("btn.view-details")}
                           </Button>
                         </div>
                       </TableCell>
@@ -518,7 +518,7 @@ export default function ShipmentsPage() {
             </div>
           ) : shipments && shipments.length > 0 ? (
             <div className="text-center py-8 text-muted-foreground" data-testid="text-no-results">
-              Ningún embarque coincide con los filtros aplicados
+              {t("shipments.no-filter-match")}
             </div>
           ) : (
             <div className="text-center py-12">
@@ -534,7 +534,7 @@ export default function ShipmentsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Barcode className="h-5 w-5" />
-              Números de Serie - {selectedShipment?.order.quotation.folio}
+              {t("shipments.serials-title")} - {selectedShipment?.order.quotation.folio}
             </DialogTitle>
             <DialogDescription>
               {selectedShipment?.order.quotation.folio}
@@ -549,14 +549,14 @@ export default function ShipmentsPage() {
             return (
               <div className="space-y-1.5 px-1">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Series capturadas</span>
+                  <span className="text-muted-foreground">{t("shipments.serials-captured")}</span>
                   <span className={captured >= totalNeeded ? "font-semibold text-green-600" : "font-semibold"}>
-                    {captured} de {totalNeeded}
+                    {captured} {t("label.of")} {totalNeeded}
                   </span>
                 </div>
                 <Progress value={pct} className="h-2" />
                 {captured >= totalNeeded && (
-                  <p className="text-xs text-green-600 text-right">Todos los productos tienen serie asignada</p>
+                  <p className="text-xs text-green-600 text-right">{t("shipments.all-serials-assigned")}</p>
                 )}
               </div>
             );
@@ -565,7 +565,7 @@ export default function ShipmentsPage() {
           <div className="space-y-4">
             {productInstances && productInstances.length > 0 && (
               <div>
-                <Label className="text-sm font-medium">Series Registradas</Label>
+                <Label className="text-sm font-medium">{t("shipments.registered-serials")}</Label>
                 <ScrollArea className="h-48 mt-2 border rounded-md">
                   <div className="p-3 space-y-2">
                     {productInstances.map((instance) => (
@@ -593,7 +593,7 @@ export default function ShipmentsPage() {
                         </div>
                         {deletingInstanceId === instance.id ? (
                           <div className="flex items-center gap-1 shrink-0">
-                            <span className="text-xs text-destructive font-medium">¿Eliminar?</span>
+                            <span className="text-xs text-destructive font-medium">{t("shipments.delete-confirm")}</span>
                             <Button
                               size="icon"
                               variant="ghost"
@@ -667,7 +667,7 @@ export default function ShipmentsPage() {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-medium">Agregar Nuevas Series</Label>
+                <Label className="text-sm font-medium">{t("shipments.add-new-serials")}</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -676,7 +676,7 @@ export default function ShipmentsPage() {
                   data-testid="button-add-serial-row"
                 >
                   <Plus className="h-4 w-4 mr-1" />
-                  Agregar
+                  {t("shipments.add")}
                 </Button>
               </div>
 
@@ -684,7 +684,7 @@ export default function ShipmentsPage() {
                 <div className="text-center py-6 border rounded-md border-dashed">
                   <Barcode className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">
-                    Haz clic en "Agregar" para registrar números de serie
+                    {t("shipments.add-hint")}
                   </p>
                 </div>
               ) : (
@@ -696,10 +696,10 @@ export default function ShipmentsPage() {
                         onValueChange={(v) => updateSerialRow(index, "productId", v === "_select" ? "" : v)}
                       >
                         <SelectTrigger className="w-56" data-testid={`select-product-${index}`}>
-                          <SelectValue placeholder="Producto" />
+                          <SelectValue placeholder={t("shipments.product")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="_select">Seleccionar producto</SelectItem>
+                          <SelectItem value="_select">{t("shipments.select-product")}</SelectItem>
                           {(orderProducts.length > 0 ? orderProducts : products?.filter(p => p.active) ?? []).map((product) => (
                             <SelectItem key={product!.id} value={product!.id}>
                               {product!.name}
@@ -708,7 +708,7 @@ export default function ShipmentsPage() {
                         </SelectContent>
                       </Select>
                       <Input
-                        placeholder="Número de serie"
+                        placeholder={t("shipments.serial-number")}
                         value={serial.serialNumber}
                         onChange={(e) => updateSerialRow(index, "serialNumber", e.target.value)}
                         className="flex-1"
@@ -736,7 +736,7 @@ export default function ShipmentsPage() {
                   onClick={() => setNewSerials([])}
                   data-testid="button-cancel-serials"
                 >
-                  Cancelar
+                  {t("btn.cancel")}
                 </Button>
                 <Button
                   onClick={handleSaveSerials}
@@ -746,7 +746,7 @@ export default function ShipmentsPage() {
                   {addSerialsMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : null}
-                  Guardar Series
+                  {t("shipments.save-serials")}
                 </Button>
               </div>
             )}
@@ -760,7 +760,7 @@ export default function ShipmentsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5" />
-              Detalles del Embarque
+              {t("shipments.details-title")}
             </DialogTitle>
             <DialogDescription>
               {selectedShipment?.order.quotation.folio}
@@ -773,7 +773,7 @@ export default function ShipmentsPage() {
                 {getStatusBadge(selectedShipment.status)}
                 {!editMode && (
                   <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
-                    Editar
+                    {t("btn.edit")}
                   </Button>
                 )}
               </div>
@@ -782,95 +782,95 @@ export default function ShipmentsPage() {
                 <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Transportista</Label>
+                      <Label>{t("shipments.col.carrier")}</Label>
                       <Input
                         value={editTransporter}
                         onChange={(e) => setEditTransporter(e.target.value)}
-                        placeholder="Nombre del transportista"
+                        placeholder={t("shipments.carrier-ph")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Tipo de Transporte</Label>
+                      <Label>{t("shipments.transport-type")}</Label>
                       <Select value={editTransportType} onValueChange={setEditTransportType}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="propio">Transporte Propio</SelectItem>
-                          <SelectItem value="paqueteria">Paquetería</SelectItem>
+                          <SelectItem value="propio">{t("shipments.transport-own")}</SelectItem>
+                          <SelectItem value="paqueteria">{t("shipments.transport-parcel")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Número de Guía / Rastreo</Label>
+                      <Label>{t("shipments.tracking-number")}</Label>
                       <Input
                         value={editTrackingNumber}
                         onChange={(e) => setEditTrackingNumber(e.target.value)}
-                        placeholder="Número de guía"
+                        placeholder={t("shipments.tracking-ph")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Nombre del Chofer</Label>
+                      <Label>{t("shipments.driver-name")}</Label>
                       <Input
                         value={editDriverName}
                         onChange={(e) => setEditDriverName(e.target.value)}
-                        placeholder="Nombre del chofer"
+                        placeholder={t("shipments.driver-ph")}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Placas del Vehículo</Label>
+                    <Label>{t("shipments.vehicle-plates")}</Label>
                     <Input
                       value={editVehiclePlates}
                       onChange={(e) => setEditVehiclePlates(e.target.value)}
-                      placeholder="Placas"
+                      placeholder={t("shipments.plates-ph")}
                       className="w-1/2"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Folio de Factura</Label>
+                    <Label>{t("shipments.invoice-number")}</Label>
                     <Input
                       value={editInvoiceNumber}
                       onChange={(e) => setEditInvoiceNumber(e.target.value)}
-                      placeholder="Ej. A-1234"
+                      placeholder={t("shipments.invoice-ph")}
                       data-testid="input-invoice-number"
                     />
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setEditMode(false)}>
-                      Cancelar
+                      {t("btn.cancel")}
                     </Button>
                     <Button onClick={handleSaveShipment} disabled={updateShipmentMutation.isPending}>
-                      Guardar
+                      {t("btn.save")}
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Transportista</Label>
+                    <Label className="text-xs text-muted-foreground">{t("shipments.col.carrier")}</Label>
                     <p className="font-medium">{selectedShipment.transporter}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Tipo</Label>
-                    <p className="font-medium capitalize">{selectedShipment.transportType === "propio" ? "Transporte Propio" : "Paquetería"}</p>
+                    <Label className="text-xs text-muted-foreground">{t("label.type")}</Label>
+                    <p className="font-medium capitalize">{selectedShipment.transportType === "propio" ? t("shipments.transport-own") : t("shipments.transport-parcel")}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Número de Guía</Label>
-                    <p className="font-medium">{selectedShipment.trackingNumber || "No asignado"}</p>
+                    <Label className="text-xs text-muted-foreground">{t("shipments.tracking-number-short")}</Label>
+                    <p className="font-medium">{selectedShipment.trackingNumber || t("shipments.not-assigned")}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Chofer</Label>
-                    <p className="font-medium">{selectedShipment.driverName || "No asignado"}</p>
+                    <Label className="text-xs text-muted-foreground">{t("shipments.driver")}</Label>
+                    <p className="font-medium">{selectedShipment.driverName || t("shipments.not-assigned")}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Placas</Label>
-                    <p className="font-medium">{selectedShipment.vehiclePlates || "No asignadas"}</p>
+                    <Label className="text-xs text-muted-foreground">{t("shipments.plates")}</Label>
+                    <p className="font-medium">{selectedShipment.vehiclePlates || t("shipments.not-assigned-fem")}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Fecha de Embarque</Label>
+                    <Label className="text-xs text-muted-foreground">{t("shipments.shipping-date")}</Label>
                     <p className="font-medium">
                       {selectedShipment.shippedAt 
                         ? format(new Date(selectedShipment.shippedAt), "PPP", { locale: es })
@@ -879,7 +879,7 @@ export default function ShipmentsPage() {
                   </div>
                   {(selectedShipment as any).invoiceNumber && (
                     <div>
-                      <Label className="text-xs text-muted-foreground">Folio de Factura</Label>
+                      <Label className="text-xs text-muted-foreground">{t("shipments.invoice-number")}</Label>
                       <p className="font-medium">{(selectedShipment as any).invoiceNumber}</p>
                     </div>
                   )}
@@ -896,18 +896,18 @@ export default function ShipmentsPage() {
                   data-testid={`button-remision-${selectedShipment.id}`}
                 >
                   <FileDown className="h-4 w-4 mr-1" />
-                  Remisión de Salida
+                  {t("shipments.exit-remision")}
                 </Button>
                 <div className="flex gap-2">
                   {selectedShipment.status === ShipmentStatus.PENDING && (
                     <Button onClick={handleMarkAsInTransit} disabled={updateShipmentMutation.isPending}>
                       <Truck className="h-4 w-4 mr-1" />
-                      Marcar En Tránsito
+                      {t("shipments.mark-in-transit")}
                     </Button>
                   )}
                   {selectedShipment.status === ShipmentStatus.IN_TRANSIT && (
                     <Button onClick={handleMarkAsDelivered} disabled={updateShipmentMutation.isPending} className="bg-green-600 hover:bg-green-700">
-                      Marcar Entregado
+                      {t("shipments.mark-delivered")}
                     </Button>
                   )}
                 </div>

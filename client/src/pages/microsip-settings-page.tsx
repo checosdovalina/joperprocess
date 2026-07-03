@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ interface MicrosipConfigResponse extends Partial<MicrosipConfig> {
 
 export default function MicrosipSettingsPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   
   const [formData, setFormData] = useState({
     host: "",
@@ -98,14 +100,14 @@ export default function MicrosipSettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/microsip/config"] });
       toast({
-        title: "Configuración guardada",
-        description: "La configuración de Microsip ha sido guardada correctamente.",
+        title: t("microsip.saved-title"),
+        description: t("microsip.saved-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: error.message || "No se pudo guardar la configuración",
+        title: t("label.error"),
+        description: error.message || t("microsip.save-error"),
         variant: "destructive",
       });
     },
@@ -119,12 +121,12 @@ export default function MicrosipSettingsPage() {
     onSuccess: (data) => {
       if (data.success) {
         toast({
-          title: "Conexión exitosa",
+          title: t("microsip.conn-success"),
           description: data.message,
         });
       } else {
         toast({
-          title: "Error de conexión",
+          title: t("microsip.conn-error"),
           description: data.message,
           variant: "destructive",
         });
@@ -132,8 +134,8 @@ export default function MicrosipSettingsPage() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: error.message || "No se pudo probar la conexión",
+        title: t("label.error"),
+        description: error.message || t("microsip.test-error"),
         variant: "destructive",
       });
     },
@@ -148,12 +150,12 @@ export default function MicrosipSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/microsip/logs"] });
       if (data.success) {
         toast({
-          title: "Sincronización iniciada",
-          description: data.message || "Revisa el historial para ver el resultado.",
+          title: t("microsip.sync-started"),
+          description: data.message || t("microsip.sync-started-desc"),
         });
       } else {
         toast({
-          title: "Error en sincronización",
+          title: t("microsip.sync-error"),
           description: data.error,
           variant: "destructive",
         });
@@ -161,8 +163,8 @@ export default function MicrosipSettingsPage() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: error.message || "Error durante la sincronización",
+        title: t("label.error"),
+        description: error.message || t("microsip.sync-error-generic"),
         variant: "destructive",
       });
     },
@@ -176,15 +178,15 @@ export default function MicrosipSettingsPage() {
     onSuccess: (_, enabled) => {
       queryClient.invalidateQueries({ queryKey: ["/api/microsip/config"] });
       toast({
-        title: enabled ? "Sincronización activada" : "Sincronización desactivada",
+        title: enabled ? t("microsip.enabled-title") : t("microsip.disabled-title"),
         description: enabled 
-          ? "La sincronización automática ha sido activada." 
-          : "La sincronización automática ha sido desactivada.",
+          ? t("microsip.enabled-desc") 
+          : t("microsip.disabled-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -250,11 +252,11 @@ export default function MicrosipSettingsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "success":
-        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> Exitoso</Badge>;
+        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> {t("microsip.badge.success")}</Badge>;
       case "error":
-        return <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20"><XCircle className="w-3 h-3 mr-1" /> Error</Badge>;
+        return <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20"><XCircle className="w-3 h-3 mr-1" /> {t("label.error")}</Badge>;
       case "started":
-        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> En proceso</Badge>;
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> {t("microsip.badge.in-progress")}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -291,15 +293,15 @@ export default function MicrosipSettingsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Database className="h-6 w-6" />
-            Integración Microsip
+            {t("microsip.title")}
           </h1>
           <p className="text-muted-foreground">
-            Sincroniza clientes, productos, facturas y pagos desde Microsip
+            {t("microsip.subtitle")}
           </p>
         </div>
         {config?.configured && (
           <div className="flex items-center gap-2">
-            <Label htmlFor="sync-toggle">Sincronización automática</Label>
+            <Label htmlFor="sync-toggle">{t("microsip.auto-sync")}</Label>
             <Switch
               id="sync-toggle"
               checked={config.enabled || false}
@@ -314,15 +316,15 @@ export default function MicrosipSettingsPage() {
       <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
-            <CardTitle>Configuración de Conexión</CardTitle>
+            <CardTitle>{t("microsip.conn.title")}</CardTitle>
             <CardDescription>
-              Datos para conectarse a la base de datos Firebird de Microsip
+              {t("microsip.conn.desc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="host">Servidor (IP o hostname)</Label>
+                <Label htmlFor="host">{t("microsip.field.host")}</Label>
                 <Input
                   id="host"
                   placeholder="192.168.1.100"
@@ -332,7 +334,7 @@ export default function MicrosipSettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="port">Puerto</Label>
+                <Label htmlFor="port">{t("microsip.field.port")}</Label>
                 <Input
                   id="port"
                   type="number"
@@ -345,7 +347,7 @@ export default function MicrosipSettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="database">Base de datos principal (Inventario)</Label>
+              <Label htmlFor="database">{t("microsip.field.database")}</Label>
               <Input
                 id="database"
                 placeholder="C:\Microsip\Base de Datos\EMPRESA.FDB"
@@ -354,12 +356,12 @@ export default function MicrosipSettingsPage() {
                 data-testid="input-database"
               />
               <p className="text-xs text-muted-foreground">
-                Ruta al archivo .FDB principal (clientes, productos, categorías)
+                {t("microsip.database.hint")}
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="cxcDatabase">Base de datos CXC / Facturas <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+              <Label htmlFor="cxcDatabase">{t("microsip.field.cxc-database")}<span className="text-muted-foreground font-normal">{t("microsip.optional")}</span></Label>
               <Input
                 id="cxcDatabase"
                 placeholder="C:\Microsip\Base de Datos\EMPRESA_CXC.FDB"
@@ -368,13 +370,13 @@ export default function MicrosipSettingsPage() {
                 data-testid="input-cxc-database"
               />
               <p className="text-xs text-muted-foreground">
-                Solo si tu instalación de Microsip tiene las facturas (DOCTOS_VE) en una base de datos separada. Déjalo vacío para usar la misma base de datos principal.
+                {t("microsip.cxc.hint")}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Usuario</Label>
+                <Label htmlFor="username">{t("label.username")}</Label>
                 <Input
                   id="username"
                   placeholder="SYSDBA"
@@ -384,7 +386,7 @@ export default function MicrosipSettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Contraseña</Label>
+                <Label htmlFor="password">{t("label.password")}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -411,7 +413,7 @@ export default function MicrosipSettingsPage() {
                 ) : (
                   <TestTube className="mr-2 h-4 w-4" />
                 )}
-                Probar conexión
+                {t("microsip.test-connection")}
               </Button>
               <Button type="submit" disabled={saveMutation.isPending} data-testid="button-save-config">
                 {saveMutation.isPending ? (
@@ -419,7 +421,7 @@ export default function MicrosipSettingsPage() {
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                Guardar configuración
+                {t("microsip.save-config")}
               </Button>
             </div>
           </CardContent>
@@ -430,9 +432,9 @@ export default function MicrosipSettingsPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Opciones de Sincronización</CardTitle>
+              <CardTitle>{t("microsip.sync-options.title")}</CardTitle>
               <CardDescription>
-                Selecciona qué datos deseas sincronizar desde Microsip
+                {t("microsip.sync-options.desc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -440,7 +442,7 @@ export default function MicrosipSettingsPage() {
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
-                    <Label>Clientes</Label>
+                    <Label>{t("microsip.entity.customers")}</Label>
                   </div>
                   <Switch
                     checked={formData.syncCustomers}
@@ -451,7 +453,7 @@ export default function MicrosipSettingsPage() {
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-2">
                     <FolderTree className="h-4 w-4 text-muted-foreground" />
-                    <Label>Categorías</Label>
+                    <Label>{t("microsip.entity.categories")}</Label>
                   </div>
                   <Switch
                     checked={formData.syncCategories}
@@ -462,7 +464,7 @@ export default function MicrosipSettingsPage() {
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-muted-foreground" />
-                    <Label>Productos</Label>
+                    <Label>{t("microsip.entity.products")}</Label>
                   </div>
                   <Switch
                     checked={formData.syncProducts}
@@ -473,7 +475,7 @@ export default function MicrosipSettingsPage() {
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
-                    <Label>Facturas</Label>
+                    <Label>{t("microsip.entity.invoices")}</Label>
                   </div>
                   <Switch
                     checked={formData.syncInvoices}
@@ -484,7 +486,7 @@ export default function MicrosipSettingsPage() {
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-2">
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    <Label>Pagos</Label>
+                    <Label>{t("microsip.entity.payments")}</Label>
                   </div>
                   <Switch
                     checked={formData.syncPayments}
@@ -498,7 +500,7 @@ export default function MicrosipSettingsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="masterInterval">Intervalo datos maestros (min)</Label>
+                  <Label htmlFor="masterInterval">{t("microsip.master-interval")}</Label>
                   <Input
                     id="masterInterval"
                     type="number"
@@ -506,10 +508,10 @@ export default function MicrosipSettingsPage() {
                     onChange={(e) => setFormData({ ...formData, masterDataInterval: parseInt(e.target.value) || 120 })}
                     data-testid="input-master-interval"
                   />
-                  <p className="text-xs text-muted-foreground">Clientes, productos, categorías</p>
+                  <p className="text-xs text-muted-foreground">{t("microsip.master-interval-hint")}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="transInterval">Intervalo transaccional (min)</Label>
+                  <Label htmlFor="transInterval">{t("microsip.trans-interval")}</Label>
                   <Input
                     id="transInterval"
                     type="number"
@@ -517,7 +519,7 @@ export default function MicrosipSettingsPage() {
                     onChange={(e) => setFormData({ ...formData, transactionalInterval: parseInt(e.target.value) || 60 })}
                     data-testid="input-trans-interval"
                   />
-                  <p className="text-xs text-muted-foreground">Facturas, pagos</p>
+                  <p className="text-xs text-muted-foreground">{t("microsip.trans-interval-hint")}</p>
                 </div>
               </div>
 
@@ -528,7 +530,7 @@ export default function MicrosipSettingsPage() {
                 data-testid="button-save-sync-options"
               >
                 {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Guardar opciones
+                {t("microsip.save-options")}
               </Button>
             </CardContent>
           </Card>
@@ -536,7 +538,7 @@ export default function MicrosipSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Sincronización Manual</span>
+                <span>{t("microsip.manual.title")}</span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -549,11 +551,11 @@ export default function MicrosipSettingsPage() {
                   ) : (
                     <Play className="mr-2 h-4 w-4" />
                   )}
-                  Sincronizar todo
+                  {t("microsip.sync-all")}
                 </Button>
               </CardTitle>
               <CardDescription>
-                Ejecuta la sincronización manualmente cuando lo necesites
+                {t("microsip.manual.desc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -566,7 +568,7 @@ export default function MicrosipSettingsPage() {
                   data-testid="button-sync-customers"
                 >
                   <Users className="mr-2 h-4 w-4" />
-                  Clientes
+                  {t("microsip.entity.customers")}
                 </Button>
                 <Button
                   variant="outline"
@@ -576,7 +578,7 @@ export default function MicrosipSettingsPage() {
                   data-testid="button-sync-categories"
                 >
                   <FolderTree className="mr-2 h-4 w-4" />
-                  Categorías
+                  {t("microsip.entity.categories")}
                 </Button>
                 <Button
                   variant="outline"
@@ -586,7 +588,7 @@ export default function MicrosipSettingsPage() {
                   data-testid="button-sync-products"
                 >
                   <Package className="mr-2 h-4 w-4" />
-                  Productos
+                  {t("microsip.entity.products")}
                 </Button>
                 <Button
                   variant="outline"
@@ -596,7 +598,7 @@ export default function MicrosipSettingsPage() {
                   data-testid="button-sync-invoices"
                 >
                   <FileText className="mr-2 h-4 w-4" />
-                  Facturas
+                  {t("microsip.entity.invoices")}
                 </Button>
                 <Button
                   variant="outline"
@@ -606,7 +608,7 @@ export default function MicrosipSettingsPage() {
                   data-testid="button-sync-payments"
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Pagos
+                  {t("microsip.entity.payments")}
                 </Button>
               </div>
             </CardContent>
@@ -617,7 +619,7 @@ export default function MicrosipSettingsPage() {
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <Clock className="h-5 w-5" />
-                  Historial de Sincronización
+                  {t("microsip.history.title")}
                 </span>
                 <Button
                   variant="ghost"
@@ -655,10 +657,10 @@ export default function MicrosipSettingsPage() {
                         <div className="flex items-center gap-4">
                           <div className="text-right text-sm">
                             <p className="text-muted-foreground">
-                              {log.recordsCreated} nuevos / {log.recordsUpdated} actualizados
+                              {t("microsip.records-summary").replace("{created}", String(log.recordsCreated)).replace("{updated}", String(log.recordsUpdated))}
                             </p>
                             {(log.recordsSkipped ?? 0) > 0 && (
-                              <p className="text-xs text-orange-500">{log.recordsSkipped} omitidos</p>
+                              <p className="text-xs text-orange-500">{t("microsip.records-skipped").replace("{count}", String(log.recordsSkipped))}</p>
                             )}
                           </div>
                           {getStatusBadge(log.status)}
@@ -669,7 +671,7 @@ export default function MicrosipSettingsPage() {
                 </ScrollArea>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  No hay registros de sincronización
+                  {t("microsip.no-logs")}
                 </div>
               )}
             </CardContent>
@@ -678,52 +680,52 @@ export default function MicrosipSettingsPage() {
           {config.lastSyncStatus && (
             <Card>
               <CardHeader>
-                <CardTitle>Estado Actual</CardTitle>
+                <CardTitle>{t("microsip.current-status")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div>
-                    <p className="text-muted-foreground">Última sync clientes</p>
+                    <p className="text-muted-foreground">{t("microsip.last-customers")}</p>
                     <p className="font-medium">
                       {config.lastCustomerSync 
                         ? format(new Date(config.lastCustomerSync), "dd/MM HH:mm", { locale: es })
-                        : "Nunca"
+                        : t("microsip.never")
                       }
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Última sync productos</p>
+                    <p className="text-muted-foreground">{t("microsip.last-products")}</p>
                     <p className="font-medium">
                       {config.lastProductSync 
                         ? format(new Date(config.lastProductSync), "dd/MM HH:mm", { locale: es })
-                        : "Nunca"
+                        : t("microsip.never")
                       }
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Última sync categorías</p>
+                    <p className="text-muted-foreground">{t("microsip.last-categories")}</p>
                     <p className="font-medium">
                       {config.lastCategorySync 
                         ? format(new Date(config.lastCategorySync), "dd/MM HH:mm", { locale: es })
-                        : "Nunca"
+                        : t("microsip.never")
                       }
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Última sync facturas</p>
+                    <p className="text-muted-foreground">{t("microsip.last-invoices")}</p>
                     <p className="font-medium">
                       {config.lastInvoiceSync 
                         ? format(new Date(config.lastInvoiceSync), "dd/MM HH:mm", { locale: es })
-                        : "Nunca"
+                        : t("microsip.never")
                       }
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Última sync pagos</p>
+                    <p className="text-muted-foreground">{t("microsip.last-payments")}</p>
                     <p className="font-medium">
                       {config.lastPaymentSync 
                         ? format(new Date(config.lastPaymentSync), "dd/MM HH:mm", { locale: es })
-                        : "Nunca"
+                        : t("microsip.never")
                       }
                     </p>
                   </div>
@@ -743,7 +745,7 @@ export default function MicrosipSettingsPage() {
               <CardTitle className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
-                  Productos en USD (Microsip)
+                  {t("microsip.usd.title")}
                 </span>
                 <Button
                   variant="outline"
@@ -757,11 +759,11 @@ export default function MicrosipSettingsPage() {
                   ) : (
                     <Play className="h-4 w-4 mr-2" />
                   )}
-                  Consultar
+                  {t("microsip.query")}
                 </Button>
               </CardTitle>
               <CardDescription>
-                Lista los artículos activos en Microsip con MONEDA_ID distinto de 1 (Peso), es decir, en dólares u otra divisa.
+                {t("microsip.usd.desc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -773,23 +775,23 @@ export default function MicrosipSettingsPage() {
 
               {usdProducts === null && !usdError && (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  Haz clic en "Consultar" para ver los productos en USD
+                  {t("microsip.usd.click-hint")}
                 </p>
               )}
 
               {usdProducts !== null && (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    {usdProducts.length} producto{usdProducts.length !== 1 ? "s" : ""} encontrado{usdProducts.length !== 1 ? "s" : ""}
-                    {usdProducts.length === 0 ? " — ningún artículo activo tiene MONEDA_ID ≠ 1" : ""}
+                    {(usdProducts.length !== 1 ? t("microsip.usd.count-plural") : t("microsip.usd.count-singular")).replace("{count}", String(usdProducts.length))}
+                    {usdProducts.length === 0 ? t("microsip.usd.none-suffix") : ""}
                   </p>
                   {usdProducts.length > 0 && (
                     <ScrollArea className="h-[320px] border rounded-lg">
                       <table className="w-full text-sm" data-testid="table-usd-products">
                         <thead className="sticky top-0 bg-muted">
                           <tr>
-                            <th className="px-3 py-2 text-left font-medium border-b">Clave</th>
-                            <th className="px-3 py-2 text-left font-medium border-b">Nombre</th>
+                            <th className="px-3 py-2 text-left font-medium border-b">{t("microsip.col.key")}</th>
+                            <th className="px-3 py-2 text-left font-medium border-b">{t("label.name")}</th>
                             <th className="px-3 py-2 text-center font-medium border-b w-[90px]">MONEDA_ID</th>
                           </tr>
                         </thead>
@@ -820,15 +822,15 @@ export default function MicrosipSettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
-                Intérprete SQL (Solo Lectura)
+                {t("microsip.sql.title")}
               </CardTitle>
               <CardDescription>
-                Ejecuta consultas SELECT en Microsip para depuración
+                {t("microsip.sql.desc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="sql-query">Consulta SQL</Label>
+                <Label htmlFor="sql-query">{t("microsip.sql.query-label")}</Label>
                 <textarea
                   id="sql-query"
                   data-testid="input-sql-query"
@@ -849,10 +851,10 @@ export default function MicrosipSettingsPage() {
                   ) : (
                     <Play className="h-4 w-4 mr-2" />
                   )}
-                  Ejecutar
+                  {t("microsip.sql.run")}
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  Solo consultas SELECT - máximo 5,000 filas
+                  {t("microsip.sql.hint")}
                 </span>
               </div>
 
@@ -865,7 +867,7 @@ export default function MicrosipSettingsPage() {
               {queryResult && (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    {queryResult.rowCount} filas encontradas
+                    {t("microsip.rows-found").replace("{count}", String(queryResult.rowCount))}
                   </p>
                   <ScrollArea className="h-[400px] border rounded-lg">
                     <div className="overflow-auto">

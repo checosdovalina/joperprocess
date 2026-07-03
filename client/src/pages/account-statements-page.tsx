@@ -175,12 +175,12 @@ export default function AccountStatementsPage() {
     mutationFn: (data: { enabled: boolean; scheduleDays: number[]; sendHour: number; onlyOverdue: boolean }) =>
       apiRequest("PUT", "/api/account-statement-schedule", data),
     onSuccess: () => {
-      toast({ title: "Programación guardada", description: "El envío automático ha sido configurado." });
+      toast({ title: t("stmts.sched.saved-title"), description: t("stmts.sched.saved-desc") });
       refetchSchedule();
       setScheduleOpen(false);
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err.message ?? "No se pudo guardar la configuración.", variant: "destructive" });
+      toast({ title: t("label.error"), description: err.message ?? t("stmts.sched.save-error"), variant: "destructive" });
     },
   });
 
@@ -255,7 +255,7 @@ export default function AccountStatementsPage() {
       setAnySearch("");
       setAnySearchOpen(false);
     } catch {
-      toast({ title: "Error", description: "No se pudo generar el estado de cuenta.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("stmts.gen-error"), variant: "destructive" });
     } finally {
       setDownloadingAnyId(null);
     }
@@ -287,13 +287,13 @@ export default function AccountStatementsPage() {
     mutationFn: ({ customerId, additionalEmails }: { customerId: string; additionalEmails: string[] }) =>
       apiRequest("POST", `/api/customers/${customerId}/send-account-statement`, { additionalEmails }),
     onSuccess: (_, vars) => {
-      toast({ title: "Estado de cuenta enviado", description: `Correo enviado exitosamente.` });
+      toast({ title: t("stmts.sent-title"), description: t("stmts.sent-desc") });
       setSendDialogOpen(false);
       setSingleSendCustomer(null);
       setAdditionalEmail("");
     },
     onError: (err: any) => {
-      toast({ title: "Error al enviar", description: err.message ?? "No se pudo enviar el correo.", variant: "destructive" });
+      toast({ title: t("stmts.send-error-title"), description: err.message ?? t("stmts.send-error-desc"), variant: "destructive" });
     },
   });
 
@@ -308,13 +308,13 @@ export default function AccountStatementsPage() {
       setBulkConfirmOpen(false);
       setSelected(new Set());
       toast({
-        title: `Enviados: ${data.sent} / ${data.sent + data.failed}`,
-        description: data.failed > 0 ? `${data.failed} no se pudieron enviar.` : "Todos enviados correctamente.",
+        title: `${t("stmts.bulk.sent-title")} ${data.sent} / ${data.sent + data.failed}`,
+        description: data.failed > 0 ? `${data.failed} ${t("stmts.bulk.failed-suffix")}` : t("stmts.bulk.all-sent"),
         variant: data.failed > 0 ? "destructive" : "default",
       });
     },
     onError: (err: any) => {
-      toast({ title: "Error en envío masivo", description: err.message ?? "Error inesperado.", variant: "destructive" });
+      toast({ title: t("stmts.bulk.error-title"), description: err.message ?? t("stmts.unexpected-error"), variant: "destructive" });
       setBulkConfirmOpen(false);
     },
   });
@@ -338,7 +338,7 @@ export default function AccountStatementsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast({ title: "Error", description: "No se pudo descargar el PDF.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("stmts.pdf-error"), variant: "destructive" });
     } finally {
       setDownloadingId(null);
     }
@@ -353,10 +353,10 @@ export default function AccountStatementsPage() {
       const url = `${window.location.origin}/estado-cuenta/${data.token}`;
       await navigator.clipboard.writeText(url);
       setCopiedId(customerId);
-      toast({ title: "Enlace copiado", description: "Válido por 7 días." });
+      toast({ title: t("stmts.link-copied"), description: t("stmts.link-valid-7") });
       setTimeout(() => setCopiedId(null), 2500);
     } catch {
-      toast({ title: "Error", description: "No se pudo generar el enlace.", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("stmts.link-error"), variant: "destructive" });
     } finally {
       setLinkLoadingId(null);
     }
@@ -392,7 +392,7 @@ export default function AccountStatementsPage() {
               disabled={bulkSendMutation.isPending}
             >
               <Send className="w-4 h-4 mr-2" />
-              Enviar a seleccionados ({selected.size})
+              {t("stmts.send-selected")} ({selected.size})
             </Button>
           )}
           <Button
@@ -402,7 +402,7 @@ export default function AccountStatementsPage() {
             onClick={openScheduleDialog}
           >
             <CalendarClock className="w-4 h-4 mr-2" />
-            {scheduleConfig?.enabled ? "Envío automático activo" : "Programar envío"}
+            {scheduleConfig?.enabled ? t("stmts.sched.active-btn") : t("stmts.sched.program-btn")}
           </Button>
           <div className="flex flex-col items-end gap-1">
             <Button
@@ -432,7 +432,7 @@ export default function AccountStatementsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-6 py-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Saldo Total por Cobrar</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t("stmts.total-balance")}</CardTitle>
             <Building2 className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -442,7 +442,7 @@ export default function AccountStatementsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Saldo Vencido</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t("stmts.overdue-balance")}</CardTitle>
             <AlertTriangle className="w-4 h-4 text-destructive" />
           </CardHeader>
           <CardContent>
@@ -458,7 +458,7 @@ export default function AccountStatementsPage() {
           <CardContent>
             <p className="text-2xl font-bold" data-testid="text-selected-count">{selected.size}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {selectedWithEmail.length} con correo / {selectedWithoutEmail.length} sin correo
+              {selectedWithEmail.length} {t("stmts.with-email")} / {selectedWithoutEmail.length} {t("stmts.without-email")}
             </p>
           </CardContent>
         </Card>
@@ -472,7 +472,7 @@ export default function AccountStatementsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               data-testid="input-search"
-              placeholder="Buscar cliente, RFC o correo..."
+              placeholder={t("stmts.search-ph")}
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -539,7 +539,7 @@ export default function AccountStatementsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
               data-testid="input-any-customer-search"
-              placeholder="Buscar cualquier cliente (nombre, RFC)…"
+              placeholder={t("stmts.search-any-ph")}
               className="pl-9"
               value={anySearch}
               onChange={(e) => { setAnySearch(e.target.value); setAnySearchOpen(true); }}
@@ -576,11 +576,11 @@ export default function AccountStatementsPage() {
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 pb-6">
         {isLoading ? (
-          <div className="flex items-center justify-center h-40 text-muted-foreground">Cargando...</div>
+          <div className="flex items-center justify-center h-40 text-muted-foreground">{t("label.loading")}</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
             <Mail className="w-8 h-8" />
-            <p>{statements.length === 0 ? "No hay clientes con saldo pendiente." : "Sin resultados para la búsqueda."}</p>
+            <p>{statements.length === 0 ? t("stmts.empty-no-balance") : t("stmts.empty-search")}</p>
           </div>
         ) : (
           <div className="space-y-0">
@@ -639,15 +639,15 @@ export default function AccountStatementsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52">
                         <DropdownMenuItem onClick={() => openSingleSend(s)} className="gap-2">
-                          <Mail className="w-4 h-4" /> Enviar por correo
+                          <Mail className="w-4 h-4" /> {t("stmts.send-by-email")}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)} className="gap-2">
-                          <Download className="w-4 h-4" /> Descargar PDF
+                          <Download className="w-4 h-4" /> {t("invoices.download-pdf")}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleCopyLink(s.customer.id)} className="gap-2">
                           {copiedId === s.customer.id ? <Check className="w-4 h-4 text-green-600" /> : <Link className="w-4 h-4" />}
-                          {copiedId === s.customer.id ? "¡Enlace copiado!" : "Copiar enlace (7 días)"}
+                          {copiedId === s.customer.id ? t("stmts.copied-excl") : t("stmts.copy-link-7")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -668,10 +668,10 @@ export default function AccountStatementsPage() {
                         onCheckedChange={toggleAll}
                       />
                     </th>
-                    <th className="px-3 py-3 text-left font-semibold text-muted-foreground">Cliente</th>
-                    <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Saldo Total</th>
-                    <th className="px-3 py-3 text-right font-semibold text-muted-foreground">Vencido</th>
-                    <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">Correo</th>
+                    <th className="px-3 py-3 text-left font-semibold text-muted-foreground">{t("label.client")}</th>
+                    <th className="px-3 py-3 text-right font-semibold text-muted-foreground">{t("stmts.col.total-balance")}</th>
+                    <th className="px-3 py-3 text-right font-semibold text-muted-foreground">{t("stmts.col.overdue")}</th>
+                    <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">{t("stmts.col.email")}</th>
                     <th className="px-3 py-3 w-10"></th>
                   </tr>
                 </thead>
@@ -720,7 +720,7 @@ export default function AccountStatementsPage() {
                           {s.customer.email ? (
                             <span className="text-muted-foreground text-xs block truncate" title={s.customer.email}>{s.customer.email}</span>
                           ) : (
-                            <span className="text-muted-foreground/40 text-xs italic">Sin correo</span>
+                            <span className="text-muted-foreground/40 text-xs italic">{t("stmts.no-email-short")}</span>
                           )}
                         </td>
                         <td className="px-3 py-3 text-right w-10 shrink-0">
@@ -741,15 +741,15 @@ export default function AccountStatementsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
                               <DropdownMenuItem onClick={() => openSingleSend(s)} className="gap-2">
-                                <Mail className="w-4 h-4" /> Enviar por correo
+                                <Mail className="w-4 h-4" /> {t("stmts.send-by-email")}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)} className="gap-2">
-                                <Download className="w-4 h-4" /> Descargar PDF
+                                <Download className="w-4 h-4" /> {t("invoices.download-pdf")}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleCopyLink(s.customer.id)} className="gap-2">
                                 {copiedId === s.customer.id ? <Check className="w-4 h-4 text-green-600" /> : <Link className="w-4 h-4" />}
-                                {copiedId === s.customer.id ? "¡Enlace copiado!" : "Copiar enlace (7 días)"}
+                                {copiedId === s.customer.id ? t("stmts.copied-excl") : t("stmts.copy-link-7")}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -789,7 +789,7 @@ export default function AccountStatementsPage() {
               ) : (
                 <div className="flex items-center gap-2 bg-destructive/10 rounded-md px-3 py-2.5">
                   <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
-                  <span className="text-sm text-destructive">Sin correo registrado</span>
+                  <span className="text-sm text-destructive">{t("stmts.no-email-registered")}</span>
                 </div>
               )}
             </div>
@@ -808,18 +808,18 @@ export default function AccountStatementsPage() {
                 inputMode="email"
                 autoComplete="off"
               />
-              <p className="text-xs text-muted-foreground mt-1.5">Separa múltiples correos con coma</p>
+              <p className="text-xs text-muted-foreground mt-1.5">{t("stmts.emails-comma-hint")}</p>
             </div>
 
             <Separator />
 
             {/* Contenido */}
             <div className="bg-muted/50 rounded-md px-3 py-2.5 space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">El correo incluirá</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("stmts.email-includes")}</p>
               <ul className="text-xs text-muted-foreground space-y-0.5 mt-1">
-                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> Facturas pendientes y con pago parcial</li>
-                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> Saldo total y saldo vencido</li>
-                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> Historial de pagos recientes</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> {t("stmts.includes-1")}</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> {t("stmts.includes-2")}</li>
+                <li className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-green-500" /> {t("stmts.includes-3")}</li>
               </ul>
             </div>
           </div>
@@ -830,7 +830,7 @@ export default function AccountStatementsPage() {
               className="w-full sm:w-auto"
               onClick={() => setSendDialogOpen(false)}
             >
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               data-testid="button-confirm-send"
@@ -847,7 +847,7 @@ export default function AccountStatementsPage() {
               ) : (
                 <Send className="w-4 h-4 mr-2" />
               )}
-              Enviar Correo
+              {t("stmts.send-email-btn")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -857,22 +857,22 @@ export default function AccountStatementsPage() {
       <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Envío masivo de estados de cuenta</AlertDialogTitle>
+            <AlertDialogTitle>{t("stmts.bulk.title")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>
-                  Se enviarán estados de cuenta a <strong>{selectedWithEmail.length}</strong> cliente(s) con correo registrado.
+                  {t("stmts.bulk.will-send-prefix")} <strong>{selectedWithEmail.length}</strong> {t("stmts.bulk.with-email-suffix")}
                 </p>
                 {selectedWithoutEmail.length > 0 && (
                   <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                     <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                      {selectedWithoutEmail.length} cliente(s) sin correo serán omitidos:
+                      {selectedWithoutEmail.length} {t("stmts.bulk.no-email-suffix")}
                     </p>
                     <ul className="text-sm text-amber-600 dark:text-amber-500 mt-1 list-disc pl-4">
                       {selectedWithoutEmail.slice(0, 5).map((s) => (
                         <li key={s.customer.id}>{s.customer.name}</li>
                       ))}
-                      {selectedWithoutEmail.length > 5 && <li>y {selectedWithoutEmail.length - 5} más...</li>}
+                      {selectedWithoutEmail.length > 5 && <li>{t("stmts.bulk.and")} {selectedWithoutEmail.length - 5} {t("stmts.bulk.more")}</li>}
                     </ul>
                   </div>
                 )}
@@ -880,7 +880,7 @@ export default function AccountStatementsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               data-testid="button-confirm-bulk-send"
               onClick={() => bulkSendMutation.mutate(Array.from(selected))}
@@ -891,7 +891,7 @@ export default function AccountStatementsPage() {
               ) : (
                 <Send className="w-4 h-4 mr-2" />
               )}
-              Confirmar envío ({selectedWithEmail.length})
+              {t("stmts.bulk.confirm")} ({selectedWithEmail.length})
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -901,7 +901,7 @@ export default function AccountStatementsPage() {
       <Dialog open={resultsOpen} onOpenChange={setResultsOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Resultado del envío masivo</DialogTitle>
+            <DialogTitle>{t("stmts.bulk.result-title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
             {(bulkResults ?? []).map((r) => (
@@ -938,10 +938,10 @@ export default function AccountStatementsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarClock className="w-5 h-5" />
-              Envío automático de estados de cuenta
+              {t("stmts.sched.title")}
             </DialogTitle>
             <DialogDescription>
-              El sistema enviará los estados de cuenta por correo automáticamente en los días y hora que configures.
+              {t("stmts.sched.desc")}
             </DialogDescription>
           </DialogHeader>
 
@@ -949,9 +949,9 @@ export default function AccountStatementsPage() {
             {/* Enable toggle */}
             <div className="flex items-center justify-between rounded-md border px-4 py-3">
               <div>
-                <p className="text-sm font-medium">Envío automático</p>
+                <p className="text-sm font-medium">{t("stmts.sched.auto-send")}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {schedEnabled ? "Activo — se enviará según el programa" : "Desactivado"}
+                  {schedEnabled ? t("stmts.sched.active-desc") : t("stmts.sched.disabled")}
                 </p>
               </div>
               <Switch
@@ -964,33 +964,33 @@ export default function AccountStatementsPage() {
             {/* Days preset */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Días del mes
+                {t("stmts.sched.days-of-month")}
               </Label>
               <Select value={schedDaysPreset} onValueChange={setSchedDaysPreset}>
                 <SelectTrigger data-testid="select-schedule-days">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="5,25">5 y 25 de cada mes</SelectItem>
-                  <SelectItem value="1,15">1° y 15 de cada mes</SelectItem>
-                  <SelectItem value="1,10,20">1°, 10 y 20 de cada mes</SelectItem>
-                  <SelectItem value="1,8,15,22">1°, 8, 15 y 22 de cada mes</SelectItem>
-                  <SelectItem value="1">Solo el 1° de cada mes</SelectItem>
-                  <SelectItem value="15">Solo el 15 de cada mes</SelectItem>
-                  <SelectItem value="5">Solo el 5 de cada mes</SelectItem>
-                  <SelectItem value="25">Solo el 25 de cada mes</SelectItem>
-                  <SelectItem value="1,10,20,28">1°, 10, 20 y 28 de cada mes</SelectItem>
+                  <SelectItem value="5,25">{t("stmts.days.5-25")}</SelectItem>
+                  <SelectItem value="1,15">{t("stmts.days.1-15")}</SelectItem>
+                  <SelectItem value="1,10,20">{t("stmts.days.1-10-20")}</SelectItem>
+                  <SelectItem value="1,8,15,22">{t("stmts.days.1-8-15-22")}</SelectItem>
+                  <SelectItem value="1">{t("stmts.days.only-1")}</SelectItem>
+                  <SelectItem value="15">{t("stmts.days.only-15")}</SelectItem>
+                  <SelectItem value="5">{t("stmts.days.only-5")}</SelectItem>
+                  <SelectItem value="25">{t("stmts.days.only-25")}</SelectItem>
+                  <SelectItem value="1,10,20,28">{t("stmts.days.1-10-20-28")}</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Días seleccionados: {schedDaysPreset.split(",").join(", ")}
+                {t("stmts.sched.days-selected")} {schedDaysPreset.split(",").join(", ")}
               </p>
             </div>
 
             {/* Hour */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Hora de envío (tiempo de México)
+                {t("stmts.sched.send-time")}
               </Label>
               <Select value={String(schedHour)} onValueChange={(v) => setSchedHour(Number(v))}>
                 <SelectTrigger data-testid="select-schedule-hour">
@@ -999,7 +999,7 @@ export default function AccountStatementsPage() {
                 <SelectContent>
                   {[6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => (
                     <SelectItem key={h} value={String(h)}>
-                      {h === 12 ? "12:00 pm (mediodía)" : h < 12 ? `${h}:00 am` : `${h - 12}:00 pm`}
+                      {h === 12 ? t("stmts.sched.noon") : h < 12 ? `${h}:00 am` : `${h - 12}:00 pm`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1009,11 +1009,11 @@ export default function AccountStatementsPage() {
             {/* Only overdue */}
             <div className="flex items-center justify-between rounded-md border px-4 py-3">
               <div>
-                <p className="text-sm font-medium">Solo clientes con saldo vencido</p>
+                <p className="text-sm font-medium">{t("stmts.only-overdue-label")}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {schedOnlyOverdue
-                    ? "Solo envía a quienes tienen facturas vencidas"
-                    : "Envía a todos los clientes con saldo pendiente"}
+                    ? t("stmts.sched.only-overdue-desc")
+                    : t("stmts.sched.all-desc")}
                 </p>
               </div>
               <Switch
@@ -1026,7 +1026,7 @@ export default function AccountStatementsPage() {
             {/* Last run info */}
             {scheduleConfig?.lastRunAt && (
               <div className="bg-muted/50 rounded-md px-3 py-2.5 text-xs text-muted-foreground">
-                Último envío automático: {new Date(scheduleConfig.lastRunAt).toLocaleString("es-MX", {
+                {t("stmts.last-auto-send")} {new Date(scheduleConfig.lastRunAt).toLocaleString("es-MX", {
                   day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
                 })}
               </div>
@@ -1035,7 +1035,7 @@ export default function AccountStatementsPage() {
 
           <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2 pt-2">
             <Button variant="outline" className="w-full sm:w-auto" onClick={() => setScheduleOpen(false)}>
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               data-testid="button-save-schedule"
@@ -1048,7 +1048,7 @@ export default function AccountStatementsPage() {
               ) : (
                 <Check className="w-4 h-4 mr-2" />
               )}
-              Guardar programación
+              {t("stmts.sched.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

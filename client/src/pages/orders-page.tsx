@@ -128,10 +128,10 @@ export default function OrdersPage() {
       return res.json();
     },
     onSuccess: (data) => {
-      let description = "La liberación se registró correctamente";
-      if (data.invoiceId) description += ". Factura creada.";
-      if (data.shipmentId) description += " Embarque creado.";
-      toast({ title: "Productos liberados", description });
+      let description = t("orders.toast.release-desc");
+      if (data.invoiceId) description += ". " + t("orders.toast.invoice-created");
+      if (data.shipmentId) description += " " + t("orders.toast.shipment-created");
+      toast({ title: t("orders.toast.release-title"), description });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedOrderId, "details"] });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
@@ -139,7 +139,7 @@ export default function OrdersPage() {
       resetReleaseForm();
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo registrar la liberación", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("orders.toast.release-error"), variant: "destructive" });
     },
   });
 
@@ -161,13 +161,13 @@ export default function OrdersPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Pedido actualizado", description: "La información de producción se guardó correctamente" });
+      toast({ title: t("orders.toast.updated"), description: t("orders.toast.updated-desc") });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedOrderId, "details"] });
       setIsEditingProduction(false);
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo actualizar el pedido", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("orders.toast.update-error"), variant: "destructive" });
     },
   });
 
@@ -177,7 +177,7 @@ export default function OrdersPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Pedido cancelado", description: "El pedido se marcó como cancelado" });
+      toast({ title: t("orders.toast.cancelled"), description: t("orders.toast.cancelled-desc") });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders", cancelOrderId, "details"] });
       queryClient.invalidateQueries({ queryKey: ["/api/pipeline"] });
@@ -187,7 +187,7 @@ export default function OrdersPage() {
       setCancelReason("");
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err?.message || "No se pudo cancelar el pedido", variant: "destructive" });
+      toast({ title: t("label.error"), description: err?.message || t("orders.toast.cancel-error"), variant: "destructive" });
     },
   });
 
@@ -203,13 +203,13 @@ export default function OrdersPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Pedido cerrado", description: "El pedido se marcó como cerrado" });
+      toast({ title: t("orders.toast.closed"), description: t("orders.toast.closed-desc") });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/pipeline"] });
       setDetailsDialogOpen(false);
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err?.message || "No se pudo cerrar el pedido", variant: "destructive" });
+      toast({ title: t("label.error"), description: err?.message || t("orders.toast.close-error"), variant: "destructive" });
     },
   });
 
@@ -284,7 +284,7 @@ export default function OrdersPage() {
     if (!releaseItem) return;
     const qty = parseFloat(releaseQuantity);
     if (isNaN(qty) || qty <= 0 || qty > releaseItem.maxQuantity) {
-      toast({ title: "Error", description: "Cantidad inválida", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("orders.toast.invalid-qty"), variant: "destructive" });
       return;
     }
     releaseMutation.mutate({
@@ -321,7 +321,7 @@ export default function OrdersPage() {
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-add-order">
           <Plus className="h-4 w-4 mr-2" />
-          Nueva Orden
+          {t("orders.new")}
         </Button>
       </div>
 
@@ -372,7 +372,7 @@ export default function OrdersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Enviados</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("orders.shipped")}</CardTitle>
             <Package className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
@@ -387,15 +387,15 @@ export default function OrdersPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Pedidos</CardTitle>
+              <CardTitle>{t("orders.list-title")}</CardTitle>
               <CardDescription>
                 {(() => {
                   const terminal = [OrderStatus.SHIPPED, OrderStatus.DELIVERED];
                   const closedCount = orders?.filter(o => terminal.includes(o.status as any)).length ?? 0;
                   const visible = hideDelivered ? (orders?.filter(o => !terminal.includes(o.status as any)).length ?? 0) : (orders?.length ?? 0);
                   return <>
-                    {visible} de {orders?.length || 0} pedidos
-                    {hideDelivered && closedCount > 0 && <span className="ml-1">({closedCount} cerrado{closedCount !== 1 ? "s" : ""} oculto{closedCount !== 1 ? "s" : ""})</span>}
+                    {visible} {t("label.of")} {orders?.length || 0} {t("orders.count-noun")}
+                    {hideDelivered && closedCount > 0 && <span className="ml-1">({closedCount} {t("orders.closed-hidden")})</span>}
                   </>;
                 })()}
               </CardDescription>
@@ -404,7 +404,7 @@ export default function OrdersPage() {
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por folio o cliente..."
+                  placeholder={t("search.folio-client")}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
@@ -413,7 +413,7 @@ export default function OrdersPage() {
               </div>
               {(orders?.filter(o => o.status === OrderStatus.SHIPPED || o.status === OrderStatus.DELIVERED).length ?? 0) > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
-                  {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar enviados/entregados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar enviados/entregados</>}
+                  {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />{t("btn.show-shipped")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("btn.hide-shipped")}</>}
                 </Button>
               )}
             </div>
@@ -464,13 +464,13 @@ export default function OrdersPage() {
                             {format(new Date(order.estimatedDelivery), "PP", { locale: es })}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">No definida</span>
+                          <span className="text-xs text-muted-foreground">{t("label.not-defined")}</span>
                         )}
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 w-32">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">Producción</span>
+                            <span className="text-muted-foreground">{t("orders.progress-label")}</span>
                             <span className="font-medium">{order.productionProgress}%</span>
                           </div>
                           <Progress value={order.productionProgress} className="h-2" />
@@ -502,7 +502,7 @@ export default function OrdersPage() {
                               onClick={() => closeOrderMutation.mutate(order.id)}
                               disabled={closeOrderMutation.isPending}
                               data-testid={`button-close-order-${order.id}`}
-                              title="Cerrar pedido (proceso terminado)"
+                              title={t("orders.close-title")}
                             >
                               <CheckCircle2 className="h-4 w-4 text-slate-600" />
                             </Button>
@@ -513,7 +513,7 @@ export default function OrdersPage() {
                               size="icon"
                               onClick={() => handleOpenCancel(order.id)}
                               data-testid={`button-cancel-order-${order.id}`}
-                              title="Cancelar pedido"
+                              title={t("orders.cancel-title")}
                             >
                               <XCircle className="h-4 w-4 text-red-600" />
                             </Button>
@@ -569,17 +569,17 @@ export default function OrdersPage() {
             <div className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label className="text-xs text-muted-foreground">Estado</Label>
+                  <Label className="text-xs text-muted-foreground">{t("label.status")}</Label>
                   <div className="mt-1">{getStatusBadge(orderDetails.status)}</div>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Fecha Creación</Label>
+                  <Label className="text-xs text-muted-foreground">{t("label.creation-date")}</Label>
                   <div className="text-sm font-medium mt-1">
                     {format(new Date(orderDetails.createdAt), "PPP", { locale: es })}
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Progreso Producción</Label>
+                  <Label className="text-xs text-muted-foreground">{t("orders.progress-label")}</Label>
                   <div className="mt-1">
                     <Progress value={orderDetails.productionProgress} className="h-2" />
                     <span className="text-xs text-muted-foreground">{orderDetails.productionProgress}%</span>
@@ -672,16 +672,16 @@ export default function OrdersPage() {
                 <div>
                   <h3 className="font-semibold mb-3 flex items-center gap-2">
                     <Truck className="h-4 w-4" />
-                    Historial de Liberaciones
+                    {t("orders.release-history")}
                   </h3>
                   <div className="rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Producto</TableHead>
-                          <TableHead className="text-right">Cantidad</TableHead>
-                          <TableHead>Notas</TableHead>
+                          <TableHead>{t("label.date")}</TableHead>
+                          <TableHead>{t("label.product")}</TableHead>
+                          <TableHead className="text-right">{t("label.quantity")}</TableHead>
+                          <TableHead>{t("label.notes")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -714,7 +714,7 @@ export default function OrdersPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-              Cerrar
+              {t("btn.close")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -723,7 +723,7 @@ export default function OrdersPage() {
       <Dialog open={releaseDialogOpen} onOpenChange={setReleaseDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Liberar Productos</DialogTitle>
+            <DialogTitle>{t("orders.release-dialog")}</DialogTitle>
             <DialogDescription>
               {releaseItem?.productName}
             </DialogDescription>
@@ -731,7 +731,7 @@ export default function OrdersPage() {
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="quantity">Cantidad a liberar</Label>
+              <Label htmlFor="quantity">{t("orders.release-qty")}</Label>
               <Input
                 id="quantity"
                 type="number"
@@ -743,17 +743,17 @@ export default function OrdersPage() {
                 data-testid="input-release-quantity"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Máximo disponible: {releaseItem?.maxQuantity}
+                {t("orders.release-max")}: {releaseItem?.maxQuantity}
               </p>
             </div>
 
             <div>
-              <Label htmlFor="notes">Notas (opcional)</Label>
+              <Label htmlFor="notes">{t("label.notes-optional")}</Label>
               <Textarea
                 id="notes"
                 value={releaseNotes}
                 onChange={(e) => setReleaseNotes(e.target.value)}
-                placeholder="Observaciones sobre esta liberación..."
+                placeholder={t("orders.release-notes-ph")}
                 data-testid="input-release-notes"
               />
             </div>
@@ -769,7 +769,7 @@ export default function OrdersPage() {
                   data-testid="checkbox-create-invoice"
                 />
                 <Label htmlFor="createInvoice" className="text-sm font-normal cursor-pointer">
-                  Generar factura automáticamente
+                  {t("orders.auto-invoice")}
                 </Label>
               </div>
 
@@ -781,50 +781,50 @@ export default function OrdersPage() {
                   data-testid="checkbox-create-shipment"
                 />
                 <Label htmlFor="createShipment" className="text-sm font-normal cursor-pointer">
-                  Generar embarque automáticamente
+                  {t("orders.auto-shipment")}
                 </Label>
               </div>
 
               {createShipment && (
                 <div className="pl-6 space-y-3 border-l-2 border-muted ml-2">
                   <div>
-                    <Label htmlFor="transporter" className="text-xs">Transportista</Label>
+                    <Label htmlFor="transporter" className="text-xs">{t("label.carrier")}</Label>
                     <Input
                       id="transporter"
                       value={shipmentTransporter}
                       onChange={(e) => setShipmentTransporter(e.target.value)}
-                      placeholder="Nombre del transportista"
+                      placeholder={t("orders.transporter-ph")}
                       data-testid="input-transporter"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="transportType" className="text-xs">Tipo de transporte</Label>
+                    <Label htmlFor="transportType" className="text-xs">{t("orders.transport-type")}</Label>
                     <Select
                       value={shipmentTransportType}
                       onValueChange={(v) => setShipmentTransportType(v as "propio" | "paqueteria")}
                     >
                       <SelectTrigger data-testid="select-transport-type">
-                        <SelectValue placeholder="Selecciona tipo" />
+                        <SelectValue placeholder={t("orders.transport-select")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="propio">Transporte propio</SelectItem>
-                        <SelectItem value="paqueteria">Paquetería</SelectItem>
+                        <SelectItem value="propio">{t("orders.transport-own")}</SelectItem>
+                        <SelectItem value="paqueteria">{t("orders.transport-courier")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Label htmlFor="driverName" className="text-xs">Chofer</Label>
+                      <Label htmlFor="driverName" className="text-xs">{t("orders.driver")}</Label>
                       <Input
                         id="driverName"
                         value={shipmentDriverName}
                         onChange={(e) => setShipmentDriverName(e.target.value)}
-                        placeholder="Nombre"
+                        placeholder={t("orders.driver-ph")}
                         data-testid="input-driver-name"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="vehiclePlates" className="text-xs">Placas</Label>
+                      <Label htmlFor="vehiclePlates" className="text-xs">{t("orders.plates")}</Label>
                       <Input
                         id="vehiclePlates"
                         value={shipmentVehiclePlates}
@@ -841,14 +841,14 @@ export default function OrdersPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setReleaseDialogOpen(false)}>
-              Cancelar
+              {t("btn.cancel")}
             </Button>
             <Button
               onClick={handleConfirmRelease}
               disabled={releaseMutation.isPending}
               data-testid="button-confirm-release"
             >
-              {releaseMutation.isPending ? "Procesando..." : "Confirmar Liberación"}
+              {releaseMutation.isPending ? t("btn.processing") : t("orders.release-confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -859,25 +859,25 @@ export default function OrdersPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <XCircle className="h-5 w-5 text-red-600" />
-              Cancelar Pedido
+              {t("orders.cancel-confirm")}
             </DialogTitle>
             <DialogDescription>
-              El pedido se marcará como cancelado y dejará de aparecer como activo. Esta acción no elimina facturas ni embarques ya generados.
+              {t("orders.cancel-dialog-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="cancelReason">Motivo de la cancelación (opcional)</Label>
+            <Label htmlFor="cancelReason">{t("orders.cancel-reason")}</Label>
             <Textarea
               id="cancelReason"
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Ej. El cliente canceló el pedido"
+              placeholder={t("orders.cancel-reason-ph")}
               data-testid="input-cancel-reason"
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)} data-testid="button-cancel-dismiss">
-              Volver
+              {t("btn.back")}
             </Button>
             <Button
               variant="destructive"
@@ -885,7 +885,7 @@ export default function OrdersPage() {
               disabled={cancelOrderMutation.isPending}
               data-testid="button-confirm-cancel-order"
             >
-              {cancelOrderMutation.isPending ? "Cancelando..." : "Cancelar Pedido"}
+              {cancelOrderMutation.isPending ? t("orders.cancelling") : t("orders.cancel-confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

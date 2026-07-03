@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -97,33 +98,33 @@ type IncidentDetails = {
   attachments: Attachment[];
 };
 
-const typeLabels: Record<string, { label: string; icon: typeof AlertTriangle }> = {
-  [IncidentType.GARANTIA]: { label: "Garantía", icon: AlertTriangle },
-  [IncidentType.RETRABAJO]: { label: "Retrabajo", icon: Wrench },
-  [IncidentType.QUEJA]: { label: "Queja", icon: MessageSquare },
-  [IncidentType.CONSULTA]: { label: "Consulta", icon: HelpCircle },
-  [IncidentType.ADMINISTRATIVO]: { label: "Administrativo", icon: FileText },
+const typeLabels: Record<string, { labelKey: string; icon: typeof AlertTriangle }> = {
+  [IncidentType.GARANTIA]: { labelKey: "public.support.type.garantia", icon: AlertTriangle },
+  [IncidentType.RETRABAJO]: { labelKey: "public.support.type.retrabajo", icon: Wrench },
+  [IncidentType.QUEJA]: { labelKey: "public.support.type.queja", icon: MessageSquare },
+  [IncidentType.CONSULTA]: { labelKey: "public.support.type.consulta", icon: HelpCircle },
+  [IncidentType.ADMINISTRATIVO]: { labelKey: "public.support.type.administrativo", icon: FileText },
 };
 
-const statusLabels: Record<string, string> = {
-  [IncidentStatus.NUEVO]: "Nuevo",
-  [IncidentStatus.ASIGNADO]: "Asignado",
-  [IncidentStatus.EN_PROCESO]: "En Proceso",
-  [IncidentStatus.ESPERANDO_CLIENTE]: "Esperando su Respuesta",
-  [IncidentStatus.ESPERANDO_INTERNO]: "En Revisión",
-  [IncidentStatus.RESUELTO]: "Resuelto",
-  [IncidentStatus.CERRADO]: "Cerrado",
-  [IncidentStatus.CANCELADO]: "Cancelado",
+const statusLabelKeys: Record<string, string> = {
+  [IncidentStatus.NUEVO]: "status.new",
+  [IncidentStatus.ASIGNADO]: "status.assigned",
+  [IncidentStatus.EN_PROCESO]: "status.in-progress",
+  [IncidentStatus.ESPERANDO_CLIENTE]: "public.ticket.status.waiting-you",
+  [IncidentStatus.ESPERANDO_INTERNO]: "public.incident.status.in-review",
+  [IncidentStatus.RESUELTO]: "status.resolved",
+  [IncidentStatus.CERRADO]: "status.closed",
+  [IncidentStatus.CANCELADO]: "public.incident.status.cancelled",
 };
 
-const urgencyLabels: Record<string, string> = {
-  [IncidentUrgency.BAJA]: "Baja",
-  [IncidentUrgency.MEDIA]: "Media",
-  [IncidentUrgency.ALTA]: "Alta",
-  [IncidentUrgency.CRITICA]: "Crítica",
+const urgencyLabelKeys: Record<string, string> = {
+  [IncidentUrgency.BAJA]: "public.urgency.baja",
+  [IncidentUrgency.MEDIA]: "public.urgency.media",
+  [IncidentUrgency.ALTA]: "public.urgency.alta",
+  [IncidentUrgency.CRITICA]: "public.urgency.critica",
 };
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: (key: string) => string) {
   const colors: Record<string, string> = {
     [IncidentStatus.NUEVO]: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
     [IncidentStatus.ASIGNADO]: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
@@ -150,12 +151,12 @@ function getStatusBadge(status: string) {
   return (
     <Badge className={colors[status] || "bg-gray-100"}>
       <Icon className="h-3 w-3 mr-1" />
-      {statusLabels[status] || status}
+      {statusLabelKeys[status] ? t(statusLabelKeys[status]) : status}
     </Badge>
   );
 }
 
-function getUrgencyBadge(urgency: string) {
+function getUrgencyBadge(urgency: string, t: (key: string) => string) {
   const colors: Record<string, string> = {
     [IncidentUrgency.BAJA]: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     [IncidentUrgency.MEDIA]: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
@@ -165,7 +166,7 @@ function getUrgencyBadge(urgency: string) {
 
   return (
     <Badge className={colors[urgency] || "bg-gray-100"}>
-      {urgencyLabels[urgency] || urgency}
+      {urgencyLabelKeys[urgency] ? t(urgencyLabelKeys[urgency]) : urgency}
     </Badge>
   );
 }
@@ -183,6 +184,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function PublicTicketPage() {
+  const { t } = useI18n();
   const [, params] = useRoute("/soporte/ticket/:token");
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -199,7 +201,7 @@ export default function PublicTicketPage() {
       const response = await fetch(`/api/public/incidents/${token}`);
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || "Error al cargar el ticket");
+        throw new Error(err.error || t("public.ticket.load-error"));
       }
       return response.json();
     },
@@ -226,7 +228,7 @@ export default function PublicTicketPage() {
 
         if (!uploadUrlResponse.ok) {
           const error = await uploadUrlResponse.json();
-          throw new Error(error.error || "Error al preparar subida");
+          throw new Error(error.error || t("public.ticket.upload-prepare-error"));
         }
 
         const { uploadURL, entityId } = await uploadUrlResponse.json();
@@ -238,7 +240,7 @@ export default function PublicTicketPage() {
         });
 
         if (!uploadResponse.ok) {
-          throw new Error("Error al subir archivo");
+          throw new Error(t("public.support.file-upload-error"));
         }
 
         await fetch("/api/public/incidents/confirm-upload", {
@@ -262,8 +264,8 @@ export default function PublicTicketPage() {
         ]);
       } catch (error) {
         toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Error al subir archivo",
+          title: t("label.error"),
+          description: error instanceof Error ? error.message : t("public.support.file-upload-error"),
           variant: "destructive",
         });
       }
@@ -289,7 +291,7 @@ export default function PublicTicketPage() {
       });
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || "Error al agregar comentario");
+        throw new Error(err.error || t("public.ticket.comment-error"));
       }
       return response.json();
     },
@@ -298,13 +300,13 @@ export default function PublicTicketPage() {
       setUploadedFiles([]);
       queryClient.invalidateQueries({ queryKey: ["/api/public/incidents", token] });
       toast({
-        title: "Comentario agregado",
-        description: "Su comentario ha sido enviado exitosamente",
+        title: t("public.ticket.comment-added"),
+        description: t("public.ticket.comment-added-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -318,20 +320,20 @@ export default function PublicTicketPage() {
       });
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || "Error al confirmar cierre");
+        throw new Error(err.error || t("public.incident.close-error"));
       }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/public/incidents", token] });
       toast({
-        title: "Ticket cerrado",
-        description: "Gracias por confirmar que su solicitud fue resuelta",
+        title: t("public.ticket.closed-toast"),
+        description: t("public.ticket.closed-toast-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -352,7 +354,7 @@ export default function PublicTicketPage() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="mt-2 text-muted-foreground">Cargando ticket...</p>
+          <p className="mt-2 text-muted-foreground">{t("public.ticket.loading")}</p>
         </div>
       </div>
     );
@@ -366,9 +368,9 @@ export default function PublicTicketPage() {
             <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center mb-4">
               <XCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
             </div>
-            <CardTitle>Error al cargar el ticket</CardTitle>
+            <CardTitle>{t("public.ticket.load-error")}</CardTitle>
             <CardDescription>
-              {(error as Error)?.message || "No se pudo encontrar el ticket solicitado"}
+              {(error as Error)?.message || t("public.ticket.not-found")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -378,7 +380,7 @@ export default function PublicTicketPage() {
               data-testid="button-back-to-support"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver al Centro de Soporte
+              {t("public.ticket.back-to-support")}
             </Button>
           </CardContent>
         </Card>
@@ -406,7 +408,7 @@ export default function PublicTicketPage() {
             </Button>
             <HeadphonesIcon className="h-6 w-6" />
             <div>
-              <h1 className="text-lg font-bold">Centro de Soporte</h1>
+              <h1 className="text-lg font-bold">{t("public.support.center")}</h1>
               <p className="text-sm text-primary-foreground/80">GRUPO JOPER</p>
             </div>
           </div>
@@ -419,7 +421,7 @@ export default function PublicTicketPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                  <span data-testid="text-ticket-number">Ticket #{incident.ticketNumber}</span>
+                  <span data-testid="text-ticket-number">{t("public.ticket.number")} #{incident.ticketNumber}</span>
                   <span>·</span>
                   <span>{format(new Date(incident.createdAt), "d 'de' MMMM, yyyy", { locale: es })}</span>
                 </div>
@@ -429,8 +431,8 @@ export default function PublicTicketPage() {
                 </CardTitle>
               </div>
               <div className="flex items-center gap-2">
-                {getStatusBadge(incident.status)}
-                {getUrgencyBadge(incident.urgency)}
+                {getStatusBadge(incident.status, t)}
+                {getUrgencyBadge(incident.urgency, t)}
               </div>
             </div>
           </CardHeader>
@@ -438,24 +440,24 @@ export default function PublicTicketPage() {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="flex items-center gap-2 text-sm">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Empresa:</span>
+                <span className="text-muted-foreground">{t("public.company")}:</span>
                 <span className="font-medium">{incident.customer.name}</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Tipo:</span>
+                <span className="text-muted-foreground">{t("label.type")}:</span>
                 <span className="font-medium">{typeLabels[incident.type]?.label || incident.type}</span>
               </div>
               {incident.assignee && (
                 <div className="flex items-center gap-2 text-sm">
                   <User2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Atendido por:</span>
+                  <span className="text-muted-foreground">{t("public.ticket.attended-by")}</span>
                   <span className="font-medium">{incident.assignee.fullName}</span>
                 </div>
               )}
               {incident.product && (
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Producto:</span>
+                  <span className="text-muted-foreground">{t("label.product")}:</span>
                   <span className="font-medium">{incident.product.name}</span>
                 </div>
               )}
@@ -464,7 +466,7 @@ export default function PublicTicketPage() {
             <Separator />
 
             <div>
-              <h3 className="font-medium mb-2">Descripción</h3>
+              <h3 className="font-medium mb-2">{t("label.description")}</h3>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                 {incident.description}
               </p>
@@ -476,7 +478,7 @@ export default function PublicTicketPage() {
                 <div>
                   <h3 className="font-medium mb-3 flex items-center gap-2">
                     <Paperclip className="h-4 w-4" />
-                    Archivos Adjuntos ({incident.attachments.length})
+                    {t("public.ticket.attachments")} ({incident.attachments.length})
                   </h3>
                   <div className="grid gap-2">
                     {incident.attachments.map((attachment) => {
@@ -512,7 +514,7 @@ export default function PublicTicketPage() {
                 <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
                   <h3 className="font-medium text-green-800 dark:text-green-200 mb-2 flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4" />
-                    Resolución
+                    {t("public.incident.resolution")}
                   </h3>
                   <p className="text-sm text-green-700 dark:text-green-300 whitespace-pre-wrap">
                     {incident.resolution}
@@ -524,10 +526,10 @@ export default function PublicTicketPage() {
             {isResolved && !isClosed && (
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <h3 className="font-medium text-blue-800 dark:text-blue-200 mb-2">
-                  ¿Está satisfecho con la resolución?
+                  {t("public.ticket.satisfied-q")}
                 </h3>
                 <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
-                  Si considera que su solicitud ha sido resuelta satisfactoriamente, puede confirmar el cierre del ticket.
+                  {t("public.ticket.satisfied-desc")}
                 </p>
                 <Button
                   onClick={() => confirmCloseMutation.mutate()}
@@ -537,12 +539,12 @@ export default function PublicTicketPage() {
                   {confirmCloseMutation.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Confirmando...
+                      {t("public.ticket.confirming")}
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Confirmar Cierre
+                      {t("public.incident.confirm-close")}
                     </>
                   )}
                 </Button>
@@ -555,7 +557,7 @@ export default function PublicTicketPage() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              Conversación
+              {t("public.incident.conversation")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -563,8 +565,8 @@ export default function PublicTicketPage() {
               {incident.comments.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
                   <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No hay comentarios aún</p>
-                  <p className="text-sm">Sea el primero en agregar un comentario</p>
+                  <p>{t("public.ticket.no-comments")}</p>
+                  <p className="text-sm">{t("public.ticket.be-first")}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -697,7 +699,7 @@ export default function PublicTicketPage() {
 
             {isClosed && (
               <div className="text-center py-4 text-muted-foreground">
-                <p className="text-sm">Este ticket está cerrado. No se pueden agregar más comentarios.</p>
+                <p className="text-sm">{t("public.ticket.closed-no-comments")}</p>
               </div>
             )}
           </CardContent>

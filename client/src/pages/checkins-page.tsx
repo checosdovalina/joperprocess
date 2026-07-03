@@ -94,15 +94,15 @@ export default function CheckinsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits"] });
       toast({
-        title: "Visita iniciada",
-        description: "El check-in ha sido creado desde la visita programada",
+        title: t("checkins.toast-visit-started"),
+        description: t("checkins.toast-visit-started-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo convertir la visita",
+        title: t("label.error"),
+        description: error.message || t("checkins.toast-convert-error"),
       });
     },
   });
@@ -119,8 +119,8 @@ export default function CheckinsPage() {
         (error) => {
           setGettingLocation(false);
           toast({
-            title: "Error de ubicación",
-            description: "No se pudo obtener la ubicación GPS. Verifica los permisos.",
+            title: t("checkins.toast-location-error"),
+            description: t("checkins.toast-location-error-desc"),
             variant: "destructive",
           });
         }
@@ -128,8 +128,8 @@ export default function CheckinsPage() {
     } else {
       setGettingLocation(false);
       toast({
-        title: "GPS no disponible",
-        description: "Tu navegador no soporta geolocalización",
+        title: t("checkins.toast-gps-unavailable"),
+        description: t("checkins.toast-gps-unavailable-desc"),
         variant: "destructive",
       });
     }
@@ -154,13 +154,13 @@ export default function CheckinsPage() {
       });
       setLocation(null);
       toast({
-        title: "Check-in registrado",
-        description: "El check-in ha sido creado exitosamente",
+        title: t("checkins.toast-registered"),
+        description: t("checkins.toast-registered-desc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("label.error"),
         description: error.message,
         variant: "destructive",
       });
@@ -174,10 +174,10 @@ export default function CheckinsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
       setCheckinToDelete(null);
-      toast({ title: "Check-in eliminado" });
+      toast({ title: t("checkins.toast-deleted") });
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo eliminar el check-in", variant: "destructive" });
+      toast({ title: t("label.error"), description: t("checkins.toast-delete-error"), variant: "destructive" });
     },
   });
 
@@ -195,15 +195,15 @@ export default function CheckinsPage() {
           });
           setGettingLocation(false);
           toast({
-            title: "Ubicación obtenida",
-            description: "La ubicación GPS ha sido capturada correctamente",
+            title: t("checkins.toast-location-obtained"),
+            description: t("checkins.toast-location-obtained-desc"),
           });
         },
         (error) => {
           setGettingLocation(false);
           toast({
-            title: "Error de ubicación",
-            description: "No se pudo obtener la ubicación GPS. Verifica los permisos.",
+            title: t("checkins.toast-location-error"),
+            description: t("checkins.toast-location-error-desc"),
             variant: "destructive",
           });
         }
@@ -211,8 +211,8 @@ export default function CheckinsPage() {
     } else {
       setGettingLocation(false);
       toast({
-        title: "GPS no disponible",
-        description: "Tu navegador no soporta geolocalización",
+        title: t("checkins.toast-gps-unavailable"),
+        description: t("checkins.toast-gps-unavailable-desc"),
         variant: "destructive",
       });
     }
@@ -258,7 +258,7 @@ export default function CheckinsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("checkins.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Registra visitas a clientes con ubicación GPS
+            {t("checkins.subtitle")}
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -270,43 +270,43 @@ export default function CheckinsPage() {
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col">
             <DialogHeader className="shrink-0">
-              <DialogTitle>Nuevo Check-in</DialogTitle>
+              <DialogTitle>{t("checkins.new")}</DialogTitle>
               <DialogDescription>
-                Registra una visita al cliente
+                {t("checkins.dialog-desc")}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
               <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                 <div className="space-y-2">
-                  <Label htmlFor="customer">Cliente *</Label>
+                  <Label htmlFor="customer">{t("label.client")} *</Label>
                   <CustomerCombobox
                     customers={customers || []}
                     value={formData.customerId || ""}
                     onValueChange={(value) => setFormData({ ...formData, customerId: value })}
-                    placeholder="Buscar cliente..."
+                    placeholder={t("checkins.search-customer")}
                     data-testid="select-checkin-customer"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="meetingType">Tipo de Reunión *</Label>
+                  <Label htmlFor="meetingType">{t("checkins.meeting-type")} *</Label>
                   <Select
                     value={formData.meetingType}
                     onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
                   >
                     <SelectTrigger id="meetingType" data-testid="select-meeting-type">
-                      <SelectValue placeholder="Selecciona tipo" />
+                      <SelectValue placeholder={t("checkins.select-type")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
-                      <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
-                      <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+                      <SelectItem value={MeetingType.VISITA}>{t("checkins.type.visit")}</SelectItem>
+                      <SelectItem value={MeetingType.LLAMADA}>{t("checkins.type.call")}</SelectItem>
+                      <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Ubicación GPS</Label>
+                  <Label>{t("label.gps")}</Label>
                   <Button
                     type="button"
                     variant="outline"
@@ -318,17 +318,17 @@ export default function CheckinsPage() {
                     {gettingLocation ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Obteniendo ubicación...
+                        {t("checkins.getting-location")}
                       </>
                     ) : location ? (
                       <>
                         <MapPin className="mr-2 h-4 w-4 text-green-600" />
-                        Ubicación capturada
+                        {t("checkins.location-captured")}
                       </>
                     ) : (
                       <>
                         <MapPin className="mr-2 h-4 w-4" />
-                        Capturar Ubicación
+                        {t("checkins.capture-location")}
                       </>
                     )}
                   </Button>
@@ -340,13 +340,13 @@ export default function CheckinsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Notas de la Visita</Label>
+                  <Label htmlFor="notes">{t("checkins.visit-notes")}</Label>
                   <Textarea
                     id="notes"
                     data-testid="textarea-checkin-notes"
                     value={formData.notes ?? ""}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Describe los temas tratados en la visita..."
+                    placeholder={t("checkins.notes-placeholder")}
                     rows={4}
                   />
                 </div>
@@ -358,13 +358,13 @@ export default function CheckinsPage() {
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
                 >
-                  Cancelar
+                  {t("btn.cancel")}
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-checkin">
                   {createMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Guardando...
+                      {t("btn.saving")}
                     </>
                   ) : (
                     t("checkins.register")
@@ -386,7 +386,7 @@ export default function CheckinsPage() {
                 {t("checkins.scheduled-today")}
               </CardTitle>
               <CardDescription>
-                {todayVisits.length} {todayVisits.length === 1 ? "visita programada" : "visitas programadas"}
+                {todayVisits.length} {todayVisits.length === 1 ? t("checkins.visit-scheduled-singular") : t("checkins.visits-scheduled-plural")}
               </CardDescription>
             </div>
           </CardHeader>
@@ -395,7 +395,7 @@ export default function CheckinsPage() {
               {todayVisits.map((visit) => (
                 <Card key={visit.id} className="hover-elevate" data-testid={`card-scheduled-visit-${visit.id}`}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">{visit.customer?.name || "Sin cliente"}</CardTitle>
+                    <CardTitle className="text-base">{visit.customer?.name || t("checkins.no-customer")}</CardTitle>
                     <CardDescription className="text-xs">
                       {format(new Date(visit.scheduledDate), "PPP", { locale: es })}
                     </CardDescription>
@@ -423,12 +423,12 @@ export default function CheckinsPage() {
                       {convertVisitMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Iniciando...
+                          {t("checkins.starting")}
                         </>
                       ) : (
                         <>
                           <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Iniciar Check-in
+                          {t("checkins.start")}
                         </>
                       )}
                     </Button>
@@ -446,7 +446,7 @@ export default function CheckinsPage() {
             <div>
               <CardTitle>{t("checkins.history")}</CardTitle>
               <CardDescription>
-                {filteredCheckins.length} de {checkins?.length || 0} visitas registradas
+                {filteredCheckins.length} {t("checkins.of")} {checkins?.length || 0} {t("checkins.visits-registered")}
               </CardDescription>
             </div>
           </div>
@@ -455,7 +455,7 @@ export default function CheckinsPage() {
           <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
             <div className="flex-1 min-w-[180px]">
               <Input
-                placeholder="Buscar cliente..."
+                placeholder={t("checkins.search-customer")}
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
                 data-testid="input-search-checkin"
@@ -463,23 +463,23 @@ export default function CheckinsPage() {
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[150px]" data-testid="select-filter-status">
-                <SelectValue placeholder="Estado" />
+                <SelectValue placeholder={t("label.status")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="all">{t("label.all")}</SelectItem>
                 <SelectItem value="active">{t("status.in-progress")}</SelectItem>
                 <SelectItem value="done">{t("status.done")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-[150px]" data-testid="select-filter-type">
-                <SelectValue placeholder="Tipo" />
+                <SelectValue placeholder={t("label.type")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                <SelectItem value={MeetingType.VISITA}>Visita</SelectItem>
-                <SelectItem value={MeetingType.LLAMADA}>Llamada</SelectItem>
-                <SelectItem value={MeetingType.VIDEOLLAMADA}>Videollamada</SelectItem>
+                <SelectItem value="all">{t("checkins.all-types")}</SelectItem>
+                <SelectItem value={MeetingType.VISITA}>{t("checkins.type.visit")}</SelectItem>
+                <SelectItem value={MeetingType.LLAMADA}>{t("checkins.type.call")}</SelectItem>
+                <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-1">
@@ -489,7 +489,7 @@ export default function CheckinsPage() {
                 onChange={e => setFilterDateFrom(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-from"
-                title="Desde"
+                title={t("label.from")}
               />
               <span className="text-muted-foreground text-sm">—</span>
               <Input
@@ -498,13 +498,13 @@ export default function CheckinsPage() {
                 onChange={e => setFilterDateTo(e.target.value)}
                 className="w-[140px]"
                 data-testid="input-date-to"
-                title="Hasta"
+                title={t("label.to")}
               />
             </div>
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
                 <RotateCcw className="h-4 w-4 mr-1" />
-                Limpiar
+                {t("btn.clear")}
               </Button>
             )}
           </div>
@@ -543,7 +543,7 @@ export default function CheckinsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{checkin.customer?.name || "Sin cliente"}</div>
+                        <div className="font-medium">{checkin.customer?.name || t("checkins.no-customer")}</div>
                         <div className="text-xs text-muted-foreground">{checkin.customer?.city || "-"}</div>
                       </TableCell>
                       <TableCell>
@@ -553,20 +553,20 @@ export default function CheckinsPage() {
                         {checkin.latitude && checkin.longitude ? (
                           <div className="flex items-center gap-1 text-sm text-muted-foreground">
                             <MapPin className="h-3 w-3" />
-                            GPS Capturado
+                            {t("checkins.gps-captured")}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Sin ubicación</span>
+                          <span className="text-xs text-muted-foreground">{t("checkins.no-location")}</span>
                         )}
                       </TableCell>
                       <TableCell>
                         {checkin.checkoutAt ? (
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            Finalizado
+                            {t("status.done")}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                            En curso
+                            {t("status.ongoing")}
                           </Badge>
                         )}
                       </TableCell>
@@ -579,7 +579,7 @@ export default function CheckinsPage() {
                               data-testid={`button-view-checkin-${checkin.id}`}
                             >
                               <FileText className="h-4 w-4 mr-1" />
-                              Ver Detalle
+                              {t("checkins.view-detail")}
                             </Button>
                           </Link>
                           {isAdmin && (
@@ -602,19 +602,19 @@ export default function CheckinsPage() {
             </div>
           ) : checkins && checkins.length > 0 ? (
             <div className="text-center py-8 text-muted-foreground" data-testid="text-no-results">
-              Ningún check-in coincide con los filtros aplicados
+              {t("checkins.no-match")}
             </div>
           ) : (
             <div className="text-center py-12">
               <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay check-ins registrados</p>
+              <p className="text-muted-foreground">{t("checkins.no-results")}</p>
               <Button
                 className="mt-4"
                 onClick={() => setIsDialogOpen(true)}
                 data-testid="button-add-first-checkin"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Registrar Primer Check-in
+                {t("checkins.register-first")}
               </Button>
             </div>
           )}
@@ -624,20 +624,20 @@ export default function CheckinsPage() {
       <AlertDialog open={!!checkinToDelete} onOpenChange={(open) => { if (!open) setCheckinToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar check-in</AlertDialogTitle>
+            <AlertDialogTitle>{t("checkins.delete-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. El check-in y sus registros asociados serán eliminados permanentemente.
+              {t("checkins.delete-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete">{t("btn.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground"
               onClick={() => checkinToDelete && deleteMutation.mutate(checkinToDelete)}
               disabled={deleteMutation.isPending}
               data-testid="button-confirm-delete"
             >
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Eliminar"}
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("btn.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

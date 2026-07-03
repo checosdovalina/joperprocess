@@ -6,10 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Mail, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/hooks/use-i18n";
 import { apiRequest } from "@/lib/queryClient";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 
 export default function ForgotPasswordPage() {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -20,8 +22,8 @@ export default function ForgotPasswordPage() {
     
     if (!email) {
       toast({
-        title: "Error",
-        description: "Por favor ingresa tu correo electrónico",
+        title: t("label.error"),
+        description: t("auth.enter-email"),
         variant: "destructive",
       });
       return;
@@ -33,8 +35,8 @@ export default function ForgotPasswordPage() {
       setIsSubmitted(true);
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Error al procesar la solicitud",
+        title: t("label.error"),
+        description: error.message || t("auth.request-error"),
         variant: "destructive",
       });
     } finally {
@@ -47,14 +49,14 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         <Link href="/auth" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" />
-          Volver a iniciar sesión
+          {t("auth.back-to-login")}
         </Link>
         
         <div className="flex items-center gap-3 mb-8">
           <img src={nexxoLogo} alt="Nexxo" className="h-12 w-12" />
           <div>
             <h1 className="text-2xl font-bold text-primary">NEXXO</h1>
-            <p className="text-sm text-muted-foreground">Sistema Comercial</p>
+            <p className="text-sm text-muted-foreground">{t("auth.system-name")}</p>
           </div>
         </div>
 
@@ -62,10 +64,10 @@ export default function ForgotPasswordPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
-              Recuperar Contraseña
+              {t("auth.recover-password")}
             </CardTitle>
             <CardDescription>
-              Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña
+              {t("auth.recover-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -74,26 +76,25 @@ export default function ForgotPasswordPage() {
                 <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mb-4">
                   <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">¡Correo enviado!</h3>
+                <h3 className="text-lg font-semibold mb-2">{t("auth.email-sent")}</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.
-                  El enlace expirará en 1 hora.
+                  {t("auth.email-sent-desc")}
                 </p>
                 <Link href="/auth">
                   <Button variant="outline" className="w-full">
-                    Volver a iniciar sesión
+                    {t("auth.back-to-login")}
                   </Button>
                 </Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Correo Electrónico</Label>
+                  <Label htmlFor="email">{t("auth.email")}</Label>
                   <Input
                     id="email"
                     data-testid="input-forgot-email"
                     type="email"
-                    placeholder="tu@correo.com"
+                    placeholder={t("auth.email-placeholder")}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -108,10 +109,10 @@ export default function ForgotPasswordPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Enviando...
+                      {t("auth.sending")}
                     </>
                   ) : (
-                    "Enviar enlace de recuperación"
+                    t("auth.send-recovery-link")
                   )}
                 </Button>
               </form>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -46,15 +46,16 @@ import {
   Video,
 } from "lucide-react";
 import { IncidentType, IncidentUrgency } from "@shared/schema";
+import { useI18n } from "@/hooks/use-i18n";
 
-const incidentFormSchema = z.object({
-  customerId: z.string().min(1, "Seleccione su empresa"),
-  type: z.string().min(1, "Seleccione el tipo de incidente"),
+const makeIncidentFormSchema = (t: (key: string) => string) => z.object({
+  customerId: z.string().min(1, t("public.support.company-required")),
+  type: z.string().min(1, t("public.support.type-required")),
   urgency: z.string().default(IncidentUrgency.MEDIA),
-  subject: z.string().min(5, "El asunto debe tener al menos 5 caracteres"),
-  description: z.string().min(20, "La descripción debe tener al menos 20 caracteres"),
-  contactName: z.string().min(2, "Ingrese su nombre"),
-  contactEmail: z.string().email("Ingrese un correo válido"),
+  subject: z.string().min(5, t("incidents.subject-min")),
+  description: z.string().min(20, t("public.support.description-min")),
+  contactName: z.string().min(2, t("public.support.name-required")),
+  contactEmail: z.string().email(t("public.support.email-invalid")),
   contactPhone: z.string().optional(),
   warrantySerialNumber: z.string().optional(),
 }).refine((data) => {
@@ -63,18 +64,18 @@ const incidentFormSchema = z.object({
   }
   return true;
 }, {
-  message: "Ingrese el número de serie del producto (mínimo 3 caracteres)",
+  message: t("public.support.serial-required"),
   path: ["warrantySerialNumber"],
 });
 
-type IncidentFormData = z.infer<typeof incidentFormSchema>;
+type IncidentFormData = z.infer<ReturnType<typeof makeIncidentFormSchema>>;
 
-const lookupSchema = z.object({
-  ticketNumber: z.string().min(1, "Ingrese el número de ticket"),
-  email: z.string().email("Ingrese un correo válido"),
+const makeLookupSchema = (t: (key: string) => string) => z.object({
+  ticketNumber: z.string().min(1, t("public.support.ticket-required")),
+  email: z.string().email(t("public.support.email-invalid")),
 });
 
-type LookupFormData = z.infer<typeof lookupSchema>;
+type LookupFormData = z.infer<ReturnType<typeof makeLookupSchema>>;
 
 type CustomerSearchResult = {
   id: string;
@@ -91,44 +92,47 @@ type UploadedFile = {
   size: number;
 };
 
-const typeLabels: Record<string, { label: string; icon: typeof AlertTriangle; description: string }> = {
+const typeLabels: Record<string, { labelKey: string; icon: typeof AlertTriangle; descKey: string }> = {
   [IncidentType.GARANTIA]: { 
-    label: "Garantía", 
+    labelKey: "public.support.type.garantia", 
     icon: AlertTriangle,
-    description: "Problemas cubiertos por garantía del producto"
+    descKey: "public.support.type.garantia-desc"
   },
   [IncidentType.RETRABAJO]: { 
-    label: "Retrabajo", 
+    labelKey: "public.support.type.retrabajo", 
     icon: Wrench,
-    description: "Solicitud de retrabajo o reparación"
+    descKey: "public.support.type.retrabajo-desc"
   },
   [IncidentType.QUEJA]: { 
-    label: "Queja", 
+    labelKey: "public.support.type.queja", 
     icon: MessageSquare,
-    description: "Quejas sobre servicio o productos"
+    descKey: "public.support.type.queja-desc"
   },
   [IncidentType.CONSULTA]: { 
-    label: "Consulta", 
+    labelKey: "public.support.type.consulta", 
     icon: HelpCircle,
-    description: "Preguntas generales o solicitudes de información"
+    descKey: "public.support.type.consulta-desc"
   },
   [IncidentType.ADMINISTRATIVO]: { 
-    label: "Administrativo", 
+    labelKey: "public.support.type.administrativo", 
     icon: FileText,
-    description: "Asuntos administrativos o de facturación"
+    descKey: "public.support.type.administrativo-desc"
   },
 };
 
 const urgencyLabels: Record<string, string> = {
-  [IncidentUrgency.BAJA]: "Baja - Puede esperar",
-  [IncidentUrgency.MEDIA]: "Media - Atención normal",
-  [IncidentUrgency.ALTA]: "Alta - Requiere atención pronto",
-  [IncidentUrgency.CRITICA]: "Crítica - Urgente",
+  [IncidentUrgency.BAJA]: "public.support.urgency.baja",
+  [IncidentUrgency.MEDIA]: "public.support.urgency.media",
+  [IncidentUrgency.ALTA]: "public.support.urgency.alta",
+  [IncidentUrgency.CRITICA]: "public.support.urgency.critica",
 };
 
 export default function PublicSupportPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { t } = useI18n();
+  const incidentFormSchema = useMemo(() => makeIncidentFormSchema(t), [t]);
+  const lookupSchema = useMemo(() => makeLookupSchema(t), [t]);
   const [mode, setMode] = useState<"select" | "create" | "lookup">("select");
   const [customerSearch, setCustomerSearch] = useState("");
   const [searchResults, setSearchResults] = useState<CustomerSearchResult[]>([]);
@@ -288,8 +292,8 @@ export default function PublicSupportPage() {
       });
       setUploadedFiles([]);
       toast({
-        title: "Ticket creado exitosamente",
-        description: `Su número de ticket es: ${data.ticketNumber}`,
+        title: t("public.support.ticket-created"),
+        description: `${t("public.support.ticket-created-desc")} ${data.ticketNumber}`,
       });
     },
     onError: (error: Error) => {
@@ -360,21 +364,21 @@ export default function PublicSupportPage() {
             <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <CardTitle className="text-2xl">Ticket Creado Exitosamente</CardTitle>
+            <CardTitle className="text-2xl">{t("public.support.created-title")}</CardTitle>
             <CardDescription>
-              Su solicitud ha sido registrada y será atendida por nuestro equipo
+              {t("public.support.created-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="bg-muted rounded-lg p-4 text-center">
-              <p className="text-sm text-muted-foreground mb-1">Número de Ticket</p>
+              <p className="text-sm text-muted-foreground mb-1">{t("public.support.ticket-number")}</p>
               <p className="text-2xl font-bold" data-testid="text-ticket-number">
                 {createdTicket.ticketNumber}
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label>Enlace de seguimiento</Label>
+              <Label>{t("public.support.tracking-link")}</Label>
               <div className="flex gap-2">
                 <Input 
                   value={getTrackingUrl()} 
@@ -392,7 +396,7 @@ export default function PublicSupportPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Guarde este enlace para dar seguimiento a su ticket
+                {t("public.support.tracking-hint")}
               </p>
             </div>
 
@@ -403,7 +407,7 @@ export default function PublicSupportPage() {
                 data-testid="button-view-ticket"
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Ver Mi Ticket
+                {t("public.support.view-ticket")}
               </Button>
               <Button
                 variant="outline"
@@ -417,7 +421,7 @@ export default function PublicSupportPage() {
                 className="w-full"
                 data-testid="button-create-another"
               >
-                Crear Otro Ticket
+                {t("public.support.create-another")}
               </Button>
             </div>
           </CardContent>
@@ -432,10 +436,10 @@ export default function PublicSupportPage() {
         <div className="container mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <HeadphonesIcon className="h-10 w-10" />
-            <h1 className="text-3xl font-bold">Centro de Soporte</h1>
+            <h1 className="text-3xl font-bold">{t("public.support.title")}</h1>
           </div>
           <p className="text-primary-foreground/80 max-w-xl mx-auto">
-            GRUPO JOPER - Sistema de atención al cliente. Cree tickets de soporte o consulte el estado de sus solicitudes existentes.
+            {t("public.support.subtitle")}
           </p>
         </div>
       </div>
@@ -452,9 +456,9 @@ export default function PublicSupportPage() {
                 <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-2">
                   <Plus className="h-8 w-8 text-primary" />
                 </div>
-                <CardTitle>Crear Nuevo Ticket</CardTitle>
+                <CardTitle>{t("public.support.new-ticket")}</CardTitle>
                 <CardDescription>
-                  Reporte un problema, solicite garantía, realice una consulta o levante una queja
+                  {t("public.support.new-ticket-desc")}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -468,9 +472,9 @@ export default function PublicSupportPage() {
                 <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-2">
                   <Search className="h-8 w-8 text-primary" />
                 </div>
-                <CardTitle>Consultar Ticket Existente</CardTitle>
+                <CardTitle>{t("public.support.lookup-ticket")}</CardTitle>
                 <CardDescription>
-                  Vea el estado y agregue comentarios a un ticket que ya haya creado
+                  {t("public.support.lookup-ticket-desc")}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -487,12 +491,12 @@ export default function PublicSupportPage() {
                   onClick={() => setMode("select")}
                   data-testid="button-back"
                 >
-                  ← Volver
+                  ← {t("public.back")}
                 </Button>
               </div>
-              <CardTitle>Consultar Ticket Existente</CardTitle>
+              <CardTitle>{t("public.support.lookup-ticket")}</CardTitle>
               <CardDescription>
-                Ingrese su número de ticket y el correo electrónico con el que lo creó
+                {t("public.support.lookup-desc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -503,7 +507,7 @@ export default function PublicSupportPage() {
                     name="ticketNumber"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Número de Ticket</FormLabel>
+                        <FormLabel>{t("public.support.ticket-number")}</FormLabel>
                         <FormControl>
                           <Input 
                             placeholder="Ej: INC-001234" 
@@ -520,7 +524,7 @@ export default function PublicSupportPage() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Correo Electrónico</FormLabel>
+                        <FormLabel>{t("public.support.email-label")}</FormLabel>
                         <FormControl>
                           <Input 
                             type="email"
@@ -542,12 +546,12 @@ export default function PublicSupportPage() {
                     {lookupMutation.isPending ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Buscando...
+                        {t("public.support.searching")}
                       </>
                     ) : (
                       <>
                         <Search className="h-4 w-4 mr-2" />
-                        Buscar Ticket
+                        {t("public.support.search-ticket")}
                       </>
                     )}
                   </Button>
@@ -567,12 +571,12 @@ export default function PublicSupportPage() {
                   onClick={() => setMode("select")}
                   data-testid="button-back-create"
                 >
-                  ← Volver
+                  ← {t("public.back")}
                 </Button>
               </div>
-              <CardTitle>Crear Nuevo Ticket de Soporte</CardTitle>
+              <CardTitle>{t("public.support.create-title")}</CardTitle>
               <CardDescription>
-                Complete el formulario para registrar su solicitud
+                {t("public.support.create-desc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -580,10 +584,10 @@ export default function PublicSupportPage() {
                 <form onSubmit={form.handleSubmit(onSubmitIncident)} className="space-y-6">
                   <div className="space-y-4">
                     <div>
-                      <Label>Buscar su Empresa</Label>
+                      <Label>{t("public.support.search-company")}</Label>
                       <div className="relative mt-1.5">
                         <Input
-                          placeholder="Escriba el nombre o RFC de su empresa..."
+                          placeholder={t("public.support.search-company-ph")}
                           value={customerSearch}
                           onChange={(e) => {
                             setCustomerSearch(e.target.value);
@@ -622,8 +626,8 @@ export default function PublicSupportPage() {
 
                       {customerSearch.length >= 3 && !isSearching && searchResults.length === 0 && !selectedCustomer && (
                         <div className="mt-2 p-3 border rounded-md text-center text-muted-foreground">
-                          <p className="text-sm">No se encontraron empresas</p>
-                          <p className="text-xs">Intente buscar por nombre, RFC o clave</p>
+                          <p className="text-sm">{t("public.support.no-companies")}</p>
+                          <p className="text-xs">{t("public.support.no-companies-hint")}</p>
                         </div>
                       )}
 
@@ -642,7 +646,7 @@ export default function PublicSupportPage() {
                             }}
                             data-testid="button-clear-customer"
                           >
-                            Cambiar
+                            {t("public.support.change")}
                           </Button>
                         </div>
                       )}
@@ -658,21 +662,21 @@ export default function PublicSupportPage() {
                       name="type"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tipo de Solicitud</FormLabel>
+                          <FormLabel>{t("public.support.request-type")}</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-type">
-                                <SelectValue placeholder="Seleccione el tipo de solicitud" />
+                                <SelectValue placeholder={t("public.support.request-type-ph")} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {Object.entries(typeLabels).map(([value, { label, icon: Icon, description }]) => (
+                              {Object.entries(typeLabels).map(([value, { labelKey, icon: Icon, descKey }]) => (
                                 <SelectItem key={value} value={value}>
                                   <div className="flex items-center gap-2">
                                     <Icon className="h-4 w-4" />
                                     <div>
-                                      <span>{label}</span>
-                                      <p className="text-xs text-muted-foreground">{description}</p>
+                                      <span>{t(labelKey)}</span>
+                                      <p className="text-xs text-muted-foreground">{t(descKey)}</p>
                                     </div>
                                   </div>
                                 </SelectItem>
@@ -690,16 +694,16 @@ export default function PublicSupportPage() {
                         name="warrantySerialNumber"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Número de Serie del Producto</FormLabel>
+                            <FormLabel>{t("public.support.serial-number")}</FormLabel>
                             <FormControl>
                               <Input
-                                placeholder="Ej: SN-2024-001234"
+                                placeholder={t("public.support.serial-ph")}
                                 {...field}
                                 data-testid="input-warranty-serial"
                               />
                             </FormControl>
                             <p className="text-xs text-muted-foreground">
-                              El número de serie se encuentra en la placa del producto o en su factura
+                              {t("public.support.serial-hint")}
                             </p>
                             <FormMessage />
                           </FormItem>
@@ -712,7 +716,7 @@ export default function PublicSupportPage() {
                       name="urgency"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Urgencia</FormLabel>
+                          <FormLabel>{t("label.urgency")}</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-urgency">
@@ -722,7 +726,7 @@ export default function PublicSupportPage() {
                             <SelectContent>
                               {Object.entries(urgencyLabels).map(([value, label]) => (
                                 <SelectItem key={value} value={value}>
-                                  {label}
+                                  {t(label)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -737,10 +741,10 @@ export default function PublicSupportPage() {
                       name="subject"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Asunto</FormLabel>
+                          <FormLabel>{t("label.subject")}</FormLabel>
                           <FormControl>
                             <Input 
-                              placeholder="Resumen breve de su solicitud" 
+                              placeholder={t("public.support.subject-ph")} 
                               {...field}
                               data-testid="input-subject"
                             />
@@ -755,10 +759,10 @@ export default function PublicSupportPage() {
                       name="description"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Descripción Detallada</FormLabel>
+                          <FormLabel>{t("public.support.description-detailed")}</FormLabel>
                           <FormControl>
                             <Textarea
-                              placeholder="Describa el problema o solicitud con el mayor detalle posible..."
+                              placeholder={t("public.support.description-ph")}
                               rows={5}
                               {...field}
                               data-testid="input-description"
@@ -770,9 +774,9 @@ export default function PublicSupportPage() {
                     />
 
                     <div className="space-y-3">
-                      <Label>Evidencia (Opcional)</Label>
+                      <Label>{t("public.support.evidence")}</Label>
                       <p className="text-xs text-muted-foreground">
-                        Puede adjuntar fotos, videos o documentos que ayuden a describir el problema
+                        {t("public.support.evidence-hint")}
                       </p>
                       
                       <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
@@ -796,10 +800,10 @@ export default function PublicSupportPage() {
                             <Upload className="h-8 w-8 text-muted-foreground" />
                           )}
                           <span className="text-sm text-muted-foreground">
-                            {isUploading ? "Subiendo..." : "Haga clic para seleccionar archivos"}
+                            {isUploading ? t("public.support.uploading") : t("public.support.click-select-files")}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            Imágenes, videos, PDF, Word, Excel
+                            {t("public.support.file-types")}
                           </span>
                         </label>
                       </div>
@@ -837,17 +841,17 @@ export default function PublicSupportPage() {
                   </div>
 
                   <div className="border-t pt-6">
-                    <h3 className="font-medium mb-4">Información de Contacto</h3>
+                    <h3 className="font-medium mb-4">{t("public.support.contact-info")}</h3>
                     <div className="grid md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="contactName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Nombre Completo</FormLabel>
+                            <FormLabel>{t("label.full-name")}</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder="Su nombre" 
+                                placeholder={t("public.support.your-name")} 
                                 {...field}
                                 data-testid="input-contact-name"
                               />
@@ -862,7 +866,7 @@ export default function PublicSupportPage() {
                         name="contactEmail"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Correo Electrónico</FormLabel>
+                            <FormLabel>{t("public.support.email-label")}</FormLabel>
                             <FormControl>
                               <Input 
                                 type="email"
@@ -881,10 +885,10 @@ export default function PublicSupportPage() {
                         name="contactPhone"
                         render={({ field }) => (
                           <FormItem className="md:col-span-2">
-                            <FormLabel>Teléfono (Opcional)</FormLabel>
+                            <FormLabel>{t("public.support.phone-optional")}</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder="Número de teléfono" 
+                                placeholder={t("public.support.phone-ph")} 
                                 {...field}
                                 data-testid="input-contact-phone"
                               />
@@ -905,12 +909,12 @@ export default function PublicSupportPage() {
                     {createMutation.isPending ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creando Ticket...
+                        {t("public.support.creating-ticket")}
                       </>
                     ) : (
                       <>
                         <Plus className="h-4 w-4 mr-2" />
-                        Crear Ticket de Soporte
+                        {t("public.support.create-ticket-btn")}
                       </>
                     )}
                   </Button>

@@ -14,6 +14,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Customer } from "@shared/schema";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface CustomerComboboxProps {
   customers: Customer[];
@@ -28,12 +29,14 @@ export function CustomerCombobox({
   customers,
   value,
   onValueChange,
-  placeholder = "Selecciona un cliente",
+  placeholder,
   disabled = false,
   "data-testid": testId,
 }: CustomerComboboxProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const resolvedPlaceholder = placeholder ?? t("incidents.select-customer");
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === value),
@@ -86,7 +89,7 @@ export function CustomerCombobox({
               )}
             </div>
           ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
+            <span className="text-muted-foreground">{resolvedPlaceholder}</span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -97,7 +100,7 @@ export function CustomerCombobox({
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Buscar por nombre, RFC, clave, teléfono..."
+              placeholder={t("customers.combobox-search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid={`${testId}-search`}
@@ -115,7 +118,7 @@ export function CustomerCombobox({
           </div>
           <CommandList className="max-h-[320px]">
             <CommandEmpty>
-              {search ? "No se encontraron clientes" : "Escribe para buscar..."}
+              {search ? t("customers.no-results") : t("customers.type-to-search")}
             </CommandEmpty>
             <CommandGroup>
               {filteredCustomers.map((customer) => (
@@ -180,7 +183,7 @@ export function CustomerCombobox({
               ))}
               {filteredCustomers.length === 60 && (
                 <div className="py-2 px-4 text-xs text-muted-foreground text-center border-t">
-                  Mostrando 60 resultados. Escribe para filtrar.
+                  {t("customers.showing-60")}
                 </div>
               )}
             </CommandGroup>

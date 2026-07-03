@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCustomerSchema, InsertCustomer, Customer } from "@shared/schema";
 import { z } from "zod";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Form,
   FormControl,
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { EntityFormDialog } from "@/components/entity-form-dialog";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface CustomerFormProps {
   open: boolean;
@@ -45,20 +46,22 @@ const defaultFormValues = {
 };
 
 // Extend schema with client-side decimal validation, omitting tenantId (added by backend)
-const customerFormSchema = insertCustomerSchema.omit({ tenantId: true }).extend({
+const makeCustomerFormSchema = (t: (key: string) => string) => insertCustomerSchema.omit({ tenantId: true }).extend({
   creditLimit: z.string()
-    .min(1, { message: "El límite de crédito es requerido" })
+    .min(1, { message: t("customers.credit-limit-required") })
     .refine(
       (val) => /^\d+(\.\d{0,2})?$/.test(val),
-      { message: "Debe ser un número decimal válido (ej: 100.50)" }
+      { message: t("customers.credit-limit-invalid") }
     ),
 });
 
-type CustomerFormData = z.infer<typeof customerFormSchema>;
+type CustomerFormData = z.infer<ReturnType<typeof makeCustomerFormSchema>>;
 
 export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer, onCancel }: CustomerFormProps) {
+  const { t } = useI18n();
   const isEditing = !!customer;
-  
+  const customerFormSchema = useMemo(() => makeCustomerFormSchema(t), [t]);
+
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerFormSchema),
     defaultValues: defaultFormValues,
@@ -110,8 +113,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
     <EntityFormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={isEditing ? "Editar Cliente" : "Nuevo Cliente"}
-      description={isEditing ? "Actualiza la información del cliente" : "Agrega un nuevo cliente al sistema"}
+      title={isEditing ? t("customers.edit-title") : t("customers.new-title")}
+      description={isEditing ? t("customers.edit-desc") : t("customers.new-desc")}
     >
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -121,11 +124,11 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="name"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Razón Social *</FormLabel>
+                    <FormLabel>{t("customers.business-name")} *</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
-                        placeholder="Nombre del cliente"
+                        placeholder={t("customers.name-placeholder")}
                         data-testid="input-customer-name"
                       />
                     </FormControl>
@@ -144,7 +147,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                       <Input
                         {...field}
                         value={field.value || ""}
-                        placeholder="RFC del cliente"
+                        placeholder={t("customers.rfc-placeholder")}
                         data-testid="input-customer-rfc"
                       />
                     </FormControl>
@@ -158,12 +161,12 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="contactName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contacto</FormLabel>
+                    <FormLabel>{t("label.contact")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         value={field.value || ""}
-                        placeholder="Nombre del contacto"
+                        placeholder={t("incidents.form.contact-name")}
                         data-testid="input-customer-contact"
                       />
                     </FormControl>
@@ -177,7 +180,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Correo Electrónico</FormLabel>
+                    <FormLabel>{t("customers.email-label")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -197,7 +200,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Teléfono</FormLabel>
+                    <FormLabel>{t("label.phone")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -216,12 +219,12 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="address"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Dirección</FormLabel>
+                    <FormLabel>{t("customers.address")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         value={field.value || ""}
-                        placeholder="Calle y número"
+                        placeholder={t("customers.address-placeholder")}
                         data-testid="input-customer-address"
                       />
                     </FormControl>
@@ -235,12 +238,12 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="city"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Ciudad</FormLabel>
+                    <FormLabel>{t("customers.city")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         value={field.value || ""}
-                        placeholder="Ciudad"
+                        placeholder={t("customers.city")}
                         data-testid="input-customer-city"
                       />
                     </FormControl>
@@ -254,12 +257,12 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="state"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estado</FormLabel>
+                    <FormLabel>{t("customers.state")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         value={field.value || ""}
-                        placeholder="Estado"
+                        placeholder={t("customers.state")}
                         data-testid="input-customer-state"
                       />
                     </FormControl>
@@ -273,12 +276,12 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="country"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>País</FormLabel>
+                    <FormLabel>{t("customers.country")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         value={field.value || ""}
-                        placeholder="México"
+                        placeholder={t("customers.country-ph")}
                         data-testid="input-customer-country"
                       />
                     </FormControl>
@@ -292,7 +295,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="zipCode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Código Postal</FormLabel>
+                    <FormLabel>{t("customers.zip-code")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -311,7 +314,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="creditLimit"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Límite de Crédito</FormLabel>
+                    <FormLabel>{t("customers.credit-limit")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -331,7 +334,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 name="creditDays"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Días de Crédito</FormLabel>
+                    <FormLabel>{t("customers.credit-days")}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -357,9 +360,9 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
-                    <FormLabel>No enviar estado de cuenta automático</FormLabel>
+                    <FormLabel>{t("customers.skip-statement")}</FormLabel>
                     <FormDescription className="text-xs text-muted-foreground">
-                      Al activar esto, el cliente no recibirá estados de cuenta por correo en los envíos automáticos programados.
+                      {t("customers.skip-statement-desc")}
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -385,11 +388,11 @@ export function CustomerForm({ open, onOpenChange, onSubmit, isPending, customer
                 disabled={isPending}
                 data-testid="button-cancel-customer"
               >
-                Cancelar
+                {t("btn.cancel")}
               </Button>
               <Button type="submit" disabled={isPending} data-testid="button-save-customer">
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isEditing ? "Actualizar Cliente" : "Guardar Cliente"}
+                {isEditing ? t("customers.update-btn") : t("customers.save-btn")}
               </Button>
             </div>
           </form>

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle, XCircle, FileText, Clock, AlertTriangle, Download } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface QuotationItem {
   id: string;
@@ -59,6 +60,7 @@ interface PublicQuotation {
 }
 
 export default function PublicQuotationApproval() {
+  const { t } = useI18n();
   const { token } = useParams<{ token: string }>();
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -69,7 +71,7 @@ export default function PublicQuotationApproval() {
     queryFn: async () => {
       const response = await fetch(`/api/public/quotations/${token}`);
       if (!response.ok) {
-        throw new Error("Cotización no encontrada");
+        throw new Error(t("public.quotation.not-found"));
       }
       return response.json();
     },
@@ -173,9 +175,9 @@ export default function PublicQuotationApproval() {
         <Card className="w-full max-w-md text-center">
           <CardHeader>
             <AlertTriangle className="h-12 w-12 mx-auto text-destructive mb-4" />
-            <CardTitle>Cotización No Encontrada</CardTitle>
+            <CardTitle>{t("public.quotation.not-found-title")}</CardTitle>
             <CardDescription>
-              El enlace que utilizaste no es válido o ha expirado.
+              {t("public.quotation.invalid-link-desc")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -198,19 +200,19 @@ export default function PublicQuotationApproval() {
             {isRejected && <XCircle className="h-16 w-16 mx-auto text-destructive mb-4" />}
             {isExpired && <Clock className="h-16 w-16 mx-auto text-muted-foreground mb-4" />}
             <CardTitle className="text-2xl">
-              {isApproved && "Cotización Aprobada"}
-              {isRejected && "Cotización Rechazada"}
-              {isExpired && "Cotización Expirada"}
+              {isApproved && t("public.quotation.approved-title")}
+              {isRejected && t("public.quotation.rejected-title")}
+              {isExpired && t("public.quotation.expired-title")}
             </CardTitle>
             <CardDescription className="text-base">
-              {isApproved && "Gracias por aprobar esta cotización. Nuestro equipo de crédito revisará y autorizará su pedido."}
-              {isRejected && "Esta cotización ha sido rechazada. Si tiene preguntas, contacte a nuestro equipo de ventas."}
-              {isExpired && "Esta cotización ha expirado. Por favor, solicite una nueva cotización a su vendedor."}
+              {isApproved && t("public.quotation.approved-desc")}
+              {isRejected && t("public.quotation.rejected-desc")}
+              {isExpired && t("public.quotation.expired-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-              <p className="text-sm text-muted-foreground">Cotización</p>
+              <p className="text-sm text-muted-foreground">{t("public.quotation")}</p>
               <p className="font-semibold">{quotation.folio}</p>
               <p className="text-lg font-bold">{formatCurrency(quotation.total)}</p>
               {quotation.customer && (
@@ -233,10 +235,10 @@ export default function PublicQuotationApproval() {
               <div>
                 <CardTitle className="text-2xl flex items-center gap-2">
                   <FileText className="h-6 w-6" />
-                  Cotización {quotation.folio}
+                  {t("public.quotation")} {quotation.folio}
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  {quotation.customer?.name && `Cliente: ${quotation.customer.name}`}
+                  {quotation.customer?.name && `${t("label.client")}: ${quotation.customer.name}`}
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="w-fit text-sm">
@@ -247,22 +249,22 @@ export default function PublicQuotationApproval() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground">Fecha de Creación</p>
+                <p className="text-muted-foreground">{t("public.quotation.creation-date")}</p>
                 <p className="font-medium">
                   {format(new Date(quotation.createdAt), "PPP", { locale: es })}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Válida Hasta</p>
+                <p className="text-muted-foreground">{t("public.quotation.valid-until")}</p>
                 <p className="font-medium">
                   {quotation.validUntil
                     ? format(new Date(quotation.validUntil), "PPP", { locale: es })
-                    : "Sin vencimiento"}
+                    : t("public.quotation.no-expiry")}
                 </p>
               </div>
               {quotation.user && (
                 <div>
-                  <p className="text-muted-foreground">Vendedor</p>
+                  <p className="text-muted-foreground">{t("label.seller")}</p>
                   <p className="font-medium">{quotation.user.fullName}</p>
                 </div>
               )}
@@ -272,13 +274,13 @@ export default function PublicQuotationApproval() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm pt-4 border-t">
                 {quotation.paymentTerms && (
                   <div>
-                    <p className="text-muted-foreground">Condiciones de Pago</p>
+                    <p className="text-muted-foreground">{t("label.payment-terms")}</p>
                     <p className="font-medium">{quotation.paymentTerms}</p>
                   </div>
                 )}
                 {quotation.deliveryTime && (
                   <div>
-                    <p className="text-muted-foreground">Tiempo de Entrega</p>
+                    <p className="text-muted-foreground">{t("label.delivery-time")}</p>
                     <p className="font-medium">{quotation.deliveryTime}</p>
                   </div>
                 )}
@@ -290,19 +292,19 @@ export default function PublicQuotationApproval() {
         {/* Items Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Productos</CardTitle>
+            <CardTitle className="text-lg">{t("public.products")}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead className="text-center">Cantidad</TableHead>
-                    <TableHead className="text-right">Precio Unit.</TableHead>
-                    <TableHead className="text-center">Desc.</TableHead>
-                    {hasMixedCurrencies && <TableHead className="text-center">Mon.</TableHead>}
-                    <TableHead className="text-right">Subtotal</TableHead>
+                    <TableHead>{t("label.product")}</TableHead>
+                    <TableHead className="text-center">{t("label.quantity")}</TableHead>
+                    <TableHead className="text-right">{t("public.quotation.unit-price")}</TableHead>
+                    <TableHead className="text-center">{t("public.quotation.disc")}</TableHead>
+                    {hasMixedCurrencies && <TableHead className="text-center">{t("public.quotation.curr")}</TableHead>}
+                    <TableHead className="text-right">{t("label.subtotal")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -353,25 +355,25 @@ export default function PublicQuotationApproval() {
                 {/* MXN totals */}
                 <div className="w-full sm:w-72 rounded-md border overflow-hidden">
                   <div className="bg-primary px-4 py-2">
-                    <p className="text-xs font-semibold text-primary-foreground uppercase tracking-wide">Pesos Mexicanos (MXN)</p>
+                    <p className="text-xs font-semibold text-primary-foreground uppercase tracking-wide">{t("public.quotation.mxn")}</p>
                   </div>
                   <div className="p-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span className="text-muted-foreground">{t("label.subtotal")}:</span>
                       <span>{formatMXN(mxnTotals.subtotal)}</span>
                     </div>
                     {mxnTotals.discount > 0 && (
                       <div className="flex justify-between text-sm text-green-600">
-                        <span>Descuento ({discountPct}%):</span>
+                        <span>{t("label.discount")} ({discountPct}%):</span>
                         <span>-{formatMXN(mxnTotals.discount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">IVA:</span>
+                      <span className="text-muted-foreground">{t("label.tax")}:</span>
                       <span>{formatMXN(mxnTotals.tax)}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t font-bold text-base">
-                      <span>Total MXN:</span>
+                      <span>{t("label.total")} MXN:</span>
                       <span>{formatMXN(mxnTotals.total)}</span>
                     </div>
                   </div>
@@ -379,42 +381,42 @@ export default function PublicQuotationApproval() {
                 {/* USD totals */}
                 <div className="w-full sm:w-72 rounded-md border overflow-hidden">
                   <div className="bg-emerald-700 px-4 py-2">
-                    <p className="text-xs font-semibold text-white uppercase tracking-wide">Dólares Americanos (USD)</p>
+                    <p className="text-xs font-semibold text-white uppercase tracking-wide">{t("public.quotation.usd")}</p>
                   </div>
                   <div className="p-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span className="text-muted-foreground">{t("label.subtotal")}:</span>
                       <span>{formatUSD(usdTotals.subtotal)}</span>
                     </div>
                     {usdTotals.discount > 0 && (
                       <div className="flex justify-between text-sm text-green-600">
-                        <span>Descuento ({discountPct}%):</span>
+                        <span>{t("label.discount")} ({discountPct}%):</span>
                         <span>-{formatUSD(usdTotals.discount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">IVA:</span>
+                      <span className="text-muted-foreground">{t("label.tax")}:</span>
                       <span>{formatUSD(usdTotals.tax)}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t font-bold text-base">
-                      <span>Total USD:</span>
+                      <span>{t("label.total")} USD:</span>
                       <span>{formatUSD(usdTotals.total)}</span>
                     </div>
                   </div>
                   <div className="px-4 pb-3">
-                    <p className="text-xs text-muted-foreground">Tipo de cambio a convenir al momento del pedido.</p>
+                    <p className="text-xs text-muted-foreground">{t("public.quotation.exchange-note")}</p>
                   </div>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-end space-y-2">
                 <div className="flex justify-between w-full max-w-xs text-sm">
-                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span className="text-muted-foreground">{t("label.subtotal")}:</span>
                   <span>{formatCurrency(quotation.subtotal)}</span>
                 </div>
                 {parseFloat(quotation.globalDiscount || "0") > 0 && (
                   <div className="flex justify-between w-full max-w-xs text-sm text-green-600">
-                    <span>Descuento ({quotation.globalDiscount}%):</span>
+                    <span>{t("label.discount")} ({quotation.globalDiscount}%):</span>
                     <span>
                       -{formatCurrency(
                         parseFloat(quotation.subtotal) * (parseFloat(quotation.globalDiscount) / 100)
@@ -423,11 +425,11 @@ export default function PublicQuotationApproval() {
                   </div>
                 )}
                 <div className="flex justify-between w-full max-w-xs text-sm">
-                  <span className="text-muted-foreground">IVA:</span>
+                  <span className="text-muted-foreground">{t("label.tax")}:</span>
                   <span>{formatCurrency(quotation.tax)}</span>
                 </div>
                 <div className="flex justify-between w-full max-w-xs pt-2 border-t text-lg font-bold">
-                  <span>Total:</span>
+                  <span>{t("label.total")}:</span>
                   <span>{formatCurrency(quotation.total)}</span>
                 </div>
               </div>
@@ -441,13 +443,13 @@ export default function PublicQuotationApproval() {
             <CardContent className="pt-6 space-y-4">
               {quotation.notes && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Notas</p>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">{t("label.notes")}</p>
                   <p className="text-sm whitespace-pre-wrap">{quotation.notes}</p>
                 </div>
               )}
               {quotation.conditions && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Condiciones</p>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">{t("quotations.form.conditions")}</p>
                   <p className="text-sm whitespace-pre-wrap">{quotation.conditions}</p>
                 </div>
               )}
@@ -458,9 +460,9 @@ export default function PublicQuotationApproval() {
         {/* Action Buttons */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">¿Desea proceder con esta cotización?</CardTitle>
+            <CardTitle className="text-lg">{t("public.quotation.proceed-q")}</CardTitle>
             <CardDescription>
-              Al aprobar, la cotización será enviada a nuestro departamento de crédito para su autorización.
+              {t("public.quotation.proceed-desc")}
             </CardDescription>
           </CardHeader>
           <CardFooter className="flex flex-col sm:flex-row gap-3">
@@ -472,7 +474,7 @@ export default function PublicQuotationApproval() {
               data-testid="button-approve-quotation"
             >
               <CheckCircle className="h-5 w-5 mr-2" />
-              {approveMutation.isPending ? "Aprobando..." : "Aprobar Cotización"}
+              {approveMutation.isPending ? t("public.quotation.approving") : t("public.quotation.approve-btn")}
             </Button>
             <Button
               variant="outline"
@@ -483,7 +485,7 @@ export default function PublicQuotationApproval() {
               data-testid="button-reject-quotation"
             >
               <XCircle className="h-5 w-5 mr-2" />
-              Rechazar
+              {t("btn.reject")}
             </Button>
             <Button
               variant="ghost"
@@ -498,7 +500,7 @@ export default function PublicQuotationApproval() {
                 data-testid="button-download-pdf"
               >
                 <Download className="h-5 w-5 mr-2" />
-                Descargar PDF
+                {t("btn.download-pdf")}
               </a>
             </Button>
           </CardFooter>
@@ -508,14 +510,14 @@ export default function PublicQuotationApproval() {
         <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Rechazar Cotización</DialogTitle>
+              <DialogTitle>{t("public.quotation.reject-title")}</DialogTitle>
               <DialogDescription>
-                Por favor, indique el motivo del rechazo (opcional).
+                {t("public.quotation.reject-desc")}
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
               <Textarea
-                placeholder="Motivo del rechazo..."
+                placeholder={t("public.quotation.reject-ph")}
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 rows={4}
@@ -528,7 +530,7 @@ export default function PublicQuotationApproval() {
                 onClick={() => setShowRejectDialog(false)}
                 disabled={rejectMutation.isPending}
               >
-                Cancelar
+                {t("btn.cancel")}
               </Button>
               <Button
                 variant="destructive"
@@ -536,7 +538,7 @@ export default function PublicQuotationApproval() {
                 disabled={rejectMutation.isPending}
                 data-testid="button-confirm-reject"
               >
-                {rejectMutation.isPending ? "Rechazando..." : "Confirmar Rechazo"}
+                {rejectMutation.isPending ? t("public.quotation.rejecting") : t("public.quotation.confirm-reject")}
               </Button>
             </DialogFooter>
           </DialogContent>
