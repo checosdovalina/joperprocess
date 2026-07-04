@@ -189,17 +189,31 @@ export function AppSidebar() {
               <SidebarMenu>
                 {group.items.map((item) => (
                   <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location === item.url || location.startsWith(item.url + "/")}
-                      data-testid={`link-${item.url.slice(1) || "dashboard"}`}
-                      size="lg"
-                    >
-                      <Link href={item.url} onClick={handleNavClick}>
+                    {item.url === "/pipeline" ? (
+                      <SidebarMenuButton
+                        data-testid="link-pipeline"
+                        size="lg"
+                        onClick={() => {
+                          window.open("/pipeline-tv", "_blank");
+                          handleNavClick();
+                        }}
+                      >
                         <item.icon className="h-5 w-5 shrink-0" />
                         <span className="text-sm">{t(item.titleKey)}</span>
-                      </Link>
-                    </SidebarMenuButton>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url || location.startsWith(item.url + "/")}
+                        data-testid={`link-${item.url.slice(1) || "dashboard"}`}
+                        size="lg"
+                      >
+                        <Link href={item.url} onClick={handleNavClick}>
+                          <item.icon className="h-5 w-5 shrink-0" />
+                          <span className="text-sm">{t(item.titleKey)}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    )}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>

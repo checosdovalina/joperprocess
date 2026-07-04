@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -473,11 +474,11 @@ function Column({ col, count, total, children, isLoading, isFullscreen }:
       }}>
         {isLoading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 60, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
-            Cargando...
+            {t("label.loading")}
           </div>
         ) : count === 0 ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 60, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
-            Sin registros
+            {t("pipeline.no-records")}
           </div>
         ) : children}
       </div>
@@ -489,10 +490,13 @@ function Column({ col, count, total, children, isLoading, isFullscreen }:
 
 export default function PipelinePage() {
   const { t } = useI18n();
+  const [location] = useLocation();
+  const isTvMode = location === "/pipeline-tv";
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showActive, setShowActive] = useState(true);
+  const [showTvPrompt, setShowTvPrompt] = useState(true);
 
   const { data, refetch, isFetching, isLoading } = useQuery<PipelineData>({
     queryKey: ["/api/pipeline"],
@@ -570,6 +574,35 @@ export default function PipelinePage() {
       fontFamily: "'Inter', system-ui, sans-serif",
       color: "#fff", overflow: "hidden",
     }}>
+      {isTvMode && showTvPrompt && !isFullscreen && (
+        <div
+          onClick={() => {
+            document.documentElement.requestFullscreen()
+              .then(() => {
+                setIsFullscreen(true);
+                setShowTvPrompt(false);
+              })
+              .catch(() => {});
+          }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            background: "rgba(0,0,0,0.72)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+          }}
+          data-testid="overlay-tv-fullscreen"
+        >
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
+            padding: "28px 40px", borderRadius: 14,
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.18)",
+          }}>
+            <Maximize2 size={34} style={{ color: "#3b82f6" }} />
+            <div style={{ fontSize: 17, fontWeight: 700 }}>{t("pipeline.click-fullscreen")}</div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -586,7 +619,7 @@ export default function PipelinePage() {
               {t("pipeline.board-title")}
             </div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 1 }}>
-              Nexxo — Sistema Comercial
+              Nexxo — {t("app.tagline")}
             </div>
           </div>
         </div>
@@ -685,7 +718,7 @@ export default function PipelinePage() {
           zIndex: 100,
         }}>
           <RefreshCw size={13} style={{ animation: "spin 1s linear infinite" }} />
-          Actualizando...
+          {t("pipeline.updating")}
         </div>
       )}
 

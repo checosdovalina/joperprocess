@@ -733,13 +733,13 @@ export function QuotationForm({
                     name="customerId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cliente *</FormLabel>
+                        <FormLabel>{t("label.client")} *</FormLabel>
                         <FormControl>
                           <CustomerCombobox
                             customers={customers}
                             value={field.value}
                             onValueChange={field.onChange}
-                            placeholder="Buscar cliente..."
+                            placeholder={t("quotations.search-customer")}
                             data-testid="select-customer"
                           />
                         </FormControl>
@@ -754,7 +754,7 @@ export function QuotationForm({
                     render={({ field }) => (
                       <FormItem>
                         <div className="flex items-center justify-between">
-                          <FormLabel>Vigencia</FormLabel>
+                          <FormLabel>{t("quotations.validity")}</FormLabel>
                           <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground select-none">
                             <Checkbox
                               checked={sinVigencia}
@@ -764,7 +764,7 @@ export function QuotationForm({
                               }}
                               data-testid="checkbox-sin-vigencia"
                             />
-                            Sin vigencia
+                            {t("quotations.no-validity")}
                           </label>
                         </div>
                         <FormControl>
@@ -1084,7 +1084,7 @@ export function QuotationForm({
                                 />
                               </FormControl>
                               <FormLabel className="cursor-pointer text-sm font-normal">
-                                Costo pendiente por cotizar
+                                {t("quotations.cost-pending")}
                               </FormLabel>
                             </FormItem>
                           )}
@@ -1097,7 +1097,7 @@ export function QuotationForm({
                 <Card>
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-base">Productos</CardTitle>
+                      <CardTitle className="text-base">{t("quotations.products")}</CardTitle>
                       <Button
                         type="button"
                         variant="outline"

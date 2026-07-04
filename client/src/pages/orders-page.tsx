@@ -528,14 +528,14 @@ export default function OrdersPage() {
           ) : (
             <div className="text-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay pedidos registrados</p>
+              <p className="text-muted-foreground">{t("orders.no-orders")}</p>
               <Button
                 className="mt-4"
                 onClick={() => setDialogOpen(true)}
                 data-testid="button-add-first-order"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Crear Primera Orden
+                {t("orders.create-first")}
               </Button>
             </div>
           )}

@@ -5,6 +5,23 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Component, ReactNode } from "react";
 
+function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
+      <h2 className="text-xl font-semibold text-destructive">{t("error.unexpected")}</h2>
+      <p className="text-muted-foreground text-sm max-w-md">{error?.message}</p>
+      <button
+        className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
+        onClick={onReset}
+        data-testid="button-back-dashboard"
+      >
+        {t("error.back-dashboard")}
+      </button>
+    </div>
+  );
+}
+
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: ReactNode }) {
     super(props);
@@ -16,16 +33,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
-          <h2 className="text-xl font-semibold text-destructive">Ocurrió un error inesperado</h2>
-          <p className="text-muted-foreground text-sm max-w-md">{this.state.error?.message}</p>
-          <button
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
-            onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = "/dashboard"; }}
-          >
-            Volver al Dashboard
-          </button>
-        </div>
+        <ErrorFallback
+          error={this.state.error}
+          onReset={() => { this.setState({ hasError: false, error: null }); window.location.href = "/dashboard"; }}
+        />
       );
     }
     return this.props.children;
@@ -78,35 +89,38 @@ import { UserRole } from "@shared/schema";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/hooks/use-i18n";
 
-const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/customers": "Clientes",
-  "/checkins": "Check-ins",
-  "/scheduled-visits": "Visitas Programadas",
-  "/quotations": "Cotizaciones",
-  "/credit-auth": "Autorización de Crédito",
-  "/orders": "Pedidos",
-  "/production": "Producción",
-  "/board": "Tablero de Producción",
-  "/pipeline": "Tablero Ventas",
-  "/order-release": "Liberación de Pedidos",
-  "/shipments": "Embarques",
-  "/accounts-receivable": "Facturación",
-  "/payments": "Cobranza",
-  "/reports": "Reportes",
-  "/incidents": "Incidentes",
-  "/products": "Productos",
-  "/users": "Usuarios",
-  "/company-settings": "Configuración de Empresa",
-  "/microsip": "Integración Microsip",
-  "/tenants": "Gestionar Empresas",
+const PAGE_TITLE_KEYS: Record<string, string> = {
+  "/dashboard": "nav.dashboard",
+  "/customers": "nav.customers",
+  "/checkins": "nav.checkins",
+  "/scheduled-visits": "nav.scheduled-visits",
+  "/quotations": "nav.quotations",
+  "/credit-auth": "nav.credit-auth",
+  "/orders": "nav.orders",
+  "/production": "nav.production",
+  "/board": "nav.board",
+  "/pipeline": "nav.pipeline",
+  "/order-release": "nav.order-release",
+  "/shipments": "nav.shipments",
+  "/accounts-receivable": "nav.accounts-receivable",
+  "/account-statements": "nav.account-statements",
+  "/payments": "nav.payments",
+  "/reports": "nav.reports",
+  "/incidents": "nav.incidents",
+  "/products": "nav.products",
+  "/users": "nav.users",
+  "/company-settings": "nav.company-settings",
+  "/microsip": "nav.microsip",
+  "/tenants": "nav.tenants",
 };
 
-function getPageTitle(location: string): string {
-  if (location.startsWith("/checkins/")) return "Detalle de Check-in";
-  if (location.startsWith("/incidents/")) return "Detalle de Incidente";
-  return PAGE_TITLES[location] ?? "Nexxo";
+function getPageTitle(location: string, t: (key: string) => string): string {
+  if (location.startsWith("/checkins/")) return t("nav.checkin-detail");
+  if (location.startsWith("/incidents/")) return t("nav.incident-detail");
+  const key = PAGE_TITLE_KEYS[location];
+  return key ? t(key) : "Nexxo";
 }
 
 function ThemeToggle() {
@@ -176,12 +190,13 @@ function Router() {
 
 function MainLayout() {
   const [location] = useLocation();
+  const { t } = useI18n();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 
-  const pageTitle = getPageTitle(location);
+  const pageTitle = getPageTitle(location, t);
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
@@ -217,6 +232,7 @@ export default function App() {
   const [isTicketPage] = useRoute("/soporte/ticket/:token");
   const [isRegisterCompany] = useRoute("/registro");
   const [isBoardRoute] = useRoute("/board");
+  const [isPipelineTvRoute] = useRoute("/pipeline-tv");
   const isPublicRoute = isLandingPage || isAuthPage || isForgotPassword || isResetPassword || isQuotationApproval || isShippingApproval || isIncidentPortal || isSupportPage || isTicketPage || isRegisterCompany;
 
   return (
@@ -242,6 +258,8 @@ export default function App() {
                 </Switch>
               ) : isBoardRoute ? (
                 <ProtectedRoute path="/board" component={ProductionBoardPage} />
+              ) : isPipelineTvRoute ? (
+                <ProtectedRoute path="/pipeline-tv" component={PipelinePage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA]} />
               ) : (
                 <MainLayout />
               )}
