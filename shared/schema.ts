@@ -614,6 +614,22 @@ export const customerProductPrices = pgTable("customer_product_prices", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Documents / Manuals table (operational manuals + parts breakdowns)
+export const documents = pgTable("documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull().default("operativo"), // 'operativo' | 'despiece'
+  category: text("category"),
+  productId: varchar("product_id").references(() => products.id),
+  fileUrl: text("file_url").notNull(), // storage entityId / relative path
+  fileName: text("file_name").notNull(), // original filename
+  fileSize: integer("file_size"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Incidents (Tickets) table
 export const incidents = pgTable("incidents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -788,6 +804,21 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   }),
   customerPrices: many(customerProductPrices),
   quotationItems: many(quotationItems),
+}));
+
+export const documentsRelations = relations(documents, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [documents.tenantId],
+    references: [tenants.id],
+  }),
+  product: one(products, {
+    fields: [documents.productId],
+    references: [products.id],
+  }),
+  uploader: one(users, {
+    fields: [documents.uploadedBy],
+    references: [users.id],
+  }),
 }));
 
 export const customerProductPricesRelations = relations(customerProductPrices, ({ one }) => ({
@@ -1155,6 +1186,14 @@ export const updateProductSchema = createInsertSchema(products).omit({
   updatedAt: true,
 }).partial();
 
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+  tenantId: true,
+  createdAt: true,
+}).extend({
+  type: z.enum(["operativo", "despiece"]),
+});
+
 export const insertCustomerProductPriceSchema = createInsertSchema(customerProductPrices).omit({
   id: true,
   createdAt: true,
@@ -1364,6 +1403,9 @@ export type Product = typeof products.$inferSelect;
 
 export type InsertCustomerProductPrice = z.infer<typeof insertCustomerProductPriceSchema>;
 export type CustomerProductPrice = typeof customerProductPrices.$inferSelect;
+
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
 
 export type UpdateQuotation = z.infer<typeof updateQuotationSchema>;
 

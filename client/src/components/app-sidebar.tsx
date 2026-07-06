@@ -22,6 +22,7 @@ import {
   LayoutGrid,
   Mail,
   ShieldCheck,
+  BookOpen,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -123,6 +124,7 @@ const menuGroups: MenuGroup[] = [
     labelKey: "nav.group.administracion",
     items: [
       { titleKey: "nav.products", url: "/products", icon: Package, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA] },
+      { titleKey: "nav.documents", url: "/documents", icon: BookOpen, roles: Object.values(UserRole) },
       { titleKey: "nav.users", url: "/users", icon: Users, roles: [UserRole.ADMIN] },
       { titleKey: "nav.company-settings", url: "/company-settings", icon: Settings, roles: [UserRole.ADMIN] },
       { titleKey: "nav.microsip", url: "/microsip", icon: Database, roles: [UserRole.ADMIN] },

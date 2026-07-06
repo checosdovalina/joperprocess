@@ -64,6 +64,7 @@ import AccountStatementsPage from "@/pages/account-statements-page";
 import PaymentsPage from "@/pages/payments-page";
 import UsersPage from "@/pages/users-page";
 import ProductsPage from "@/pages/products-page";
+import DocumentsPage from "@/pages/documents-page";
 import IncidentsPage from "@/pages/incidents-page";
 import CompanySettingsPage from "@/pages/company-settings-page";
 import MicrosipSettingsPage from "@/pages/microsip-settings-page";
@@ -110,6 +111,7 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
   "/reports": "nav.reports",
   "/incidents": "nav.incidents",
   "/products": "nav.products",
+  "/documents": "nav.documents",
   "/users": "nav.users",
   "/company-settings": "nav.company-settings",
   "/microsip": "nav.microsip",
@@ -176,6 +178,7 @@ function Router() {
       <ProtectedRoute path="/payments" component={PaymentsPage} />
       <ProtectedRoute path="/users" component={UsersPage} />
       <ProtectedRoute path="/products" component={ProductsPage} />
+      <ProtectedRoute path="/documents" component={DocumentsPage} />
       <ProtectedRoute path="/incidents/:id" component={IncidentDetailPage} />
       <ProtectedRoute path="/incidents" component={IncidentsPage} />
       <ProtectedRoute path="/company-settings" component={CompanySettingsPage} />

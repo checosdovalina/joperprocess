@@ -46,6 +46,7 @@ import {
   insertInvoiceSchema,
   insertPaymentSchema,
   insertPendingUploadSchema,
+  insertDocumentSchema,
   insertProductCategorySchema,
   insertProductSchema,
   updateProductSchema,
@@ -6041,6 +6042,240 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error setting check-in photo:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ==================== DOCUMENTS / MANUALS ====================
+
+  // In-memory registry binding a freshly-issued upload entityId to the user that
+  // requested it. Document metadata can only be created for a blob the same user
+  // actually just uploaded, preventing an admin from registering someone else's
+  // (potentially another tenant's) object by guessing/reusing its identifier.
+  const pendingDocumentUploads = new Map<string, { userId: string; expiresAt: number }>();
+  const DOCUMENT_UPLOAD_TTL_MS = 30 * 60 * 1000; // 30 minutes
+  const cleanupPendingDocumentUploads = () => {
+    const now = Date.now();
+    Array.from(pendingDocumentUploads.entries()).forEach(([key, val]) => {
+      if (val.expiresAt < now) pendingDocumentUploads.delete(key);
+    });
+  };
+
+  // Request an upload URL for a document (ADMIN only)
+  app.post("/api/documents/upload", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      cleanupPendingDocumentUploads();
+
+      // Local storage: return a direct upload endpoint
+      if (useLocalStorage()) {
+        const entityId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+        pendingDocumentUploads.set(entityId, { userId, expiresAt: Date.now() + DOCUMENT_UPLOAD_TTL_MS });
+        return res.json({
+          uploadURL: `/api/documents/upload-direct/${entityId}`,
+          entityId,
+          useDirectUpload: true,
+        });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const { uploadURL, entityId } = await objectStorageService.getObjectEntityUploadURL();
+      pendingDocumentUploads.set(entityId, { userId, expiresAt: Date.now() + DOCUMENT_UPLOAD_TTL_MS });
+      res.json({ uploadURL, entityId });
+    } catch (error) {
+      console.error("Error getting document upload URL:", error);
+      res.status(500).json({ error: "Error getting upload URL" });
+    }
+  });
+
+  // Direct upload endpoint for local storage documents (ADMIN only)
+  app.put("/api/documents/upload-direct/:entityId", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { entityId } = req.params;
+
+      // Strict entityId validation to prevent path traversal
+      if (!/^doc-[0-9]+-[a-z0-9]+$/.test(entityId)) {
+        return res.status(400).json({ error: "Invalid document identifier" });
+      }
+
+      // Only accept an upload for an entityId this same user just requested
+      const pending = pendingDocumentUploads.get(entityId);
+      if (!pending || pending.userId !== req.user!.id || pending.expiresAt < Date.now()) {
+        return res.status(400).json({ error: "Invalid or expired upload" });
+      }
+
+      // Enforce max size (25MB) while streaming to avoid buffering oversized payloads
+      const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
+      const chunks: Buffer[] = [];
+      let totalBytes = 0;
+      let tooLarge = false;
+      for await (const chunk of req) {
+        const buf = chunk as Buffer;
+        totalBytes += buf.length;
+        if (totalBytes > MAX_DOCUMENT_BYTES) {
+          tooLarge = true;
+          break;
+        }
+        chunks.push(buf);
+      }
+      if (tooLarge) {
+        req.destroy();
+        return res.status(413).json({ error: "File too large (max 25MB)" });
+      }
+      const buffer = Buffer.concat(chunks);
+
+      if (buffer.length === 0) {
+        return res.status(400).json({ error: "No file data received" });
+      }
+
+      // Enforce PDF magic bytes
+      if (buffer.subarray(0, 4).toString("latin1") !== "%PDF") {
+        return res.status(400).json({ error: "Only PDF files are allowed" });
+      }
+
+      const storagePath = await localStorageService.uploadDocument(buffer, entityId);
+      console.log(`✅ Document uploaded to local storage: ${storagePath}`);
+      res.status(200).json({ success: true, entityId });
+    } catch (error) {
+      console.error("Error uploading document file:", error);
+      res.status(500).json({ error: "Error uploading document" });
+    }
+  });
+
+  // Create a document record after the file was uploaded (ADMIN only)
+  app.post("/api/documents", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const schema = insertDocumentSchema.extend({
+        fileUrl: z.string().refine(
+          (val) => !val.includes("..") && !val.includes("\\"),
+          { message: "Invalid file path" }
+        ),
+      });
+      const data = schema.parse(req.body);
+
+      // Only allow registering a blob this same user just uploaded
+      const pending = pendingDocumentUploads.get(data.fileUrl);
+      if (!pending || pending.userId !== userId || pending.expiresAt < Date.now()) {
+        return res.status(400).json({ error: "Archivo de carga no válido o expirado" });
+      }
+
+      const scopedStorage = createTenantScopedStorage(req);
+
+      // Validate optional product link belongs to tenant
+      if (data.productId) {
+        const product = await scopedStorage.getProduct(data.productId);
+        if (!product) {
+          return res.status(400).json({ error: "Producto no válido" });
+        }
+      }
+
+      // For GCS, set ACL policy on the uploaded object (private, owned by uploader)
+      if (!useLocalStorage()) {
+        const objectStorageService = new ObjectStorageService();
+        try {
+          const objectFile = await objectStorageService.getObjectEntityFile(data.fileUrl);
+          await setObjectAclPolicy(objectFile, {
+            owner: userId,
+            visibility: "private",
+          });
+        } catch (aclError) {
+          console.error("Document ACL update failed:", aclError);
+          return res.status(500).json({ error: "No se pudo asegurar el archivo" });
+        }
+      }
+
+      const document = await scopedStorage.createDocument({
+        ...data,
+        uploadedBy: userId,
+      });
+      pendingDocumentUploads.delete(data.fileUrl);
+      res.status(201).json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: error.errors });
+      }
+      console.error("Error creating document:", error);
+      res.status(500).json({ error: "Error al crear el documento" });
+    }
+  });
+
+  // List all documents for the tenant (any authenticated user)
+  app.get("/api/documents", isAuthenticated, async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const documentsList = await scopedStorage.getAllDocuments();
+      res.json(documentsList);
+    } catch (error) {
+      console.error("Error listing documents:", error);
+      res.status(500).json({ error: "Error al obtener documentos" });
+    }
+  });
+
+  // Download / view a document (any authenticated user in the tenant)
+  app.get("/api/documents/:id/download", isAuthenticated, async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const document = await scopedStorage.getDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ error: "Documento no encontrado" });
+      }
+
+      const safeName = (document.fileName || "documento.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const disposition = req.query.download === "1" ? "attachment" : "inline";
+
+      if (useLocalStorage()) {
+        const relativePath = `documents/${document.fileUrl}.pdf`;
+        res.set({
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `${disposition}; filename="${safeName}"`,
+        });
+        const served = await localStorageService.streamFile(relativePath, res);
+        if (!served) {
+          return res.status(404).json({ error: "Archivo no encontrado" });
+        }
+        return;
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(document.fileUrl);
+      res.set("Content-Disposition", `${disposition}; filename="${safeName}"`);
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "Archivo no encontrado" });
+      }
+      res.status(500).json({ error: "Error al descargar el documento" });
+    }
+  });
+
+  // Delete a document (ADMIN only)
+  app.delete("/api/documents/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const document = await scopedStorage.getDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ error: "Documento no encontrado" });
+      }
+
+      // Best-effort delete of the underlying file
+      try {
+        if (useLocalStorage()) {
+          await localStorageService.deleteFile(`documents/${document.fileUrl}.pdf`);
+        } else {
+          const objectStorageService = new ObjectStorageService();
+          const objectFile = await objectStorageService.getObjectEntityFile(document.fileUrl);
+          await objectFile.delete();
+        }
+      } catch (fileError) {
+        console.error("Could not delete document file (continuing):", fileError);
+      }
+
+      await scopedStorage.deleteDocument(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ error: "Error al eliminar el documento" });
     }
   });
 

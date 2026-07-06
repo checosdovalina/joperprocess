@@ -15,6 +15,7 @@ import {
   products,
   productCategories,
   customerProductPrices,
+  documents,
   incidents,
   type User,
   type ScheduledVisit,
@@ -49,6 +50,8 @@ import {
   type InsertProductCategory,
   type CustomerProductPrice,
   type InsertCustomerProductPrice,
+  type Document,
+  type InsertDocument,
   type Incident,
 } from "@shared/schema";
 import { db } from "./db";
@@ -154,6 +157,12 @@ export interface IStorage {
   getCustomerProductPrice(customerId: string, productId: string): Promise<CustomerProductPrice | undefined>;
   getCustomerProductPrices(customerId: string): Promise<CustomerProductPrice[]>;
   createCustomerProductPrice(price: InsertCustomerProductPrice): Promise<CustomerProductPrice>;
+
+  // Documents
+  getAllDocuments(): Promise<Document[]>;
+  getDocument(id: string): Promise<Document | undefined>;
+  createDocument(document: InsertDocument & { tenantId: string; uploadedBy?: string | null }): Promise<Document>;
+  deleteDocument(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -565,6 +574,25 @@ export class DatabaseStorage implements IStorage {
   async createCustomerProductPrice(insertPrice: InsertCustomerProductPrice): Promise<CustomerProductPrice> {
     const [price] = await db.insert(customerProductPrices).values(insertPrice).returning();
     return price;
+  }
+
+  // Documents
+  async getAllDocuments(): Promise<Document[]> {
+    return await db.select().from(documents).orderBy(desc(documents.createdAt));
+  }
+
+  async getDocument(id: string): Promise<Document | undefined> {
+    const [document] = await db.select().from(documents).where(eq(documents.id, id));
+    return document || undefined;
+  }
+
+  async createDocument(insertDocument: InsertDocument & { tenantId: string; uploadedBy?: string | null }): Promise<Document> {
+    const [document] = await db.insert(documents).values(insertDocument).returning();
+    return document;
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    await db.delete(documents).where(eq(documents.id, id));
   }
 }
 
@@ -1074,6 +1102,42 @@ export class TenantScopedStorage {
       },
       orderBy: (sv, { desc }) => [desc(sv.scheduledDate)],
     });
+  }
+
+  // Documents
+  async getAllDocuments(): Promise<Document[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllDocuments();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(documents)
+      .where(eq(documents.tenantId, this.ctx.tenantId))
+      .orderBy(desc(documents.createdAt));
+  }
+
+  async getDocument(id: string): Promise<Document | undefined> {
+    const document = await this.base.getDocument(id);
+    if (!document) return undefined;
+    if (!this.ctx.allowGlobal && document.tenantId !== this.ctx.tenantId) {
+      return undefined;
+    }
+    return document;
+  }
+
+  async createDocument(data: InsertDocument & { uploadedBy?: string | null }): Promise<Document> {
+    const tenantId = this.ctx.tenantId;
+    if (!tenantId) {
+      throw new Error("Cannot create document without a tenant context");
+    }
+    return this.base.createDocument({ ...data, tenantId });
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    const existing = await this.getDocument(id);
+    if (!existing) {
+      throw new Error("Document not found");
+    }
+    await this.base.deleteDocument(id);
   }
 }
 

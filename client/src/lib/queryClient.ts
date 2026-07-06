@@ -17,7 +17,7 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-function getSelectedTenantId(): string | null {
+export function getSelectedTenantId(): string | null {
   if (typeof window !== 'undefined') {
     return localStorage.getItem('selectedTenantId');
   }
