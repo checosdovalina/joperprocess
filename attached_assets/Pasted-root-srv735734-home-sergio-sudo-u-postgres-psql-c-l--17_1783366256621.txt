@@ -1,0 +1,23 @@
+root@srv735734:/home/sergio# sudo -u postgres psql -c "\l"
+                                                                                 List of databases
+                             Name                              |   Owner   | Encoding | Locale Provider |   Collate   |    Ctype    | Locale | ICU Rules |    Access privileges    
+---------------------------------------------------------------+-----------+----------+-----------------+-------------+-------------+--------+-----------+-------------------------
+ courtflow                                                     | courtflow | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | =Tc/courtflow          +
+                                                               |           |          |                 |             |             |        |           | courtflow=CTc/courtflow
+ postgres                                                      | postgres  | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | 
+ prisma_migrate_shadow_db_70a63bc1-8dd5-4531-a854-c6c8299a875f | tipo_user | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | 
+ prisma_migrate_shadow_db_ea41da9d-4bb9-4ed1-8f42-fa056a81b39f | tipo_user | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | 
+ template0                                                     | postgres  | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | =c/postgres            +
+                                                               |           |          |                 |             |             |        |           | postgres=CTc/postgres
+ template1                                                     | postgres  | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | =c/postgres            +
+                                                               |           |          |                 |             |             |        |           | postgres=CTc/postgres
+ tipo                                                          | postgres  | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | =Tc/postgres           +
+                                                               |           |          |                 |             |             |        |           | postgres=CTc/postgres  +
+                                                               |           |          |                 |             |             |        |           | tipo_user=CTc/postgres
+ tipodev                                                       | tipo_user | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | 
+ umami                                                         | postgres  | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | =Tc/postgres           +
+                                                               |           |          |                 |             |             |        |           | postgres=CTc/postgres  +
+                                                               |           |          |                 |             |             |        |           | umami_user=CTc/postgres
+(9 rows)
+
+root@srv735734:/home/sergio# 
