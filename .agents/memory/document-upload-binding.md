@@ -22,6 +22,14 @@ PUT and on the metadata-create POST, reject if the id is missing/expired or
 binding is enough — a user belongs to one tenant and scoped storage derives the
 tenant from that same user context.
 
+## documents.category stored as name (not categoryId) — intentional
+
+Document category is picked from the product-categories table but persisted as
+the category **name string** in `documents.category`, not a categoryId FK.
+**Why:** keeps the existing distinct-category list filter working with zero
+schema migration; renames are a rare edge case for this internal tool. Do not
+"fix" this into a FK without also migrating the filter + display + legacy rows.
+
 **Gotchas:**
 - Also enforce the size limit *while streaming* the request body (break the
   `for await` loop once bytes exceed the max) — never `Buffer.concat` first,

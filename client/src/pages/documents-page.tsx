@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useI18n } from "@/hooks/use-i18n";
-import { Document, Product, UserRole } from "@shared/schema";
+import { Document, Product, ProductCategory, UserRole } from "@shared/schema";
+import { SearchCombobox } from "@/components/search-combobox";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient, getSelectedTenantId } from "@/lib/queryClient";
@@ -99,7 +100,21 @@ export default function DocumentsPage() {
     queryKey: ["/api/products"],
   });
 
+  const { data: productCategories } = useQuery<ProductCategory[]>({
+    queryKey: ["/api/product-categories"],
+  });
+
   const productMap = new Map((products ?? []).map((p) => [p.id, p]));
+
+  const categoryOptions = (productCategories ?? [])
+    .map((c) => ({ value: c.name, label: c.name }))
+    .sort((a, b) => a.label.localeCompare(b.label, "es"));
+
+  const productOptions = (products ?? []).map((p) => ({
+    value: p.id,
+    label: p.name,
+    sublabel: p.code ?? undefined,
+  }));
 
   const categories = Array.from(
     new Set((documents ?? []).map((d) => d.category).filter((c): c is string => !!c))
@@ -498,30 +513,33 @@ export default function DocumentsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="doc-category">{t("documents.field.category")}</Label>
-                <Input
-                  id="doc-category"
+                <SearchCombobox
+                  options={categoryOptions}
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  onValueChange={setCategory}
                   placeholder={t("documents.field.categoryPlaceholder")}
-                  data-testid="input-category"
+                  searchPlaceholder={t("documents.field.categorySearch")}
+                  emptyMessage={t("documents.field.categoryEmpty")}
+                  moreResultsLabel={t("documents.field.moreResults")}
+                  data-testid="select-category"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label>{t("documents.field.product")}</Label>
-              <Select value={productId} onValueChange={setProductId}>
-                <SelectTrigger data-testid="select-product">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t("documents.field.noProduct")}</SelectItem>
-                  {(products ?? []).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.code} · {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchCombobox
+                options={[
+                  { value: "none", label: t("documents.field.noProduct") },
+                  ...productOptions,
+                ]}
+                value={productId}
+                onValueChange={setProductId}
+                placeholder={t("documents.field.noProduct")}
+                searchPlaceholder={t("documents.field.productSearch")}
+                emptyMessage={t("documents.field.productEmpty")}
+                moreResultsLabel={t("documents.field.moreResults")}
+                data-testid="select-product"
+              />
             </div>
           </div>
           <DialogFooter>
