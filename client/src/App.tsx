@@ -65,6 +65,7 @@ import PaymentsPage from "@/pages/payments-page";
 import UsersPage from "@/pages/users-page";
 import ProductsPage from "@/pages/products-page";
 import DocumentsPage from "@/pages/documents-page";
+import SystemLogsPage from "@/pages/system-logs-page";
 import IncidentsPage from "@/pages/incidents-page";
 import CompanySettingsPage from "@/pages/company-settings-page";
 import MicrosipSettingsPage from "@/pages/microsip-settings-page";
@@ -179,6 +180,7 @@ function Router() {
       <ProtectedRoute path="/users" component={UsersPage} />
       <ProtectedRoute path="/products" component={ProductsPage} />
       <ProtectedRoute path="/documents" component={DocumentsPage} />
+      <ProtectedRoute path="/system-logs" component={SystemLogsPage} allowedRoles={[UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION]} />
       <ProtectedRoute path="/incidents/:id" component={IncidentDetailPage} />
       <ProtectedRoute path="/incidents" component={IncidentsPage} />
       <ProtectedRoute path="/company-settings" component={CompanySettingsPage} />

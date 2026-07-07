@@ -1345,6 +1345,31 @@ export type AccountStatementSchedule = typeof accountStatementSchedules.$inferSe
 
 // ==================== END ACCOUNT STATEMENT SCHEDULES ====================
 
+// ==================== SYSTEM ACTIVITY LOGS ====================
+
+// General activity/audit log for background jobs and important events
+// (automatic account-statement sends, manual sends, errors, etc.).
+// Microsip sync activity lives in `microsipSyncLogs` and is merged in at the API layer.
+export const systemLogs = pgTable("system_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  category: text("category").notNull(), // 'account_statement' | 'microsip_sync' | 'system'
+  level: text("level").notNull().default("info"), // 'info' | 'warning' | 'error'
+  action: text("action"), // short label, e.g. 'auto_send', 'manual_send', 'pre_send_refresh'
+  message: text("message").notNull(),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSystemLogSchema = createInsertSchema(systemLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertSystemLog = z.infer<typeof insertSystemLogSchema>;
+export type SystemLog = typeof systemLogs.$inferSelect;
+
+// ==================== END SYSTEM ACTIVITY LOGS ====================
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

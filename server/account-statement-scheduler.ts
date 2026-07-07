@@ -2,6 +2,7 @@ import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 import { accountStatementSchedules, tenants, customers, invoices, payments, users } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
+import { logSystemActivity } from "./system-log";
 
 function todayInMexico(tz = "America/Mexico_City"): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
@@ -87,15 +88,41 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
         `facturas (+${invResult.created} nuevas, ${invResult.updated} actualizadas), ` +
         `pagos (+${payResult.created} nuevos, ${payResult.updated} actualizados)`
       );
+      await logSystemActivity({
+        tenantId,
+        category: "account_statement",
+        action: "pre_send_refresh",
+        level: "info",
+        message: `Datos actualizados desde Microsip antes del envío: ${invResult.created} facturas nuevas, ${invResult.updated} actualizadas; ${payResult.created} pagos nuevos, ${payResult.updated} actualizados.`,
+        details: { invoices: invResult, payments: payResult },
+      });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(`[StatementScheduler] Pre-send refresh failed for tenant ${tenantId} (se enviará con datos disponibles):`, err);
+      await logSystemActivity({
+        tenantId,
+        category: "account_statement",
+        action: "pre_send_refresh",
+        level: "warning",
+        message: `No se pudo actualizar con Microsip antes del envío; se enviará con los datos disponibles. (${msg})`,
+      });
     }
+  } else {
+    await logSystemActivity({
+      tenantId,
+      category: "account_statement",
+      action: "pre_send_refresh",
+      level: "warning",
+      message: "Microsip no está configurado o no disponible; se enviará con los datos locales disponibles.",
+    });
   }
 
   const { sendAccountStatementEmail } = await import("./account-statement-email-service");
   const now = new Date();
   let sent = 0;
   let skipped = 0;
+  let failed = 0;
+  const failedCustomers: string[] = [];
 
   for (const customer of allCustomers) {
     const emails = (customer.email ?? "")
@@ -150,9 +177,20 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
       });
       sent++;
     } catch (err) {
+      failed++;
+      failedCustomers.push(customer.name);
       console.error(`[StatementScheduler] Failed to send to ${customer.name}:`, err);
     }
   }
 
-  console.log(`[StatementScheduler] ${tenant.name}: ${sent} enviados, ${skipped} omitidos`);
+  console.log(`[StatementScheduler] ${tenant.name}: ${sent} enviados, ${skipped} omitidos, ${failed} fallidos`);
+  await logSystemActivity({
+    tenantId,
+    category: "account_statement",
+    action: "auto_send",
+    level: failed > 0 ? "warning" : "info",
+    message: `Envío automático completado: ${sent} enviados, ${skipped} omitidos, ${failed} fallidos.` +
+      (onlyOverdue ? " (solo clientes con saldo vencido)" : ""),
+    details: { sent, skipped, failed, failedCustomers, onlyOverdue },
+  });
 }

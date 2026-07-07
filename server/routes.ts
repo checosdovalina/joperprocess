@@ -72,6 +72,7 @@ import {
 } from "@shared/schema";
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
+import { logSystemActivity } from "./system-log";
 import { randomBytes } from "crypto";
 import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc } from "drizzle-orm";
 import type { Request } from "express";
@@ -5268,6 +5269,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         liveData,
       });
 
+      if (tenantId) {
+        await logSystemActivity({
+          tenantId,
+          category: "account_statement",
+          action: "manual_send",
+          level: "info",
+          message: `Estado de cuenta enviado manualmente a ${customer.name} (${recipientEmails.join(", ")}).`,
+          details: { customerId: customer.id, recipientEmails, usedLiveData: !!liveData, sentBy: (req.user as any)?.fullName ?? null },
+        });
+      }
+
       res.json({ success: true, message: `Estado de cuenta enviado a ${recipientEmails.join(", ")}` });
     } catch (error: any) {
       console.error("Error sending account statement:", error);
@@ -5322,10 +5334,100 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       const sent = results.filter((r) => r.success).length;
-      res.json({ sent, failed: results.length - sent, results });
+      const failed = results.length - sent;
+      if (tenantId) {
+        await logSystemActivity({
+          tenantId,
+          category: "account_statement",
+          action: "manual_bulk_send",
+          level: failed > 0 ? "warning" : "info",
+          message: `Envío masivo manual de estados de cuenta: ${sent} enviados, ${failed} fallidos.`,
+          details: { sent, failed, sentBy: (req.user as any)?.fullName ?? null, results },
+        });
+      }
+      res.json({ sent, failed, results });
     } catch (error: any) {
       console.error("Error bulk sending account statements:", error);
       res.status(500).json({ error: error.message ?? "Error al enviar estados de cuenta" });
+    }
+  });
+
+  // GET /api/system-logs — unified activity log (account-statement events + Microsip syncs)
+  app.get("/api/system-logs", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant requerido" });
+
+      const allowedCategories = ["all", "account_statement", "microsip_sync", "system"];
+      const rawCategory = typeof req.query.category === "string" ? req.query.category : "all";
+      const category = allowedCategories.includes(rawCategory) ? rawCategory : "all";
+      const parsedLimit = parseInt(String(req.query.limit ?? "200"), 10);
+      const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 200, 1), 500);
+
+      const { systemLogs } = await import("@shared/schema");
+
+      const sysRows = await db
+        .select()
+        .from(systemLogs)
+        .where(eq(systemLogs.tenantId, tenantId))
+        .orderBy(sql`${systemLogs.createdAt} DESC`)
+        .limit(limit);
+
+      const sysNormalized = sysRows.map((r) => ({
+        id: r.id,
+        source: "system" as const,
+        category: r.category,
+        level: r.level,
+        action: r.action,
+        message: r.message,
+        details: r.details,
+        createdAt: r.createdAt,
+      }));
+
+      const msRows = await db
+        .select()
+        .from(microsipSyncLogs)
+        .where(eq(microsipSyncLogs.tenantId, tenantId))
+        .orderBy(sql`${microsipSyncLogs.startedAt} DESC`)
+        .limit(limit);
+
+      const typeLabels: Record<string, string> = {
+        customers: "Clientes", products: "Productos", categories: "Categorías",
+        invoices: "Facturas", payments: "Pagos", full: "Completa",
+      };
+      const msNormalized = msRows.map((r) => {
+        const level = r.status === "error" ? "error" : r.status === "started" ? "warning" : "info";
+        const typeLabel = typeLabels[r.syncType] ?? r.syncType;
+        const statusLabel = r.status === "success" ? "exitosa" : r.status === "error" ? "con error" : "en proceso";
+        let message = `Sincronización Microsip (${typeLabel}) ${statusLabel}`;
+        if (r.status === "success") {
+          message += `: ${r.recordsCreated ?? 0} nuevos, ${r.recordsUpdated ?? 0} actualizados, ${r.recordsSkipped ?? 0} omitidos.`;
+        } else if (r.status === "error" && r.errorMessage) {
+          message += `: ${r.errorMessage}`;
+        }
+        return {
+          id: r.id,
+          source: "microsip" as const,
+          category: "microsip_sync",
+          level,
+          action: r.syncType,
+          message,
+          details: {
+            recordsCreated: r.recordsCreated, recordsUpdated: r.recordsUpdated,
+            recordsSkipped: r.recordsSkipped, recordsProcessed: r.recordsProcessed,
+            errorMessage: r.errorMessage, errorDetails: r.errorDetails, completedAt: r.completedAt,
+          },
+          createdAt: r.startedAt,
+        };
+      });
+
+      let merged = [...sysNormalized, ...msNormalized];
+      if (category && category !== "all") merged = merged.filter((m) => m.category === category);
+      merged.sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime());
+      res.json(merged.slice(0, limit));
+    } catch (error) {
+      console.error("Error fetching system logs:", error);
+      res.status(500).json({ error: "Error al obtener registros de actividad" });
     }
   });
 

@@ -23,6 +23,7 @@ import {
   Mail,
   ShieldCheck,
   BookOpen,
+  ScrollText,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -128,6 +129,7 @@ const menuGroups: MenuGroup[] = [
       { titleKey: "nav.users", url: "/users", icon: Users, roles: [UserRole.ADMIN] },
       { titleKey: "nav.company-settings", url: "/company-settings", icon: Settings, roles: [UserRole.ADMIN] },
       { titleKey: "nav.microsip", url: "/microsip", icon: Database, roles: [UserRole.ADMIN] },
+      { titleKey: "nav.system-logs", url: "/system-logs", icon: ScrollText, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION] },
     ],
   },
 ];
