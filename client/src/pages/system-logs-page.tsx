@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -202,54 +202,56 @@ export default function SystemLogsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((log) => {
+                {filtered.flatMap((log) => {
                   const CatIcon = CATEGORY_ICONS[log.category] ?? Settings;
                   const isOpen = expanded.has(log.id);
                   const hasDetails =
                     log.details != null &&
                     !(typeof log.details === "object" && Object.keys(log.details as object).length === 0);
-                  return (
-                    <Fragment key={log.id}>
-                      <TableRow
-                        className={hasDetails ? "cursor-pointer" : ""}
-                        onClick={() => hasDetails && toggle(log.id)}
-                        data-testid={`row-log-${log.id}`}
-                      >
-                        <TableCell>
-                          {hasDetails ? (
-                            isOpen ? (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                            )
-                          ) : null}
+                  const rows = [
+                    <TableRow
+                      key={log.id}
+                      className={hasDetails ? "cursor-pointer" : ""}
+                      onClick={() => hasDetails && toggle(log.id)}
+                      data-testid={`row-log-${log.id}`}
+                    >
+                      <TableCell>
+                        {hasDetails ? (
+                          isOpen ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {formatDateTime(log.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-2 text-sm">
+                          <CatIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                          {CATEGORY_LABELS[log.category] ?? log.category}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <LevelBadge level={log.level} />
+                      </TableCell>
+                      <TableCell className="text-sm">{log.message}</TableCell>
+                    </TableRow>,
+                  ];
+                  if (isOpen && hasDetails) {
+                    rows.push(
+                      <TableRow key={`${log.id}-details`}>
+                        <TableCell />
+                        <TableCell colSpan={4}>
+                          <pre className="text-xs bg-muted rounded-md p-3 overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify(log.details, null, 2)}
+                          </pre>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(log.createdAt)}
-                        </TableCell>
-                        <TableCell>
-                          <span className="inline-flex items-center gap-2 text-sm">
-                            <CatIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                            {CATEGORY_LABELS[log.category] ?? log.category}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <LevelBadge level={log.level} />
-                        </TableCell>
-                        <TableCell className="text-sm">{log.message}</TableCell>
-                      </TableRow>
-                      {isOpen && hasDetails && (
-                        <TableRow>
-                          <TableCell />
-                          <TableCell colSpan={4}>
-                            <pre className="text-xs bg-muted rounded-md p-3 overflow-x-auto whitespace-pre-wrap">
-                              {JSON.stringify(log.details, null, 2)}
-                            </pre>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  );
+                      </TableRow>,
+                    );
+                  }
+                  return rows;
                 })}
               </TableBody>
             </Table>
