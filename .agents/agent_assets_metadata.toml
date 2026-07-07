@@ -18,3 +18,9 @@ id = "aF6Ul7jYohTeNIXChnsVS"
 uri = "file://nexxo-mejoras-mayo-junio-2026.pdf"
 type = "pdf"
 title = "Nexxo - Mejoras (total 89 horas)"
+
+[[outputs]]
+id = "UDEdEhqgza91VfZBxkYHD"
+uri = "file://nexxo-opciones-ligero-movil.pdf"
+type = "pdf"
+title = "Opciones Ligero y Móvil — Propuesta técnica"
