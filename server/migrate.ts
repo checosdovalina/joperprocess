@@ -41,6 +41,22 @@ const MIGRATIONS: { id: string; sql: string }[] = [
       updated_at timestamptz NOT NULL DEFAULT now()
     )`,
   },
+  {
+    id: "006_create_system_logs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS system_logs (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id varchar NOT NULL REFERENCES tenants(id),
+        category text NOT NULL,
+        level text NOT NULL DEFAULT 'info',
+        action text,
+        message text NOT NULL,
+        details jsonb,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_system_logs_tenant_created ON system_logs (tenant_id, created_at DESC);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
