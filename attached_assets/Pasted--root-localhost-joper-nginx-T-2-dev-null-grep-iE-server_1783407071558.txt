@@ -1,0 +1,43 @@
+[root@localhost joper]# nginx -T 2>/dev/null | grep -iE "server_name|ssl_certificate |listen"
+        listen       80;
+        listen       [::]:80;
+        server_name  _;
+#        listen       443 ssl http2;
+#        listen       [::]:443 ssl http2;
+#        server_name  _;
+#        ssl_certificate "/etc/pki/nginx/server.crt";
+    listen 80;
+    server_name nexxo.com.mx www.nexxo.com.mx;
+    server_name events-ots.com www.events-ots.com;
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/events-ots.com/fullchain.pem; # managed by Certbot
+    listen 80;
+    server_name events-ots.com www.events-ots.com;
+[root@localhost joper]# certbot certificates
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Found the following certs:
+  Certificate Name: events-ots.com
+    Serial Number: 576726626e2b056d75829361181de89e7d1
+    Key Type: ECDSA
+    Domains: events-ots.com www.events-ots.com
+    Expiry Date: 2026-04-13 03:39:08+00:00 (INVALID: EXPIRED)
+    Certificate Path: /etc/letsencrypt/live/events-ots.com/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/events-ots.com/privkey.pem
+  Certificate Name: nexxo.com.mx-0001
+    Serial Number: 56a21df7430fbb530c483779a19a4955d29
+    Key Type: ECDSA
+    Domains: nexxo.com.mx *.nexxo.com.mx
+    Expiry Date: 2026-07-19 13:55:00+00:00 (VALID: 12 days)
+    Certificate Path: /etc/letsencrypt/live/nexxo.com.mx-0001/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxo.com.mx-0001/privkey.pem
+  Certificate Name: nexxo.com.mx
+    Serial Number: 6247e61c93d31d77d9d0e60ca4637a1b358
+    Key Type: ECDSA
+    Domains: nexxo.com.mx www.nexxo.com.mx
+    Expiry Date: 2026-03-19 05:10:42+00:00 (INVALID: EXPIRED)
+    Certificate Path: /etc/letsencrypt/live/nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxo.com.mx/privkey.pem
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+[root@localhost joper]# 
