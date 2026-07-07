@@ -57,6 +57,26 @@ const MIGRATIONS: { id: string; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_system_logs_tenant_created ON system_logs (tenant_id, created_at DESC);
     `,
   },
+  {
+    id: "007_create_documents",
+    sql: `
+      CREATE TABLE IF NOT EXISTS documents (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id varchar NOT NULL REFERENCES tenants(id),
+        title text NOT NULL,
+        description text,
+        type text NOT NULL DEFAULT 'operativo',
+        category text,
+        product_id varchar REFERENCES products(id),
+        file_url text NOT NULL,
+        file_name text NOT NULL,
+        file_size integer,
+        uploaded_by varchar REFERENCES users(id),
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_documents_tenant ON documents (tenant_id);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
