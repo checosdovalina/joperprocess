@@ -6205,8 +6205,8 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Invalid or expired upload" });
       }
 
-      // Enforce max size (25MB) while streaming to avoid buffering oversized payloads
-      const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
+      // Enforce max size (100MB) while streaming to avoid buffering oversized payloads
+      const MAX_DOCUMENT_BYTES = 100 * 1024 * 1024;
       const chunks: Buffer[] = [];
       let totalBytes = 0;
       let tooLarge = false;
@@ -6221,7 +6221,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
       if (tooLarge) {
         req.destroy();
-        return res.status(413).json({ error: "File too large (max 25MB)" });
+        return res.status(413).json({ error: "File too large (max 100MB)" });
       }
       const buffer = Buffer.concat(chunks);
 

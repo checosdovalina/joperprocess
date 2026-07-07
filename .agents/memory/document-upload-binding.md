@@ -34,6 +34,14 @@ schema migration; renames are a rare edge case for this internal tool. Do not
 - Also enforce the size limit *while streaming* the request body (break the
   `for await` loop once bytes exceed the max) — never `Buffer.concat` first,
   which lets an oversized payload exhaust memory.
+- Oversized upload rejection uses `req.destroy()` mid-stream, which the browser
+  reports as `TypeError: Failed to fetch` (a network reset), NOT a clean 413.
+  The real UX guard is the **client-side** `file.size` pre-check before upload —
+  keep it in lockstep with the server `MAX_DOCUMENT_BYTES` (both 100MB) and the
+  i18n `documents.error.tooLarge` text, or big files silently "fail to fetch".
+- Three size limits must stay aligned or the smallest one cuts first and
+  confuses debugging: client pre-check, server `MAX_DOCUMENT_BYTES`, and nginx
+  `client_max_body_size` (set nginx a margin higher, e.g. 110M vs 100MB).
 - Iterating a `Map` with `for...of` trips TS2802 (downlevelIteration) in this
   repo's tsconfig; use `Array.from(map.entries()).forEach(...)` instead. Do not
   edit tsconfig.

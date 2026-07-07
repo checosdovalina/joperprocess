@@ -160,7 +160,7 @@ export default function DocumentsPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    if (file && file.size > 25 * 1024 * 1024) {
+    if (file && file.size > 100 * 1024 * 1024) {
       toast({
         title: t("documents.error.tooLarge"),
         variant: "destructive",
