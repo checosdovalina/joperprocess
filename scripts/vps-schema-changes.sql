@@ -68,6 +68,23 @@ ALTER TABLE orders
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS released_at timestamptz;
 
+-- ----------------------------------------------------------------
+-- [2026-07-07] Tabla: system_logs — Registro de Actividad
+-- Guarda envíos de estados de cuenta, sincronizaciones y errores
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS system_logs (
+  id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id varchar NOT NULL REFERENCES tenants(id),
+  category text NOT NULL,
+  level text NOT NULL DEFAULT 'info',
+  action text,
+  message text NOT NULL,
+  details jsonb,
+  created_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_system_logs_tenant_created
+  ON system_logs (tenant_id, created_at DESC);
+
 -- ================================================================
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
