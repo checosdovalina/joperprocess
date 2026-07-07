@@ -74,6 +74,24 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
     console.warn(`[StatementScheduler] Microsip not configured for tenant ${tenantId}, using local DB`);
   }
 
+  // ── Refresh data BEFORE sending ────────────────────────────────────────────
+  // Pull the latest invoices + payments from Microsip so the account statements
+  // reflect the current balances at the moment of the automatic send (instead of
+  // relying on whatever was last synced or on a manual "Actualizar" click).
+  if (msService) {
+    try {
+      const invResult = await msService.syncInvoices();
+      const payResult = await msService.syncPayments();
+      console.log(
+        `[StatementScheduler] Pre-send refresh for tenant ${tenantId}: ` +
+        `facturas (+${invResult.created} nuevas, ${invResult.updated} actualizadas), ` +
+        `pagos (+${payResult.created} nuevos, ${payResult.updated} actualizados)`
+      );
+    } catch (err) {
+      console.error(`[StatementScheduler] Pre-send refresh failed for tenant ${tenantId} (se enviará con datos disponibles):`, err);
+    }
+  }
+
   const { sendAccountStatementEmail } = await import("./account-statement-email-service");
   const now = new Date();
   let sent = 0;
