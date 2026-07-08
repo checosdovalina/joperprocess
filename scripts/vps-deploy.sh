@@ -50,9 +50,12 @@ echo ""
 echo "[2/6] Descargando cambios del repositorio..."
 git -C "$PROJECT_DIR" pull origin main
 
-# 3. Instalar dependencias
-echo "[3/6] Instalando dependencias..."
-npm --prefix "$PROJECT_DIR" install --production=false --silent
+# 3. Instalar dependencias (incluyendo devDependencies: vite, tailwind,
+#    postcss, esbuild, etc. son necesarias para compilar). Forzamos
+#    NODE_ENV=development + --include=dev para que npm NO omita devDependencies
+#    aunque el servidor tenga NODE_ENV=production configurado globalmente.
+echo "[3/6] Instalando dependencias (incluye herramientas de compilación)..."
+NODE_ENV=development npm --prefix "$PROJECT_DIR" install --include=dev
 
 # 4. Compilar
 echo "[4/6] Compilando..."
