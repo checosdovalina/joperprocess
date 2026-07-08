@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   BookOpen,
   ScrollText,
+  Store,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -127,6 +128,7 @@ const menuGroups: MenuGroup[] = [
       { titleKey: "nav.products", url: "/products", icon: Package, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA] },
       { titleKey: "nav.documents", url: "/documents", icon: BookOpen, roles: Object.values(UserRole) },
       { titleKey: "nav.users", url: "/users", icon: Users, roles: [UserRole.ADMIN] },
+      { titleKey: "nav.empresas", url: "/empresas", icon: Store, roles: [UserRole.ADMIN] },
       { titleKey: "nav.company-settings", url: "/company-settings", icon: Settings, roles: [UserRole.ADMIN] },
       { titleKey: "nav.microsip", url: "/microsip", icon: Database, roles: [UserRole.ADMIN] },
       { titleKey: "nav.system-logs", url: "/system-logs", icon: ScrollText, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION] },

@@ -105,6 +105,34 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS idx_documents_tenant ON documents (tenant_id);
 
+-- ----------------------------------------------------------------
+-- [2026-07-08] Tabla: empresas — Marcas comerciales dentro de un tenant
+-- Una "empresa" (p.ej. "Joper Ligero" / "Joper Móvil") es un nivel comercial
+-- POR DEBAJO del tenant. Comparten la misma BD, clientes, productos y Microsip.
+-- Sólo cambia la marca y sirve para segmentar cotizaciones/pedidos/embarques y
+-- a qué empresa pertenece cada vendedor. NO es un tenant nuevo.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS empresas (
+  id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id varchar NOT NULL REFERENCES tenants(id),
+  name text NOT NULL,
+  clave text,
+  logo_url text,
+  primary_color text DEFAULT '#4DA3FF',
+  secondary_color text DEFAULT '#1F3C88',
+  subdomain text UNIQUE,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_empresas_tenant ON empresas (tenant_id);
+
+-- Columna empresa_id (nullable) en usuarios y documentos comerciales
+ALTER TABLE users ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES empresas(id);
+ALTER TABLE quotations ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES empresas(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES empresas(id);
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES empresas(id);
+
 -- ================================================================
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --

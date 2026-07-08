@@ -54,6 +54,34 @@ export const insertTenantSchema = createInsertSchema(tenants).omit({
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type Tenant = typeof tenants.$inferSelect;
 
+// ==================== EMPRESAS (marcas comerciales dentro de un tenant) ====================
+// Una "empresa" es un nivel comercial POR DEBAJO del tenant. Todas las empresas de un
+// tenant comparten la misma base de datos, clientes, productos y Microsip. Sólo cambia
+// la marca (logo/colores) y sirve para segmentar cotizaciones/pedidos/embarques y a qué
+// empresa pertenece cada vendedor. NO es un tenant nuevo (eso rompería el compartir datos).
+export const empresas = pgTable("empresas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(), // p.ej. "Joper Ligero", "Joper Móvil"
+  clave: text("clave"), // clave corta interna, p.ej. "LIGERO" / "MOVIL"
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color").default("#4DA3FF"),
+  secondaryColor: text("secondary_color").default("#1F3C88"),
+  subdomain: text("subdomain").unique(), // opcional: marca por subdominio (último paso)
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertEmpresaSchema = createInsertSchema(empresas).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertEmpresa = z.infer<typeof insertEmpresaSchema>;
+export type Empresa = typeof empresas.$inferSelect;
+
 // ==================== END MULTI-TENANCY ====================
 
 // Enum for user roles
@@ -201,6 +229,7 @@ export type CommentVisibilityType = typeof CommentVisibility[keyof typeof Commen
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
+  empresaId: varchar("empresa_id").references(() => empresas.id), // vendedor pertenece a UNA empresa; null = rol global (ve todas)
   username: text("username").notNull(),
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
@@ -324,6 +353,7 @@ export const pendingUploads = pgTable("pending_uploads", {
 export const quotations = pgTable("quotations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  empresaId: varchar("empresa_id").references(() => empresas.id), // empresa (marca) a la que pertenece esta cotización
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   folio: text("folio").notNull().unique(),
@@ -442,6 +472,7 @@ export const OrderReleaseStatus = {
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  empresaId: varchar("empresa_id").references(() => empresas.id), // heredada de la cotización
   quotationId: varchar("quotation_id").notNull().references(() => quotations.id),
   status: text("status").notNull().default(OrderStatus.PENDING),
   productionProgress: integer("production_progress").notNull().default(0),
@@ -475,6 +506,7 @@ export const orderReleases = pgTable("order_releases", {
 export const shipments = pgTable("shipments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  empresaId: varchar("empresa_id").references(() => empresas.id), // heredada del pedido
   orderId: varchar("order_id").notNull().references(() => orders.id),
   transporter: text("transporter").notNull(),
   transportType: text("transport_type").notNull(), // 'propio' or 'paqueteria'

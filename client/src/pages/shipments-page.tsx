@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Shipment, Order, Quotation, Customer, ShipmentStatus, ShipmentProductInstance, Product, QuotationItem } from "@shared/schema";
+import { Shipment, Order, Quotation, Customer, ShipmentStatus, ShipmentProductInstance, Product, QuotationItem, type Empresa } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -75,9 +75,14 @@ export default function ShipmentsPage() {
   });
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
 
   const { data: shipments, isLoading } = useQuery<ShipmentWithDetails[]>({
     queryKey: ["/api/shipments"],
+  });
+
+  const { data: empresas } = useQuery<Empresa[]>({
+    queryKey: ["/api/empresas"],
   });
 
   const { data: products } = useQuery<Product[]>({
@@ -295,11 +300,12 @@ export default function ShipmentsPage() {
     addSerialsMutation.mutate(validSerials);
   };
 
-  const hasActiveFilters = searchText !== "" || filterStatus !== "all" || filterDateFrom !== "" || filterDateTo !== "";
+  const hasActiveFilters = searchText !== "" || filterStatus !== "all" || filterEmpresa !== "all" || filterDateFrom !== "" || filterDateTo !== "";
 
   const filteredShipments = (shipments ?? []).filter(s => {
     if (hideDelivered && s.status === ShipmentStatus.DELIVERED) return false;
     if (filterStatus !== "all" && s.status !== filterStatus) return false;
+    if (filterEmpresa !== "all" && s.empresaId !== filterEmpresa) return false;
     if (searchText) {
       const q = searchText.toLowerCase();
       const matchCustomer = s.order.quotation.customer.name.toLowerCase().includes(q);
@@ -323,6 +329,7 @@ export default function ShipmentsPage() {
   const resetFilters = () => {
     setSearchText("");
     setFilterStatus("all");
+    setFilterEmpresa("all");
     setFilterDateFrom("");
     setFilterDateTo("");
   };
@@ -414,6 +421,19 @@ export default function ShipmentsPage() {
                 <SelectItem value={ShipmentStatus.DELIVERED}>{t("status.delivered")}</SelectItem>
               </SelectContent>
             </Select>
+            {empresas && empresas.length > 0 && (
+              <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las empresas</SelectItem>
+                  {empresas.map(e => (
+                    <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="flex items-center gap-1">
               <Input
                 type="date"
@@ -466,6 +486,11 @@ export default function ShipmentsPage() {
                     <TableRow key={shipment.id} className="hover-elevate" data-testid={`row-shipment-${shipment.id}`}>
                       <TableCell>
                         <div className="font-mono text-sm">{shipment.order.quotation.folio}</div>
+                        {shipment.empresaId && empresas && empresas.length > 0 && (
+                          <Badge variant="secondary" className="mt-1" data-testid={`badge-empresa-${shipment.id}`}>
+                            {empresas.find(e => e.id === shipment.empresaId)?.name ?? ""}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">{shipment.transporter}</div>

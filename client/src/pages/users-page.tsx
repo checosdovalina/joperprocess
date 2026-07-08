@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { User, UserRole } from "@shared/schema";
+import { User, UserRole, type Empresa } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,7 @@ export default function UsersPage() {
     email: "",
     role: "",
     newPassword: "",
+    empresaId: "none",
   });
   const [newUser, setNewUser] = useState({
     username: "",
@@ -47,15 +48,25 @@ export default function UsersPage() {
     fullName: "",
     email: "",
     role: UserRole.VENDEDOR as string,
+    empresaId: "none",
   });
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 
+  const { data: empresas = [] } = useQuery<Empresa[]>({
+    queryKey: ["/api/empresas"],
+  });
+
   const createUserMutation = useMutation({
     mutationFn: async (userData: typeof newUser) => {
-      const res = await apiRequest("POST", "/api/register", { ...userData, active: true });
+      const { empresaId, ...rest } = userData;
+      const res = await apiRequest("POST", "/api/register", {
+        ...rest,
+        active: true,
+        empresaId: empresaId === "none" ? null : empresaId,
+      });
       return await res.json();
     },
     onSuccess: () => {
@@ -71,6 +82,7 @@ export default function UsersPage() {
         fullName: "",
         email: "",
         role: UserRole.VENDEDOR,
+        empresaId: "none",
       });
     },
     onError: (error: Error) => {
@@ -105,10 +117,11 @@ export default function UsersPage() {
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data }: { userId: string; data: typeof editData }) => {
-      const payload: Record<string, string> = {
+      const payload: Record<string, string | null> = {
         fullName: data.fullName,
         email: data.email,
         role: data.role,
+        empresaId: data.empresaId === "none" ? null : data.empresaId,
       };
       if (data.newPassword.trim()) {
         payload.password = data.newPassword.trim();
@@ -124,7 +137,7 @@ export default function UsersPage() {
       });
       setIsEditDialogOpen(false);
       setEditingUser(null);
-      setEditData({ fullName: "", email: "", role: "", newPassword: "" });
+      setEditData({ fullName: "", email: "", role: "", newPassword: "", empresaId: "none" });
     },
     onError: (error: Error) => {
       toast({
@@ -142,6 +155,7 @@ export default function UsersPage() {
       email: user.email,
       role: user.role,
       newPassword: "",
+      empresaId: user.empresaId ?? "none",
     });
     setIsEditDialogOpen(true);
   };
@@ -267,6 +281,30 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {empresas.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="new-empresa">Empresa</Label>
+                  <Select
+                    value={newUser.empresaId}
+                    onValueChange={(value) => setNewUser({ ...newUser, empresaId: value })}
+                  >
+                    <SelectTrigger id="new-empresa" data-testid="select-new-empresa">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Todas las empresas</SelectItem>
+                      {empresas.map((empresa) => (
+                        <SelectItem key={empresa.id} value={empresa.id}>
+                          {empresa.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Los vendedores solo verán su empresa asignada. Deja "Todas" para roles internos.
+                  </p>
+                </div>
+              )}
               <div className="flex gap-2 justify-end">
                 <Button
                   type="button"
@@ -346,6 +384,7 @@ export default function UsersPage() {
                     <TableHead>{t("users.col.full-name")}</TableHead>
                     <TableHead>{t("users.col.email")}</TableHead>
                     <TableHead>{t("users.col.role")}</TableHead>
+                    {empresas.length > 0 && <TableHead>Empresa</TableHead>}
                     <TableHead>{t("label.status")}</TableHead>
                     <TableHead className="text-right">{t("label.actions")}</TableHead>
                   </TableRow>
@@ -365,6 +404,17 @@ export default function UsersPage() {
                       <TableCell>
                         <Badge variant="outline">{getRoleLabel(user.role)}</Badge>
                       </TableCell>
+                      {empresas.length > 0 && (
+                        <TableCell>
+                          {user.empresaId ? (
+                            <Badge variant="secondary" data-testid={`badge-empresa-${user.id}`}>
+                              {empresas.find((e) => e.id === user.empresaId)?.name ?? "—"}
+                            </Badge>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Todas</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell>
                         {user.active ? (
                           <Badge className="bg-green-100 text-green-800" data-testid={`status-active-${user.id}`}>
@@ -465,6 +515,30 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
+            {empresas.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-empresa">Empresa</Label>
+                <Select
+                  value={editData.empresaId}
+                  onValueChange={(value) => setEditData({ ...editData, empresaId: value })}
+                >
+                  <SelectTrigger id="edit-empresa" data-testid="select-edit-empresa">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Todas las empresas</SelectItem>
+                    {empresas.map((empresa) => (
+                      <SelectItem key={empresa.id} value={empresa.id}>
+                        {empresa.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Los vendedores solo verán su empresa asignada. Deja "Todas" para roles internos.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="edit-newPassword">{t("users.form.new-password")} <span className="text-muted-foreground text-xs">{t("users.form.password-hint")}</span></Label>
               <Input

@@ -29,7 +29,7 @@ import { sendCheckoutEmail } from "./email-service";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import OpenAI from "openai";
-import { tenants, insertTenantSchema } from "@shared/schema";
+import { tenants, insertTenantSchema, empresas, insertEmpresaSchema } from "@shared/schema";
 import { 
   insertCustomerSchema,
   updateCustomerSchema,
@@ -159,9 +159,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/pipeline", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
-      const tenantFilter = tenantId ? eq(quotations.tenantId, tenantId) : undefined;
-      const orderTenantFilter = tenantId ? eq(orders.tenantId, tenantId) : undefined;
-      const shipmentTenantFilter = tenantId ? eq(shipments.tenantId, tenantId) : undefined;
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      const quotEmpresaFilter = restrictedEmpresaId ? eq(quotations.empresaId, restrictedEmpresaId) : undefined;
+      const orderEmpresaFilter = restrictedEmpresaId ? eq(orders.empresaId, restrictedEmpresaId) : undefined;
+      const shipmentEmpresaFilter = restrictedEmpresaId ? eq(shipments.empresaId, restrictedEmpresaId) : undefined;
+      const tenantFilter = tenantId
+        ? (quotEmpresaFilter ? and(eq(quotations.tenantId, tenantId), quotEmpresaFilter) : eq(quotations.tenantId, tenantId))
+        : quotEmpresaFilter;
+      const orderTenantFilter = tenantId
+        ? (orderEmpresaFilter ? and(eq(orders.tenantId, tenantId), orderEmpresaFilter) : eq(orders.tenantId, tenantId))
+        : orderEmpresaFilter;
+      const shipmentTenantFilter = tenantId
+        ? (shipmentEmpresaFilter ? and(eq(shipments.tenantId, tenantId), shipmentEmpresaFilter) : eq(shipments.tenantId, tenantId))
+        : shipmentEmpresaFilter;
 
       // Quotations with customer and seller
       const quotRows = await db.select({
@@ -227,7 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .leftJoin(quotations, eq(creditAuthorizations.quotationId, quotations.id))
         .leftJoin(customers, eq(quotations.customerId, customers.id))
         .leftJoin(sellerAlias3, eq(quotations.userId, sellerAlias3.id))
-        .where(tenantFilter ? eq(quotations.tenantId, tenantId!) : undefined)
+        .where(tenantFilter)
         .orderBy(sql`${creditAuthorizations.createdAt} DESC`)
         .limit(200);
 
@@ -249,7 +260,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { type, id } = req.query as { type: string; id: string };
       if (!type || !id) return res.status(400).json({ error: "Missing type or id" });
 
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents.
+      // Tenant isolation: never expose a record from another tenant, even by direct ID.
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      const effectiveTenantId = getEffectiveTenantId(req);
+
       if (type === "quotation") {
+        const q = await db.query.quotations.findFirst({ where: eq(quotations.id, id), columns: { tenantId: true, empresaId: true } });
+        if (!q) return res.json([]);
+        if (effectiveTenantId && q.tenantId !== effectiveTenantId) return res.json([]);
+        if (restrictedEmpresaId && q.empresaId !== restrictedEmpresaId) return res.json([]);
         const items = await db.query.quotationItems.findMany({
           where: eq(quotationItems.quotationId, id),
           with: { product: { columns: { name: true, code: true, unit: true } } },
@@ -282,6 +302,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
         if (!order?.quotation) return res.json([]);
+        if (effectiveTenantId && order.tenantId !== effectiveTenantId) return res.json([]);
+        if (restrictedEmpresaId && order.empresaId !== restrictedEmpresaId) return res.json([]);
         return res.json(order.quotation.items.map(i => ({
           id: i.id,
           productCode: i.product?.code ?? "",
@@ -309,6 +331,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
         if (!auth?.quotation) return res.json([]);
+        if (effectiveTenantId && auth.quotation.tenantId !== effectiveTenantId) return res.json([]);
+        if (restrictedEmpresaId && auth.quotation.empresaId !== restrictedEmpresaId) return res.json([]);
         return res.json(auth.quotation.items.map(i => ({
           id: i.id,
           productCode: i.product?.code ?? "",
@@ -322,6 +346,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (type === "shipment") {
+        const s = await db.query.shipments.findFirst({ where: eq(shipments.id, id), columns: { tenantId: true, empresaId: true } });
+        if (!s) return res.json([]);
+        if (effectiveTenantId && s.tenantId !== effectiveTenantId) return res.json([]);
+        if (restrictedEmpresaId && s.empresaId !== restrictedEmpresaId) return res.json([]);
         const instances = await db.query.shipmentProductInstances.findMany({
           where: eq(shipmentProductInstances.shipmentId, id),
           with: { product: { columns: { name: true, code: true, unit: true } } },
@@ -441,6 +469,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== END TENANT ENDPOINTS ====================
+
+  // ==================== EMPRESAS (marcas comerciales) ENDPOINTS ====================
+
+  // List empresas for the current tenant (any authenticated user, used by pickers/filters)
+  app.get("/api/empresas", isAuthenticated, async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const list = await scopedStorage.getAllEmpresas();
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching empresas:", error);
+      res.status(500).json({ error: "Error fetching empresas" });
+    }
+  });
+
+  // Create empresa (admin only)
+  app.post("/api/empresas", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const tenantId = scopedStorage.getTenantId();
+      if (!tenantId) {
+        return res.status(400).json({ error: "No hay contexto de empresa (tenant)" });
+      }
+      const validationResult = insertEmpresaSchema.omit({ tenantId: true }).safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          error: "Datos inválidos",
+          details: validationResult.error.errors,
+        });
+      }
+      const newEmpresa = await scopedStorage.createEmpresa({ ...validationResult.data, tenantId });
+      res.status(201).json(newEmpresa);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "El subdominio ya existe" });
+      }
+      console.error("Error creating empresa:", error);
+      res.status(500).json({ error: "Error creating empresa" });
+    }
+  });
+
+  // Update empresa (admin only)
+  app.patch("/api/empresas/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const scopedStorage = createTenantScopedStorage(req);
+      const updateSchema = insertEmpresaSchema.omit({ tenantId: true }).partial();
+      const validationResult = updateSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          error: "Datos inválidos",
+          details: validationResult.error.errors,
+        });
+      }
+      const updated = await scopedStorage.updateEmpresa(id, validationResult.data);
+      if (!updated) {
+        return res.status(404).json({ error: "Empresa no encontrada" });
+      }
+      res.json(updated);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "El subdominio ya existe" });
+      }
+      console.error("Error updating empresa:", error);
+      res.status(500).json({ error: "Error updating empresa" });
+    }
+  });
+
+  // ==================== END EMPRESAS ENDPOINTS ====================
 
   // ==================== COMPANY SETTINGS ENDPOINTS ====================
   
@@ -913,6 +1010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fullName: z.string().optional(),
         email: z.string().email().optional(),
         password: z.string().min(6).optional(),
+        empresaId: z.string().nullable().optional(),
       });
       
       const validated = updateSchema.parse(req.body);
@@ -1082,6 +1180,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer not found" });
       }
 
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's commercial history
+      const restrictedEmpresaId = scopedStorage.getRestrictedEmpresaId();
+
       // Get pending/overdue invoices (accounts receivable)
       const pendingInvoices = await scopedStorage.getPendingInvoicesByCustomer(id);
       
@@ -1101,7 +1202,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get customer's quotation IDs first
       const customerQuotations = await db.query.quotations.findMany({
-        where: eq(quotations.customerId, id),
+        where: restrictedEmpresaId
+          ? and(eq(quotations.customerId, id), eq(quotations.empresaId, restrictedEmpresaId))
+          : eq(quotations.customerId, id),
         columns: { id: true },
       });
       const quotationIds = customerQuotations.map(q => q.id);
@@ -1131,10 +1234,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get recent quotations (last 6 months)
       const recentQuotations = await db.query.quotations.findMany({
-        where: and(
-          eq(quotations.customerId, id),
-          sql`${quotations.createdAt} > NOW() - INTERVAL '6 months'`
-        ),
+        where: restrictedEmpresaId
+          ? and(
+              eq(quotations.customerId, id),
+              eq(quotations.empresaId, restrictedEmpresaId),
+              sql`${quotations.createdAt} > NOW() - INTERVAL '6 months'`
+            )
+          : and(
+              eq(quotations.customerId, id),
+              sql`${quotations.createdAt} > NOW() - INTERVAL '6 months'`
+            ),
         orderBy: (quotations, { desc }) => [desc(quotations.createdAt)],
         limit: 10,
       });
@@ -2006,10 +2115,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Quotation not found" });
       }
 
+      // Tenant isolation: never expose a record from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && quotation.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+
       // Authorization check: user must own the quotation or have authorized role
       // Vendedores can view all quotations for sales follow-up purposes
       const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
+      }
+
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      if (restrictedEmpresaId && quotation.empresaId !== restrictedEmpresaId) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
 
@@ -2041,6 +2162,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Quotation not found" });
       }
 
+      // Empresa isolation: a vendedor bound to an empresa cannot edit a quotation
+      // that belongs to another empresa.
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      if (restrictedEmpresaId && existingQuotation.empresaId !== restrictedEmpresaId) {
+        return res.status(403).json({ error: "No autorizado para editar esta cotización" });
+      }
+
+      // Tenant isolation: never mutate a record from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && existingQuotation.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+
       // Authorization check
       const allowedRoles = [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA];
       if (existingQuotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
@@ -2056,6 +2190,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { items, ...quotationData } = req.body;
+      // empresaId is an immutable inherited invariant; never allow reassignment via update.
+      delete quotationData.empresaId;
 
       // Capture the vendor's intended status BEFORE any internal overrides.
       // This is the signal that distinguishes "Enviar a Autorización" from "Guardar Borrador".
@@ -2083,6 +2219,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update quotation data
       const scopedStorage = createTenantScopedStorage(req);
       const updatedQuotation = await scopedStorage.updateQuotation(id, quotationData);
+      // Fail fast if the scoped update denied access (out of tenant/empresa scope);
+      // never proceed to mutate items for a record we could not update.
+      if (!updatedQuotation) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
 
       // Update items if provided
       if (items && Array.isArray(items)) {
@@ -2251,9 +2392,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Quotation not found" });
       }
 
+      // Tenant isolation: never expose a record from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && quotation.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+
       // Authorization check: user must own the quotation or be admin/credit/sales role
       const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
+      }
+
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      if (restrictedEmpresaId && quotation.empresaId !== restrictedEmpresaId) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
 
@@ -2305,9 +2458,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Quotation not found" });
       }
 
+      // Tenant isolation: never expose a record from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && quotation.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+
       // Authorization check: user must own the quotation or be admin
       const allowedRoles = [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ error: "No autorizado para enviar esta cotización" });
+      }
+
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      if (restrictedEmpresaId && quotation.empresaId !== restrictedEmpresaId) {
         return res.status(403).json({ error: "No autorizado para enviar esta cotización" });
       }
 
@@ -3701,6 +3866,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
       const updateData = { ...req.body };
+      // empresaId is an immutable inherited invariant; never allow reassignment via update.
+      delete updateData.empresaId;
 
       // Terminal statuses must go through their dedicated admin-only endpoints
       // (POST /close, POST /cancel). Block them here to prevent bypassing role checks.
@@ -3876,8 +4043,20 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Order not found" });
       }
 
-      // Get all releases for this order
+      // Tenant isolation: never expose a record from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && order.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
       const scopedStorage = createTenantScopedStorage(req);
+      const restrictedEmpresaId = scopedStorage.getRestrictedEmpresaId();
+      if (restrictedEmpresaId && order.empresaId !== restrictedEmpresaId) {
+        return res.status(403).json({ error: "No autorizado para acceder a este pedido" });
+      }
+
+      // Get all releases for this order
       const releases = await scopedStorage.getOrderReleases(id);
 
       res.json({ ...order, releases });
@@ -4438,6 +4617,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       // 1. Subdomain tenant, 2. User's tenantId, 3. SuperAdmin global (no filter)
       const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
       const isSuperAdminGlobal = req.user?.isSuperAdmin && !resolvedTenantId;
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's orders
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
       const { dateFrom, dateTo, customerId, status, activeOnly } = req.query as Record<string, string>;
 
       const tenantWhere = (!isSuperAdminGlobal && resolvedTenantId)
@@ -4475,6 +4656,11 @@ Proporciona tu análisis en el siguiente formato JSON:
       const creditAuthByQuotation = new Map(allCreditAuths.map(c => [c.quotationId, c]));
 
       let filtered = orderRows;
+
+      // Empresa isolation
+      if (restrictedEmpresaId) {
+        filtered = filtered.filter(o => o.empresaId === restrictedEmpresaId);
+      }
 
       // By default only show active (non-shipped, non-delivered) orders
       // Pass activeOnly=false to see all
@@ -4606,9 +4792,13 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
       const isSuperAdminGlobal = req.user?.isSuperAdmin && !resolvedTenantId;
-      const boardTenantWhere = (!isSuperAdminGlobal && resolvedTenantId)
-        ? eq(orders.tenantId, resolvedTenantId)
-        : undefined;
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's orders
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      const boardTenantConds = [
+        (!isSuperAdminGlobal && resolvedTenantId) ? eq(orders.tenantId, resolvedTenantId) : undefined,
+        restrictedEmpresaId ? eq(orders.empresaId, restrictedEmpresaId) : undefined,
+      ].filter(Boolean) as any[];
+      const boardTenantWhere = boardTenantConds.length > 0 ? and(...boardTenantConds) : undefined;
 
       const orderRows = await db.query.orders.findMany({
         where: boardTenantWhere,
@@ -4738,6 +4928,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       const data = { ...req.body };
+      // empresaId is an immutable inherited invariant; never allow reassignment via update.
+      delete data.empresaId;
       if (data.shippedAt && typeof data.shippedAt === "string") {
         data.shippedAt = new Date(data.shippedAt);
       }
@@ -4769,6 +4961,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         },
       });
       if (!shipment) return res.status(404).json({ error: "Embarque no encontrado" });
+
+      // Tenant isolation: never expose a record from another tenant, even by direct ID.
+      if (tenantId && shipment.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Embarque no encontrado" });
+      }
+
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      if (restrictedEmpresaId && shipment.empresaId !== restrictedEmpresaId) {
+        return res.status(403).json({ error: "No autorizado para acceder a este embarque" });
+      }
 
       // Load order → quotation → items → customer
       const order = await db.query.orders.findFirst({

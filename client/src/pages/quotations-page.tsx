@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTenant } from "@/hooks/use-tenant";
-import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User } from "@shared/schema";
+import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User, type Empresa } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -89,6 +89,7 @@ export default function QuotationsPage() {
   const [hideConverted, setHideConverted] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSeller, setFilterSeller] = useState("all");
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
 
   // Pre-apply filter from URL param (e.g. navigating from dashboard)
   useEffect(() => {
@@ -111,6 +112,7 @@ export default function QuotationsPage() {
   const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
   const { data: products } = useEntityQuery<Product[]>("/api/products");
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
+  const { data: empresas } = useQuery<Empresa[]>({ queryKey: ["/api/empresas"] });
 
   const createQuotationMutation = useMutation<Quotation, Error, InsertQuotation & { items: InsertQuotationItem[]; _sendEmail: boolean }>({
     mutationFn: async (data) => {
@@ -514,7 +516,7 @@ export default function QuotationsPage() {
 
   const inactiveCount = quotations?.filter(q => INACTIVE_STATUSES.includes(q.status as any)).length ?? 0;
 
-  const hasActiveFilters = filterStatus !== "all" || filterSeller !== "all" || filterDateFrom !== "" || filterDateTo !== "" || searchText !== "";
+  const hasActiveFilters = filterStatus !== "all" || filterSeller !== "all" || filterEmpresa !== "all" || filterDateFrom !== "" || filterDateTo !== "" || searchText !== "";
 
   const filteredQuotations = (quotations ?? []).filter(q => {
     // Tab split
@@ -525,6 +527,7 @@ export default function QuotationsPage() {
     if (activeTab === "active" && hideConverted && q.status === QuotationStatus.CONVERTED) return false;
     if (filterStatus !== "all" && q.status !== filterStatus) return false;
     if (filterSeller !== "all" && q.userId !== filterSeller) return false;
+    if (filterEmpresa !== "all" && q.empresaId !== filterEmpresa) return false;
     if (searchText) {
       const search = searchText.toLowerCase();
       const matchFolio = q.folio?.toLowerCase().includes(search);
@@ -545,6 +548,7 @@ export default function QuotationsPage() {
   const resetFilters = () => {
     setFilterStatus("all");
     setFilterSeller("all");
+    setFilterEmpresa("all");
     setFilterDateFrom("");
     setFilterDateTo("");
     setSearchText("");
@@ -675,6 +679,19 @@ export default function QuotationsPage() {
                 ))}
               </SelectContent>
             </Select>
+            {empresas && empresas.length > 0 && (
+              <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las empresas</SelectItem>
+                  {empresas.map(e => (
+                    <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="flex items-center gap-1">
               <Input
                 type="date"
@@ -732,6 +749,11 @@ export default function QuotationsPage() {
                       <TableCell>
                         <div className="font-medium">{quotation.customer?.name || t("quotations.no-customer")}</div>
                         <div className="text-xs text-muted-foreground">{quotation.customer?.rfc || "-"}</div>
+                        {quotation.empresaId && empresas && empresas.length > 0 && (
+                          <Badge variant="secondary" className="mt-1" data-testid={`badge-empresa-${quotation.id}`}>
+                            {empresas.find(e => e.id === quotation.empresaId)?.name ?? ""}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">

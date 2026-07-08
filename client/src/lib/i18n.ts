@@ -78,6 +78,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.company-settings": "Configuración",
     "nav.microsip": "Microsip",
     "nav.tenants": "Gestionar Empresas",
+    "nav.empresas": "Empresas",
     // ── Sidebar footer ──
     "nav.working-in": "Trabajando en:",
     "nav.select-company": "Seleccionar empresa...",
@@ -2404,6 +2405,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.company-settings": "Settings",
     "nav.microsip": "Microsip",
     "nav.tenants": "Manage Companies",
+    "nav.empresas": "Brands",
     // ── Sidebar footer ──
     "nav.working-in": "Working in:",
     "nav.select-company": "Select company...",
@@ -4730,6 +4732,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.company-settings": "Configurações",
     "nav.microsip": "Microsip",
     "nav.tenants": "Gerenciar Empresas",
+    "nav.empresas": "Empresas",
     // ── Sidebar footer ──
     "nav.working-in": "Trabalhando em:",
     "nav.select-company": "Selecionar empresa...",

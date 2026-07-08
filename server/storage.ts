@@ -17,6 +17,10 @@ import {
   customerProductPrices,
   documents,
   incidents,
+  empresas,
+  UserRole,
+  type Empresa,
+  type InsertEmpresa,
   type User,
   type ScheduledVisit,
   type InsertUser,
@@ -72,6 +76,12 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+
+  // Empresas (marcas comerciales dentro de un tenant)
+  getEmpresa(id: string): Promise<Empresa | undefined>;
+  getAllEmpresas(): Promise<Empresa[]>;
+  createEmpresa(empresa: InsertEmpresa): Promise<Empresa>;
+  updateEmpresa(id: string, data: Partial<InsertEmpresa>): Promise<Empresa | undefined>;
 
   // Customers
   getCustomer(id: string): Promise<Customer | undefined>;
@@ -202,6 +212,26 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  // Empresas
+  async getEmpresa(id: string): Promise<Empresa | undefined> {
+    const [empresa] = await db.select().from(empresas).where(eq(empresas.id, id));
+    return empresa || undefined;
+  }
+
+  async getAllEmpresas(): Promise<Empresa[]> {
+    return await db.select().from(empresas).orderBy(empresas.name);
+  }
+
+  async createEmpresa(insertEmpresa: InsertEmpresa): Promise<Empresa> {
+    const [empresa] = await db.insert(empresas).values(insertEmpresa).returning();
+    return empresa;
+  }
+
+  async updateEmpresa(id: string, data: Partial<InsertEmpresa>): Promise<Empresa | undefined> {
+    const [empresa] = await db.update(empresas).set({ ...data, updatedAt: new Date() }).where(eq(empresas.id, id)).returning();
+    return empresa || undefined;
   }
 
   // Customers
@@ -606,33 +636,46 @@ import type { Request } from "express";
 interface TenantContext {
   tenantId: string | null;
   allowGlobal: boolean;
+  // Empresa scoping: a VENDEDOR bound to a single empresa only sees that empresa's
+  // commercial documents (quotations/orders/shipments). Global roles (admin, logística,
+  // crédito, fábrica, etc.) see every empresa within the tenant.
+  empresaId: string | null;
+  restrictToEmpresa: boolean;
 }
 
 function getTenantContext(req: Request): TenantContext {
   const user = req.user;
   const tenant = req.tenant;
-  
+
+  // A vendedor assigned to a specific empresa is restricted to it. SuperAdmins are never
+  // restricted so they can oversee the whole platform.
+  const empresaId = user?.empresaId ?? null;
+  const restrictToEmpresa =
+    !user?.isSuperAdmin && user?.role === UserRole.VENDEDOR && !!empresaId;
+
   // If on a subdomain, always use that tenant (ignore header)
   if (tenant?.id) {
-    return { tenantId: tenant.id, allowGlobal: false };
+    return { tenantId: tenant.id, allowGlobal: false, empresaId, restrictToEmpresa };
   }
-  
+
   // SuperAdmin on main domain (no subdomain)
   if (user?.isSuperAdmin) {
     // Check if SuperAdmin has selected a specific tenant via header
     const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
     if (selectedTenantId) {
       // SuperAdmin working in context of a specific tenant
-      return { tenantId: selectedTenantId, allowGlobal: false };
+      return { tenantId: selectedTenantId, allowGlobal: false, empresaId: null, restrictToEmpresa: false };
     }
     // SuperAdmin without selection - global access
-    return { tenantId: null, allowGlobal: true };
+    return { tenantId: null, allowGlobal: true, empresaId: null, restrictToEmpresa: false };
   }
-  
+
   // Regular users use their assigned tenantId
-  return { 
-    tenantId: user?.tenantId || null, 
-    allowGlobal: false 
+  return {
+    tenantId: user?.tenantId || null,
+    allowGlobal: false,
+    empresaId,
+    restrictToEmpresa,
   };
 }
 
@@ -668,6 +711,54 @@ export class TenantScopedStorage {
 
   isGlobalAccess(): boolean {
     return this.ctx.allowGlobal;
+  }
+
+  // The empresa this user is restricted to (only vendedores bound to an empresa).
+  getRestrictedEmpresaId(): string | null {
+    return this.ctx.restrictToEmpresa ? this.ctx.empresaId : null;
+  }
+
+  // Builds the "empresaId = X" filter for commercial documents when the current user
+  // is restricted to a single empresa. Returns undefined for global roles (see all).
+  private empresaFilter(table: any): any {
+    if (!this.ctx.restrictToEmpresa || !this.ctx.empresaId) {
+      return undefined;
+    }
+    return eq(table.empresaId, this.ctx.empresaId);
+  }
+
+  // ==================== EMPRESAS (tenant-scoped) ====================
+  async getAllEmpresas(): Promise<Empresa[]> {
+    if (this.ctx.allowGlobal) {
+      return this.base.getAllEmpresas();
+    }
+    if (!this.ctx.tenantId) return [];
+    return await db.select().from(empresas)
+      .where(eq(empresas.tenantId, this.ctx.tenantId))
+      .orderBy(empresas.name);
+  }
+
+  async getEmpresa(id: string): Promise<Empresa | undefined> {
+    const empresa = await this.base.getEmpresa(id);
+    if (!empresa) return undefined;
+    if (!this.ctx.allowGlobal && empresa.tenantId !== this.ctx.tenantId) return undefined;
+    return empresa;
+  }
+
+  async createEmpresa(data: InsertEmpresa): Promise<Empresa> {
+    const tenantId = this.ctx.tenantId;
+    if (!tenantId) {
+      throw new Error("No se puede crear una empresa sin contexto de tenant");
+    }
+    return this.base.createEmpresa({ ...data, tenantId });
+  }
+
+  async updateEmpresa(id: string, data: Partial<InsertEmpresa>): Promise<Empresa | undefined> {
+    const existing = await this.getEmpresa(id);
+    if (!existing) return undefined;
+    // Never allow moving an empresa to another tenant
+    const { tenantId: _ignore, ...rest } = data as any;
+    return this.base.updateEmpresa(id, rest);
   }
 
   // ==================== TENANT-AWARE METHODS ====================
@@ -736,6 +827,7 @@ export class TenantScopedStorage {
       return this.base.getAllQuotations();
     }
     if (!this.ctx.tenantId) return [];
+    const empresaCond = this.empresaFilter(quotations);
     const results = await db.select({
       quotation: quotations,
       customer: {
@@ -747,7 +839,9 @@ export class TenantScopedStorage {
     })
     .from(quotations)
     .leftJoin(customers, eq(quotations.customerId, customers.id))
-    .where(eq(quotations.tenantId, this.ctx.tenantId))
+    .where(empresaCond
+      ? and(eq(quotations.tenantId, this.ctx.tenantId), empresaCond)
+      : eq(quotations.tenantId, this.ctx.tenantId))
     .orderBy(desc(quotations.createdAt));
     
     return results.map(r => ({
@@ -757,7 +851,12 @@ export class TenantScopedStorage {
   }
 
   async createQuotation(data: InsertQuotation): Promise<Quotation> {
-    return this.base.createQuotation(this.withTenant(data));
+    // A vendedor bound to an empresa always stamps their empresa on the quotation.
+    // Global roles may pass empresaId explicitly (e.g. from the empresa picker).
+    const withEmpresa = this.ctx.restrictToEmpresa && this.ctx.empresaId
+      ? { ...data, empresaId: this.ctx.empresaId }
+      : data;
+    return this.base.createQuotation(this.withTenant(withEmpresa));
   }
 
   // Orders
@@ -776,8 +875,11 @@ export class TenantScopedStorage {
       });
     }
     if (!this.ctx.tenantId) return [];
+    const empresaCond = this.empresaFilter(orders);
     return await db.query.orders.findMany({
-      where: and(eq(orders.tenantId, this.ctx.tenantId), eq(orders.releaseStatus, "approved")),
+      where: empresaCond
+        ? and(eq(orders.tenantId, this.ctx.tenantId), eq(orders.releaseStatus, "approved"), empresaCond)
+        : and(eq(orders.tenantId, this.ctx.tenantId), eq(orders.releaseStatus, "approved")),
       with: {
         quotation: {
           with: {
@@ -790,7 +892,19 @@ export class TenantScopedStorage {
   }
 
   async createOrder(data: InsertOrder): Promise<Order> {
-    return this.base.createOrder(this.withTenant(data));
+    // Inheritance is an invariant: empresa always comes from the source quotation,
+    // never from client input. Any client-supplied empresaId is ignored.
+    // Use the scoped getQuotation so a restricted vendedor cannot create an order
+    // from a quotation outside their empresa/tenant.
+    let empresaId: string | null = null;
+    if (data.quotationId) {
+      const quotation = await this.getQuotation(data.quotationId);
+      if (!quotation) {
+        throw new Error("Cotización no encontrada o fuera de tu alcance");
+      }
+      empresaId = quotation.empresaId ?? null;
+    }
+    return this.base.createOrder(this.withTenant({ ...data, empresaId }));
   }
 
   // Shipments
@@ -812,8 +926,11 @@ export class TenantScopedStorage {
       });
     }
     if (!this.ctx.tenantId) return [];
+    const empresaCond = this.empresaFilter(shipments);
     return await db.query.shipments.findMany({
-      where: eq(shipments.tenantId, this.ctx.tenantId),
+      where: empresaCond
+        ? and(eq(shipments.tenantId, this.ctx.tenantId), empresaCond)
+        : eq(shipments.tenantId, this.ctx.tenantId),
       with: {
         order: {
           with: {
@@ -830,7 +947,19 @@ export class TenantScopedStorage {
   }
 
   async createShipment(data: InsertShipment): Promise<Shipment> {
-    return this.base.createShipment(this.withTenant(data));
+    // Inheritance is an invariant: empresa always comes from the source order,
+    // never from client input. Any client-supplied empresaId is ignored.
+    // Use the scoped getOrder so a restricted vendedor cannot create a shipment
+    // from an order outside their empresa/tenant.
+    let empresaId: string | null = null;
+    if (data.orderId) {
+      const order = await this.getOrder(data.orderId);
+      if (!order) {
+        throw new Error("Pedido no encontrado o fuera de tu alcance");
+      }
+      empresaId = order.empresaId ?? null;
+    }
+    return this.base.createShipment(this.withTenant({ ...data, empresaId }));
   }
 
   // Invoices
@@ -925,6 +1054,7 @@ export class TenantScopedStorage {
     const quotation = await this.base.getQuotation(id);
     if (!quotation) return undefined;
     if (!this.ctx.allowGlobal && quotation.tenantId !== this.ctx.tenantId) return undefined;
+    if (this.ctx.restrictToEmpresa && this.ctx.empresaId && quotation.empresaId !== this.ctx.empresaId) return undefined;
     return quotation;
   }
   async updateQuotation(id: string, data: Partial<InsertQuotation>) {
@@ -951,6 +1081,7 @@ export class TenantScopedStorage {
     const order = await this.base.getOrder(id);
     if (!order) return undefined;
     if (!this.ctx.allowGlobal && order.tenantId !== this.ctx.tenantId) return undefined;
+    if (this.ctx.restrictToEmpresa && this.ctx.empresaId && order.empresaId !== this.ctx.empresaId) return undefined;
     return order;
   }
   async updateOrder(id: string, data: Partial<InsertOrder>) {
@@ -970,6 +1101,7 @@ export class TenantScopedStorage {
     const shipment = await this.base.getShipment(id);
     if (!shipment) return undefined;
     if (!this.ctx.allowGlobal && shipment.tenantId !== this.ctx.tenantId) return undefined;
+    if (this.ctx.restrictToEmpresa && this.ctx.empresaId && shipment.empresaId !== this.ctx.empresaId) return undefined;
     return shipment;
   }
   async updateShipment(id: string, data: Partial<InsertShipment>) {

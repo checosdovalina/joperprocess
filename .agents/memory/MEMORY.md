@@ -6,3 +6,4 @@
 - [drizzle-kit push needs a TTY](drizzle-push-tty.md) — new-table create/rename prompt stalls under pipe/--force; create the table with executeSql instead.
 - [node-firebird concurrent attach race](node-firebird-attach-race.md) — overlapping Firebird.attach() throws false "user name and password not defined"; serialize all attaches process-wide.
 - [Document/blob upload binding](document-upload-binding.md) — bind issued upload entityId to requesting user (in-memory map) + stream-enforce size limit; tenant scoping alone doesn't stop cross-tenant object hijack.
+- [Empresa + tenant isolation](empresa-tenant-isolation.md) — by-id raw lookups must check BOTH empresa (getRestrictedEmpresaId) and tenant (getEffectiveTenantId); empresa scoping alone leaves the pre-existing cross-tenant IDOR open.

@@ -135,6 +135,7 @@ export function setupAuth(app: Express) {
           UserRole.FACTURACION,
         ]),
         active: z.boolean().optional(),
+        empresaId: z.string().nullable().optional(),
       });
 
       const validationResult = registerSchema.safeParse(req.body);
@@ -183,6 +184,7 @@ export function setupAuth(app: Express) {
         role: userData.role,
         active: userData.active ?? true,
         tenantId: tenantId,
+        empresaId: userData.empresaId ?? null,
       });
 
       // RACE CONDITION PROTECTION:

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
-import { Order, Quotation, Customer, QuotationItem, Product, OrderStatus, InsertOrder } from "@shared/schema";
+import { Order, Quotation, Customer, QuotationItem, Product, OrderStatus, InsertOrder, type Empresa } from "@shared/schema";
 
 import {
   Table,
@@ -79,6 +79,7 @@ export default function OrdersPage() {
   const [isEditingProduction, setIsEditingProduction] = useState(false);
   const [hideDelivered, setHideDelivered] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -91,6 +92,7 @@ export default function OrdersPage() {
   >("/api/orders");
 
   const { data: quotations } = useEntityQuery<Quotation[]>("/api/quotations");
+  const { data: empresas } = useQuery<Empresa[]>({ queryKey: ["/api/empresas"] });
 
   const { data: orderDetails, isLoading: isLoadingDetails } = useQuery<OrderDetails>({
     queryKey: ["/api/orders", selectedOrderId, "details"],
@@ -411,6 +413,19 @@ export default function OrdersPage() {
                   data-testid="input-search-orders"
                 />
               </div>
+              {empresas && empresas.length > 0 && (
+                <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
+                  <SelectTrigger className="w-full sm:w-[160px]">
+                    <SelectValue placeholder="Empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las empresas</SelectItem>
+                    {empresas.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {(orders?.filter(o => o.status === OrderStatus.SHIPPED || o.status === OrderStatus.DELIVERED).length ?? 0) > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
                   {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />{t("btn.show-shipped")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("btn.hide-shipped")}</>}
@@ -441,6 +456,7 @@ export default function OrdersPage() {
                 </TableHeader>
                 <TableBody>
                   {(hideDelivered ? orders.filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED && o.status !== OrderStatus.CLOSED && o.status !== OrderStatus.CANCELLED) : orders)
+                    .filter((o) => filterEmpresa === "all" || o.empresaId === filterEmpresa)
                     .filter((o) => {
                       const q = searchTerm.trim().toLowerCase();
                       if (!q) return true;
@@ -452,6 +468,11 @@ export default function OrdersPage() {
                     <TableRow key={order.id} className="hover-elevate" data-testid={`row-order-${order.id}`}>
                       <TableCell>
                         <div className="font-mono font-medium">{order.quotation.folio}</div>
+                        {order.empresaId && empresas && empresas.length > 0 && (
+                          <Badge variant="secondary" className="mt-1" data-testid={`badge-empresa-${order.id}`}>
+                            {empresas.find(e => e.id === order.empresaId)?.name ?? ""}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
