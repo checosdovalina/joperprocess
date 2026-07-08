@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
-import { Order, Quotation, Customer, QuotationItem, Product, OrderStatus } from "@shared/schema";
+import { Order, Quotation, Customer, QuotationItem, Product, OrderStatus, type Empresa } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -35,6 +35,13 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface OrderRelease {
   id: string;
@@ -68,6 +75,7 @@ export default function ProductionPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [hideDelivered, setHideDelivered] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -76,6 +84,10 @@ export default function ProductionPage() {
   const { data: orders, isLoading } = useQuery<OrderWithQuotation[]>({
     queryKey: ["/api/orders"],
   });
+
+  const { data: empresas } = useQuery<Empresa[]>({ queryKey: ["/api/empresas"] });
+  const empresaName = (id: string | null | undefined) =>
+    (id && empresas?.find(e => e.id === id)?.name) || "";
 
   const { data: orderDetails, isLoading: isLoadingDetails } = useQuery<OrderDetails>({
     queryKey: ["/api/orders", selectedOrderId, "details"],
@@ -216,6 +228,9 @@ export default function ProductionPage() {
         || norm(order.quotation?.customer?.name || "").includes(q)
       );
     }
+    if (filterEmpresa !== "all") {
+      ordersList = ordersList.filter((order) => order.empresaId === filterEmpresa);
+    }
     if (ordersList.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -239,7 +254,16 @@ export default function ProductionPage() {
         <TableBody>
           {ordersList.map((order) => (
             <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
-              <TableCell className="font-medium">{order.quotation.folio}</TableCell>
+              <TableCell className="font-medium">
+                <div className="flex flex-col gap-1">
+                  <span>{order.quotation.folio}</span>
+                  {order.empresaId && empresaName(order.empresaId) && (
+                    <Badge variant="secondary" className="w-fit" data-testid={`badge-empresa-${order.id}`}>
+                      {empresaName(order.empresaId)}
+                    </Badge>
+                  )}
+                </div>
+              </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {format(new Date(order.createdAt), "dd/MM/yyyy", { locale: es })}
               </TableCell>
@@ -367,15 +391,30 @@ export default function ProductionPage() {
         </Card>
       </div>
 
-      <div className="relative w-full sm:w-72">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder={t("search.folio-client")}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-8"
-          data-testid="input-search-production"
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t("search.folio-client")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+            data-testid="input-search-production"
+          />
+        </div>
+        {empresas && empresas.length > 0 && (
+          <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
+            <SelectTrigger className="w-full sm:w-56">
+              <SelectValue placeholder="Empresa" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las empresas</SelectItem>
+              {empresas.map(e => (
+                <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Tabs defaultValue="pending" className="w-full">

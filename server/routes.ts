@@ -1127,7 +1127,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const validated = updateSchema.parse(req.body);
-      
+
+      // Enforce tenant ownership of the target user (prevent cross-tenant IDOR).
+      const effectiveTenantId = getEffectiveTenantId(req);
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Non-superadmin admins (or superadmin on a subdomain) may only edit users
+      // within their own tenant. SuperAdmin on the main domain (effectiveTenantId
+      // null) may edit any user.
+      if (effectiveTenantId && targetUser.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // If an empresa is assigned, it must belong to the same tenant as the user.
+      if (validated.empresaId) {
+        const scopedStorage = createTenantScopedStorage(req);
+        const empresa = await scopedStorage.getEmpresa(validated.empresaId);
+        if (!empresa || (targetUser.tenantId && empresa.tenantId !== targetUser.tenantId)) {
+          return res.status(400).json({ error: "Empresa inválida para este tenant" });
+        }
+      }
+
       // Hash new password if provided
       let updateData: Omit<typeof validated, 'password'> & { password?: string } = { ...validated };
       if (validated.password) {
