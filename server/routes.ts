@@ -130,6 +130,62 @@ function requireTenantId(req: Request): string {
   return req.user.tenantId;
 }
 
+// Options for the shared by-ID isolation guard (assertTenantScope).
+interface TenantScopeOptions {
+  // Message returned on 404 (record missing, or belongs to another tenant).
+  notFoundMessage?: string;
+  // Message returned on 403 (record belongs to another empresa). Defaults to notFoundMessage.
+  forbiddenMessage?: string;
+  // JSON key for the message ("error" by default; a few endpoints use "message").
+  messageKey?: "error" | "message";
+  // When true, also enforce empresa (marca comercial) isolation via getRestrictedEmpresaId().
+  // Only enable for records that carry an empresaId column (quotations/orders/shipments);
+  // leaving it off preserves behavior for tenant-only records (products, invoices, users…).
+  checkEmpresa?: boolean;
+}
+
+// Reusable tenant + empresa isolation guard for by-ID handlers. Fetch the record by raw ID,
+// then call this to verify it belongs to the caller's effective tenant AND (for empresa-scoped
+// documents) the caller's restricted empresa. It writes the appropriate 404/403 response and
+// returns false when the record is out of scope, so the safe path is a single line:
+//     if (!assertTenantScope(req, res, record, { notFoundMessage: "..." })) return;
+// This keeps the guard the default and makes a forgotten guard on a new endpoint obvious in review.
+// See .agents/memory/empresa-tenant-isolation.md for the two-axis isolation rules.
+function assertTenantScope<T extends { tenantId?: string | null; empresaId?: string | null }>(
+  req: Request,
+  res: Response,
+  record: T | null | undefined,
+  options: TenantScopeOptions = {},
+): record is T {
+  const key = options.messageKey ?? "error";
+  const notFoundMessage = options.notFoundMessage ?? "Not found";
+  const forbiddenMessage = options.forbiddenMessage ?? notFoundMessage;
+
+  if (!record) {
+    res.status(404).json({ [key]: notFoundMessage });
+    return false;
+  }
+
+  // Tenant axis: 404 (never reveal existence of another tenant's record). The guard only
+  // fires when effectiveTenantId is non-null, so superadmin-global access still works.
+  const effectiveTenantId = getEffectiveTenantId(req);
+  if (effectiveTenantId && record.tenantId !== effectiveTenantId) {
+    res.status(404).json({ [key]: notFoundMessage });
+    return false;
+  }
+
+  // Empresa axis: 403 for a restricted vendedor reaching another empresa's document.
+  if (options.checkEmpresa) {
+    const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+    if (restrictedEmpresaId && record.empresaId !== restrictedEmpresaId) {
+      res.status(403).json({ [key]: forbiddenMessage });
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // Company hierarchy (Opción B): a company ADMIN may "switch into" a descendant company
 // via the X-Selected-Tenant-Id header. This middleware validates the selected company is a
 // descendant of the admin's own company and, if so, OVERWRITES req.tenant with that child's
@@ -1129,16 +1185,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validated = updateSchema.parse(req.body);
 
       // Enforce tenant ownership of the target user (prevent cross-tenant IDOR).
-      const effectiveTenantId = getEffectiveTenantId(req);
+      // Non-superadmin admins (or superadmin on a subdomain) may only edit users within
+      // their own tenant. SuperAdmin on the main domain (null effective tenant) may edit any user.
       const targetUser = await storage.getUser(id);
-      if (!targetUser) {
-        return res.status(404).json({ error: "User not found" });
-      }
-      // Non-superadmin admins (or superadmin on a subdomain) may only edit users
-      // within their own tenant. SuperAdmin on the main domain (effectiveTenantId
-      // null) may edit any user.
-      if (effectiveTenantId && targetUser.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "User not found" });
+      if (!assertTenantScope(req, res, targetUser, { notFoundMessage: "User not found" })) {
+        return;
       }
 
       // If an empresa is assigned, it must belong to the same tenant as the user.
@@ -1674,14 +1725,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      if (!visit) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
-      }
-
       // Tenant isolation: never expose a visit from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
+      if (!assertTenantScope(req, res, visit, { notFoundMessage: "Scheduled visit not found" })) {
+        return;
       }
 
       res.json(visit);
@@ -1739,14 +1785,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(scheduledVisits.id, id),
       });
 
-      if (!visit) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
-      }
-
       // Tenant isolation: never mutate a visit from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
+      if (!assertTenantScope(req, res, visit, { notFoundMessage: "Scheduled visit not found" })) {
+        return;
       }
 
       // Only owner or admin can update
@@ -1778,14 +1819,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(scheduledVisits.id, id),
       });
 
-      if (!visit) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
-      }
-
       // Tenant isolation: never mutate a visit from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
+      if (!assertTenantScope(req, res, visit, { notFoundMessage: "Scheduled visit not found" })) {
+        return;
       }
 
       // Only owner or admin can delete
@@ -1821,14 +1857,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(scheduledVisits.id, id),
       });
 
-      if (!visit) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
-      }
-
       // Tenant isolation: never convert a visit from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Scheduled visit not found" });
+      if (!assertTenantScope(req, res, visit, { notFoundMessage: "Scheduled visit not found" })) {
+        return;
       }
 
       // Only owner can convert
@@ -1983,14 +2014,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
       
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-
       // Tenant isolation: never expose a product from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && product.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Product not found" });
+      if (!assertTenantScope(req, res, product, { notFoundMessage: "Product not found" })) {
+        return;
       }
       
       res.json(product);
@@ -2276,26 +2302,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         with: { customer: true, user: true },
       });
 
-      if (!quotation) {
-        return res.status(404).json({ error: "Quotation not found" });
-      }
-
-      // Tenant isolation: never expose a record from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && quotation.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Quotation not found" });
+      // Tenant + empresa isolation: never expose another tenant's/empresa's record by direct ID.
+      if (!assertTenantScope(req, res, quotation, {
+        notFoundMessage: "Quotation not found",
+        forbiddenMessage: "No autorizado para acceder a esta cotización",
+        checkEmpresa: true,
+      })) {
+        return;
       }
 
       // Authorization check: user must own the quotation or have authorized role
       // Vendedores can view all quotations for sales follow-up purposes
       const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
-        return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
-      }
-
-      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
-      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
-      if (restrictedEmpresaId && quotation.empresaId !== restrictedEmpresaId) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
 
@@ -2323,21 +2342,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(quotations.id, id),
       });
 
-      if (!existingQuotation) {
-        return res.status(404).json({ error: "Quotation not found" });
-      }
-
-      // Empresa isolation: a vendedor bound to an empresa cannot edit a quotation
-      // that belongs to another empresa.
-      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
-      if (restrictedEmpresaId && existingQuotation.empresaId !== restrictedEmpresaId) {
-        return res.status(403).json({ error: "No autorizado para editar esta cotización" });
-      }
-
-      // Tenant isolation: never mutate a record from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && existingQuotation.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Quotation not found" });
+      // Tenant + empresa isolation: never mutate another tenant's/empresa's record by direct ID.
+      if (!assertTenantScope(req, res, existingQuotation, {
+        notFoundMessage: "Quotation not found",
+        forbiddenMessage: "No autorizado para editar esta cotización",
+        checkEmpresa: true,
+      })) {
+        return;
       }
 
       // Authorization check
@@ -2553,25 +2564,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         with: { customer: true, user: true },
       });
 
-      if (!quotation) {
-        return res.status(404).json({ error: "Quotation not found" });
-      }
-
-      // Tenant isolation: never expose a record from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && quotation.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Quotation not found" });
+      // Tenant + empresa isolation: never expose another tenant's/empresa's record by direct ID.
+      if (!assertTenantScope(req, res, quotation, {
+        notFoundMessage: "Quotation not found",
+        forbiddenMessage: "No autorizado para acceder a esta cotización",
+        checkEmpresa: true,
+      })) {
+        return;
       }
 
       // Authorization check: user must own the quotation or be admin/credit/sales role
       const allowedRoles = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
-        return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
-      }
-
-      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
-      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
-      if (restrictedEmpresaId && quotation.empresaId !== restrictedEmpresaId) {
         return res.status(403).json({ error: "No autorizado para acceder a esta cotización" });
       }
 
@@ -2619,25 +2623,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         with: { customer: true, user: true },
       });
 
-      if (!quotation) {
-        return res.status(404).json({ error: "Quotation not found" });
-      }
-
-      // Tenant isolation: never expose a record from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && quotation.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Quotation not found" });
+      // Tenant + empresa isolation: never expose another tenant's/empresa's record by direct ID.
+      if (!assertTenantScope(req, res, quotation, {
+        notFoundMessage: "Quotation not found",
+        forbiddenMessage: "No autorizado para enviar esta cotización",
+        checkEmpresa: true,
+      })) {
+        return;
       }
 
       // Authorization check: user must own the quotation or be admin
       const allowedRoles = [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA];
       if (quotation.userId !== userId && !allowedRoles.includes(userRole as any)) {
-        return res.status(403).json({ error: "No autorizado para enviar esta cotización" });
-      }
-
-      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
-      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
-      if (restrictedEmpresaId && quotation.empresaId !== restrictedEmpresaId) {
         return res.status(403).json({ error: "No autorizado para enviar esta cotización" });
       }
 
@@ -4252,24 +4249,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         },
       });
 
-      if (!order) {
-        return res.status(404).json({ error: "Order not found" });
-      }
-
-      // Tenant isolation: never expose a record from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && order.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Order not found" });
-      }
-
-      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
-      const scopedStorage = createTenantScopedStorage(req);
-      const restrictedEmpresaId = scopedStorage.getRestrictedEmpresaId();
-      if (restrictedEmpresaId && order.empresaId !== restrictedEmpresaId) {
-        return res.status(403).json({ error: "No autorizado para acceder a este pedido" });
+      // Tenant + empresa isolation: never expose another tenant's/empresa's order by direct ID.
+      if (!assertTenantScope(req, res, order, {
+        notFoundMessage: "Order not found",
+        forbiddenMessage: "No autorizado para acceder a este pedido",
+        checkEmpresa: true,
+      })) {
+        return;
       }
 
       // Get all releases for this order
+      const scopedStorage = createTenantScopedStorage(req);
       const releases = await scopedStorage.getOrderReleases(id);
 
       res.json({ ...order, releases });
@@ -5173,17 +5163,13 @@ Proporciona tu análisis en el siguiente formato JSON:
           productInstances: { with: { product: true } },
         },
       });
-      if (!shipment) return res.status(404).json({ error: "Embarque no encontrado" });
-
-      // Tenant isolation: never expose a record from another tenant, even by direct ID.
-      if (tenantId && shipment.tenantId !== tenantId) {
-        return res.status(404).json({ error: "Embarque no encontrado" });
-      }
-
-      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
-      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
-      if (restrictedEmpresaId && shipment.empresaId !== restrictedEmpresaId) {
-        return res.status(403).json({ error: "No autorizado para acceder a este embarque" });
+      // Tenant + empresa isolation: never expose another tenant's/empresa's shipment by direct ID.
+      if (!assertTenantScope(req, res, shipment, {
+        notFoundMessage: "Embarque no encontrado",
+        forbiddenMessage: "No autorizado para acceder a este embarque",
+        checkEmpresa: true,
+      })) {
+        return;
       }
 
       // Load order → quotation → items → customer
@@ -5442,14 +5428,9 @@ Proporciona tu análisis en el siguiente formato JSON:
         with: { customer: true, order: true },
       });
 
-      if (!invoice) {
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-
       // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Invoice not found" });
+      if (!assertTenantScope(req, res, invoice, { notFoundMessage: "Invoice not found" })) {
+        return;
       }
 
       res.json(invoice);
@@ -5468,14 +5449,9 @@ Proporciona tu análisis en el siguiente formato JSON:
         with: { customer: true, order: true },
       });
 
-      if (!invoice) {
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-
       // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Invoice not found" });
+      if (!assertTenantScope(req, res, invoice, { notFoundMessage: "Invoice not found" })) {
+        return;
       }
 
       const tenantForPdf = invoice.tenantId
@@ -5504,14 +5480,9 @@ Proporciona tu análisis en el siguiente formato JSON:
         with: { customer: true },
       });
 
-      if (!invoice) {
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-
       // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Invoice not found" });
+      if (!assertTenantScope(req, res, invoice, { notFoundMessage: "Invoice not found" })) {
+        return;
       }
 
       if (!invoice.customer.email) {
@@ -6132,14 +6103,9 @@ Proporciona tu análisis en el siguiente formato JSON:
         },
       });
       
-      if (!invoice) {
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-
       // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
-      const effectiveTenantId = getEffectiveTenantId(req);
-      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
-        return res.status(404).json({ error: "Invoice not found" });
+      if (!assertTenantScope(req, res, invoice, { notFoundMessage: "Invoice not found" })) {
+        return;
       }
       
       res.json(invoice);

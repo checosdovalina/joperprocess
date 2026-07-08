@@ -23,6 +23,19 @@ predicate) leaks across BOTH axes:
 another TENANT's record by guessing a UUID. Adding empresa checks to these endpoints does
 NOT fix the pre-existing tenant IDOR — you must add the tenant guard too.
 
+## Reusable guard: assertTenantScope (server/routes.ts)
+The two-axis by-id guard is now consolidated in one helper near `getEffectiveTenantId`:
+`assertTenantScope(req, res, record, { notFoundMessage, forbiddenMessage?, messageKey?, checkEmpresa? })`.
+It fetches-nothing (you pass the already-fetched record), returns a type-guard boolean, and
+writes the 404 (missing/other-tenant) or 403 (other-empresa) response itself, so the safe path
+is one line: `if (!assertTenantScope(req, res, rec, {...})) return;`. Empresa axis is OPT-IN via
+`checkEmpresa: true` (only for records with an empresaId column — quotations/orders/shipments);
+tenant-only records (products/invoices/users/scheduledVisits) omit it. New by-id endpoints MUST
+use this instead of hand-writing the inline `if (tenantId && rec.tenantId !== ...)` block.
+**Watch-out:** the helper always checks tenant(404) BEFORE empresa(403). The old quotation PATCH
+checked empresa first, so a cross-tenant+restricted request now returns 404 instead of 403
+(strictly safer, both deny). List-shaped/pipeline endpoints still post-filter and do NOT use this.
+
 ## How to apply
 - Prefer scoped storage getters (`TenantScopedStorage.getQuotation/getOrder/getShipment`)
   which enforce tenant AND empresa (return undefined on mismatch). Use them in
