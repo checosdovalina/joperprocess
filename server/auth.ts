@@ -286,7 +286,7 @@ export function setupAuth(app: Express) {
                 subdomain,
                 email: contactEmail,
                 phone,
-                active: true,
+                active: false,
               })
               .returning();
 
@@ -329,16 +329,18 @@ export function setupAuth(app: Express) {
         portalUrl,
         username,
         password: generatedPassword,
+        pendingApproval: true,
       }).catch((err) => {
         console.error("Failed to send company welcome email:", err);
       });
 
       res.status(201).json({
-        message: "Empresa registrada exitosamente",
+        message: "Empresa registrada. Está en revisión y será activada por Nexxo.",
         companyName,
         subdomain,
         portalUrl,
         emailSentTo: contactEmail,
+        pendingApproval: true,
       });
     } catch (error: any) {
       if (error?.code === "23505") {

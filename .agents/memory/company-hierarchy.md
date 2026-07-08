@@ -33,6 +33,12 @@ flat (no subdomain nesting).
   switcher). The old admin POST `/api/companies` was removed.
 - **Why:** users wanted structural changes locked to a trusted platform role to
   avoid accidental misconfiguration by day-to-day admins.
+- Public self-registration (`POST /api/register-company`) is KEPT but creates the
+  tenant `active:false` (pending approval); the superadmin activates it from the
+  `/tenants` panel (one-click "Activar" = PATCH `{active:true}`). Inactive tenants
+  are fully blocked by tenantMiddleware (403) so a pending company cannot operate
+  until approved. Credentials are still emailed at registration (plaintext
+  password only exists then); the welcome email has a `pendingApproval` mode.
 
 ## How to apply / watch out for
 - Any handler that reads tenant from `req.user.tenantId` (instead of

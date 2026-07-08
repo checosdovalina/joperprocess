@@ -90,6 +90,20 @@ export default function TenantsPage() {
     },
   });
 
+  const activateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("PATCH", `/api/tenants/${id}`, { active: true });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tenants"] });
+      toast({ title: t("tenants.activated") });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("tenants.update-error"), description: error.message, variant: "destructive" });
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -444,6 +458,17 @@ export default function TenantsPage() {
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
+                {!tenant.active && (
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => activateMutation.mutate(tenant.id)}
+                    disabled={activateMutation.isPending}
+                    data-testid={`button-activate-tenant-${tenant.id}`}
+                  >
+                    {t("tenants.activate")}
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   size="sm" 

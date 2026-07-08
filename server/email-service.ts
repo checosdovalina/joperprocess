@@ -623,6 +623,7 @@ interface SendCompanyWelcomeEmailParams {
   portalUrl: string;
   username: string;
   password: string;
+  pendingApproval?: boolean;
 }
 
 export async function sendCompanyWelcomeEmail({
@@ -631,9 +632,28 @@ export async function sendCompanyWelcomeEmail({
   portalUrl,
   username,
   password,
+  pendingApproval = false,
 }: SendCompanyWelcomeEmailParams): Promise<void> {
   try {
-    const subject = `Bienvenido a Nexxo - Tu portal de ${companyName} está listo`;
+    const subject = pendingApproval
+      ? `Recibimos el registro de ${companyName} en Nexxo`
+      : `Bienvenido a Nexxo - Tu portal de ${companyName} está listo`;
+
+    const introHtml = pendingApproval
+      ? `<p>Recibimos el registro del portal comercial de <strong>${companyName}</strong>. Tu solicitud está <strong>en revisión</strong>. Te avisaremos en cuanto el equipo de Nexxo active tu portal.</p>`
+      : `<p>El portal comercial de <strong>${companyName}</strong> ha sido creado exitosamente. Ya puedes acceder a tu plataforma personalizada de Nexxo.</p>`;
+
+    const buttonHtml = pendingApproval
+      ? ``
+      : `<div class="button-container"><a href="${portalUrl}" class="button">Acceder a mi portal</a></div>`;
+
+    const credsIntroHtml = pendingApproval
+      ? `<p>Guarda estos datos de acceso. Podrás iniciar sesión una vez que tu portal sea activado:</p>`
+      : `<p>Estos son tus datos de acceso de administrador:</p>`;
+
+    const warningHtml = pendingApproval
+      ? `<div class="warning">Tu portal aún no está activo. Recibirás acceso en cuanto Nexxo apruebe tu registro.</div>`
+      : `<div class="warning">Por seguridad, te recomendamos cambiar tu contraseña después de iniciar sesión por primera vez.</div>`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -743,13 +763,11 @@ export async function sendCompanyWelcomeEmail({
             <div class="content">
               <p>Hola,</p>
 
-              <p>El portal comercial de <strong>${companyName}</strong> ha sido creado exitosamente. Ya puedes acceder a tu plataforma personalizada de Nexxo.</p>
+              ${introHtml}
 
-              <div class="button-container">
-                <a href="${portalUrl}" class="button">Acceder a mi portal</a>
-              </div>
+              ${buttonHtml}
 
-              <p>Estos son tus datos de acceso de administrador:</p>
+              ${credsIntroHtml}
 
               <div class="credentials">
                 <p><span class="label">Dirección del portal</span><br>
@@ -760,14 +778,12 @@ export async function sendCompanyWelcomeEmail({
                 <span class="value">${password}</span></p>
               </div>
 
-              <div class="warning">
-                ⚠️ Por seguridad, te recomendamos cambiar tu contraseña después de iniciar sesión por primera vez.
-              </div>
+              ${warningHtml}
 
-              <p class="link-text">
+              ${pendingApproval ? `` : `<p class="link-text">
                 Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
                 ${portalUrl}
-              </p>
+              </p>`}
             </div>
 
             <div class="footer">

@@ -141,6 +141,13 @@ export default function CompanyRegistrationPage() {
                   </p>
                 </div>
 
+                <div className="rounded-md border p-4" data-testid="box-pending-approval">
+                  <p className="text-sm font-medium">{t("registration.pending-title")}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {t("registration.pending-desc")}
+                  </p>
+                </div>
+
                 <p className="text-sm text-muted-foreground">
                   {t("registration.spam-hint")}
                 </p>
