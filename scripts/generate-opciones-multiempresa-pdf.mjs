@@ -26,7 +26,7 @@ const requerimientos = [
   "Autorizaciones (Administrador): ve las dos empresas juntas.",
   "Crédito y Cobranza (Eunice): ve las dos, con saldo consolidado por cliente.",
   "Compras: ve todo.",
-  "Folios de cotización con consecutivo distinto por empresa (Móvil con su prefijo, ej. MEX-0001).",
+  "Folios de cotización con prefijo según el cliente: MEX para México y EXT para extranjero. Ambas empresas comparten el mismo prefijo; lo importante es que los folios nunca se dupliquen entre empresas.",
   "Clientes y productos compartidos: provienen de la misma base de Microsip.",
 ];
 
@@ -48,6 +48,7 @@ const opciones = [
       "Identidad compartida: el administrador y Eunice necesitarían una cuenta que funcione en ambos, con las autorizaciones guardándose en el sistema correcto.",
       "Doble operación en el servidor: dos apps, dos bases, dos despliegues, dos migraciones. Más superficie que puede fallar.",
       "La API es un componente nuevo completo que hay que diseñar, asegurar y mantener; suele ser más trabajo que agregar una etiqueta de empresa.",
+      "Folios duplicados: como ambas empresas usan el mismo prefijo (MEX/EXT), cada sistema generaría su propia numeración y los folios se repetirían entre empresas.",
     ],
     cuando: "Conviene solo si fueran negocios realmente distintos, con equipos y procesos separados, y lo compartido fuera únicamente reportes ocasionales de lectura.",
   },
@@ -61,6 +62,7 @@ const opciones = [
       "Lo compartido ya está junto por default: producción, autorizaciones, crédito y compras ven ambas sin trabajo extra.",
       "Saldo consolidado del cliente inmediato, porque todo vive en la misma base.",
       "Una sola sincronización de Microsip, sin datos duplicados.",
+      "Los folios se generan en un solo lugar, así que nunca se duplican aunque ambas empresas compartan el mismo prefijo (MEX/EXT).",
       "Una sola aplicación que mantener y desplegar.",
     ],
     cons: [
@@ -90,7 +92,7 @@ const opciones = [
 // Fases del alcance (h = horas estimadas de desarrollo, aproximadas)
 const fases = [
   { t: "Base de datos y migración: agregar la empresa a las tablas, asignar empresa a cada usuario y marcar todo lo existente como 'Ligero'.", h: 12 },
-  { t: "Folios de cotización separados por empresa, con prefijo configurable (ej. MEX para Móvil).", h: 7 },
+  { t: "Folios de cotización: conservar el prefijo por tipo de cliente (MEX/EXT) y garantizar numeración única para que nunca se dupliquen entre las dos empresas.", h: 4 },
   { t: "Backend: filtrar la información por empresa según el rol y marcar la empresa al crear cada cotización.", h: 14 },
   { t: "Pantallas y tableros: producción con un tablero por empresa, listas de cotizaciones filtradas, indicador de empresa y vista combinada para los roles globales.", h: 20 },
   { t: "Subdominios con imagen propia por marca (logo y colores).", h: 7 },
@@ -101,7 +103,7 @@ const preguntas = [
   "Para los roles compartidos (Administrador, Eunice, Compras): ¿un solo login que muestre ambas empresas, o subdominios por marca?",
   "La separación por empresa, ¿aplica solo a cotizaciones o también a pedidos, embarques y producción?",
   "¿Un vendedor puede pertenecer a las dos empresas o siempre a una sola?",
-  "¿Cuál es el formato exacto del folio de Móvil y Ligero conserva su numeración actual tal cual?",
+  "Sobre el folio: ¿se conserva el esquema actual (prefijo MEX para México / EXT para extranjero con número único), o se desea un consecutivo corrido (0001, 0002, …)?",
 ];
 
 const fmtH = (h) => (Number.isInteger(h) ? `${h}` : h.toFixed(1));
