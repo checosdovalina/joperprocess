@@ -81,6 +81,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.empresas": "Empresas",
     "nav.companies": "Compañías",
     "nav.company": "Compañía",
+    "tenants.field.parent": "Compañía padre",
+    "tenants.parent.none": "Ninguna (compañía principal)",
+    "tenants.parent.help": "Si eliges una, esta compañía será hija de la seleccionada y su administrador podrá operarla.",
     // ── Sidebar footer ──
     "nav.working-in": "Trabajando en:",
     "nav.select-company": "Seleccionar empresa...",
@@ -2410,6 +2413,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.empresas": "Brands",
     "nav.companies": "Companies",
     "nav.company": "Company",
+    "tenants.field.parent": "Parent company",
+    "tenants.parent.none": "None (top-level company)",
+    "tenants.parent.help": "If set, this company becomes a child of the selected one and its admin can operate it.",
     // ── Sidebar footer ──
     "nav.working-in": "Working in:",
     "nav.select-company": "Select company...",
@@ -4739,6 +4745,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.empresas": "Empresas",
     "nav.companies": "Empresas (Compañías)",
     "nav.company": "Compañía",
+    "tenants.field.parent": "Empresa matriz",
+    "tenants.parent.none": "Nenhuma (empresa principal)",
+    "tenants.parent.help": "Se definida, esta empresa será filha da selecionada e seu administrador poderá operá-la.",
     // ── Sidebar footer ──
     "nav.working-in": "Trabalhando em:",
     "nav.select-company": "Selecionar empresa...",

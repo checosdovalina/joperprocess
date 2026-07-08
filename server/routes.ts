@@ -455,7 +455,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const [newTenant] = await db.insert(tenants).values(validationResult.data).returning();
+      // Optional parent company (compañía padre). insertTenantSchema omits parentId,
+      // so it is validated separately here. Only superadmins reach this point.
+      const parentId = typeof req.body?.parentId === "string" && req.body.parentId.trim()
+        ? req.body.parentId.trim()
+        : null;
+      if (parentId) {
+        const parent = await getTenantById(parentId);
+        if (!parent) {
+          return res.status(400).json({ error: "La compañía padre seleccionada no existe" });
+        }
+      }
+
+      const [newTenant] = await db.insert(tenants).values({ ...validationResult.data, parentId }).returning();
       res.status(201).json(newTenant);
     } catch (error: any) {
       if (error.code === '23505') {
@@ -489,9 +501,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Optional parent company change (compañía padre). Guard against self-parenting
+      // and cycles (a company cannot be a child of one of its own descendants).
+      let parentUpdate: { parentId?: string | null } = {};
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, "parentId")) {
+        const parentId = typeof req.body.parentId === "string" && req.body.parentId.trim()
+          ? req.body.parentId.trim()
+          : null;
+        if (parentId) {
+          if (parentId === id) {
+            return res.status(400).json({ error: "Una compañía no puede ser su propia compañía padre" });
+          }
+          const parent = await getTenantById(parentId);
+          if (!parent) {
+            return res.status(400).json({ error: "La compañía padre seleccionada no existe" });
+          }
+          const descendants = await getAccessibleTenantIds(id); // includes id + all descendants
+          if (descendants.includes(parentId)) {
+            return res.status(400).json({ error: "No puedes asignar como padre a una de sus propias compañías hijas" });
+          }
+        }
+        parentUpdate = { parentId };
+      }
+
       const [updatedTenant] = await db
         .update(tenants)
-        .set({ ...validationResult.data, updatedAt: new Date() })
+        .set({ ...validationResult.data, ...parentUpdate, updatedAt: new Date() })
         .where(eq(tenants.id, id))
         .returning();
       
@@ -541,36 +576,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create a child company under the admin's own company. parentId is FORCED server-side
-  // to the admin's home company — it can never be set by the client.
-  app.post("/api/companies", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
-    try {
-      const homeTenantId = req.user!.tenantId;
-      if (!homeTenantId) {
-        return res.status(400).json({ error: "Usuario sin compañía asignada" });
-      }
-      // Strip any client-supplied parentId; validate the rest with the tenant insert schema.
-      const { parentId: _ignored, ...body } = req.body ?? {};
-      const validationResult = insertTenantSchema.safeParse(body);
-      if (!validationResult.success) {
-        return res.status(400).json({
-          error: "Datos inválidos",
-          details: validationResult.error.errors,
-        });
-      }
-      const [newCompany] = await db
-        .insert(tenants)
-        .values({ ...validationResult.data, parentId: homeTenantId })
-        .returning();
-      res.status(201).json(newCompany);
-    } catch (error: any) {
-      if (error.code === '23505') {
-        return res.status(400).json({ error: "El subdominio ya existe" });
-      }
-      console.error("Error creating company:", error);
-      res.status(500).json({ error: "Error al crear la compañía" });
-    }
-  });
+  // NOTE: Company/empresa structural configuration (creating and nesting companies) is
+  // handled exclusively by the platform superadmin (Nexxo) via /api/tenants. Company
+  // admins can only VIEW their tree (GET /api/companies above) and operate inside a
+  // descendant via the company switcher — they cannot create or restructure companies.
 
   // ==================== END TENANT ENDPOINTS ====================
 

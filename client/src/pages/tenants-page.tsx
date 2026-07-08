@@ -22,6 +22,7 @@ interface Tenant {
   primaryColor: string | null;
   secondaryColor: string | null;
   active: boolean;
+  parentId: string | null;
   email: string | null;
   phone: string | null;
   plan: string | null;
@@ -40,6 +41,7 @@ export default function TenantsPage() {
   const [formData, setFormData] = useState({
     name: "",
     subdomain: "",
+    parentId: "",
     email: "",
     phone: "",
     primaryColor: "#4DA3FF",
@@ -92,6 +94,7 @@ export default function TenantsPage() {
     setFormData({
       name: "",
       subdomain: "",
+      parentId: "",
       email: "",
       phone: "",
       primaryColor: "#4DA3FF",
@@ -108,6 +111,7 @@ export default function TenantsPage() {
     setFormData({
       name: tenant.name,
       subdomain: tenant.subdomain,
+      parentId: tenant.parentId || "",
       email: tenant.email || "",
       phone: tenant.phone || "",
       primaryColor: tenant.primaryColor || "#4DA3FF",
@@ -212,6 +216,25 @@ export default function TenantsPage() {
                 </div>
               </div>
               
+              <div className="space-y-2">
+                <Label htmlFor="parentId">{t("tenants.field.parent")}</Label>
+                <select
+                  id="parentId"
+                  value={formData.parentId}
+                  onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
+                  className="w-full h-10 px-3 rounded-md border bg-background"
+                  data-testid="select-parent-company"
+                >
+                  <option value="">{t("tenants.parent.none")}</option>
+                  {tenantsList
+                    .filter((tn) => tn.id !== editingTenant?.id)
+                    .map((tn) => (
+                      <option key={tn.id} value={tn.id}>{tn.name}</option>
+                    ))}
+                </select>
+                <p className="text-xs text-muted-foreground">{t("tenants.parent.help")}</p>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">{t("tenants.field.email")}</Label>
@@ -364,6 +387,11 @@ export default function TenantsPage() {
                       <Globe className="h-3 w-3" />
                       {tenant.subdomain}.nexxo.com.mx
                     </div>
+                    {tenant.parentId && (
+                      <div className="text-xs text-muted-foreground mt-0.5" data-testid={`text-parent-${tenant.id}`}>
+                        {t("tenants.field.parent")}: {tenantsList.find((x) => x.id === tenant.parentId)?.name || "—"}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <Badge variant={tenant.active ? "default" : "secondary"}>
