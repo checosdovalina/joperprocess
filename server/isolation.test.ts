@@ -33,6 +33,8 @@ import {
   products,
   orders,
   shipments,
+  invoices,
+  scheduledVisits,
   creditAuthorizations,
   UserRole,
   QuotationStatus,
@@ -64,6 +66,7 @@ type Ctx = {
   vendedorA1: typeof users.$inferSelect;
   adminA: typeof users.$inferSelect;
   adminB: typeof users.$inferSelect;
+  superadmin: typeof users.$inferSelect;
   qA1: string;
   qA2: string;
   qB1: string;
@@ -78,6 +81,10 @@ type Ctx = {
   caA1: string;
   caA2: string;
   caB1: string;
+  invA1: string;
+  invB1: string;
+  svA1: string;
+  svB1: string;
 };
 
 const ctx = {} as Ctx;
@@ -139,6 +146,21 @@ async function seed() {
   }).returning();
   ctx.adminB = adminB;
 
+  // Platform superadmin: tenantId=null so on the main domain (no req.tenant) they
+  // get global cross-tenant access. Verifies the allowGlobal path stays open.
+  const [superadmin] = await db.insert(users).values({
+    tenantId: null,
+    empresaId: null,
+    username: `superadmin_${RUN}`,
+    password,
+    fullName: "Super Admin",
+    email: `superadmin_${RUN}@test.local`,
+    role: UserRole.ADMIN,
+    isSuperAdmin: true,
+    active: true,
+  }).returning();
+  ctx.superadmin = superadmin;
+
   // Quotations. qA1 is owned by the vendedor so the vendedor can also edit it
   // (isolate the empresa/tenant guard from the unrelated ownership/role guard).
   ctx.qA1 = await insertReturningId(quotations, {
@@ -174,6 +196,26 @@ async function seed() {
   ctx.caA1 = await insertReturningId(creditAuthorizations, { quotationId: ctx.qA1, userId: ctx.vendedorA1.id });
   ctx.caA2 = await insertReturningId(creditAuthorizations, { quotationId: ctx.qA2, userId: ctx.adminA.id });
   ctx.caB1 = await insertReturningId(creditAuthorizations, { quotationId: ctx.qB1, userId: ctx.adminB.id });
+
+  // Invoices (tenant-scoped only; no empresa column). Cross-tenant by-id read must 404.
+  ctx.invA1 = await insertReturningId(invoices, {
+    tenantId: ctx.tenantA, orderId: ctx.oA1, customerId: ctx.customerA,
+    serie: "A", folio: `INV-${RUN}-A1`, subtotal: "200", tax: "32", total: "232",
+  });
+  ctx.invB1 = await insertReturningId(invoices, {
+    tenantId: ctx.tenantB, orderId: ctx.oB1, customerId: ctx.customerB,
+    serie: "B", folio: `INV-${RUN}-B1`, subtotal: "100", tax: "16", total: "116",
+  });
+
+  // Scheduled visits (tenant-scoped only). Cross-tenant by-id read must 404.
+  ctx.svA1 = await insertReturningId(scheduledVisits, {
+    tenantId: ctx.tenantA, userId: ctx.vendedorA1.id, customerId: ctx.customerA,
+    scheduledDate: new Date(),
+  });
+  ctx.svB1 = await insertReturningId(scheduledVisits, {
+    tenantId: ctx.tenantB, userId: ctx.adminB.id, customerId: ctx.customerB,
+    scheduledDate: new Date(),
+  });
 }
 
 async function cleanup() {
@@ -182,12 +224,15 @@ async function cleanup() {
   const qs = await db.select({ id: quotations.id }).from(quotations).where(inArray(quotations.tenantId, tIds));
   const qIds = qs.map((q) => q.id);
   if (qIds.length) await db.delete(creditAuthorizations).where(inArray(creditAuthorizations.quotationId, qIds));
+  await db.delete(scheduledVisits).where(inArray(scheduledVisits.tenantId, tIds));
+  await db.delete(invoices).where(inArray(invoices.tenantId, tIds));
   await db.delete(shipments).where(inArray(shipments.tenantId, tIds));
   await db.delete(orders).where(inArray(orders.tenantId, tIds));
   await db.delete(quotations).where(inArray(quotations.tenantId, tIds));
   await db.delete(products).where(inArray(products.tenantId, tIds));
   await db.delete(customers).where(inArray(customers.tenantId, tIds));
   await db.delete(users).where(inArray(users.tenantId, tIds));
+  if (ctx.superadmin?.id) await db.delete(users).where(eq(users.id, ctx.superadmin.id));
   await db.delete(empresas).where(inArray(empresas.tenantId, tIds));
   await db.delete(tenants).where(inArray(tenants.id, tIds));
 }
@@ -224,9 +269,46 @@ function req(cookie: string, subdomain: string) {
     });
 }
 
+// Simulates a superadmin on the platform MAIN domain (nexxo.com.mx). Setting
+// X-Forwarded-Host to the bare base domain makes tenantMiddleware skip resolving a
+// subdomain (req.tenant stays undefined), which is what grants the superadmin
+// allowGlobal (cross-tenant) access. No X-Tenant-Subdomain header is sent.
+const MAIN_DOMAIN = "nexxo.com.mx";
+
+async function loginMainDomain(username: string): Promise<string> {
+  const res = await fetch(`${ctx.baseUrl}/api/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forwarded-Host": MAIN_DOMAIN },
+    body: JSON.stringify({ username, password: "Test-1234" }),
+  });
+  if (res.status !== 200) {
+    throw new Error(`main-domain login failed for ${username}: ${res.status} ${await res.text()}`);
+  }
+  const setCookies = (res.headers as any).getSetCookie?.() ?? [res.headers.get("set-cookie")];
+  const sid = setCookies
+    .map((c: string) => c?.split(";")[0])
+    .find((c: string) => c?.startsWith("connect.sid="));
+  if (!sid) throw new Error(`no session cookie returned for ${username}`);
+  return sid;
+}
+
+function reqMainDomain(cookie: string) {
+  return (method: string, path: string, body?: any) =>
+    fetch(`${ctx.baseUrl}${path}`, {
+      method,
+      headers: {
+        Cookie: cookie,
+        "X-Forwarded-Host": MAIN_DOMAIN,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+}
+
 let asVendedorA1: ReturnType<typeof req>;
 let asAdminA: ReturnType<typeof req>;
 let asAdminB: ReturnType<typeof req>;
+let asSuperadmin: ReturnType<typeof reqMainDomain>;
 
 beforeAll(async () => {
   await seed();
@@ -244,6 +326,7 @@ beforeAll(async () => {
   asVendedorA1 = req(await login(ctx.vendedorA1.username, ctx.subA), ctx.subA);
   asAdminA = req(await login(ctx.adminA.username, ctx.subA), ctx.subA);
   asAdminB = req(await login(ctx.adminB.username, ctx.subB), ctx.subB);
+  asSuperadmin = reqMainDomain(await loginMainDomain(ctx.superadmin.username));
 });
 
 afterAll(async () => {
@@ -440,6 +523,66 @@ describe("GET /api/customers/:id/summary", () => {
   it("blocked (404) for a customer in another tenant", async () => {
     expect((await asVendedorA1("GET", `/api/customers/${ctx.customerB}/summary`)).status).toBe(404);
     expect((await asAdminB("GET", `/api/customers/${ctx.customerA}/summary`)).status).toBe(404);
+  });
+});
+
+describe("GET /api/invoices/:id (tenant-scoped by-id)", () => {
+  it("allowed inside tenant (200)", async () => {
+    const r = await asAdminA("GET", `/api/invoices/${ctx.invA1}`);
+    expect(r.status).toBe(200);
+    expect((await r.json()).id).toBe(ctx.invA1);
+  });
+  it("blocked cross-tenant (404)", async () => {
+    expect((await asAdminA("GET", `/api/invoices/${ctx.invB1}`)).status).toBe(404);
+    expect((await asAdminB("GET", `/api/invoices/${ctx.invA1}`)).status).toBe(404);
+    expect((await asVendedorA1("GET", `/api/invoices/${ctx.invB1}`)).status).toBe(404);
+  });
+  it("PDF blocked cross-tenant (404)", async () => {
+    expect((await asAdminA("GET", `/api/invoices/${ctx.invB1}/pdf`)).status).toBe(404);
+  });
+});
+
+describe("GET /api/scheduled-visits/:id (tenant-scoped by-id)", () => {
+  it("allowed inside tenant (200)", async () => {
+    const r = await asVendedorA1("GET", `/api/scheduled-visits/${ctx.svA1}`);
+    expect(r.status).toBe(200);
+    expect((await r.json()).id).toBe(ctx.svA1);
+  });
+  it("blocked cross-tenant (404)", async () => {
+    expect((await asVendedorA1("GET", `/api/scheduled-visits/${ctx.svB1}`)).status).toBe(404);
+    expect((await asAdminB("GET", `/api/scheduled-visits/${ctx.svA1}`)).status).toBe(404);
+  });
+});
+
+describe("GET /api/products/:id (tenant-scoped by-id)", () => {
+  it("allowed inside tenant (200)", async () => {
+    const r = await asVendedorA1("GET", `/api/products/${ctx.productA1}`);
+    expect(r.status).toBe(200);
+    expect((await r.json()).id).toBe(ctx.productA1);
+  });
+  it("blocked cross-tenant (404)", async () => {
+    expect((await asAdminB("GET", `/api/products/${ctx.productA1}`)).status).toBe(404);
+  });
+});
+
+describe("SuperAdmin on main domain keeps global cross-tenant access", () => {
+  it("reads quotations from BOTH tenants by id (200)", async () => {
+    expect((await asSuperadmin("GET", `/api/quotations/${ctx.qA1}`)).status).toBe(200);
+    expect((await asSuperadmin("GET", `/api/quotations/${ctx.qA2}`)).status).toBe(200);
+    expect((await asSuperadmin("GET", `/api/quotations/${ctx.qB1}`)).status).toBe(200);
+  });
+  it("reads invoices from BOTH tenants by id (200)", async () => {
+    expect((await asSuperadmin("GET", `/api/invoices/${ctx.invA1}`)).status).toBe(200);
+    expect((await asSuperadmin("GET", `/api/invoices/${ctx.invB1}`)).status).toBe(200);
+  });
+  it("reads products from any tenant by id (200)", async () => {
+    expect((await asSuperadmin("GET", `/api/products/${ctx.productA1}`)).status).toBe(200);
+  });
+  it("pipeline aggregate spans all tenants", async () => {
+    const data = await (await asSuperadmin("GET", "/api/pipeline")).json();
+    const qIds = data.quotations.map((q: any) => q.id);
+    expect(qIds).toContain(ctx.qA1);
+    expect(qIds).toContain(ctx.qB1);
   });
 });
 
