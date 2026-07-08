@@ -23,7 +23,7 @@ const COLORS = {
 const requerimientos = [
   "Vendedores: cada quien ve solo su empresa (cotizaciones y tableros separados). Móvil no ve Ligero y Ligero no ve Móvil.",
   "Producción: ve las dos empresas, pero en tableros separados.",
-  "Autorizaciones (Tere): ve las dos empresas juntas.",
+  "Autorizaciones (Administrador): ve las dos empresas juntas.",
   "Crédito y Cobranza (Eunice): ve las dos, con saldo consolidado por cliente.",
   "Compras: ve todo.",
   "Folios de cotización con consecutivo distinto por empresa (Móvil con su prefijo, ej. MEX-0001).",
@@ -45,7 +45,7 @@ const opciones = [
       "Lo compartido se vuelve lo difícil: cada pantalla que debe ver las dos empresas (producción, autorizaciones, crédito, compras) tiene que unir datos de dos sistemas en vivo, y eso es permanente.",
       "Crédito y Cobranza necesita el saldo consolidado del cliente entre las dos empresas; con dos bases eso es un cruce entre sistemas cada vez.",
       "Datos duplicados: al ser dos bases, clientes, productos, facturas y pagos de Microsip se sincronizan dos veces y hay que mantenerlas consistentes.",
-      "Identidad compartida: Tere y Eunice necesitarían una cuenta que funcione en ambos, con las autorizaciones guardándose en el sistema correcto.",
+      "Identidad compartida: el administrador y Eunice necesitarían una cuenta que funcione en ambos, con las autorizaciones guardándose en el sistema correcto.",
       "Doble operación en el servidor: dos apps, dos bases, dos despliegues, dos migraciones. Más superficie que puede fallar.",
       "La API es un componente nuevo completo que hay que diseñar, asegurar y mantener; suele ser más trabajo que agregar una etiqueta de empresa.",
     ],
@@ -76,7 +76,7 @@ const opciones = [
       "Es la Opción B, más una capa de presentación: cada marca tiene su propia dirección con su logo y colores (por ejemplo movil.nexxo.com.mx), pero por debajo usan la misma base de datos. Separado a la vista, unido por dentro.",
     pros: [
       "El vendedor de Móvil entra a su propia dirección con la imagen de su marca y solo ve lo suyo.",
-      "Tere, Eunice, Producción y Compras entran y ven las dos empresas juntas, ya integradas.",
+      "El administrador, Eunice, Producción y Compras entran y ven las dos empresas juntas, ya integradas.",
       "Da la sensación de dos sistemas, sin el costo de unir datos entre dos bases.",
       "Aprovecha que el sistema ya soporta subdominios y certificados comodín.",
     ],
@@ -98,7 +98,7 @@ const fases = [
 ];
 
 const preguntas = [
-  "Para los roles compartidos (Tere, Eunice, Compras): ¿un solo login que muestre ambas empresas, o subdominios por marca?",
+  "Para los roles compartidos (Administrador, Eunice, Compras): ¿un solo login que muestre ambas empresas, o subdominios por marca?",
   "La separación por empresa, ¿aplica solo a cotizaciones o también a pedidos, embarques y producción?",
   "¿Un vendedor puede pertenecer a las dos empresas o siempre a una sola?",
   "¿Cuál es el formato exacto del folio de Móvil y Ligero conserva su numeración actual tal cual?",
@@ -261,6 +261,7 @@ bullets(preguntas, COLORS.primaryLight);
 const range = doc.bufferedPageRange();
 for (let i = 0; i < range.count; i++) {
   doc.switchToPage(range.start + i);
+  doc.page.margins.bottom = 0;
   const fy = PAGE_H - 38;
   doc.rect(0, fy, PAGE_W, 38).fill(COLORS.bandSoft);
   doc.fillColor(COLORS.textSoft).font("Helvetica").fontSize(7.5).text(
