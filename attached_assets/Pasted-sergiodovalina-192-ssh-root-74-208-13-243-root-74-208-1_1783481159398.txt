@@ -1,0 +1,155 @@
+sergiodovalina@192 ~ % ssh root@74.208.13.243
+
+root@74.208.13.243's password: 
+Last failed login: Wed Jul  8 03:21:08 UTC 2026 from 20.102.98.53 on ssh:notty
+There were 2182 failed login attempts since the last successful login.
+Last login: Tue Jul  7 07:15:28 2026 from 177.242.7.138
+[root@localhost ~]# cd /var/www/joper
+[root@localhost joper]# git pull origin main
+export DATABASE_URL="postgresql://joper_user:tu_password_segura@127.0.0.1:5432/joper_db?sslmode=disable"
+bash scripts/vps-deploy.sh
+remote: Enumerating objects: 219, done.
+remote: Counting objects: 100% (219/219), done.
+remote: Compressing objects: 100% (56/56), done.
+remote: Total 183 (delta 125), reused 183 (delta 125), pack-reused 0 (from 0)
+Receiving objects: 100% (183/183), 703.83 KiB | 659.00 KiB/s, done.
+Resolving deltas: 100% (125/125), completed with 30 local objects.
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+   1ccafc2..2dd2a61  main       -> origin/main
+Updating 1ccafc2..2dd2a61
+Fast-forward
+ .agents/agent_assets_metadata.toml                                                    |    6 +
+ .agents/memory/MEMORY.md                                                              |    3 +
+ .agents/memory/company-hierarchy.md                                                   |   49 ++++
+ .agents/memory/credit-auth-tenant-scoping.md                                          |   25 ++
+ .agents/memory/empresa-tenant-isolation.md                                            |   61 +++++
+ .replit                                                                               |   19 ++
+ attached_assets/Captura_de_pantalla_2026-07-07_a_la(s)_7.30.03_p.m._1783474214877.png |  Bin 0 -> 659597 bytes
+ client/src/App.tsx                                                                    |    6 +
+ client/src/components/app-sidebar.tsx                                                 |   51 ++++
+ client/src/lib/i18n.ts                                                                |   28 ++
+ client/src/pages/companies-page.tsx                                                   |  169 ++++++++++++
+ client/src/pages/company-registration-page.tsx                                        |    7 +
+ client/src/pages/empresas-page.tsx                                                    |  335 +++++++++++++++++++++++
+ client/src/pages/orders-page.tsx                                                      |   23 +-
+ client/src/pages/production-page.tsx                                                  |   61 ++++-
+ client/src/pages/quotations-page.tsx                                                  |   26 +-
+ client/src/pages/shipments-page.tsx                                                   |   29 +-
+ client/src/pages/tenants-page.tsx                                                     |   53 ++++
+ client/src/pages/users-page.tsx                                                       |   82 +++++-
+ nexxo-opciones-ligero-movil.pdf                                                       |  Bin 0 -> 13717 bytes
+ package-lock.json                                                                     | 1685 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----
+ package.json                                                                          |    1 +
+ scripts/generate-opciones-multiempresa-pdf.mjs                                        |  348 +++++++++++++++++++++++
+ scripts/migrate-empresas.mjs                                                          |  138 ++++++++++
+ scripts/post-merge.sh                                                                 |   12 +
+ scripts/vps-schema-changes.sql                                                        |   35 +++
+ server/auth.ts                                                                        |    8 +-
+ server/email-service.ts                                                               |   38 ++-
+ server/isolation.test.ts                                                              |  617 +++++++++++++++++++++++++++++++++++++++++
+ server/routes.ts                                                                      |  533 ++++++++++++++++++++++++++++++++----
+ server/storage.ts                                                                     |  184 +++++++++++--
+ server/tenant.ts                                                                      |   40 ++-
+ shared/schema.ts                                                                      |   38 +++
+ storage/quotations/F-zziso_mrbgtpfr_hl27ka-A1-1783478124796.pdf                       |  Bin 0 -> 2512 bytes
+ storage/quotations/F-zziso_mrbguaf2_sas0z2-A1-1783478151397.pdf                       |  Bin 0 -> 2515 bytes
+ storage/quotations/F-zziso_mrbgwn1h_fxjlvz-A1-1783478261463.pdf                       |  Bin 0 -> 2518 bytes
+ storage/quotations/F-zziso_mrbhdutv_adyr3b-A1-1783479064730.pdf                       |  Bin 0 -> 2525 bytes
+ storage/quotations/F-zziso_mrbhibxa_8gz8x0-A1-1783479273711.pdf                       |  Bin 0 -> 2515 bytes
+ storage/quotations/F-zziso_mrbhjsxl_dxrctu-A1-1783479342324.pdf                       |  Bin 0 -> 2522 bytes
+ storage/quotations/F-zziso_mrbhk7f0_0809e7-A1-1783479360794.pdf                       |  Bin 0 -> 2508 bytes
+ storage/quotations/F-zziso_mrbhkfem_qk2imy-A1-1783479371531.pdf                       |  Bin 0 -> 2528 bytes
+ storage/quotations/F-zziso_mrbhm4r4_d5334z-A1-1783479450732.pdf                       |  Bin 0 -> 2504 bytes
+ storage/quotations/F-zziso_mrbhmof8_zukzxq-A1-1783479476534.pdf                       |  Bin 0 -> 2509 bytes
+ storage/quotations/F-zziso_mrbhmysy_o8vyc1-A1-1783479489905.pdf                       |  Bin 0 -> 2520 bytes
+ storage/quotations/F-zziso_mrbhoeh3_ydkk4r-A1-1783479556802.pdf                       |  Bin 0 -> 2514 bytes
+ storage/quotations/F-zziso_mrbhqtzf_q9njnz-A1-1783479670512.pdf                       |  Bin 0 -> 2509 bytes
+ storage/quotations/F-zziso_mrbhvftj_3royh9-A1-1783479885493.pdf                       |  Bin 0 -> 2528 bytes
+ storage/quotations/F-zziso_mrbhwvsg_co8ebc-A1-1783479952897.pdf                       |  Bin 0 -> 2510 bytes
+ storage/quotations/F-zziso_mrbhy2cg_8xygm8-A1-1783480007559.pdf                       |  Bin 0 -> 2523 bytes
+ vitest.config.ts                                                                      |   19 ++
+ 50 files changed, 4551 insertions(+), 178 deletions(-)
+ create mode 100644 .agents/memory/company-hierarchy.md
+ create mode 100644 .agents/memory/credit-auth-tenant-scoping.md
+ create mode 100644 .agents/memory/empresa-tenant-isolation.md
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-07-07_a_la(s)_7.30.03_p.m._1783474214877.png
+ create mode 100644 client/src/pages/companies-page.tsx
+ create mode 100644 client/src/pages/empresas-page.tsx
+ create mode 100644 nexxo-opciones-ligero-movil.pdf
+ create mode 100644 scripts/generate-opciones-multiempresa-pdf.mjs
+ create mode 100644 scripts/migrate-empresas.mjs
+ create mode 100644 scripts/post-merge.sh
+ create mode 100644 server/isolation.test.ts
+ create mode 100644 storage/quotations/F-zziso_mrbgtpfr_hl27ka-A1-1783478124796.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbguaf2_sas0z2-A1-1783478151397.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbgwn1h_fxjlvz-A1-1783478261463.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhdutv_adyr3b-A1-1783479064730.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhibxa_8gz8x0-A1-1783479273711.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhjsxl_dxrctu-A1-1783479342324.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhk7f0_0809e7-A1-1783479360794.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhkfem_qk2imy-A1-1783479371531.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhm4r4_d5334z-A1-1783479450732.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhmof8_zukzxq-A1-1783479476534.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhmysy_o8vyc1-A1-1783479489905.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhoeh3_ydkk4r-A1-1783479556802.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhqtzf_q9njnz-A1-1783479670512.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhvftj_3royh9-A1-1783479885493.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhwvsg_co8ebc-A1-1783479952897.pdf
+ create mode 100644 storage/quotations/F-zziso_mrbhy2cg_8xygm8-A1-1783480007559.pdf
+ create mode 100644 vitest.config.ts
+
+=========================================
+  NEXXO - Despliegue Seguro VPS
+=========================================
+
+  Base de datos: OK (postgresql://joper_user:tu_password_segura@...)
+
+[1/6] Creando backup de seguridad...
+[03:24:00] Iniciando backup...
+[03:24:01] Backup guardado: /var/backups/nexxo/nexxo_20260708_032400.sql.gz (2.7M)
+[03:24:01] Backup completado exitosamente.
+
+[2/6] Descargando cambios del repositorio...
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+[3/6] Instalando dependencias...
+
+[4/6] Compilando...
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+vite v5.4.20 building for production...
+transforming (1) index.htmlnode:internal/process/promises:391
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+[Failed to load PostCSS config: Failed to load PostCSS config (searchPath: /var/www/joper/client): [Error] Loading PostCSS Plugin failed: Cannot find module 'postcss'
+Require stack:
+- /var/www/joper/node_modules/tailwindcss/lib/lib/setupContextUtils.js
+- /var/www/joper/node_modules/tailwindcss/lib/lib/setupTrackingContext.js
+- /var/www/joper/node_modules/tailwindcss/lib/plugin.js
+- /var/www/joper/node_modules/tailwindcss/lib/index.js
+- /var/www/joper/postcss.config.js
+
+(@/var/www/joper/postcss.config.js)
+Error: Loading PostCSS Plugin failed: Cannot find module 'postcss'
+Require stack:
+- /var/www/joper/node_modules/tailwindcss/lib/lib/setupContextUtils.js
+- /var/www/joper/node_modules/tailwindcss/lib/lib/setupTrackingContext.js
+- /var/www/joper/node_modules/tailwindcss/lib/plugin.js
+- /var/www/joper/node_modules/tailwindcss/lib/index.js
+- /var/www/joper/postcss.config.js
+
+(@/var/www/joper/postcss.config.js)
+    at load (file:///var/www/joper/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:33632:11)
+    at file:///var/www/joper/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:33657:16
+    at Array.map (<anonymous>)
+    at plugins (file:///var/www/joper/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:33656:8)
+    at processResult (file:///var/www/joper/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:33726:14)
+    at file:///var/www/joper/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:33856:14]
+
+Node.js v20.19.6
+[root@localhost joper]# 
