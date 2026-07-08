@@ -106,6 +106,41 @@ const preguntas = [
   "Sobre el folio: ¿se conserva el esquema actual (prefijo MEX para México / EXT para extranjero con número único), o se desea un consecutivo corrido (0001, 0002, …)?",
 ];
 
+const aprobacionIntro =
+  "El proceso de aprobación es el mismo que hoy. Lo único que cambia es que cada documento lleva su etiqueta de empresa (Ligero o Móvil) y esa etiqueta viaja con él de principio a fin.";
+
+const aprobacionPasos = [
+  "El vendedor crea la cotización: queda marcada con su empresa y toma su folio (MEX/EXT según el cliente). El vendedor solo ve las cotizaciones de su empresa.",
+  "El administrador aprueba el envío, solo si es envío gratis por parte de Joper. Ve las cotizaciones de las dos empresas.",
+  "El cliente aprueba la cotización por la liga que recibe por correo.",
+  "Crédito y Cobranza (Eunice) aprueba el crédito con su firma. Ve las dos empresas y el saldo consolidado del cliente. Al aprobar, la cotización se convierte en Pedido, que hereda la misma empresa.",
+  "El administrador libera el pedido (Liberación de Pedidos). Ve los pedidos de las dos empresas juntos.",
+  "Producción trabaja el pedido: ve las dos empresas, pero en tableros separados.",
+  "Embarques crea el embarque y el pedido pasa a estado 'enviado'.",
+];
+
+const aprobacionNota =
+  "La etiqueta de empresa se pone una sola vez, al crear la cotización, y se arrastra sola por toda la cadena (cotización → crédito → pedido → producción → embarque). Nadie tiene que elegirla de nuevo en cada paso.";
+
+const empresasIntro =
+  "Crear una empresa hija es una acción de administrador dentro del mismo sistema, no montar otro sistema. Arriba está la empresa raíz (Joper), con la conexión a Microsip y el catálogo; debajo cuelgan las empresas hijas (Ligero, Móvil, y las que vengan), que comparten esos datos y solo se distinguen por su etiqueta.";
+
+const empresasPasos = [
+  "El administrador entra al panel de Empresas y da en 'Nueva empresa'.",
+  "Captura el nombre y una clave corta (ej. Joper Móvil / MOVIL), el logo y colores de la marca, y un subdominio si quieren uno propio (ej. movil.nexxo.com.mx).",
+  "Guarda: la empresa queda disponible en el sistema.",
+  "Asigna los vendedores a esa empresa. Los roles globales (Administrador, Crédito/Cobranza, Compras) la ven automáticamente.",
+  "Si usa subdominio, se apunta el DNS a la misma aplicación; el certificado comodín *.nexxo.com.mx ya lo cubre.",
+  "Listo: los vendedores entran y sus cotizaciones nacen marcadas con esa empresa, sin mezclarse con la otra.",
+];
+
+const empresasNoHaceFalta = [
+  "No se crea otra base de datos.",
+  "No se vuelve a cargar ni duplicar el catálogo de clientes y productos.",
+  "No se reconfigura Microsip.",
+  "No se toca código: crear una empresa es solo capturar datos en el panel, y es repetible para una tercera o cuarta empresa.",
+];
+
 const fmtH = (h) => (Number.isInteger(h) ? `${h}` : h.toFixed(1));
 const totalHoras = fases.reduce((n, f) => n + f.h, 0);
 
@@ -201,6 +236,18 @@ function bullets(items, dotColor) {
   });
 }
 
+function numberedList(items) {
+  items.forEach((it, idx) => {
+    doc.font("Helvetica").fontSize(9);
+    const textW = CONTENT_W - 28;
+    const h = doc.heightOfString(it, { width: textW, lineGap: 1.5 });
+    ensureSpace(h + 7);
+    doc.fillColor(COLORS.primaryLight).font("Helvetica-Bold").fontSize(9).text(`${idx + 1}.`, M + 4, y, { width: 16 });
+    doc.fillColor(COLORS.text).font("Helvetica").fontSize(9).text(it, M + 24, y, { width: textW, lineGap: 1.5 });
+    y += h + 6;
+  });
+}
+
 function bulletHours(item) {
   doc.font("Helvetica").fontSize(9);
   const textW = CONTENT_W - 24 - HOURS_COL;
@@ -246,6 +293,23 @@ doc.fillColor(COLORS.text).font("Helvetica").fontSize(9).text(
   { width: CONTENT_W - 28, lineGap: 2 }
 );
 y += recTextH + 16;
+
+// Proceso de aprobación
+sectionHeader("Proceso de aprobación");
+paragraph(aprobacionIntro);
+numberedList(aprobacionPasos);
+y += 2;
+paragraph(aprobacionNota, { color: COLORS.textSoft });
+y += 6;
+
+// Creación de empresas hijas
+sectionHeader("Creación de empresas hijas");
+paragraph(empresasIntro);
+numberedList(empresasPasos);
+y += 2;
+miniLabel("Lo que no hace falta", COLORS.good);
+bullets(empresasNoHaceFalta, COLORS.good);
+y += 6;
 
 // Alcance
 sectionHeader("Alcance del trabajo (por fases)");
