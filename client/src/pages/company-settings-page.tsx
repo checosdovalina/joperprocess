@@ -494,7 +494,7 @@ export default function CompanySettingsPage() {
                 <SelectContent>
                   {TIMEZONES.map((tz) => (
                     <SelectItem key={tz.value} value={tz.value}>
-                      {tz.label}
+                      {t(tz.labelKey)}
                     </SelectItem>
                   ))}
                 </SelectContent>

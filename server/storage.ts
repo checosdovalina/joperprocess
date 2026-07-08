@@ -123,7 +123,7 @@ export interface IStorage {
   getOrder(id: string): Promise<Order | undefined>;
   getAllOrders(): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
-  updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined>;
+  updateOrder(id: string, data: Partial<InsertOrder> & { updatedAt?: Date }): Promise<Order | undefined>;
 
   // Order Releases
   getOrderReleases(orderId: string): Promise<OrderRelease[]>;
@@ -245,7 +245,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
-    const [customer] = await db.insert(customers).values(insertCustomer).returning();
+    const [customer] = await db.insert(customers).values(insertCustomer as typeof customers.$inferInsert).returning();
     return customer;
   }
 
@@ -289,7 +289,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCheckin(insertCheckin: InsertCheckin): Promise<Checkin> {
-    const [checkin] = await db.insert(checkins).values(insertCheckin).returning();
+    const [checkin] = await db.insert(checkins).values(insertCheckin as typeof checkins.$inferInsert).returning();
     return checkin;
   }
 
@@ -374,7 +374,7 @@ export class DatabaseStorage implements IStorage {
     
     const [quotation] = await db
       .insert(quotations)
-      .values({ ...insertQuotation, folio })
+      .values({ ...insertQuotation, folio } as typeof quotations.$inferInsert)
       .returning();
     return quotation;
   }
@@ -431,11 +431,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrder(insertOrder: InsertOrder): Promise<Order> {
-    const [order] = await db.insert(orders).values(insertOrder).returning();
+    const [order] = await db.insert(orders).values(insertOrder as typeof orders.$inferInsert).returning();
     return order;
   }
 
-  async updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined> {
+  async updateOrder(id: string, data: Partial<InsertOrder> & { updatedAt?: Date }): Promise<Order | undefined> {
     const [order] = await db.update(orders).set(data).where(eq(orders.id, id)).returning();
     return order || undefined;
   }
@@ -461,7 +461,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createShipment(insertShipment: InsertShipment): Promise<Shipment> {
-    const [shipment] = await db.insert(shipments).values(insertShipment).returning();
+    const [shipment] = await db.insert(shipments).values(insertShipment as typeof shipments.$inferInsert).returning();
     return shipment;
   }
 
@@ -481,7 +481,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoice(insertInvoice: InsertInvoice): Promise<Invoice> {
-    const [invoice] = await db.insert(invoices).values(insertInvoice).returning();
+    const [invoice] = await db.insert(invoices).values(insertInvoice as typeof invoices.$inferInsert).returning();
     return invoice;
   }
 
@@ -524,7 +524,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPayment(insertPayment: InsertPayment): Promise<Payment> {
-    const [payment] = await db.insert(payments).values(insertPayment).returning();
+    const [payment] = await db.insert(payments).values(insertPayment as typeof payments.$inferInsert).returning();
     return payment;
   }
 
@@ -539,7 +539,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProductCategory(insertCategory: InsertProductCategory): Promise<ProductCategory> {
-    const [category] = await db.insert(productCategories).values(insertCategory).returning();
+    const [category] = await db.insert(productCategories).values(insertCategory as typeof productCategories.$inferInsert).returning();
     return category;
   }
 
@@ -577,7 +577,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
-    const [product] = await db.insert(products).values(insertProduct).returning();
+    const [product] = await db.insert(products).values(insertProduct as typeof products.$inferInsert).returning();
     return product;
   }
 
@@ -1100,7 +1100,7 @@ export class TenantScopedStorage {
     if (this.ctx.restrictToEmpresa && this.ctx.empresaId && order.empresaId !== this.ctx.empresaId) return undefined;
     return order;
   }
-  async updateOrder(id: string, data: Partial<InsertOrder>) {
+  async updateOrder(id: string, data: Partial<InsertOrder> & { updatedAt?: Date }) {
     const existing = await this.getOrder(id);
     if (!existing) return undefined;
     return this.base.updateOrder(id, data);

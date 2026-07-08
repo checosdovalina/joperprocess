@@ -183,8 +183,8 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
 
     let rightY = currentY + 22;
     const invoiceRows: [string, string][] = [
-      ["Fecha Emisión:", formatDate(invoice.issuedAt, tenant.timezone)],
-      ...(invoice.dueDate ? [["Vencimiento:", formatDate(invoice.dueDate, tenant.timezone)] as [string, string]] : []),
+      ["Fecha Emisión:", formatDate(invoice.issuedAt, tenant?.timezone)],
+      ...(invoice.dueDate ? [["Vencimiento:", formatDate(invoice.dueDate, tenant?.timezone)] as [string, string]] : []),
       ["Método Pago:", invoice.paymentMethod || "Por definir"],
       ["Forma Pago:",  invoice.paymentForm  || "Por definir"],
       ["Moneda:", invoice.currency || "MXN"],
@@ -250,7 +250,7 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
 
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
     doc.text("Representación impresa de Comprobante Fiscal Digital por Internet (CFDI).", MARGIN, FOOTER_Y + 6, { width: 280 });
-    doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+    doc.text(`Generado el ${formatDateTime(new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
 
     const footerRight: string[] = [];
     if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);

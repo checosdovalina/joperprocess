@@ -152,7 +152,7 @@ export function CheckinPhotoUploader({
         if (uploadURL.startsWith("/")) return window.location.origin + uploadURL;
         return uploadURL;
       },
-      headers: (file) => {
+      headers: (file): Record<string, string> => {
         const uploadURL = file.meta?.uploadURL as string;
         if (uploadURL?.startsWith("/")) {
           return { "Content-Type": file.type || "image/jpeg" };

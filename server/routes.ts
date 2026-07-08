@@ -374,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (restrictedEmpresaId && q.empresaId !== restrictedEmpresaId) return res.json([]);
         const items = await db.query.quotationItems.findMany({
           where: eq(quotationItems.quotationId, id),
-          with: { product: { columns: { name: true, code: true, unit: true } } },
+          with: { product: { columns: { name: true, code: true, unitOfMeasure: true } } },
           orderBy: (qi, { asc }) => [asc(qi.position)],
         });
         return res.json(items.map(i => ({
@@ -382,9 +382,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCode: i.product?.code ?? "",
           description: i.product?.name ?? i.description ?? "",
           qty: i.quantity,
-          unit: i.unit ?? i.product?.unit,
+          unit: i.unitOfMeasure ?? i.product?.unitOfMeasure,
           unitPrice: i.unitPrice,
-          discount: i.discount,
+          discount: i.discountAmount,
           total: i.total,
         })));
       }
@@ -396,7 +396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             quotation: {
               with: {
                 items: {
-                  with: { product: { columns: { name: true, code: true, unit: true } } },
+                  with: { product: { columns: { name: true, code: true, unitOfMeasure: true } } },
                   orderBy: (qi, { asc }) => [asc(qi.position)],
                 },
               },
@@ -411,9 +411,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCode: i.product?.code ?? "",
           description: i.product?.name ?? i.description ?? "",
           qty: i.quantity,
-          unit: i.unit ?? i.product?.unit,
+          unit: i.unitOfMeasure ?? i.product?.unitOfMeasure,
           unitPrice: i.unitPrice,
-          discount: i.discount,
+          discount: i.discountAmount,
           total: i.total,
         })));
       }
@@ -425,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             quotation: {
               with: {
                 items: {
-                  with: { product: { columns: { name: true, code: true, unit: true } } },
+                  with: { product: { columns: { name: true, code: true, unitOfMeasure: true } } },
                   orderBy: (qi, { asc }) => [asc(qi.position)],
                 },
               },
@@ -440,9 +440,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCode: i.product?.code ?? "",
           description: i.product?.name ?? i.description ?? "",
           qty: i.quantity,
-          unit: i.unit ?? i.product?.unit,
+          unit: i.unitOfMeasure ?? i.product?.unitOfMeasure,
           unitPrice: i.unitPrice,
-          discount: i.discount,
+          discount: i.discountAmount,
           total: i.total,
         })));
       }
@@ -454,14 +454,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (restrictedEmpresaId && s.empresaId !== restrictedEmpresaId) return res.json([]);
         const instances = await db.query.shipmentProductInstances.findMany({
           where: eq(shipmentProductInstances.shipmentId, id),
-          with: { product: { columns: { name: true, code: true, unit: true } } },
+          with: { product: { columns: { name: true, code: true, unitOfMeasure: true } } },
         });
         return res.json(instances.map(i => ({
           id: i.id,
           productCode: i.product?.code ?? "",
           description: i.product?.name ?? "",
-          qty: i.quantity,
-          unit: i.product?.unit ?? "Pza",
+          qty: 1,
+          unit: i.product?.unitOfMeasure ?? "Pza",
           unitPrice: null,
           discount: null,
           total: null,
@@ -1772,7 +1772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [visit] = await db.insert(scheduledVisits).values({
         ...validated,
         tenantId,
-      }).returning();
+      } as typeof scheduledVisits.$inferInsert).returning();
       res.status(201).json(visit);
     } catch (error) {
       console.error("Error creating scheduled visit:", error);
@@ -2115,7 +2115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (categoryId) {
         await db
           .update(productCategories)
-          .set({ maxDiscount: discountStr })
+          .set({ maxDiscount: discountStr } as any)
           .where(and(eq(productCategories.id, categoryId), eq(productCategories.tenantId, tenantId)));
       }
 
@@ -2138,7 +2138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const row of rows) {
         await db
           .update(productCategories)
-          .set({ maxDiscount: row.discount.toFixed(2) })
+          .set({ maxDiscount: row.discount.toFixed(2) } as any)
           .where(and(eq(productCategories.id, row.categoryId), eq(productCategories.tenantId, tenantId)));
       }
 
@@ -4126,7 +4126,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       const stamp = format(new Date(), "dd/MM/yyyy");
-      const cancelNote = `[Cancelado ${stamp} por ${req.user!.name || req.user!.username}]${reason ? ` ${reason}` : ""}`;
+      const cancelNote = `[Cancelado ${stamp} por ${req.user!.fullName || req.user!.username}]${reason ? ` ${reason}` : ""}`;
       const factoryNotes = existing.factoryNotes ? `${existing.factoryNotes}\n${cancelNote}` : cancelNote;
 
       const updatedOrder = await scopedStorage.updateOrder(id, {
@@ -4215,7 +4215,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       const stamp = format(new Date(), "dd/MM/yyyy");
-      const closeNote = `[Cerrado ${stamp} por ${req.user!.name || req.user!.username}]`;
+      const closeNote = `[Cerrado ${stamp} por ${req.user!.fullName || req.user!.username}]`;
       const factoryNotes = existing.factoryNotes ? `${existing.factoryNotes}\n${closeNote}` : closeNote;
 
       const updatedOrder = await scopedStorage.updateOrder(id, {
@@ -4912,7 +4912,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           folio: o.quotation?.folio || o.id.substring(0, 8),
           customerName: o.quotation?.customer?.name || "—",
           customerRfc: o.quotation?.customer?.rfc || null,
-          purchaseOrder: o.quotation?.purchaseOrder || null,
+          purchaseOrder: (o.quotation as any)?.purchaseOrder || null,
           closeDate: o.quotation?.customerApprovedAt || null,
           shippingDate: shipment?.shippedAt || null,
           creditReleaseDate: creditAuth?.authorizedAt || null,
@@ -5563,7 +5563,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           );
           const customerByMicrosipId = new Map<number, typeof tenantCustomers[0]>();
           for (const c of tenantCustomers) {
-            if (c.microsipId) customerByMicrosipId.set(parseInt(c.microsipId), c);
+            if (c.microsipId) customerByMicrosipId.set(c.microsipId, c);
           }
 
           const result = cxcBalances
@@ -5952,7 +5952,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         if (microsipCfg.length > 0) {
           try {
             const service = await createMicrosipSyncService(tenantId);
-            const raw = await service.queryLiveCxcStatementForCustomer(parseInt(customer.microsipId));
+            const raw = await service.queryLiveCxcStatementForCustomer(customer.microsipId);
             const now = new Date();
             cxcData = {
               invoices: raw.invoices.map(inv => ({
@@ -6206,7 +6206,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
 
       // Get the invoice to update balance
-      const invoice = await scopedStorage.getInvoice(validated.invoiceId);
+      const invoice = await scopedStorage.getInvoice(validated.invoiceId!);
       if (!invoice) {
         return res.status(404).json({ error: "Factura no encontrada" });
       }
@@ -7039,7 +7039,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           await sendCheckoutEmail({
             to: recipients,
             checkinData: {
-              customerName: customer.name,
+              customerName: customer!.name,
               vendedorName: user.fullName,
               checkoutDate: format(new Date(), "PPP 'a las' p", { locale: es }),
               notes: checkoutNotes,
@@ -8225,6 +8225,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         ];
         const maxFileSize = 50 * 1024 * 1024; // 50MB
+        const objectStorageService = new ObjectStorageService();
 
         for (const att of attachments) {
           if (att.entityId && att.filename && att.originalName && att.mimeType && att.size) {
@@ -8331,10 +8332,10 @@ Proporciona tu análisis en el siguiente formato JSON:
         contactEmail: overrides.contactEmail ?? incident.contactEmail,
         contactPhone: overrides.contactPhone ?? incident.contactPhone,
         productName: overrides.productName ?? incident.product?.name ?? null,
-        productSku: overrides.productSku ?? incident.product?.sku ?? null,
+        productSku: overrides.productSku ?? incident.product?.code ?? null,
         warrantySerialNumber: overrides.warrantySerialNumber ?? incident.warrantySerialNumber,
         referenceNumber: overrides.referenceNumber ?? incident.referenceNumber,
-        orderFolio: incident.order?.folio ?? null,
+        orderFolio: (incident.order as any)?.folio ?? null,
         invoiceFolio: overrides.invoiceNumber || (incident.invoice as any)?.folio || null,
         assigneeName: incident.assignee?.fullName ?? null,
         assignedArea: incident.assignedArea,

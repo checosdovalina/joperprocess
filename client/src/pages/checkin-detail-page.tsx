@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, Save, EyeOff } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MeetingType } from "@shared/schema";
+import { MeetingType, type MeetingTypeType } from "@shared/schema";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -185,7 +185,7 @@ export default function CheckinDetailPage() {
   });
 
   const updateMeetingTypeMutation = useMutation({
-    mutationFn: async (meetingType: MeetingType) => {
+    mutationFn: async (meetingType: MeetingTypeType) => {
       return await apiRequest("PATCH", `/api/checkins/${id}`, { meetingType });
     },
     onSuccess: () => {
@@ -320,7 +320,7 @@ export default function CheckinDetailPage() {
                 {!checkin.checkoutAt ? (
                   <Select
                     value={checkin.meetingType || MeetingType.VISITA}
-                    onValueChange={(value) => updateMeetingTypeMutation.mutate(value as MeetingType)}
+                    onValueChange={(value) => updateMeetingTypeMutation.mutate(value as MeetingTypeType)}
                     disabled={updateMeetingTypeMutation.isPending}
                   >
                     <SelectTrigger className="w-[200px]" data-testid="select-meeting-type-edit">

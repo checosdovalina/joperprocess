@@ -191,9 +191,9 @@ export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Prom
     const quotRows: [string, string][] = [
       ["Folio:", quotation.folio],
       ["Importe:", formatCurrency(quotation.total, quotation.currency || "MXN")],
-      ["Fecha:", formatDate(quotation.createdAt, tenant.timezone)],
+      ["Fecha:", formatDate(quotation.createdAt, tenant?.timezone)],
       ["Solicitado por:", requestedBy.fullName],
-      ["Solicitud:", formatDate(authorization.createdAt, tenant.timezone)],
+      ["Solicitud:", formatDate(authorization.createdAt, tenant?.timezone)],
     ];
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
     const VALUE_W_R = COL_W - LABEL_W - 10;
@@ -261,7 +261,7 @@ export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Prom
       doc.font("Helvetica-Bold").fillColor("#555").text("Aprobado por:", MARGIN + 8, currentY + 8, { continued: true, width: 90 });
       doc.font("Helvetica").fillColor("#222").text(approvedBy.fullName);
       doc.font("Helvetica-Bold").fillColor("#555").text("Fecha:", MARGIN + 8, currentY + 20, { continued: true, width: 90 });
-      doc.font("Helvetica").fillColor("#222").text(formatDate(authorization.authorizedAt, tenant.timezone));
+      doc.font("Helvetica").fillColor("#222").text(formatDate(authorization.authorizedAt, tenant?.timezone));
       currentY += 50;
 
       // Signature
@@ -307,7 +307,7 @@ export async function generateCreditAuthPDFStream(data: CreditAuthPDFData): Prom
 
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
     doc.text("Documento generado automáticamente. Válido como constancia de autorización de crédito.", MARGIN, FOOTER_Y + 6, { width: 280 });
-    doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+    doc.text(`Generado el ${formatDateTime(new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
 
     const footerRight: string[] = [];
     if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);

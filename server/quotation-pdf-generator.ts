@@ -225,11 +225,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // Quotation info
     let rightY = currentY + 22;
     const quotationRows: [string, string][] = [
-      ["Fecha:", formatDate(quotation.createdAt, tenant.timezone)],
+      ["Fecha:", formatDate(quotation.createdAt, tenant?.timezone)],
       ["Moneda:", quotation.currency || "MXN"],
       ["Vendedor:", user.fullName],
     ];
-    if (quotation.validUntil) quotationRows.push(["Vigencia:", formatDate(quotation.validUntil, tenant.timezone)]);
+    if (quotation.validUntil) quotationRows.push(["Vigencia:", formatDate(quotation.validUntil, tenant?.timezone)]);
     if (quotation.paymentTerms) quotationRows.push(["Cond. Pago:", PAYMENT_TERMS_LABELS[quotation.paymentTerms] || quotation.paymentTerms]);
     if (quotation.deliveryTime) quotationRows.push(["T. Entrega:", DELIVERY_TIME_LABELS[quotation.deliveryTime] || quotation.deliveryTime]);
 
@@ -526,7 +526,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // Left: legal disclaimer
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
     doc.text("Este documento es una cotización y no constituye un pedido en firme.", MARGIN, FOOTER_Y + 6, { width: 260 });
-    doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+    doc.text(`Generado el ${formatDateTime(new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
 
     // Right: company contact summary
     const footerRight: string[] = [];

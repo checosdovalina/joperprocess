@@ -235,7 +235,7 @@ export default function OrdersPage() {
     const customer = orderDetails.quotation.customer;
     const subject = encodeURIComponent(`Pedido ${orderDetails.quotation.folio} - ${customer.name}`);
     const itemsList = orderDetails.quotation.items.map(item => 
-      `- ${item.product.name} (${item.product.code}): ${item.quantity} ${item.product.unit}`
+      `- ${item.product.name} (${item.product.code}): ${item.quantity} ${item.product.unitOfMeasure}`
     ).join("%0A");
     const body = encodeURIComponent(
       `Pedido: ${orderDetails.quotation.folio}\n` +
@@ -646,7 +646,7 @@ export default function OrdersPage() {
                               <div className="text-xs text-muted-foreground">{item.product.code}</div>
                             </TableCell>
                             <TableCell className="text-right font-mono">
-                              {quantity} {item.product.unit}
+                              {quantity} {item.product.unitOfMeasure}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">

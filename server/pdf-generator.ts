@@ -217,7 +217,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       doc.text("MINUTA DE VISITA A CLIENTE", MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2 });
 
       // Visit date on right
-      const visitDate = formatDateTime(checkin.checkinAt, tenant.timezone);
+      const visitDate = formatDateTime(checkin.checkinAt, tenant?.timezone);
       doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
       doc.text(visitDate, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 11, { width: CONTENT_W / 2, align: "right" });
 
@@ -269,8 +269,8 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       let rightY = currentY + 22;
       const visitRows: [string, string][] = [
         ["Vendedor:", user.fullName],
-        ["Check-in:", formatDateTime(checkin.checkinAt, tenant.timezone)],
-        ...(checkin.checkoutAt ? [["Check-out:", formatDateTime(checkin.checkoutAt, tenant.timezone)] as [string, string]] : []),
+        ["Check-in:", formatDateTime(checkin.checkinAt, tenant?.timezone)],
+        ...(checkin.checkoutAt ? [["Check-out:", formatDateTime(checkin.checkoutAt, tenant?.timezone)] as [string, string]] : []),
       ];
       if (checkin.latitude && checkin.longitude) {
         visitRows.push(["Ubicación:", `${Number(checkin.latitude).toFixed(4)}, ${Number(checkin.longitude).toFixed(4)}`]);
@@ -402,7 +402,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
 
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
       doc.text("Documento generado automáticamente. Válido como constancia de visita comercial.", MARGIN, FOOTER_Y + 6, { width: 260 });
-      doc.text(`Generado el ${formatDateTime(new Date(), tenant.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+      doc.text(`Generado el ${formatDateTime(new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
 
       const footerRight: string[] = [];
       if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);

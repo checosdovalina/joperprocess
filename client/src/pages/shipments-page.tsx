@@ -263,7 +263,7 @@ export default function ShipmentsPage() {
   };
 
   const addNewSerialRow = () => {
-    const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + (item.quantity ?? 0), 0) ?? 0;
+    const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0) ?? 0;
     const captured = (productInstances?.length ?? 0) + newSerials.length;
     if (totalNeeded > 0 && captured >= totalNeeded) {
       toast({
@@ -567,7 +567,7 @@ export default function ShipmentsPage() {
           </DialogHeader>
 
           {(() => {
-            const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + (item.quantity ?? 0), 0) ?? 0;
+            const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0) ?? 0;
             const captured = productInstances?.length ?? 0;
             const pct = totalNeeded > 0 ? Math.round((captured / totalNeeded) * 100) : 0;
             if (totalNeeded === 0) return null;

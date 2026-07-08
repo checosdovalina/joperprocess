@@ -675,7 +675,7 @@ export default function QuotationsPage() {
               <SelectContent>
                 <SelectItem value="all">{t("quotations.all-sellers")}</SelectItem>
                 {users?.map(u => (
-                  <SelectItem key={u.id} value={u.id}>{u.name || u.username}</SelectItem>
+                  <SelectItem key={u.id} value={u.id}>{u.fullName || u.username}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -446,7 +446,7 @@ export default function PublicTicketPage() {
               <div className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">{t("label.type")}:</span>
-                <span className="font-medium">{typeLabels[incident.type]?.label || incident.type}</span>
+                <span className="font-medium">{typeLabels[incident.type] ? t(typeLabels[incident.type].labelKey) : incident.type}</span>
               </div>
               {incident.assignee && (
                 <div className="flex items-center gap-2 text-sm">

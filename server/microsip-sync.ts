@@ -1108,6 +1108,7 @@ class MicrosipSyncService {
     SALDO_VENCIDO: number;
     OLDEST_DUE: Date | null;
     INVOICE_COUNT: number;
+    IS_USD: number;
   }[]> {
     if (!await this.loadConfig(false)) {
       throw new Error('Configuración de Microsip no encontrada');
@@ -1220,6 +1221,7 @@ class MicrosipSyncService {
       FECHA_VEN: Date | null;
       IMPORTE_TOTAL: number;
       SALDO: number;
+      TIPO_CAMBIO: number;
     }>;
     payments: Array<{
       REFERENCIA: string;
