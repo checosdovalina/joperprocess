@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { db } from "./db";
-import { tenants } from "@shared/schema";
+import { tenants, empresas } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 
 export interface TenantContext {
@@ -15,10 +15,20 @@ export interface TenantContext {
   locale: string | null;
 }
 
+export interface EmpresaContext {
+  id: string;
+  tenantId: string;
+  name: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+}
+
 declare global {
   namespace Express {
     interface Request {
       tenant?: TenantContext;
+      empresa?: EmpresaContext;
     }
   }
 }
@@ -32,10 +42,15 @@ export async function tenantMiddleware(req: Request, res: Response, next: NextFu
   const hostname = forwardedHost?.split(":")[0] || req.hostname || req.headers.host?.split(":")[0] || "";
   
   let subdomain: string | null = null;
+  let devEmpresaOverride: string | null = null;
   
   if (DEV_DOMAINS.some(d => hostname.includes(d))) {
     const querySubdomain = req.query.tenant as string | undefined;
     const headerSubdomain = req.headers["x-tenant-subdomain"] as string | undefined;
+    // Dev-only: allow testing an empresa (brand) subdomain via ?empresa= or header.
+    devEmpresaOverride = (req.query.empresa as string | undefined)
+      || (req.headers["x-empresa-subdomain"] as string | undefined)
+      || null;
     subdomain = querySubdomain || headerSubdomain || "joper";
   } else if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
     subdomain = hostname.replace(`.${BASE_DOMAIN}`, "");
@@ -48,6 +63,16 @@ export async function tenantMiddleware(req: Request, res: Response, next: NextFu
   }
   
   try {
+    // Dev-only: an explicit empresa override takes precedence for local testing.
+    if (devEmpresaOverride) {
+      const devResolved = await resolveEmpresaSubdomain(devEmpresaOverride);
+      if (devResolved && devResolved.tenant.active) {
+        req.tenant = devResolved.tenant;
+        req.empresa = devResolved.empresa;
+        return next();
+      }
+    }
+
     const [tenant] = await db
       .select({
         id: tenants.id,
@@ -64,26 +89,80 @@ export async function tenantMiddleware(req: Request, res: Response, next: NextFu
       .where(eq(tenants.subdomain, subdomain))
       .limit(1);
     
-    if (!tenant) {
-      if (req.path.startsWith("/api/")) {
-        return res.status(404).json({ message: "Tenant not found" });
+    if (tenant) {
+      if (!tenant.active) {
+        if (req.path.startsWith("/api/")) {
+          return res.status(403).json({ message: "Tenant is inactive" });
+        }
+        return next();
       }
+      req.tenant = tenant;
       return next();
     }
-    
-    if (!tenant.active) {
-      if (req.path.startsWith("/api/")) {
-        return res.status(403).json({ message: "Tenant is inactive" });
+
+    // Not a company (tenant) subdomain. It may be an EMPRESA (brand) subdomain,
+    // e.g. "jmobil.nexxo.com.mx" → resolve to the parent company (Joper) and
+    // attach the empresa so login works and branding reflects the brand.
+    const resolved = await resolveEmpresaSubdomain(subdomain);
+    if (resolved) {
+      if (!resolved.tenant.active) {
+        if (req.path.startsWith("/api/")) {
+          return res.status(403).json({ message: "Tenant is inactive" });
+        }
+        return next();
       }
+      req.tenant = resolved.tenant;
+      req.empresa = resolved.empresa;
       return next();
     }
-    
-    req.tenant = tenant;
-    next();
+
+    if (req.path.startsWith("/api/")) {
+      return res.status(404).json({ message: "Tenant not found" });
+    }
+    return next();
   } catch (error) {
     console.error("Tenant middleware error:", error);
     next();
   }
+}
+
+// Resolve an EMPRESA (brand) subdomain to its parent company (tenant) + empresa
+// context. Returns null when no active empresa matches. Lets brand subdomains
+// like "jmobil.nexxo.com.mx" log in against the parent company (e.g. Joper)
+// while displaying the brand's own name, colors and logo.
+async function resolveEmpresaSubdomain(
+  subdomain: string,
+): Promise<{ tenant: TenantContext; empresa: EmpresaContext } | null> {
+  const [empresa] = await db
+    .select({
+      id: empresas.id,
+      tenantId: empresas.tenantId,
+      name: empresas.name,
+      logoUrl: empresas.logoUrl,
+      primaryColor: empresas.primaryColor,
+      secondaryColor: empresas.secondaryColor,
+      active: empresas.active,
+    })
+    .from(empresas)
+    .where(eq(empresas.subdomain, subdomain))
+    .limit(1);
+
+  if (!empresa || !empresa.active) return null;
+
+  const tenant = await getTenantById(empresa.tenantId);
+  if (!tenant) return null;
+
+  return {
+    tenant,
+    empresa: {
+      id: empresa.id,
+      tenantId: empresa.tenantId,
+      name: empresa.name,
+      logoUrl: empresa.logoUrl,
+      primaryColor: empresa.primaryColor,
+      secondaryColor: empresa.secondaryColor,
+    },
+  };
 }
 
 export function requireTenant(req: Request, res: Response, next: NextFunction) {

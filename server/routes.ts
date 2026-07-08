@@ -238,15 +238,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "No tenant context" });
     }
     
+    // When accessed via an empresa (brand) subdomain (e.g. jmobil.nexxo.com.mx),
+    // show the brand's own name/colors/logo but keep the parent company id.
+    const empresa = req.empresa;
     res.json({
       id: req.tenant.id,
-      name: req.tenant.name,
+      name: empresa?.name ?? req.tenant.name,
       subdomain: req.tenant.subdomain,
-      logoUrl: req.tenant.logoUrl,
-      primaryColor: req.tenant.primaryColor,
-      secondaryColor: req.tenant.secondaryColor,
+      logoUrl: empresa?.logoUrl ?? req.tenant.logoUrl,
+      primaryColor: empresa?.primaryColor ?? req.tenant.primaryColor,
+      secondaryColor: empresa?.secondaryColor ?? req.tenant.secondaryColor,
       timezone: (req.tenant as any).timezone || "America/Mexico_City",
       locale: (req.tenant as any).locale || "es",
+      empresaId: empresa?.id ?? null,
+      empresaName: empresa?.name ?? null,
     });
   });
 

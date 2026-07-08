@@ -40,6 +40,21 @@ flat (no subdomain nesting).
   until approved. Credentials are still emailed at registration (plaintext
   password only exists then); the welcome email has a `pendingApproval` mode.
 
+## Empresa (brand) subdomains resolve to the PARENT tenant
+- An empresa (brand, `empresas` table) may own a `subdomain`. tenantMiddleware
+  resolves it in two steps: try `tenants.subdomain`; on miss, look up
+  `empresas.subdomain`, and if active set `req.tenant` = the empresa's PARENT
+  tenant (via `getTenantById(empresa.tenantId)`) plus `req.empresa` = brand
+  context. Unknown subdomain still 404s for `/api/` paths.
+- `/api/tenant-config` overrides name/logo/colors from `req.empresa` and exposes
+  `empresaId`; the tenant `id` stays the parent so auth/data stay parent-scoped.
+- **Why:** a brand subdomain (e.g. `jmobil.nexxo.com.mx`) must log in against
+  the parent company (Joper) and SHARE its data, only showing the brand's look.
+- **Watch out:** `req.empresa` is context only — writes are NOT auto-scoped to
+  the empresa (no implicit `empresaId` defaulting). Empresa assignment on new
+  docs still comes from the picker / `user.empresaId`. Dev-only `?empresa=`
+  (or `x-empresa-subdomain` header) override exists for local testing.
+
 ## How to apply / watch out for
 - Any handler that reads tenant from `req.user.tenantId` (instead of
   `getEffectiveTenantId(req)` / scoped storage) will NOT honor the switch — it
