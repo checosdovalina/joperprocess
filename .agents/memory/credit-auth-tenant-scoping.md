@@ -15,8 +15,11 @@ straight to `base` with a misleading "verify via quotation" comment but no
 actual check.
 
 **How to apply:** never query credit authorizations by raw id / unfiltered list.
+Both isolation axes (tenant AND empresa-marca) must be enforced via the quotation.
 - List: filter `creditAuthorizations.quotationId IN (SELECT id FROM quotations
-  WHERE tenant_id = getEffectiveTenantId(req))`.
+  WHERE tenant_id = getEffectiveTenantId(req)` AND, when the caller is a
+  restricted vendedor (`getRestrictedEmpresaId()` non-null), also
+  `empresa_id = restrictedEmpresaId)`.
 - get/update: resolve the parent quotation through the scoped
   `getQuotation()` (which enforces tenant + empresa) and 404 if it is undefined
   before returning/mutating.

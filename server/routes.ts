@@ -3116,11 +3116,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/credit-authorizations", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      const quotationScope = tenantId
+        ? (restrictedEmpresaId
+            ? and(eq(quotations.tenantId, tenantId), eq(quotations.empresaId, restrictedEmpresaId))
+            : eq(quotations.tenantId, tenantId))
+        : undefined;
       const allAuths = await db.query.creditAuthorizations.findMany({
-        where: tenantId
+        where: quotationScope
           ? inArray(
               creditAuthorizations.quotationId,
-              db.select({ id: quotations.id }).from(quotations).where(eq(quotations.tenantId, tenantId))
+              db.select({ id: quotations.id }).from(quotations).where(quotationScope)
             )
           : undefined,
         with: {
