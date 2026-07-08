@@ -1,0 +1,55 @@
+nux-x64-gnu-1.1.4.tgz attempt 3 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@napi-rs/wasm-runtime/-/wasm-runtime-1.1.6.tgz attempt 3 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@emnapi/runtime/-/runtime-1.11.1.tgz attempt 3 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@rolldown/binding-linux-x64-musl/-/binding-linux-x64-musl-1.1.4.tgz attempt 3 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@emnapi/wasi-threads/-/wasi-threads-1.2.2.tgz attempt 3 failed with ENOTFOUND
+	npm http fetch GET http://package-firewall.replit.local/npm/@vitest/runner/-/runner-4.1.10.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@vitest/spy/-/spy-4.1.10.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@vitest/expect/-/expect-4.1.10.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@vitest/pretty-format/-/pretty-format-4.1.10.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@vitest/snapshot/-/snapshot-4.1.10.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@types/chai/-/chai-5.2.3.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@standard-schema/spec/-/spec-1.1.0.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@types/deep-eql/-/deep-eql-4.0.2.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@tybys/wasm-util/-/wasm-util-0.10.3.tgz attempt 4 failed with ENOTFOUND
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@tybys/wasm-util
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@napi-rs/wasm-runtime
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@rolldown/binding-wasm32-wasi
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/core
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/wasi-threads
+npm http fetch GET http://package-firewall.replit.local/npm/@oxc-project/types/-/types-0.138.0.tgz attempt 4 failed with ENOTFOUND
+npm http fetch GET http://package-firewall.replit.local/npm/@napi-rs/wasm-runtime/-/wasm-runtime-1.1.6.tgz attempt 4 failed with ENOTFOUND
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@napi-rs/wasm-runtime
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@rolldown/binding-wasm32-wasi
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/core
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@tybys/wasm-util
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/wasi-threads
+npm http fetch GET http://package-firewall.replit.local/npm/@rolldown/binding-linux-x64-gnu/-/binding-linux-x64-gnu-1.1.4.tgz attempt 4 failed with ENOTFOUND
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@rolldown/binding-linux-x64-gnu
+npm http fetch GET http://package-firewall.replit.local/npm/@rolldown/binding-linux-x64-musl/-/binding-linux-x64-musl-1.1.4.tgz attempt 4 failed with ENOTFOUND
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@rolldown/binding-linux-x64-musl
+npm http fetch GET http://package-firewall.replit.local/npm/@emnapi/runtime/-/runtime-1.11.1.tgz attempt 4 failed with ENOTFOUND
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/runtime
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@img/sharp-wasm32
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@napi-rs/wasm-runtime
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@rolldown/binding-wasm32-wasi
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/core
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@tybys/wasm-util
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/wasi-threads
+npm http fetch GET http://package-firewall.replit.local/npm/@emnapi/wasi-threads/-/wasi-threads-1.2.2.tgz attempt 4 failed with ENOTFOUND
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/wasi-threads
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@emnapi/core
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@napi-rs/wasm-runtime
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@rolldown/binding-wasm32-wasi
+npm verbose reify failed optional dependency /var/www/joper/node_modules/@tybys/wasm-util
+npm verbose cwd /var/www/joper
+npm verbose os Linux 5.14.0-611.11.1.el9_7.x86_64
+npm verbose node v20.19.6
+npm verbose npm  v10.8.2
+npm error Exit handler never called!
+npm error This is an error with npm itself. Please report this error at:
+npm error   <https://github.com/npm/cli/issues>
+npm verbose exit 0
+npm info ok
+npm error A complete log of this run can be found in: /root/.npm/_logs/2026-07-08T03_41_05_865Z-debug-0.log
+[root@localhost joper]#

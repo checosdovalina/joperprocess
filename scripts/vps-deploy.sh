@@ -54,6 +54,15 @@ git -C "$PROJECT_DIR" pull origin main
 #    postcss, esbuild, etc. son necesarias para compilar). Forzamos
 #    NODE_ENV=development + --include=dev para que npm NO omita devDependencies
 #    aunque el servidor tenga NODE_ENV=production configurado globalmente.
+#
+#    IMPORTANTE: el package-lock.json generado dentro de Replit apunta a un
+#    proxy interno (package-firewall.replit.local) que NO existe fuera de
+#    Replit. Lo reemplazamos por el registro público de npm para que la
+#    instalación funcione en el VPS.
+if [ -f "$PROJECT_DIR/package-lock.json" ]; then
+  echo "  Corrigiendo URLs internas de Replit en package-lock.json..."
+  sed -i -E 's#https?://package-firewall\.replit\.local/npm/#https://registry.npmjs.org/#g' "$PROJECT_DIR/package-lock.json"
+fi
 echo "[3/6] Instalando dependencias (incluye herramientas de compilación)..."
 NODE_ENV=development npm --prefix "$PROJECT_DIR" install --include=dev
 
