@@ -3,6 +3,8 @@
 - [Microsip cancelled-payment credits](microsip-cancelled-payment-credits.md) — CXC credit sums must join payment doc and filter CANCELADO<>'S'; cancelled receipts keep phantom application rows.
 - [Ticket/folio number generation](ticket-number-generation.md) — derive next seq from MAX existing suffix (not COUNT+1) + retry on unique violation; deletions break COUNT-based numbering.
 - [users.username global unique](users-username-global-unique.md) — DB has a global unique index on username NOT shown in schema.ts; namespace per-tenant usernames and wrap tenant+user creation in a transaction.
+- [Company hierarchy (empresas hijas)](company-hierarchy.md) — tenants nest via self-ref parentId; admin switch overwrites req.tenant; anything reading req.user.tenantId ignores the switch.
+- [credit_authorizations has no tenant_id](credit-auth-tenant-scoping.md) — scope credit auths only via their quotation's tenant; raw findMany leaks across siblings.
 - [drizzle-kit push needs a TTY](drizzle-push-tty.md) — new-table create/rename prompt stalls under pipe/--force; create the table with executeSql instead.
 - [node-firebird concurrent attach race](node-firebird-attach-race.md) — overlapping Firebird.attach() throws false "user name and password not defined"; serialize all attaches process-wide.
 - [Document/blob upload binding](document-upload-binding.md) — bind issued upload entityId to requesting user (in-memory map) + stream-enforce size limit; tenant scoping alone doesn't stop cross-tenant object hijack.

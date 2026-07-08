@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { db } from "./db";
 import { tenants } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export interface TenantContext {
   id: string;
@@ -91,6 +91,44 @@ export function requireTenant(req: Request, res: Response, next: NextFunction) {
     return res.status(400).json({ message: "Tenant context required" });
   }
   next();
+}
+
+// Returns the tenant IDs that a company can "see": itself plus every descendant
+// company (children, grandchildren, ...). Used to validate that a company admin may
+// switch into a given company. Uses a recursive CTE so multi-level hierarchies work.
+export async function getAccessibleTenantIds(rootTenantId: string): Promise<string[]> {
+  const result: any = await db.execute(sql`
+    WITH RECURSIVE descendants AS (
+      SELECT id FROM tenants WHERE id = ${rootTenantId}
+      UNION ALL
+      SELECT t.id FROM tenants t
+      INNER JOIN descendants d ON t.parent_id = d.id
+    )
+    SELECT id FROM descendants
+  `);
+  const rows = (result?.rows ?? result) as Array<{ id: string }>;
+  return rows.map((r) => r.id);
+}
+
+// Fetch a full tenant context by id (used when a company admin switches into a child).
+export async function getTenantById(id: string): Promise<TenantContext | null> {
+  const [tenant] = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      subdomain: tenants.subdomain,
+      logoUrl: tenants.logoUrl,
+      primaryColor: tenants.primaryColor,
+      secondaryColor: tenants.secondaryColor,
+      active: tenants.active,
+      timezone: tenants.timezone,
+      locale: tenants.locale,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, id))
+    .limit(1);
+
+  return tenant || null;
 }
 
 export async function getTenantBySubdomain(subdomain: string): Promise<TenantContext | null> {

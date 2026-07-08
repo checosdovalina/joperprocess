@@ -79,6 +79,7 @@ import CompanyRegistrationPage from "@/pages/company-registration-page";
 import PublicTicketPage from "@/pages/public-ticket-page";
 import TenantsPage from "@/pages/tenants-page";
 import EmpresasPage from "@/pages/empresas-page";
+import CompaniesPage from "@/pages/companies-page";
 import ProductionPage from "@/pages/production-page";
 import ReportsPage from "@/pages/reports-page";
 import OrderReleasePage from "@/pages/order-release-page";
@@ -119,6 +120,7 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
   "/microsip": "nav.microsip",
   "/tenants": "nav.tenants",
   "/empresas": "nav.empresas",
+  "/companies": "nav.companies",
 };
 
 function getPageTitle(location: string, t: (key: string) => string): string {
@@ -191,6 +193,7 @@ function Router() {
       <ProtectedRoute path="/reports" component={ReportsPage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA]} />
       <ProtectedRoute path="/tenants" component={TenantsPage} />
       <ProtectedRoute path="/empresas" component={EmpresasPage} allowedRoles={[UserRole.ADMIN]} />
+      <ProtectedRoute path="/companies" component={CompaniesPage} allowedRoles={[UserRole.ADMIN]} />
       <Route component={NotFound} />
     </Switch>
   );

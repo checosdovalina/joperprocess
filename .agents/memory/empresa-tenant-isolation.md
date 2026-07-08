@@ -38,4 +38,5 @@ NOT fix the pre-existing tenant IDOR — you must add the tenant guard too.
   paths unguarded on purpose.
 
 Known separate follow-up: many OTHER by-id endpoints app-wide still lack tenant guards
-(pre-existing). Audit them for the same pattern.
+(pre-existing). Audit them for the same pattern. Special case: `credit_authorizations`
+has NO tenant_id column at all — see credit-auth-tenant-scoping.md (scope via quotation).

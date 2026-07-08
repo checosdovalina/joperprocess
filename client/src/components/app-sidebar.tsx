@@ -25,6 +25,7 @@ import {
   BookOpen,
   ScrollText,
   Store,
+  Network,
 } from "lucide-react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
@@ -60,6 +61,13 @@ interface Tenant {
   id: string;
   name: string;
   subdomain: string;
+}
+
+interface Company {
+  id: string;
+  name: string;
+  subdomain: string;
+  parentId: string | null;
 }
 
 type MenuItem = {
@@ -128,6 +136,7 @@ const menuGroups: MenuGroup[] = [
       { titleKey: "nav.products", url: "/products", icon: Package, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA] },
       { titleKey: "nav.documents", url: "/documents", icon: BookOpen, roles: Object.values(UserRole) },
       { titleKey: "nav.users", url: "/users", icon: Users, roles: [UserRole.ADMIN] },
+      { titleKey: "nav.companies", url: "/companies", icon: Network, roles: [UserRole.ADMIN] },
       { titleKey: "nav.empresas", url: "/empresas", icon: Store, roles: [UserRole.ADMIN] },
       { titleKey: "nav.company-settings", url: "/company-settings", icon: Settings, roles: [UserRole.ADMIN] },
       { titleKey: "nav.microsip", url: "/microsip", icon: Database, roles: [UserRole.ADMIN] },
@@ -160,6 +169,23 @@ export function AppSidebar() {
     enabled: !!user?.isSuperAdmin,
   });
 
+  // Company hierarchy: admins (not superadmins) can switch into descendant companies.
+  const isCompanyAdmin = user?.role === UserRole.ADMIN && !user?.isSuperAdmin;
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ["/api/companies"],
+    enabled: isCompanyAdmin,
+  });
+
+  // The company currently being viewed: the switched one, or the admin's home company.
+  const activeCompanyId = selectedTenantId || tenant?.id || "";
+  const handleCompanySwitch = (value: string) => {
+    if (!value || value === activeCompanyId) return;
+    // Persist directly and hard-reload so every query refetches with the new
+    // X-Selected-Tenant-Id header and branding is re-applied.
+    localStorage.setItem("selectedTenantId", value);
+    window.location.reload();
+  };
+
   if (!user) return null;
 
   const isOnMainDomain = !tenant || !tenant.subdomain;
@@ -186,6 +212,29 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="py-2">
+        {isCompanyAdmin && companies.length > 1 && (
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 py-1">
+              {t("nav.company")}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <div className="px-2">
+                <Select value={activeCompanyId} onValueChange={handleCompanySwitch}>
+                  <SelectTrigger className="w-full" data-testid="select-company">
+                    <SelectValue placeholder={t("nav.select-company")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id} data-testid={`select-company-${c.subdomain}`}>
+                        {c.parentId ? `— ${c.name}` : c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
         {visibleGroups.map((group) => (
           <SidebarGroup key={group.labelKey} className="py-1">
             <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 py-1">

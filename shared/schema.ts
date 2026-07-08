@@ -19,6 +19,11 @@ export const tenants = pgTable("tenants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   subdomain: text("subdomain").notNull().unique(), // e.g., "joper" for joper.nexxo.com.mx
+  // Jerarquía de compañías (Opción B): una compañía puede tener una compañía "padre".
+  // Las compañías hijas tienen sus PROPIOS datos aislados, pero el admin de la compañía
+  // padre puede entrar a administrar cualquier compañía descendiente. FK se define en
+  // scripts/vps-schema-changes.sql (auto-referencia). null = compañía raíz.
+  parentId: varchar("parent_id"),
   logoUrl: text("logo_url"),
   primaryColor: text("primary_color").default("#4DA3FF"), // Nexxo blue default
   secondaryColor: text("secondary_color").default("#1F3C88"),
@@ -47,6 +52,7 @@ export const tenants = pgTable("tenants", {
 
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
+  parentId: true,
   createdAt: true,
   updatedAt: true,
 });

@@ -1071,10 +1071,26 @@ export class TenantScopedStorage {
   async deleteQuotationItem(id: string) { return this.base.deleteQuotationItem(id); }
   
   // Credit authorization - verify via quotation
-  async getCreditAuthorization(id: string) { return this.base.getCreditAuthorization(id); }
-  async getAllCreditAuthorizations() { return this.base.getAllCreditAuthorizations(); }
+  async getCreditAuthorization(id: string) {
+    const auth = await this.base.getCreditAuthorization(id);
+    if (!auth) return undefined;
+    const quotation = await this.getQuotation(auth.quotationId);
+    if (!quotation) return undefined;
+    return auth;
+  }
+  async getAllCreditAuthorizations() {
+    const all = await this.base.getAllCreditAuthorizations();
+    if (this.ctx.allowGlobal) return all;
+    if (!this.ctx.tenantId) return [];
+    const accessibleQuotationIds = new Set((await this.getAllQuotations()).map((q) => q.id));
+    return all.filter((a) => accessibleQuotationIds.has(a.quotationId));
+  }
   async createCreditAuthorization(data: InsertCreditAuthorization) { return this.base.createCreditAuthorization(data); }
-  async updateCreditAuthorization(id: string, data: Partial<InsertCreditAuthorization>) { return this.base.updateCreditAuthorization(id, data); }
+  async updateCreditAuthorization(id: string, data: Partial<InsertCreditAuthorization>) {
+    const existing = await this.getCreditAuthorization(id);
+    if (!existing) return undefined;
+    return this.base.updateCreditAuthorization(id, data);
+  }
   
   // Order with ownership verification
   async getOrder(id: string) {

@@ -30,6 +30,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import OpenAI from "openai";
 import { tenants, insertTenantSchema, empresas, insertEmpresaSchema } from "@shared/schema";
+import { getAccessibleTenantIds, getTenantById } from "./tenant";
 import { 
   insertCustomerSchema,
   updateCustomerSchema,
@@ -74,8 +75,8 @@ import { customers, quotations, quotationItems, checkins, scheduledVisits, users
 import { createMicrosipSyncService } from "./microsip-sync";
 import { logSystemActivity } from "./system-log";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc } from "drizzle-orm";
-import type { Request } from "express";
+import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc, inArray } from "drizzle-orm";
+import type { Request, Response, NextFunction } from "express";
 
 // Helper to get effective tenantId for data filtering
 // Returns null only if superadmin on main domain (can see all data)
@@ -129,9 +130,49 @@ function requireTenantId(req: Request): string {
   return req.user.tenantId;
 }
 
+// Company hierarchy (Opción B): a company ADMIN may "switch into" a descendant company
+// via the X-Selected-Tenant-Id header. This middleware validates the selected company is a
+// descendant of the admin's own company and, if so, OVERWRITES req.tenant with that child's
+// context. Because getTenantContext()/getEffectiveTenantId() prioritize req.tenant.id, all
+// downstream scoping (reads, writes, IDOR guards) automatically applies to the child company
+// — sibling companies stay isolated. Only ADMINs (never vendedores) can switch; superadmins
+// keep their own existing selection mechanism untouched.
+async function companyHierarchyMiddleware(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    // Skip for unauthenticated, superadmins (handled separately), and non-admins.
+    if (!user || user.isSuperAdmin || user.role !== UserRole.ADMIN) {
+      return next();
+    }
+    const selectedTenantId = req.headers["x-selected-tenant-id"] as string | undefined;
+    // The admin's permanent home company. Never trust the header for this.
+    const homeTenantId = user.tenantId;
+    if (!selectedTenantId || !homeTenantId || selectedTenantId === homeTenantId) {
+      return next();
+    }
+    // Validate: the selected company must be the admin's company or a descendant of it.
+    const accessible = await getAccessibleTenantIds(homeTenantId);
+    if (!accessible.includes(selectedTenantId)) {
+      // Not authorized to switch here — ignore the header, stay on home company.
+      return next();
+    }
+    const childTenant = await getTenantById(selectedTenantId);
+    if (childTenant && childTenant.active) {
+      req.tenant = childTenant;
+    }
+    return next();
+  } catch (error) {
+    console.error("companyHierarchyMiddleware error:", error);
+    return next();
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
+
+  // Allow company admins to operate inside a descendant company (validated server-side).
+  app.use(companyHierarchyMiddleware);
 
   // ==================== TENANT ENDPOINTS ====================
   
@@ -465,6 +506,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error updating tenant:", error);
       res.status(500).json({ error: "Error updating tenant" });
+    }
+  });
+
+  // ==================== COMPANY HIERARCHY (compañías hijas) ENDPOINTS ====================
+  // Unlike /api/tenants (superadmin + main-domain only), these work on any subdomain and
+  // let a company ADMIN manage their own company plus descendant companies (Opción B).
+
+  // List the admin's company plus all descendant companies (tree data).
+  app.get("/api/companies", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const homeTenantId = req.user!.tenantId;
+      if (!homeTenantId) {
+        return res.status(400).json({ error: "Usuario sin compañía asignada" });
+      }
+      const accessibleIds = await getAccessibleTenantIds(homeTenantId);
+      const companies = await db
+        .select({
+          id: tenants.id,
+          name: tenants.name,
+          subdomain: tenants.subdomain,
+          parentId: tenants.parentId,
+          logoUrl: tenants.logoUrl,
+          primaryColor: tenants.primaryColor,
+          secondaryColor: tenants.secondaryColor,
+          active: tenants.active,
+        })
+        .from(tenants)
+        .where(inArray(tenants.id, accessibleIds));
+      res.json(companies);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+      res.status(500).json({ error: "Error al obtener las compañías" });
+    }
+  });
+
+  // Create a child company under the admin's own company. parentId is FORCED server-side
+  // to the admin's home company — it can never be set by the client.
+  app.post("/api/companies", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const homeTenantId = req.user!.tenantId;
+      if (!homeTenantId) {
+        return res.status(400).json({ error: "Usuario sin compañía asignada" });
+      }
+      // Strip any client-supplied parentId; validate the rest with the tenant insert schema.
+      const { parentId: _ignored, ...body } = req.body ?? {};
+      const validationResult = insertTenantSchema.safeParse(body);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          error: "Datos inválidos",
+          details: validationResult.error.errors,
+        });
+      }
+      const [newCompany] = await db
+        .insert(tenants)
+        .values({ ...validationResult.data, parentId: homeTenantId })
+        .returning();
+      res.status(201).json(newCompany);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "El subdominio ya existe" });
+      }
+      console.error("Error creating company:", error);
+      res.status(500).json({ error: "Error al crear la compañía" });
     }
   });
 
@@ -3011,7 +3115,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Credit Authorizations endpoints
   app.get("/api/credit-authorizations", isAuthenticated, async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
       const allAuths = await db.query.creditAuthorizations.findMany({
+        where: tenantId
+          ? inArray(
+              creditAuthorizations.quotationId,
+              db.select({ id: quotations.id }).from(quotations).where(eq(quotations.tenantId, tenantId))
+            )
+          : undefined,
         with: {
           quotation: {
             with: {
@@ -7277,7 +7388,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
 
       const incident = await db.query.incidents.findFirst({
         where: tenantId 
@@ -7610,7 +7721,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:id/comments", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
 
       // First verify incident belongs to tenant
       const incident = await db.query.incidents.findFirst({
@@ -7640,7 +7751,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:id/activities", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
 
       // First verify incident belongs to tenant
       const incident = await db.query.incidents.findFirst({
@@ -7670,7 +7781,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/api/incidents/:incidentId/attachments/:attachmentId/download", isAuthenticated, async (req, res) => {
     try {
       const { incidentId, attachmentId } = req.params;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
 
       const incident = await db.query.incidents.findFirst({
         where: tenantId 
@@ -7725,7 +7836,7 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const { incidentId } = req.params;
       const { filename, mimeType } = req.body;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
 
       if (!filename || !mimeType) {
         return res.status(400).json({ error: "Se requiere nombre de archivo y tipo MIME" });
@@ -7785,7 +7896,7 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const { incidentId } = req.params;
       const { entityId, filename, originalName, mimeType, size } = req.body;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
       const userId = req.user!.id;
 
       if (!entityId || !filename || !originalName || !mimeType || !size) {
@@ -7836,7 +7947,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.delete("/api/incidents/:incidentId/attachments/:attachmentId", isAuthenticated, async (req, res) => {
     try {
       const { incidentId, attachmentId } = req.params;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
 
       const incident = await db.query.incidents.findFirst({
         where: tenantId
@@ -8112,7 +8223,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.delete("/api/incidents/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const { id } = req.params;
-      const tenantId = req.user!.tenantId;
+      const tenantId = getEffectiveTenantId(req);
 
       const existing = await db.query.incidents.findFirst({
         where: tenantId

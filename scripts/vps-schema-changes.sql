@@ -133,6 +133,13 @@ ALTER TABLE quotations ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES em
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES empresas(id);
 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES empresas(id);
 
+-- [2026-07-08] Jerarquía de compañías (Opción B): compañías hijas
+-- Una compañía puede tener una compañía "padre" (auto-referencia en tenants).
+-- Las compañías hijas tienen sus PROPIOS datos aislados; el admin de la compañía
+-- padre puede entrar y administrar cualquier compañía descendiente.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS parent_id varchar REFERENCES tenants(id);
+CREATE INDEX IF NOT EXISTS idx_tenants_parent ON tenants (parent_id);
+
 -- ================================================================
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
