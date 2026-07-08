@@ -1647,6 +1647,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Scheduled visit not found" });
       }
 
+      // Tenant isolation: never expose a visit from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
       res.json(visit);
     } catch (error) {
       console.error("Error fetching scheduled visit:", error);
@@ -1706,6 +1712,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Scheduled visit not found" });
       }
 
+      // Tenant isolation: never mutate a visit from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
       // Only owner or admin can update
       if (visit.userId !== userId && req.user!.role !== UserRole.ADMIN) {
         return res.status(403).json({ error: "Not authorized to update this visit" });
@@ -1736,6 +1748,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!visit) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
+      // Tenant isolation: never mutate a visit from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
         return res.status(404).json({ error: "Scheduled visit not found" });
       }
 
@@ -1773,6 +1791,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!visit) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
+      }
+
+      // Tenant isolation: never convert a visit from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && visit.tenantId !== effectiveTenantId) {
         return res.status(404).json({ error: "Scheduled visit not found" });
       }
 
@@ -1929,6 +1953,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      // Tenant isolation: never expose a product from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && product.tenantId !== effectiveTenantId) {
         return res.status(404).json({ error: "Product not found" });
       }
       
@@ -3415,6 +3445,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/credit-authorizations/:id/comments", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      // Tenant + empresa isolation: scope the auth via its quotation before exposing comments.
+      const scopedAuth = await createTenantScopedStorage(req).getCreditAuthorization(id);
+      if (!scopedAuth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
       const comments = await db.query.creditAuthorizationComments.findMany({
         where: eq(creditAuthorizationComments.creditAuthorizationId, id),
         with: {
@@ -3437,6 +3472,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!content || content.trim() === "") {
         return res.status(400).json({ error: "El contenido del comentario es requerido" });
+      }
+
+      // Tenant + empresa isolation: scope the auth via its quotation before adding a comment.
+      const scopedAuth = await createTenantScopedStorage(req).getCreditAuthorization(id);
+      if (!scopedAuth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
       }
 
       const [comment] = await db.insert(creditAuthorizationComments).values({
@@ -3478,6 +3519,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!auth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
+      // Tenant + empresa isolation: scope the auth via its quotation before exposing the PDF.
+      const scopedAuth = await createTenantScopedStorage(req).getCreditAuthorization(id);
+      if (!scopedAuth) {
         return res.status(404).json({ error: "Autorización no encontrada" });
       }
 
@@ -3530,6 +3577,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Autorización no encontrada" });
       }
 
+      // Tenant + empresa isolation: scope the auth via its quotation before mutating.
+      const scopedAuth = await createTenantScopedStorage(req).getCreditAuthorization(id);
+      if (!scopedAuth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
       if (auth.status !== CreditAuthStatus.PENDING) {
         return res.status(400).json({ error: "Solo se pueden editar autorizaciones pendientes" });
       }
@@ -3578,6 +3631,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!auth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
+      // Tenant + empresa isolation: scope the auth via its quotation before analyzing.
+      const scopedAuth = await createTenantScopedStorage(req).getCreditAuthorization(id);
+      if (!scopedAuth) {
         return res.status(404).json({ error: "Autorización no encontrada" });
       }
 
@@ -3786,6 +3845,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!auth) {
+        return res.status(404).json({ error: "Autorización no encontrada" });
+      }
+
+      // Tenant + empresa isolation: scope the auth via its quotation before analyzing.
+      const scopedAuth = await createTenantScopedStorage(req).getCreditAuthorization(id);
+      if (!scopedAuth) {
         return res.status(404).json({ error: "Autorización no encontrada" });
       }
 
@@ -5195,6 +5260,11 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!instance) {
         return res.status(404).json({ error: "Product instance not found" });
       }
+      // Tenant + empresa isolation: scope via the parent shipment.
+      const scopedShipment = await createTenantScopedStorage(req).getShipment(instance.shipmentId);
+      if (!scopedShipment) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
       res.json(instance);
     } catch (error) {
       console.error("Error fetching product instance:", error);
@@ -5238,6 +5308,18 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const { id } = req.params;
       const { status, notes, deliveredAt, serialNumber } = req.body;
+      // Tenant + empresa isolation: scope via the parent shipment before mutating.
+      const targetInstance = await db.query.shipmentProductInstances.findFirst({
+        where: eq(shipmentProductInstances.id, id),
+        columns: { shipmentId: true },
+      });
+      if (!targetInstance) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
+      const scopedShipment = await createTenantScopedStorage(req).getShipment(targetInstance.shipmentId);
+      if (!scopedShipment) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
       if (serialNumber !== undefined) {
         const existing = await db.query.shipmentProductInstances.findFirst({
           where: and(
@@ -5333,6 +5415,12 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(404).json({ error: "Invoice not found" });
       }
 
+      // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
       res.json(invoice);
     } catch (error) {
       console.error("Error fetching invoice:", error);
@@ -5350,6 +5438,12 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
 
       if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
         return res.status(404).json({ error: "Invoice not found" });
       }
 
@@ -5380,6 +5474,12 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
 
       if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
         return res.status(404).json({ error: "Invoice not found" });
       }
 
@@ -6002,6 +6102,12 @@ Proporciona tu análisis en el siguiente formato JSON:
       });
       
       if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      // Tenant isolation: never expose an invoice from another tenant, even by direct ID.
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (effectiveTenantId && invoice.tenantId !== effectiveTenantId) {
         return res.status(404).json({ error: "Invoice not found" });
       }
       

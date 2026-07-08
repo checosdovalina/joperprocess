@@ -37,6 +37,12 @@ NOT fix the pre-existing tenant IDOR — you must add the tenant guard too.
 - `TenantScopedStorage` uses `ctx.allowGlobal` for superadmin on the main domain — keep those
   paths unguarded on purpose.
 
-Known separate follow-up: many OTHER by-id endpoints app-wide still lack tenant guards
-(pre-existing). Audit them for the same pattern. Special case: `credit_authorizations`
+By-id endpoint audit is DONE across server/routes.ts: scheduledVisits, products, invoices
+(incl. accounts-receivable/:id), shipmentProductInstances, and credit_authorizations all now
+guard by tenant (via getEffectiveTenantId or scoped getters). Special case: `credit_authorizations`
 has NO tenant_id column at all — see credit-auth-tenant-scoping.md (scope via quotation).
+Endpoints found already-safe (do not re-guard): account-statement-schedule (tenantId in
+where-clause), pending-uploads (userId-bound), customers/documents/empresas/product-categories
+(use scoped storage), incidents/checkins/orders-details (already guarded). Note: raw tenants.id
+branding lookups are fine (tenant already resolved), and internal email-assembly customer
+lookups use an already-scoped quotation so they don't leak.
