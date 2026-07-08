@@ -52,7 +52,14 @@ checked empresa first, so a cross-tenant+restricted request now returns 404 inst
 
 By-id endpoint audit is DONE across server/routes.ts: scheduledVisits, products, invoices
 (incl. accounts-receivable/:id), shipmentProductInstances, and credit_authorizations all now
-guard by tenant (via getEffectiveTenantId or scoped getters). Special case: `credit_authorizations`
+guard by tenant (via getEffectiveTenantId or scoped getters). **Watch DELETE handlers
+specifically:** the read + PATCH product-instances endpoints scoped via the parent shipment,
+but the DELETE variant was left unguarded (raw delete-by-id) for a while — audit every verb
+(GET/PATCH/DELETE) of a by-id resource independently, don't assume a sibling handler's guard
+covers the whole route family. Write-path isolation (cross-company PATCH/DELETE returns 404/403
+AND leaves the row unchanged) is now regression-locked in server/isolation.test.ts alongside
+the read-path cases. Note: there is NO payments by-id write endpoint (only collection GET/POST),
+so payments have no by-id write guard to test. Special case: `credit_authorizations`
 has NO tenant_id column at all — see credit-auth-tenant-scoping.md (scope via quotation).
 Endpoints found already-safe (do not re-guard): account-statement-schedule (tenantId in
 where-clause), pending-uploads (userId-bound), customers/documents/empresas/product-categories

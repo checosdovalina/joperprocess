@@ -5366,6 +5366,18 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.delete("/api/product-instances/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      // Tenant + empresa isolation: scope via the parent shipment before deleting.
+      const targetInstance = await db.query.shipmentProductInstances.findFirst({
+        where: eq(shipmentProductInstances.id, id),
+        columns: { shipmentId: true },
+      });
+      if (!targetInstance) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
+      const scopedShipment = await createTenantScopedStorage(req).getShipment(targetInstance.shipmentId);
+      if (!scopedShipment) {
+        return res.status(404).json({ error: "Product instance not found" });
+      }
       const [deleted] = await db
         .delete(shipmentProductInstances)
         .where(eq(shipmentProductInstances.id, id))

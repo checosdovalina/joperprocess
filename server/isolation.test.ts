@@ -33,11 +33,13 @@ import {
   products,
   orders,
   shipments,
+  shipmentProductInstances,
   invoices,
   scheduledVisits,
   creditAuthorizations,
   UserRole,
   QuotationStatus,
+  ScheduledVisitStatus,
 } from "@shared/schema";
 
 // Stub the transactional email provider so the send-email happy path can be
@@ -71,7 +73,11 @@ type Ctx = {
   qA2: string;
   qB1: string;
   productA1: string;
+  productB1: string;
   itemA1: string;
+  piA1: string;
+  piA2: string;
+  piB1: string;
   oA1: string;
   oA2: string;
   oB1: string;
@@ -180,6 +186,10 @@ async function seed() {
   ctx.productA1 = await insertReturningId(products, {
     tenantId: ctx.tenantA, code: `P-${RUN}`, name: `Producto ${RUN}`, listPrice: "100",
   });
+  // A tenant-B product so the cross-tenant PATCH /api/products/:id case has a target.
+  ctx.productB1 = await insertReturningId(products, {
+    tenantId: ctx.tenantB, code: `P-${RUN}-B`, name: `Producto B ${RUN}`, listPrice: "100",
+  });
   ctx.itemA1 = await insertReturningId(quotationItems, {
     quotationId: ctx.qA1, productId: ctx.productA1, productName: `Producto ${RUN}`,
     quantity: "2", listPrice: "100", unitPrice: "100", subtotal: "200", total: "232", position: 0,
@@ -192,6 +202,22 @@ async function seed() {
   ctx.sA1 = await insertReturningId(shipments, { tenantId: ctx.tenantA, empresaId: ctx.empresaA1, orderId: ctx.oA1, transporter: "T", transportType: "propio" });
   ctx.sA2 = await insertReturningId(shipments, { tenantId: ctx.tenantA, empresaId: ctx.empresaA2, orderId: ctx.oA2, transporter: "T", transportType: "propio" });
   ctx.sB1 = await insertReturningId(shipments, { tenantId: ctx.tenantB, empresaId: ctx.empresaB1, orderId: ctx.oB1, transporter: "T", transportType: "propio" });
+
+  // Product instances (no tenant/empresa column of their own — scoped via parent shipment).
+  // piA1 is in-scope for vendedorA1 (empresaA1); piA2 is same tenant, other empresa;
+  // piB1 belongs to tenant B. Used by the product-instances PATCH/DELETE write guards.
+  ctx.piA1 = await insertReturningId(shipmentProductInstances, {
+    shipmentId: ctx.sA1, orderId: ctx.oA1, customerId: ctx.customerA, productId: ctx.productA1,
+    serialNumber: `SN-${RUN}-A1`,
+  });
+  ctx.piA2 = await insertReturningId(shipmentProductInstances, {
+    shipmentId: ctx.sA2, orderId: ctx.oA2, customerId: ctx.customerA, productId: ctx.productA1,
+    serialNumber: `SN-${RUN}-A2`,
+  });
+  ctx.piB1 = await insertReturningId(shipmentProductInstances, {
+    shipmentId: ctx.sB1, orderId: ctx.oB1, customerId: ctx.customerB, productId: ctx.productB1,
+    serialNumber: `SN-${RUN}-B1`,
+  });
 
   ctx.caA1 = await insertReturningId(creditAuthorizations, { quotationId: ctx.qA1, userId: ctx.vendedorA1.id });
   ctx.caA2 = await insertReturningId(creditAuthorizations, { quotationId: ctx.qA2, userId: ctx.adminA.id });
@@ -226,6 +252,9 @@ async function cleanup() {
   if (qIds.length) await db.delete(creditAuthorizations).where(inArray(creditAuthorizations.quotationId, qIds));
   await db.delete(scheduledVisits).where(inArray(scheduledVisits.tenantId, tIds));
   await db.delete(invoices).where(inArray(invoices.tenantId, tIds));
+  const shs = await db.select({ id: shipments.id }).from(shipments).where(inArray(shipments.tenantId, tIds));
+  const shIds = shs.map((s) => s.id);
+  if (shIds.length) await db.delete(shipmentProductInstances).where(inArray(shipmentProductInstances.shipmentId, shIds));
   await db.delete(shipments).where(inArray(shipments.tenantId, tIds));
   await db.delete(orders).where(inArray(orders.tenantId, tIds));
   await db.delete(quotations).where(inArray(quotations.tenantId, tIds));
@@ -562,6 +591,96 @@ describe("GET /api/products/:id (tenant-scoped by-id)", () => {
   });
   it("blocked cross-tenant (404)", async () => {
     expect((await asAdminB("GET", `/api/products/${ctx.productA1}`)).status).toBe(404);
+  });
+});
+
+// ── Write-path (PATCH/DELETE) isolation ──────────────────────────────────────
+// These prove a cross-company user cannot MODIFY or DELETE another company's
+// records by direct ID — the higher-risk surface. Every negative case also
+// re-reads the row straight from the DB to confirm it was left unchanged.
+
+describe("PATCH /api/invoices/:id (write guard, tenant-scoped)", () => {
+  it("allowed inside tenant (200) and persists the change", async () => {
+    const note = `note-${Date.now()}`;
+    const r = await asAdminA("PATCH", `/api/invoices/${ctx.invA1}`, { notes: note });
+    expect(r.status).toBe(200);
+    const [row] = await db.select({ notes: invoices.notes }).from(invoices).where(eq(invoices.id, ctx.invA1));
+    expect(row.notes).toBe(note);
+  });
+  it("blocked cross-tenant (404) and leaves the record unchanged", async () => {
+    const [before] = await db.select({ notes: invoices.notes }).from(invoices).where(eq(invoices.id, ctx.invB1));
+    expect((await asAdminA("PATCH", `/api/invoices/${ctx.invB1}`, { notes: "hacked" })).status).toBe(404);
+    expect((await asVendedorA1("PATCH", `/api/invoices/${ctx.invB1}`, { notes: "hacked" })).status).toBe(404);
+    const [after] = await db.select({ notes: invoices.notes }).from(invoices).where(eq(invoices.id, ctx.invB1));
+    expect(after.notes).toBe(before.notes);
+  });
+});
+
+describe("PATCH /api/accounts-receivable/:id (write guard, tenant-scoped)", () => {
+  it("blocked cross-tenant (404) and leaves the record unchanged", async () => {
+    const [before] = await db.select({ notes: invoices.notes }).from(invoices).where(eq(invoices.id, ctx.invB1));
+    expect((await asAdminA("PATCH", `/api/accounts-receivable/${ctx.invB1}`, { notes: "hacked" })).status).toBe(404);
+    const [after] = await db.select({ notes: invoices.notes }).from(invoices).where(eq(invoices.id, ctx.invB1));
+    expect(after.notes).toBe(before.notes);
+  });
+});
+
+describe("PATCH /api/products/:id (write guard, tenant-scoped)", () => {
+  it("blocked cross-tenant (404) and leaves the record unchanged", async () => {
+    const [before] = await db.select({ name: products.name }).from(products).where(eq(products.id, ctx.productB1));
+    expect((await asAdminA("PATCH", `/api/products/${ctx.productB1}`, { name: "hacked" })).status).toBe(404);
+    const [after] = await db.select({ name: products.name }).from(products).where(eq(products.id, ctx.productB1));
+    expect(after.name).toBe(before.name);
+  });
+});
+
+describe("PATCH/DELETE /api/scheduled-visits/:id (write guard, tenant-scoped)", () => {
+  it("PATCH blocked cross-tenant (404) and leaves the record unchanged", async () => {
+    const [before] = await db.select({ notes: scheduledVisits.notes }).from(scheduledVisits).where(eq(scheduledVisits.id, ctx.svB1));
+    expect((await asVendedorA1("PATCH", `/api/scheduled-visits/${ctx.svB1}`, { notes: "hacked" })).status).toBe(404);
+    expect((await asAdminA("PATCH", `/api/scheduled-visits/${ctx.svB1}`, { notes: "hacked" })).status).toBe(404);
+    const [after] = await db.select({ notes: scheduledVisits.notes }).from(scheduledVisits).where(eq(scheduledVisits.id, ctx.svB1));
+    expect(after.notes).toBe(before.notes);
+  });
+  it("DELETE (cancel) blocked cross-tenant (404) and does NOT cancel the visit", async () => {
+    const [before] = await db.select({ status: scheduledVisits.status }).from(scheduledVisits).where(eq(scheduledVisits.id, ctx.svB1));
+    expect((await asVendedorA1("DELETE", `/api/scheduled-visits/${ctx.svB1}`)).status).toBe(404);
+    expect((await asAdminA("DELETE", `/api/scheduled-visits/${ctx.svB1}`)).status).toBe(404);
+    const [after] = await db.select({ status: scheduledVisits.status }).from(scheduledVisits).where(eq(scheduledVisits.id, ctx.svB1));
+    expect(after.status).toBe(before.status);
+    expect(after.status).not.toBe(ScheduledVisitStatus.CANCELLED);
+  });
+});
+
+describe("PATCH/DELETE /api/product-instances/:id (write guard, tenant + empresa via shipment)", () => {
+  it("PATCH allowed in-scope (200) and persists the change", async () => {
+    const note = `note-${Date.now()}`;
+    const r = await asVendedorA1("PATCH", `/api/product-instances/${ctx.piA1}`, { notes: note });
+    expect(r.status).toBe(200);
+    const [row] = await db.select({ notes: shipmentProductInstances.notes }).from(shipmentProductInstances).where(eq(shipmentProductInstances.id, ctx.piA1));
+    expect(row.notes).toBe(note);
+  });
+  it("PATCH blocked cross-empresa (404) and leaves the record unchanged", async () => {
+    const [before] = await db.select({ notes: shipmentProductInstances.notes }).from(shipmentProductInstances).where(eq(shipmentProductInstances.id, ctx.piA2));
+    expect((await asVendedorA1("PATCH", `/api/product-instances/${ctx.piA2}`, { notes: "hacked" })).status).toBe(404);
+    const [after] = await db.select({ notes: shipmentProductInstances.notes }).from(shipmentProductInstances).where(eq(shipmentProductInstances.id, ctx.piA2));
+    expect(after.notes).toBe(before.notes);
+  });
+  it("PATCH blocked cross-tenant (404) and leaves the record unchanged", async () => {
+    const [before] = await db.select({ notes: shipmentProductInstances.notes }).from(shipmentProductInstances).where(eq(shipmentProductInstances.id, ctx.piB1));
+    expect((await asAdminA("PATCH", `/api/product-instances/${ctx.piB1}`, { notes: "hacked" })).status).toBe(404);
+    const [after] = await db.select({ notes: shipmentProductInstances.notes }).from(shipmentProductInstances).where(eq(shipmentProductInstances.id, ctx.piB1));
+    expect(after.notes).toBe(before.notes);
+  });
+  it("DELETE blocked cross-tenant (404) and the record still exists", async () => {
+    expect((await asAdminA("DELETE", `/api/product-instances/${ctx.piB1}`)).status).toBe(404);
+    const rows = await db.select({ id: shipmentProductInstances.id }).from(shipmentProductInstances).where(eq(shipmentProductInstances.id, ctx.piB1));
+    expect(rows.length).toBe(1);
+  });
+  it("DELETE blocked cross-empresa (404) and the record still exists", async () => {
+    expect((await asVendedorA1("DELETE", `/api/product-instances/${ctx.piA2}`)).status).toBe(404);
+    const rows = await db.select({ id: shipmentProductInstances.id }).from(shipmentProductInstances).where(eq(shipmentProductInstances.id, ctx.piA2));
+    expect(rows.length).toBe(1);
   });
 });
 
