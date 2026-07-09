@@ -261,11 +261,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/pipeline", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
-      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents
+      // Empresa isolation: vendedores bound to an empresa only see their empresa's documents.
       const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
-      const quotEmpresaFilter = restrictedEmpresaId ? eq(quotations.empresaId, restrictedEmpresaId) : undefined;
-      const orderEmpresaFilter = restrictedEmpresaId ? eq(orders.empresaId, restrictedEmpresaId) : undefined;
-      const shipmentEmpresaFilter = restrictedEmpresaId ? eq(shipments.empresaId, restrictedEmpresaId) : undefined;
+      // Optional empresa selector for non-restricted roles (e.g. Producción viewing
+      // one empresa at a time). Restricted vendedores always keep their own empresa;
+      // the selected value is ignored for them. The tenant filter still applies, so a
+      // foreign empresaId simply returns no rows (no cross-tenant leak).
+      const selectedEmpresaId = typeof req.query.empresaId === "string" && req.query.empresaId
+        ? req.query.empresaId
+        : null;
+      const empresaId = restrictedEmpresaId ?? selectedEmpresaId;
+      const quotEmpresaFilter = empresaId ? eq(quotations.empresaId, empresaId) : undefined;
+      const orderEmpresaFilter = empresaId ? eq(orders.empresaId, empresaId) : undefined;
+      const shipmentEmpresaFilter = empresaId ? eq(shipments.empresaId, empresaId) : undefined;
       const tenantFilter = tenantId
         ? (quotEmpresaFilter ? and(eq(quotations.tenantId, tenantId), quotEmpresaFilter) : eq(quotations.tenantId, tenantId))
         : quotEmpresaFilter;

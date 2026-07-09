@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import type { Empresa } from "@shared/schema";
 import {
   RefreshCw, FileText, ShieldCheck, Package, Truck,
   Radio, Maximize2, Minimize2, ChevronDown,
@@ -497,9 +499,28 @@ export default function PipelinePage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showActive, setShowActive] = useState(true);
   const [showTvPrompt, setShowTvPrompt] = useState(true);
+  const [selectedEmpresa, setSelectedEmpresa] = useState("all");
+
+  // Vendedores bound to an empresa are locked to it; other roles (Producción,
+  // Administración) can switch empresa to see each board separately.
+  const { user } = useAuth();
+  const isRestrictedVendedor = user?.role === "vendedor" && !!user?.empresaId;
+  const { data: empresas = [] } = useQuery<Empresa[]>({
+    queryKey: ["/api/empresas"],
+    enabled: !isRestrictedVendedor,
+  });
+  const showEmpresaSelector = !isRestrictedVendedor && empresas.length > 1;
 
   const { data, refetch, isFetching, isLoading } = useQuery<PipelineData>({
-    queryKey: ["/api/pipeline"],
+    queryKey: ["/api/pipeline", selectedEmpresa],
+    queryFn: async () => {
+      const url = selectedEmpresa !== "all"
+        ? `/api/pipeline?empresaId=${encodeURIComponent(selectedEmpresa)}`
+        : "/api/pipeline";
+      const r = await fetch(url, { credentials: "include" });
+      if (!r.ok) throw new Error("Error");
+      return r.json();
+    },
     refetchInterval: REFRESH_INTERVAL * 1000,
     staleTime: 15_000,
   });
@@ -647,6 +668,20 @@ export default function PipelinePage() {
               {t("pipeline.refresh-in")} {countdown}s
             </div>
           </div>
+
+          {showEmpresaSelector && (
+            <select
+              value={selectedEmpresa}
+              onChange={(e) => setSelectedEmpresa(e.target.value)}
+              style={{ ...btnBase, display: "inline-block", appearance: "auto" }}
+              data-testid="select-pipeline-empresa"
+            >
+              <option value="all" style={{ color: "#000" }}>Todas las empresas</option>
+              {empresas.map((e) => (
+                <option key={e.id} value={e.id} style={{ color: "#000" }}>{e.name}</option>
+              ))}
+            </select>
+          )}
 
           <button onClick={handleManualRefresh} title={t("pipeline.refresh")} style={btnBase} data-testid="button-refresh">
             <RefreshCw size={13} style={{ animation: isFetching ? "spin 1s linear infinite" : "none" }} />

@@ -59,7 +59,7 @@ import {
   type Incident,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, asc, isNull } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc, isNull, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -326,57 +326,51 @@ export class DatabaseStorage implements IStorage {
 
   async createQuotation(insertQuotation: InsertQuotation): Promise<Quotation> {
     const FOREIGN_RFC = 'XEXX010101000';
-    let countryPrefix = 'COT';
-
+    // Prefijo de folio según el cliente: MEX (México) / EXT (extranjero).
+    let prefix = 'MEX';
     if (insertQuotation.customerId) {
       const customer = await this.getCustomer(insertQuotation.customerId);
       if (customer) {
         if (customer.rfc === FOREIGN_RFC) {
-          countryPrefix = 'EXT';
-        } else if (customer.country) {
-          const countryPrefixes: Record<string, string> = {
-            'México': 'MEX',
-            'Mexico': 'MEX',
-            'MX': 'MEX',
-            'Estados Unidos': 'USA',
-            'United States': 'USA',
-            'US': 'USA',
-            'USA': 'USA',
-            'Canadá': 'CAN',
-            'Canada': 'CAN',
-            'CA': 'CAN',
-            'Guatemala': 'GTM',
-            'GT': 'GTM',
-            'Colombia': 'COL',
-            'CO': 'COL',
-            'Brasil': 'BRA',
-            'Brazil': 'BRA',
-            'BR': 'BRA',
-            'Argentina': 'ARG',
-            'AR': 'ARG',
-            'Chile': 'CHL',
-            'CL': 'CHL',
-            'Perú': 'PER',
-            'Peru': 'PER',
-            'PE': 'PER',
-            'España': 'ESP',
-            'Spain': 'ESP',
-            'ES': 'ESP',
-          };
-          countryPrefix = countryPrefixes[customer.country] || customer.country.substring(0, 3).toUpperCase();
+          prefix = 'EXT';
+        } else {
+          const country = (customer.country || '').trim().toLowerCase();
+          const mexican = ['méxico', 'mexico', 'mx', 'mex'];
+          if (country) {
+            prefix = mexican.includes(country) ? 'MEX' : 'EXT';
+          }
         }
       }
     }
-    
-    // Generate folio with country prefix
-    const folioNumber = Date.now().toString().slice(-6);
-    const folio = `${countryPrefix}-${folioNumber}`;
-    
-    const [quotation] = await db
-      .insert(quotations)
-      .values({ ...insertQuotation, folio } as typeof quotations.$inferInsert)
-      .returning();
-    return quotation;
+
+    // Folio secuencial y único (compartido entre empresas): toma el número más
+    // alto existente para el prefijo y le suma 1. Si dos cotizaciones toman el
+    // mismo número a la vez, el índice único lo rechaza y reintentamos con el
+    // siguiente número disponible, evitando duplicados y fallos al guardar.
+    const maxAttempts = 8;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const [row] = await db
+        .select({
+          next: sql<number>`COALESCE(MAX(CAST(substring(${quotations.folio} from ${`^${prefix}-([0-9]+)$`}) AS INTEGER)), 0) + 1`,
+        })
+        .from(quotations)
+        .where(sql`${quotations.folio} LIKE ${`${prefix}-%`}`);
+      const next = Number(row?.next ?? 1);
+      const folio = `${prefix}-${next}`;
+      try {
+        const [quotation] = await db
+          .insert(quotations)
+          .values({ ...insertQuotation, folio } as typeof quotations.$inferInsert)
+          .returning();
+        return quotation;
+      } catch (err: any) {
+        if (err?.code === '23505' && attempt < maxAttempts - 1) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('No se pudo generar un folio único para la cotización');
   }
 
   async updateQuotation(id: string, data: Partial<InsertQuotation>): Promise<Quotation | undefined> {
