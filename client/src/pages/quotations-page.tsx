@@ -680,7 +680,7 @@ export default function QuotationsPage() {
                 ))}
               </SelectContent>
             </Select>
-            {empresas && empresas.length > 0 && (
+            {empresas && empresas.length > 0 && !(user?.role === 'vendedor' && user?.empresaId) && (
               <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
                 <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Empresa" />

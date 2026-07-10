@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
+import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Shipment, Order, Quotation, Customer, ShipmentStatus, ShipmentProductInstance, Product, QuotationItem, type Empresa } from "@shared/schema";
 import {
@@ -75,6 +76,7 @@ export default function ShipmentsPage() {
   });
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const { user } = useAuth();
   const [filterEmpresa, setFilterEmpresa] = useState("all");
 
   const { data: shipments, isLoading } = useQuery<ShipmentWithDetails[]>({
@@ -421,7 +423,7 @@ export default function ShipmentsPage() {
                 <SelectItem value={ShipmentStatus.DELIVERED}>{t("status.delivered")}</SelectItem>
               </SelectContent>
             </Select>
-            {empresas && empresas.length > 0 && (
+            {empresas && empresas.length > 0 && !(user?.role === 'vendedor' && user?.empresaId) && (
               <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
                 <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Empresa" />

@@ -46,7 +46,7 @@ const defaultFormValues = {
 };
 
 // Extend schema with client-side decimal validation, omitting tenantId (added by backend)
-const makeCustomerFormSchema = (t: (key: string) => string) => insertCustomerSchema.extend({
+const makeCustomerFormSchema = (t: (key: string) => string) => insertCustomerSchema.omit({ tenantId: true }).extend({
   creditLimit: z.string()
     .min(1, { message: t("customers.credit-limit-required") })
     .refine(

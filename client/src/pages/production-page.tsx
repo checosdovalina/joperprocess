@@ -402,7 +402,7 @@ export default function ProductionPage() {
             data-testid="input-search-production"
           />
         </div>
-        {empresas && empresas.length > 0 && (
+        {empresas && empresas.length > 0 && !(user?.role === 'vendedor' && user?.empresaId) && (
           <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
             <SelectTrigger className="w-full sm:w-56">
               <SelectValue placeholder="Empresa" />
