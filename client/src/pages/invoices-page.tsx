@@ -108,7 +108,7 @@ export default function InvoicesPage() {
     const q = norm(searchTerm.trim());
     return invoices.filter((inv) => {
       const folio = `${inv.serie}-${inv.folio}`.toLowerCase();
-      const cliente = inv.customer.name.toLowerCase();
+      const cliente = (inv.customer?.name ?? "").toLowerCase();
       const fechaEmision = new Date(inv.issuedAt);
 
       if (q) {
@@ -435,8 +435,8 @@ export default function InvoicesPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium">{invoice.customer.name}</div>
-                          <div className="text-xs text-muted-foreground">{invoice.customer.rfc}</div>
+                          <div className="font-medium">{invoice.customer?.name ?? "—"}</div>
+                          <div className="text-xs text-muted-foreground">{invoice.customer?.rfc}</div>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
@@ -554,11 +554,11 @@ export default function InvoicesPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Cliente</h4>
-                    <p className="font-medium">{selectedInvoice.customer.name}</p>
-                    {selectedInvoice.customer.rfc && (
+                    <p className="font-medium">{selectedInvoice.customer?.name ?? "—"}</p>
+                    {selectedInvoice.customer?.rfc && (
                       <p className="text-sm text-muted-foreground">{selectedInvoice.customer.rfc}</p>
                     )}
-                    {selectedInvoice.customer.email && (
+                    {selectedInvoice.customer?.email && (
                       <p className="text-sm text-muted-foreground">{selectedInvoice.customer.email}</p>
                     )}
                   </div>
@@ -670,9 +670,9 @@ export default function InvoicesPage() {
               <div className="space-y-3">
                 <p>
                   {t("invoices.email.send-prefix")} <strong>{selectedInvoice?.serie}-{selectedInvoice?.folio}</strong> {t("invoices.email.send-mid")}{" "}
-                  <strong>{selectedInvoice?.customer.name}</strong>.
+                  <strong>{selectedInvoice?.customer?.name}</strong>.
                 </p>
-                {selectedInvoice?.customer.email ? (
+                {selectedInvoice?.customer?.email ? (
                   <p className="text-sm">
                     {t("invoices.email.send-to")} <strong>{selectedInvoice.customer.email}</strong>
                   </p>
