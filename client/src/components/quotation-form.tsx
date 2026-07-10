@@ -92,6 +92,7 @@ const PAYMENT_TERMS = [
   { value: "60_dias", labelKey: "quotations.payment.60" },
   { value: "90_dias", labelKey: "quotations.payment.90" },
   { value: "120_dias", labelKey: "quotations.payment.120" },
+  { value: "150_dias", labelKey: "quotations.payment.150" },
 ];
 
 const DELIVERY_TIMES = [

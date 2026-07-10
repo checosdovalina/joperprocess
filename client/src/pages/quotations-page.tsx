@@ -497,6 +497,7 @@ export default function QuotationsPage() {
     "30_dias": t("quotations.payment.30"),
     "90_dias": t("quotations.payment.90"),
     "120_dias": t("quotations.payment.120"),
+    "150_dias": t("quotations.payment.150"),
     "45_dias": t("quotations.payment.45"),
     "60_dias": t("quotations.payment.60"),
   };

@@ -56,6 +56,7 @@ const PAYMENT_TERMS_LABELS: Record<string, string> = {
   "30_dias": "30 días",
   "90_dias": "90 días",
   "120_dias": "120 días",
+  "150_dias": "150 días",
   "45_dias": "45 días",
   "60_dias": "60 días",
 };
