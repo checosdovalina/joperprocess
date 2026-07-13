@@ -82,6 +82,7 @@ export interface IStorage {
   getAllEmpresas(): Promise<Empresa[]>;
   createEmpresa(empresa: InsertEmpresa): Promise<Empresa>;
   updateEmpresa(id: string, data: Partial<InsertEmpresa>): Promise<Empresa | undefined>;
+  deleteEmpresa(id: string): Promise<boolean>;
 
   // Customers
   getCustomer(id: string): Promise<Customer | undefined>;
@@ -232,6 +233,11 @@ export class DatabaseStorage implements IStorage {
   async updateEmpresa(id: string, data: Partial<InsertEmpresa>): Promise<Empresa | undefined> {
     const [empresa] = await db.update(empresas).set({ ...data, updatedAt: new Date() }).where(eq(empresas.id, id)).returning();
     return empresa || undefined;
+  }
+
+  async deleteEmpresa(id: string): Promise<boolean> {
+    const result = await db.delete(empresas).where(eq(empresas.id, id)).returning();
+    return result.length > 0;
   }
 
   // Customers

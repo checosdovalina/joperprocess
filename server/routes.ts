@@ -734,6 +734,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete empresa (admin only)
+  app.delete("/api/empresas/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const scopedStorage = createTenantScopedStorage(req);
+      const existing = await scopedStorage.getEmpresa(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Empresa no encontrada" });
+      }
+      const deleted = await scopedStorage.deleteEmpresa(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Empresa no encontrada" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting empresa:", error);
+      res.status(500).json({ error: "Error al eliminar la empresa" });
+    }
+  });
+
   // Update empresa (admin only)
   app.patch("/api/empresas/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {

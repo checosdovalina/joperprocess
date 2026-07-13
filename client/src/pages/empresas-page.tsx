@@ -10,8 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Store, Palette, Loader2, Tag } from "lucide-react";
+import { Plus, Store, Palette, Loader2, Tag, Trash2 } from "lucide-react";
 import type { Empresa } from "@shared/schema";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const emptyForm = {
   name: "",
@@ -28,6 +33,7 @@ export default function EmpresasPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Empresa | null>(null);
   const [formData, setFormData] = useState({ ...emptyForm });
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { data: empresas = [], isLoading } = useQuery<Empresa[]>({
     queryKey: ["/api/empresas"],
@@ -77,6 +83,21 @@ export default function EmpresasPage() {
       toast({ title: "Error al actualizar empresa", description: error.message, variant: "destructive" });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/empresas/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/empresas"] });
+      toast({ title: "Empresa eliminada" });
+      setConfirmDeleteId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error al eliminar empresa", description: error.message, variant: "destructive" });
+      setConfirmDeleteId(null);
+    },
+  });
+
+  const confirmDeleteEmpresa = empresas.find((e) => e.id === confirmDeleteId);
 
   const openEditDialog = (empresa: Empresa) => {
     setEditing(empresa);
@@ -309,6 +330,16 @@ export default function EmpresasPage() {
                 >
                   Editar
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setConfirmDeleteId(empresa.id)}
+                  data-testid={`button-delete-empresa-${empresa.id}`}
+                  title="Eliminar empresa"
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -330,6 +361,28 @@ export default function EmpresasPage() {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={!!confirmDeleteId} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar empresa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esto eliminará permanentemente <strong>{confirmDeleteEmpresa?.name}</strong> y no podrá recuperarse. Los registros asociados (cotizaciones, pedidos, etc.) quedarán sin empresa asignada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-empresa">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDeleteId && deleteMutation.mutate(confirmDeleteId)}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete-empresa"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
