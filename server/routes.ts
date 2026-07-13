@@ -5347,6 +5347,17 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/product-instances", isAuthenticated, async (req, res) => {
     try {
       const validated = insertShipmentProductInstanceSchema.parse(req.body);
+      // Tenant + empresa isolation: verify the parent shipment AND order belong to
+      // the caller's scope before inserting, so a client-supplied foreign parent ID
+      // can't attach a new record to another company's data.
+      const scopedStorage = createTenantScopedStorage(req);
+      const [scopedShipment, scopedOrder] = await Promise.all([
+        scopedStorage.getShipment(validated.shipmentId),
+        scopedStorage.getOrder(validated.orderId),
+      ]);
+      if (!scopedShipment || !scopedOrder) {
+        return res.status(404).json({ error: "Shipment or order not found" });
+      }
       const [instance] = await db.insert(shipmentProductInstances).values(validated).returning();
       res.status(201).json(instance);
     } catch (error: any) {
@@ -5365,6 +5376,19 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Se requiere un arreglo de instancias" });
       }
       const validated = instances.map(i => insertShipmentProductInstanceSchema.parse(i));
+      // Tenant + empresa isolation: verify every parent shipment AND order is in the
+      // caller's scope before inserting any row, so a foreign parent ID in the batch
+      // can't attach records to another company's data.
+      const scopedStorage = createTenantScopedStorage(req);
+      const uniqueShipmentIds = Array.from(new Set(validated.map(v => v.shipmentId)));
+      const uniqueOrderIds = Array.from(new Set(validated.map(v => v.orderId)));
+      const [shipmentResults, orderResults] = await Promise.all([
+        Promise.all(uniqueShipmentIds.map(id => scopedStorage.getShipment(id))),
+        Promise.all(uniqueOrderIds.map(id => scopedStorage.getOrder(id))),
+      ]);
+      if (shipmentResults.some(s => !s) || orderResults.some(o => !o)) {
+        return res.status(404).json({ error: "Shipment or order not found" });
+      }
       const created = await db.insert(shipmentProductInstances).values(validated).returning();
       res.status(201).json(created);
     } catch (error: any) {

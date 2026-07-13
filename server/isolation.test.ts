@@ -684,6 +684,104 @@ describe("PATCH/DELETE /api/product-instances/:id (write guard, tenant + empresa
   });
 });
 
+// ── Create-path (POST) isolation ─────────────────────────────────────────────
+// A user must NOT be able to attach a NEW child record to a parent (shipment/order)
+// that belongs to another company by passing a foreign parent ID in the body.
+// Every negative case also asserts that nothing was inserted.
+
+describe("POST /api/product-instances (create guard, tenant + empresa via parent)", () => {
+  async function countBySerial(serial: string) {
+    const rows = await db
+      .select({ id: shipmentProductInstances.id })
+      .from(shipmentProductInstances)
+      .where(eq(shipmentProductInstances.serialNumber, serial));
+    return rows.length;
+  }
+
+  it("allowed in-scope (201) and inserts the row", async () => {
+    const serial = `SN-${RUN}-POST-OK`;
+    const r = await asVendedorA1("POST", "/api/product-instances", {
+      shipmentId: ctx.sA1, orderId: ctx.oA1, customerId: ctx.customerA,
+      productId: ctx.productA1, serialNumber: serial,
+    });
+    expect(r.status).toBe(201);
+    expect(await countBySerial(serial)).toBe(1);
+  });
+
+  it("blocked cross-tenant (4xx) and inserts nothing", async () => {
+    const serial = `SN-${RUN}-POST-XT`;
+    const r = await asAdminA("POST", "/api/product-instances", {
+      shipmentId: ctx.sB1, orderId: ctx.oB1, customerId: ctx.customerB,
+      productId: ctx.productB1, serialNumber: serial,
+    });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(r.status).toBeLessThan(500);
+    expect(await countBySerial(serial)).toBe(0);
+  });
+
+  it("blocked cross-empresa (4xx) and inserts nothing", async () => {
+    const serial = `SN-${RUN}-POST-XE`;
+    const r = await asVendedorA1("POST", "/api/product-instances", {
+      shipmentId: ctx.sA2, orderId: ctx.oA2, customerId: ctx.customerA,
+      productId: ctx.productA1, serialNumber: serial,
+    });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(r.status).toBeLessThan(500);
+    expect(await countBySerial(serial)).toBe(0);
+  });
+});
+
+describe("POST /api/product-instances/bulk (create guard, tenant + empresa via parent)", () => {
+  async function countBySerial(serial: string) {
+    const rows = await db
+      .select({ id: shipmentProductInstances.id })
+      .from(shipmentProductInstances)
+      .where(eq(shipmentProductInstances.serialNumber, serial));
+    return rows.length;
+  }
+
+  it("allowed in-scope (201) and inserts every row", async () => {
+    const s1 = `SN-${RUN}-BULK-OK1`;
+    const s2 = `SN-${RUN}-BULK-OK2`;
+    const r = await asVendedorA1("POST", "/api/product-instances/bulk", {
+      instances: [
+        { shipmentId: ctx.sA1, orderId: ctx.oA1, customerId: ctx.customerA, productId: ctx.productA1, serialNumber: s1 },
+        { shipmentId: ctx.sA1, orderId: ctx.oA1, customerId: ctx.customerA, productId: ctx.productA1, serialNumber: s2 },
+      ],
+    });
+    expect(r.status).toBe(201);
+    expect(await countBySerial(s1)).toBe(1);
+    expect(await countBySerial(s2)).toBe(1);
+  });
+
+  it("blocked cross-tenant (4xx) and inserts nothing", async () => {
+    const serial = `SN-${RUN}-BULK-XT`;
+    const r = await asAdminA("POST", "/api/product-instances/bulk", {
+      instances: [
+        { shipmentId: ctx.sB1, orderId: ctx.oB1, customerId: ctx.customerB, productId: ctx.productB1, serialNumber: serial },
+      ],
+    });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(r.status).toBeLessThan(500);
+    expect(await countBySerial(serial)).toBe(0);
+  });
+
+  it("rejects the whole batch if ANY parent is out of scope (cross-empresa) and inserts nothing", async () => {
+    const inScope = `SN-${RUN}-BULK-MIX-OK`;
+    const outScope = `SN-${RUN}-BULK-MIX-XE`;
+    const r = await asVendedorA1("POST", "/api/product-instances/bulk", {
+      instances: [
+        { shipmentId: ctx.sA1, orderId: ctx.oA1, customerId: ctx.customerA, productId: ctx.productA1, serialNumber: inScope },
+        { shipmentId: ctx.sA2, orderId: ctx.oA2, customerId: ctx.customerA, productId: ctx.productA1, serialNumber: outScope },
+      ],
+    });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(r.status).toBeLessThan(500);
+    expect(await countBySerial(inScope)).toBe(0);
+    expect(await countBySerial(outScope)).toBe(0);
+  });
+});
+
 describe("SuperAdmin on main domain keeps global cross-tenant access", () => {
   it("reads quotations from BOTH tenants by id (200)", async () => {
     expect((await asSuperadmin("GET", `/api/quotations/${ctx.qA1}`)).status).toBe(200);
