@@ -687,10 +687,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // SuperAdmins can create child companies from within a tenant subdomain.
+  // The new tenant is automatically linked as a child of the admin's home company.
+  app.post("/api/companies", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      if (!req.user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Solo los super administradores pueden crear compañías hijas" });
+      }
+      const homeTenantId = req.user.tenantId;
+      if (!homeTenantId) {
+        return res.status(400).json({ error: "Usuario sin compañía asignada" });
+      }
+      const { name, subdomain } = req.body;
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "El nombre es obligatorio" });
+      }
+      if (!subdomain || typeof subdomain !== "string" || !subdomain.trim()) {
+        return res.status(400).json({ error: "El subdominio es obligatorio" });
+      }
+      const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+      if (!cleanSubdomain) {
+        return res.status(400).json({ error: "Subdominio inválido" });
+      }
+      // Check subdomain uniqueness
+      const existing = await db.query.tenants.findFirst({ where: eq(tenants.subdomain, cleanSubdomain) });
+      if (existing) {
+        return res.status(409).json({ error: "El subdominio ya está en uso" });
+      }
+      const [newTenant] = await db.insert(tenants).values({
+        name: name.trim(),
+        subdomain: cleanSubdomain,
+        parentId: homeTenantId,
+        active: true,
+      }).returning();
+      res.status(201).json(newTenant);
+    } catch (error) {
+      console.error("Error creating child company:", error);
+      res.status(500).json({ error: "Error al crear la compañía hija" });
+    }
+  });
+
   // NOTE: Company/empresa structural configuration (creating and nesting companies) is
-  // handled exclusively by the platform superadmin (Nexxo) via /api/tenants. Company
-  // admins can only VIEW their tree (GET /api/companies above) and operate inside a
-  // descendant via the company switcher — they cannot create or restructure companies.
+  // handled exclusively by the platform superadmin (Nexxo) via /api/tenants or
+  // POST /api/companies. Company admins can VIEW their tree and operate inside a
+  // descendant via the company switcher — but cannot create or restructure companies.
 
   // ==================== END TENANT ENDPOINTS ====================
 
