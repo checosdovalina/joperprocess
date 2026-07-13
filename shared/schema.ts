@@ -43,6 +43,8 @@ export const tenants = pgTable("tenants", {
   timezone: text("timezone").default("America/Mexico_City"),
   locale: text("locale").default("es"), // es | en | pt
   // Billing/subscription info (for future)
+  // Short code used as folio prefix (e.g. "JOPE", "TIPO"). Auto-derived from subdomain.
+  companyCode: varchar("company_code", { length: 5 }),
   plan: text("plan").default("basic"), // basic, professional, enterprise
   maxUsers: integer("max_users").default(10),
   // Timestamps

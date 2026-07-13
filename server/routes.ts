@@ -714,10 +714,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existing) {
         return res.status(409).json({ error: "El subdominio ya está en uso" });
       }
+      const autoCode = cleanSubdomain.slice(0, 4).toUpperCase();
       const [newTenant] = await db.insert(tenants).values({
         name: name.trim(),
         subdomain: cleanSubdomain,
         parentId: homeTenantId,
+        companyCode: autoCode,
         active: true,
       }).returning();
       res.status(201).json(newTenant);

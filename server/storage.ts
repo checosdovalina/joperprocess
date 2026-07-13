@@ -17,6 +17,7 @@ import {
   customerProductPrices,
   documents,
   incidents,
+  tenants,
   empresas,
   UserRole,
   type Empresa,
@@ -327,31 +328,45 @@ export class DatabaseStorage implements IStorage {
   async createQuotation(insertQuotation: InsertQuotation): Promise<Quotation> {
     const FOREIGN_RFC = 'XEXX010101000';
     // Prefijo de folio según el cliente: MEX (México) / EXT (extranjero).
-    let prefix = 'MEX';
+    let geoPrefix = 'MEX';
     if (insertQuotation.customerId) {
       const customer = await this.getCustomer(insertQuotation.customerId);
       if (customer) {
         if (customer.rfc === FOREIGN_RFC) {
-          prefix = 'EXT';
+          geoPrefix = 'EXT';
         } else {
           const country = (customer.country || '').trim().toLowerCase();
           const mexican = ['méxico', 'mexico', 'mx', 'mex'];
           if (country) {
-            prefix = mexican.includes(country) ? 'MEX' : 'EXT';
+            geoPrefix = mexican.includes(country) ? 'MEX' : 'EXT';
           }
         }
       }
     }
 
-    // Folio secuencial y único (compartido entre empresas): toma el número más
-    // alto existente para el prefijo y le suma 1. Si dos cotizaciones toman el
-    // mismo número a la vez, el índice único lo rechaza y reintentamos con el
-    // siguiente número disponible, evitando duplicados y fallos al guardar.
+    // Prefijo de empresa: si el tenant tiene companyCode, se antepone al geo-prefix
+    // para que los folios de distintas compañías no se mezclen (JOPE-MEX-1, TIPO-MEX-1).
+    const tenantId = (insertQuotation as any).tenantId as string | undefined;
+    let companyCode: string | null = null;
+    if (tenantId) {
+      const [tenantRow] = await db
+        .select({ companyCode: tenants.companyCode })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+      companyCode = tenantRow?.companyCode ?? null;
+    }
+    // Formato: {MEX|EXT}-{companyCode}-{numero} → e.g. MEX-JOPE-1, MEX-TIPO-1
+    const prefix = companyCode ? `${geoPrefix}-${companyCode}` : geoPrefix;
+
+    // Folio secuencial y único: toma el número más alto existente para el
+    // prefijo completo y le suma 1. Reintento automático ante conflicto único.
     const maxAttempts = 8;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const escapedPrefix = prefix.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
       const [row] = await db
         .select({
-          next: sql<number>`COALESCE(MAX(CAST(substring(${quotations.folio} from ${`^${prefix}-([0-9]+)$`}) AS INTEGER)), 0) + 1`,
+          next: sql<number>`COALESCE(MAX(CAST(substring(${quotations.folio} from ${`^${escapedPrefix}-([0-9]+)$`}) AS INTEGER)), 0) + 1`,
         })
         .from(quotations)
         .where(sql`${quotations.folio} LIKE ${`${prefix}-%`}`);
@@ -997,14 +1012,16 @@ export class TenantScopedStorage {
     return this.base.createPayment(this.withTenant(data));
   }
 
-  // Products
+  // Products — child companies share the parent's product catalog.
   async getAllProducts(): Promise<Product[]> {
     if (this.ctx.allowGlobal) {
       return this.base.getAllProducts();
     }
     if (!this.ctx.tenantId) return [];
+    const tenantIds = [this.ctx.tenantId];
+    if (this.ctx.parentTenantId) tenantIds.push(this.ctx.parentTenantId);
     return await db.select().from(products)
-      .where(eq(products.tenantId, this.ctx.tenantId))
+      .where(inArray(products.tenantId, tenantIds))
       .orderBy(products.name);
   }
 
@@ -1012,14 +1029,16 @@ export class TenantScopedStorage {
     return this.base.createProduct(this.withTenant(data));
   }
 
-  // Product Categories
+  // Product Categories — child companies share the parent's categories.
   async getAllProductCategories(): Promise<ProductCategory[]> {
     if (this.ctx.allowGlobal) {
       return this.base.getAllProductCategories();
     }
     if (!this.ctx.tenantId) return [];
+    const tenantIds = [this.ctx.tenantId];
+    if (this.ctx.parentTenantId) tenantIds.push(this.ctx.parentTenantId);
     return await db.select().from(productCategories)
-      .where(eq(productCategories.tenantId, this.ctx.tenantId))
+      .where(inArray(productCategories.tenantId, tenantIds))
       .orderBy(productCategories.name);
   }
 
@@ -1171,17 +1190,23 @@ export class TenantScopedStorage {
       .orderBy(desc(payments.paymentDate));
   }
   
-  // Product with ownership verification
+  // Product with ownership verification — also allows parent's products.
   async getProduct(id: string) {
     const product = await this.base.getProduct(id);
     if (!product) return undefined;
-    if (!this.ctx.allowGlobal && product.tenantId !== this.ctx.tenantId) return undefined;
+    if (!this.ctx.allowGlobal) {
+      const allowed = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
+      if (!allowed.includes(product.tenantId)) return undefined;
+    }
     return product;
   }
   async getProductByCode(code: string) {
     const product = await this.base.getProductByCode(code);
     if (!product) return undefined;
-    if (!this.ctx.allowGlobal && product.tenantId !== this.ctx.tenantId) return undefined;
+    if (!this.ctx.allowGlobal) {
+      const allowed = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
+      if (!allowed.includes(product.tenantId)) return undefined;
+    }
     return product;
   }
   async searchProducts(query: string) {
@@ -1189,7 +1214,8 @@ export class TenantScopedStorage {
       return this.base.searchProducts(query);
     }
     const allProducts = await this.base.searchProducts(query);
-    return allProducts.filter(p => p.tenantId === this.ctx.tenantId);
+    const allowed = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
+    return allProducts.filter(p => allowed.includes(p.tenantId));
   }
   async updateProduct(id: string, data: UpdateProduct) {
     const existing = await this.getProduct(id);
