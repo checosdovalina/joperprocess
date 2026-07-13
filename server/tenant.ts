@@ -13,6 +13,7 @@ export interface TenantContext {
   active: boolean;
   timezone: string | null;
   locale: string | null;
+  parentId?: string | null;
 }
 
 export interface EmpresaContext {
@@ -84,6 +85,7 @@ export async function tenantMiddleware(req: Request, res: Response, next: NextFu
         active: tenants.active,
         timezone: tenants.timezone,
         locale: tenants.locale,
+        parentId: tenants.parentId,
       })
       .from(tenants)
       .where(eq(tenants.subdomain, subdomain))
@@ -202,6 +204,7 @@ export async function getTenantById(id: string): Promise<TenantContext | null> {
       active: tenants.active,
       timezone: tenants.timezone,
       locale: tenants.locale,
+      parentId: tenants.parentId,
     })
     .from(tenants)
     .where(eq(tenants.id, id))

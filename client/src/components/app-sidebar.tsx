@@ -178,15 +178,16 @@ export function AppSidebar() {
   });
 
   // Auto-clear stale selectedTenantId: if the stored company is no longer accessible
-  // (e.g. was created before parentId was set), silently fall back to home company.
+  // (e.g. parentId was never set), clear it so the parent company is shown instead.
   useEffect(() => {
     if (!isCompanyAdmin || !companiesLoaded || !selectedTenantId) return;
     const validIds = companies.map((c) => c.id);
     if (!validIds.includes(selectedTenantId)) {
       localStorage.removeItem("selectedTenantId");
-      setSelectedTenantId(null);
+      window.location.reload();
     }
-  }, [companiesLoaded, companies, selectedTenantId, isCompanyAdmin, setSelectedTenantId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companiesLoaded]); // run once after companies first load
 
   // The company currently being viewed: the switched one, or the admin's home company.
   const activeCompanyId = selectedTenantId || tenant?.id || "";

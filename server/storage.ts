@@ -59,7 +59,7 @@ import {
   type Incident,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, asc, isNull, sql } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc, isNull, sql, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -630,6 +630,9 @@ import type { Request } from "express";
 interface TenantContext {
   tenantId: string | null;
   allowGlobal: boolean;
+  // Parent tenant: when this is a child company, parentTenantId is set so
+  // shared resources (e.g. the customer catalog) can include the parent's records.
+  parentTenantId: string | null;
   // Empresa scoping: a VENDEDOR bound to a single empresa only sees that empresa's
   // commercial documents (quotations/orders/shipments). Global roles (admin, logística,
   // crédito, fábrica, etc.) see every empresa within the tenant.
@@ -647,9 +650,11 @@ function getTenantContext(req: Request): TenantContext {
   const restrictToEmpresa =
     !user?.isSuperAdmin && user?.role === UserRole.VENDEDOR && !!empresaId;
 
-  // If on a subdomain, always use that tenant (ignore header)
+  // If on a subdomain, always use that tenant (ignore header).
+  // parentTenantId is set when this is a child company (companyHierarchyMiddleware
+  // overwrites req.tenant with the child, which now carries parentId).
   if (tenant?.id) {
-    return { tenantId: tenant.id, allowGlobal: false, empresaId, restrictToEmpresa };
+    return { tenantId: tenant.id, allowGlobal: false, parentTenantId: tenant.parentId ?? null, empresaId, restrictToEmpresa };
   }
 
   // SuperAdmin on main domain (no subdomain)
@@ -658,16 +663,17 @@ function getTenantContext(req: Request): TenantContext {
     const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
     if (selectedTenantId) {
       // SuperAdmin working in context of a specific tenant
-      return { tenantId: selectedTenantId, allowGlobal: false, empresaId: null, restrictToEmpresa: false };
+      return { tenantId: selectedTenantId, allowGlobal: false, parentTenantId: null, empresaId: null, restrictToEmpresa: false };
     }
     // SuperAdmin without selection - global access
-    return { tenantId: null, allowGlobal: true, empresaId: null, restrictToEmpresa: false };
+    return { tenantId: null, allowGlobal: true, parentTenantId: null, empresaId: null, restrictToEmpresa: false };
   }
 
   // Regular users use their assigned tenantId
   return {
     tenantId: user?.tenantId || null,
     allowGlobal: false,
+    parentTenantId: null,
     empresaId,
     restrictToEmpresa,
   };
@@ -774,8 +780,11 @@ export class TenantScopedStorage {
       return this.base.getAllCustomers();
     }
     if (!this.ctx.tenantId) return [];
+    // Child companies share the parent's customer catalog: include both.
+    const tenantIds = [this.ctx.tenantId];
+    if (this.ctx.parentTenantId) tenantIds.push(this.ctx.parentTenantId);
     return await db.select().from(customers)
-      .where(eq(customers.tenantId, this.ctx.tenantId))
+      .where(inArray(customers.tenantId, tenantIds))
       .orderBy(desc(customers.createdAt));
   }
 
@@ -786,9 +795,11 @@ export class TenantScopedStorage {
   async getCustomer(id: string): Promise<Customer | undefined> {
     const customer = await this.base.getCustomer(id);
     if (!customer) return undefined;
-    // Verify tenant ownership
-    if (!this.ctx.allowGlobal && customer.tenantId !== this.ctx.tenantId) {
-      return undefined;
+    // Allow access when the customer belongs to this tenant OR the parent tenant
+    // (child companies share the parent's customer catalog).
+    if (!this.ctx.allowGlobal) {
+      const allowedTenants = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
+      if (!allowedTenants.includes(customer.tenantId)) return undefined;
     }
     return customer;
   }
