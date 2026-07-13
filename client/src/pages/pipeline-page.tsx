@@ -22,21 +22,24 @@ const REFRESH_INTERVAL = 20; // seconds
 interface PipelineQuotation {
   id: string; folio: string; status: string; total: string; currency: string;
   customerName: string | null; sellerName: string | null; createdAt: string;
-  validUntil: string | null;
+  validUntil: string | null; tenantName?: string | null;
 }
 interface PipelineOrder {
   id: string; status: string; productionProgress: number;
   quotFolio: string | null; quotTotal: string | null; quotCurrency: string | null;
   customerName: string | null; sellerName: string | null; estimatedDelivery: string | null; createdAt: string;
+  tenantName?: string | null;
 }
 interface PipelineShipment {
   id: string; status: string; transporter: string;
   trackingNumber: string | null; quotFolio: string | null; customerName: string | null;
   sellerName: string | null; shippedAt: string | null; createdAt: string;
+  tenantName?: string | null;
 }
 interface PipelineCreditAuth {
   id: string; status: string; quotFolio: string | null; quotTotal: string | null;
   quotCurrency: string | null; customerName: string | null; sellerName: string | null; createdAt: string;
+  tenantName?: string | null;
 }
 interface PipelineData {
   quotations: PipelineQuotation[];
@@ -221,6 +224,11 @@ function QuotCard({ q }: { q: PipelineQuotation }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-quotation-${q.id}`}
     >
+      {q.tenantName && (
+        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(99,179,237,0.8)", background: "rgba(59,130,246,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
+          {q.tenantName}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: 14, letterSpacing: "0.01em" }}>{q.folio}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -275,6 +283,11 @@ function AuthCard({ a }: { a: PipelineCreditAuth }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-auth-${a.id}`}
     >
+      {a.tenantName && (
+        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(253,211,77,0.8)", background: "rgba(245,158,11,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
+          {a.tenantName}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ color: "#fcd34d", fontWeight: 700, fontSize: 14 }}>{a.quotFolio ?? "—"}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -332,6 +345,11 @@ function OrderCard({ o }: { o: PipelineOrder }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-order-${o.id}`}
     >
+      {o.tenantName && (
+        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(216,180,254,0.8)", background: "rgba(168,85,247,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
+          {o.tenantName}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ color: "#d8b4fe", fontWeight: 700, fontSize: 14 }}>{o.quotFolio ?? "—"}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -403,6 +421,11 @@ function ShipmentCard({ s }: { s: PipelineShipment }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-shipment-${s.id}`}
     >
+      {s.tenantName && (
+        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(110,231,183,0.8)", background: "rgba(16,185,129,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
+          {s.tenantName}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ color: "#6ee7b7", fontWeight: 700, fontSize: 14 }}>{s.quotFolio ?? "—"}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -502,6 +525,7 @@ export default function PipelinePage() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showActive, setShowActive] = useState(true);
+  const [scopeAll, setScopeAll] = useState(false);
   const [showTvPrompt, setShowTvPrompt] = useState(true);
   const [selectedEmpresa, setSelectedEmpresa] = useState("all");
 
@@ -513,14 +537,25 @@ export default function PipelinePage() {
     queryKey: ["/api/empresas"],
     enabled: !isRestrictedVendedor,
   });
-  const showEmpresaSelector = !isRestrictedVendedor && empresas.length > 1;
+  interface SimpleCompany { id: string; name: string; parentId: string | null; }
+  const { data: companies = [] } = useQuery<SimpleCompany[]>({
+    queryKey: ["/api/companies"],
+    enabled: user?.role === "admin",
+  });
+  const hasMultipleCompanies = user?.role === "admin" && companies.length > 1;
+  const showEmpresaSelector = !isRestrictedVendedor && !scopeAll && empresas.length > 1;
 
   const { data, refetch, isFetching, isLoading } = useQuery<PipelineData>({
-    queryKey: ["/api/pipeline", selectedEmpresa],
+    queryKey: ["/api/pipeline", scopeAll ? "all" : selectedEmpresa],
     queryFn: async () => {
-      const url = selectedEmpresa !== "all"
-        ? `/api/pipeline?empresaId=${encodeURIComponent(selectedEmpresa)}`
-        : "/api/pipeline";
+      const params = new URLSearchParams();
+      if (scopeAll) {
+        params.set("scope", "all");
+      } else if (selectedEmpresa !== "all") {
+        params.set("empresaId", selectedEmpresa);
+      }
+      const paramStr = params.toString();
+      const url = `/api/pipeline${paramStr ? `?${paramStr}` : ""}`;
       const selectedTenantId = getSelectedTenantId();
       const headers: Record<string, string> = {};
       if (selectedTenantId) headers["X-Selected-Tenant-Id"] = selectedTenantId;
@@ -675,6 +710,16 @@ export default function PipelinePage() {
               {t("pipeline.refresh-in")} {countdown}s
             </div>
           </div>
+
+          {hasMultipleCompanies && (
+            <button
+              onClick={() => setScopeAll(!scopeAll)}
+              style={{ ...btnBase, background: scopeAll ? "rgba(16,185,129,0.22)" : "rgba(255,255,255,0.07)", border: scopeAll ? "1px solid rgba(16,185,129,0.5)" : "1px solid rgba(255,255,255,0.14)" }}
+              data-testid="button-scope-all"
+            >
+              <span style={{ fontSize: 11 }}>{scopeAll ? "Todos los sistemas" : "Este sistema"}</span>
+            </button>
+          )}
 
           {showEmpresaSelector && (
             <select

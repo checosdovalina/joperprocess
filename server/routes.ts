@@ -261,28 +261,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/pipeline", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
+      // scope=all: Company ADMINs can view data from all accessible child companies at once.
+      const scopeAll = req.query.scope === "all" && req.user?.role === UserRole.ADMIN && !req.user?.isSuperAdmin;
+      let accessibleTenantIds: string[] = [];
+      const tenantNameMap = new Map<string, string>();
+      if (scopeAll && req.user?.tenantId) {
+        accessibleTenantIds = await getAccessibleTenantIds(req.user.tenantId);
+        if (accessibleTenantIds.length > 1) {
+          const tenantRows = await db.select({ id: tenants.id, name: tenants.name })
+            .from(tenants).where(inArray(tenants.id, accessibleTenantIds));
+          tenantRows.forEach(t => tenantNameMap.set(t.id, t.name));
+        } else {
+          accessibleTenantIds = []; // single tenant — fall back to normal mode
+        }
+      }
+      const useAllTenants = scopeAll && accessibleTenantIds.length > 0;
+
       // Empresa isolation: vendedores bound to an empresa only see their empresa's documents.
       const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
       // Optional empresa selector for non-restricted roles (e.g. Producción viewing
       // one empresa at a time). Restricted vendedores always keep their own empresa;
       // the selected value is ignored for them. The tenant filter still applies, so a
       // foreign empresaId simply returns no rows (no cross-tenant leak).
-      const selectedEmpresaId = typeof req.query.empresaId === "string" && req.query.empresaId
+      // When scope=all, empresa selector is ignored (cross-tenant empresa filtering is undefined).
+      const selectedEmpresaId = !useAllTenants && typeof req.query.empresaId === "string" && req.query.empresaId
         ? req.query.empresaId
         : null;
-      const empresaId = restrictedEmpresaId ?? selectedEmpresaId;
+      const empresaId = useAllTenants ? null : (restrictedEmpresaId ?? selectedEmpresaId);
       const quotEmpresaFilter = empresaId ? eq(quotations.empresaId, empresaId) : undefined;
       const orderEmpresaFilter = empresaId ? eq(orders.empresaId, empresaId) : undefined;
       const shipmentEmpresaFilter = empresaId ? eq(shipments.empresaId, empresaId) : undefined;
-      const tenantFilter = tenantId
-        ? (quotEmpresaFilter ? and(eq(quotations.tenantId, tenantId), quotEmpresaFilter) : eq(quotations.tenantId, tenantId))
-        : quotEmpresaFilter;
-      const orderTenantFilter = tenantId
-        ? (orderEmpresaFilter ? and(eq(orders.tenantId, tenantId), orderEmpresaFilter) : eq(orders.tenantId, tenantId))
-        : orderEmpresaFilter;
-      const shipmentTenantFilter = tenantId
-        ? (shipmentEmpresaFilter ? and(eq(shipments.tenantId, tenantId), shipmentEmpresaFilter) : eq(shipments.tenantId, tenantId))
-        : shipmentEmpresaFilter;
+      const tenantFilter = useAllTenants
+        ? inArray(quotations.tenantId, accessibleTenantIds)
+        : (tenantId
+            ? (quotEmpresaFilter ? and(eq(quotations.tenantId, tenantId), quotEmpresaFilter) : eq(quotations.tenantId, tenantId))
+            : quotEmpresaFilter);
+      const orderTenantFilter = useAllTenants
+        ? inArray(orders.tenantId, accessibleTenantIds)
+        : (tenantId
+            ? (orderEmpresaFilter ? and(eq(orders.tenantId, tenantId), orderEmpresaFilter) : eq(orders.tenantId, tenantId))
+            : orderEmpresaFilter);
+      const shipmentTenantFilter = useAllTenants
+        ? inArray(shipments.tenantId, accessibleTenantIds)
+        : (tenantId
+            ? (shipmentEmpresaFilter ? and(eq(shipments.tenantId, tenantId), shipmentEmpresaFilter) : eq(shipments.tenantId, tenantId))
+            : shipmentEmpresaFilter);
 
       // Quotations with customer and seller
       const quotRows = await db.select({
@@ -341,6 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         quotFolio: quotations.folio,
         quotTotal: quotations.total,
         quotCurrency: quotations.currency,
+        quotTenantId: quotations.tenantId,
         customerName: customers.name,
         sellerName: sellerAlias3.fullName,
       })
@@ -353,10 +377,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .limit(200);
 
       res.json({
-        quotations: quotRows.map(r => ({ ...r.q, customerName: r.customerName, sellerName: r.sellerName })),
-        orders: orderRows.map(r => ({ ...r.o, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName })),
-        shipments: shipmentRows.map(r => ({ ...r.s, quotFolio: r.quotFolio, customerName: r.customerName, sellerName: r.sellerName })),
-        creditAuths: authRows.map(r => ({ ...r.a, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName })),
+        quotations: quotRows.map(r => ({ ...r.q, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.q.tenantId ?? "") ?? null })),
+        orders: orderRows.map(r => ({ ...r.o, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.o.tenantId ?? "") ?? null })),
+        shipments: shipmentRows.map(r => ({ ...r.s, quotFolio: r.quotFolio, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.s.tenantId ?? "") ?? null })),
+        creditAuths: authRows.map(r => ({ ...r.a, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.quotTenantId ?? "") ?? null })),
       });
     } catch (error) {
       console.error("Error fetching pipeline data:", error);
@@ -642,6 +666,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching companies:", error);
       res.status(500).json({ error: "Error al obtener las compañías" });
+    }
+  });
+
+  // Soft-delete a child company (deactivate). Admins can deactivate child companies
+  // within their accessible tree, but never their own home company.
+  app.delete("/api/companies/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const homeTenantId = req.user!.tenantId;
+      if (!homeTenantId) return res.status(400).json({ error: "Usuario sin compañía asignada" });
+      if (id === homeTenantId) return res.status(400).json({ error: "No puedes eliminar tu compañía principal" });
+      const accessible = await getAccessibleTenantIds(homeTenantId);
+      if (!accessible.includes(id)) return res.status(403).json({ error: "No tienes acceso a esta compañía" });
+      await db.update(tenants).set({ active: false }).where(eq(tenants.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting company:", error);
+      res.status(500).json({ error: "Error al eliminar la compañía" });
     }
   });
 
