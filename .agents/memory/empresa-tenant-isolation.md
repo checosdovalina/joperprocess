@@ -63,19 +63,6 @@ so payments have no by-id write guard to test. Special case: `credit_authorizati
 has NO tenant_id column at all — see credit-auth-tenant-scoping.md (scope via quotation).
 Endpoints found already-safe (do not re-guard): account-statement-schedule (tenantId in
 where-clause), pending-uploads (userId-bound), customers/documents/empresas/product-categories
-(use scoped storage), incidents/checkins/orders-details (already guarded).
-
-## Create-path (POST) isolation: verify the parent BEFORE inserting
-Records with no tenant/empresa column of their own (e.g. shipmentProductInstances) inherit
-scope from a client-supplied parent ID. A raw `db.insert` that trusts body shipmentId/orderId
-lets a user attach a NEW child to another company's parent. Fix: fetch each parent via
-`createTenantScopedStorage(req).getShipment/getOrder` (both enforce tenant+empresa, return
-undefined on mismatch) and 404 before insert. For /bulk, validate EVERY unique parent id up
-front → all-or-nothing (reject whole batch if any is out of scope). POST product-instances +
-/bulk now guarded & regression-locked in isolation.test.ts. Other by-parent POSTs already safe:
-credit-authorizations/:id/comments (scoped getCreditAuthorization), incidents/:id/comments
-(tenant where-clause), scheduled-visits (scoped storage), orders/shipments (scoped createOrder/
-createShipment). Still weak: some POSTs trust body customerId/productId without a direct scoped
-check (they only get the caller's tenantId on insert) — verify those IDs too when touched. Note: raw tenants.id
+(use scoped storage), incidents/checkins/orders-details (already guarded). Note: raw tenants.id
 branding lookups are fine (tenant already resolved), and internal email-assembly customer
 lookups use an already-scoped quotation so they don't leak.

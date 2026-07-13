@@ -4,9 +4,7 @@ import { useTenant } from "@/hooks/use-tenant";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Building2, Network, Loader2, ArrowRight, Trash2, Plus } from "lucide-react";
+import { Building2, Network, Loader2, ArrowRight, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,9 +13,6 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
-} from "@/components/ui/dialog";
 
 interface Company {
   id: string;
@@ -35,9 +30,6 @@ export default function CompaniesPage() {
   const { tenant, selectedTenantId } = useTenant();
   const { toast } = useToast();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createSubdomain, setCreateSubdomain] = useState("");
 
   const { data: companies = [], isLoading } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -47,7 +39,6 @@ export default function CompaniesPage() {
   const homeCompanyId = user?.tenantId;
   const activeCompanyId = selectedTenantId || tenant?.id || homeCompanyId;
   const confirmDeleteCompany = companies.find((c) => c.id === confirmDeleteId);
-  const isSuperAdmin = !!user?.isSuperAdmin;
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/companies/${id}`),
@@ -59,20 +50,6 @@ export default function CompaniesPage() {
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       setConfirmDeleteId(null);
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/companies", { name: createName, subdomain: createSubdomain }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
-      toast({ title: "Compañía creada", description: `${createName} fue creada como compañía hija.` });
-      setShowCreateDialog(false);
-      setCreateName("");
-      setCreateSubdomain("");
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error al crear", description: error.message, variant: "destructive" });
     },
   });
 
@@ -108,22 +85,15 @@ export default function CompaniesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
-            Compañías
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Tu compañía y sus compañías hijas. Cada una tiene sus propios datos (clientes propios,
-            ventas, productos). Los clientes de la compañía padre son visibles en las hijas.
-          </p>
-        </div>
-        {isSuperAdmin && (
-          <Button onClick={() => setShowCreateDialog(true)} data-testid="button-new-company">
-            <Plus className="h-4 w-4 mr-2" />
-            Nueva Compañía Hija
-          </Button>
-        )}
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
+          Compañías
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Tu compañía y sus compañías hijas. Cada compañía tiene sus propios datos (clientes,
+          productos, ventas). Puedes entrar a administrar cualquier compañía hija. La creación y
+          configuración de compañías la realiza el equipo de Nexxo.
+        </p>
       </div>
 
       <div className="space-y-4">
@@ -145,7 +115,7 @@ export default function CompaniesPage() {
                       company={child}
                       isActive={child.id === activeCompanyId}
                       onSwitch={switchToCompany}
-                      onDelete={isSuperAdmin ? () => setConfirmDeleteId(child.id) : undefined}
+                      onDelete={() => setConfirmDeleteId(child.id)}
                     />
                   ))}
                 </div>
@@ -155,7 +125,7 @@ export default function CompaniesPage() {
         })}
       </div>
 
-      {companies.length <= 1 && !isSuperAdmin && (
+      {companies.length <= 1 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Network className="h-12 w-12 text-muted-foreground mb-4" />
@@ -168,83 +138,12 @@ export default function CompaniesPage() {
         </Card>
       )}
 
-      {companies.length <= 1 && isSuperAdmin && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Network className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium">Aún no hay compañías hijas</h3>
-            <p className="text-muted-foreground max-w-md mb-4">
-              Crea una compañía hija para operar otra sucursal o negocio con datos propios
-              (sus propios clientes, ventas y productos). Comparte el catálogo de clientes del padre.
-            </p>
-            <Button onClick={() => setShowCreateDialog(true)} data-testid="button-new-company-empty">
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Compañía Hija
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Create company dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) { setShowCreateDialog(false); setCreateName(""); setCreateSubdomain(""); } }}>
-        <DialogContent data-testid="dialog-create-company">
-          <DialogHeader>
-            <DialogTitle>Nueva Compañía Hija</DialogTitle>
-            <DialogDescription>
-              La nueva compañía tendrá sus propios datos aislados (cotizaciones, pedidos, usuarios).
-              Los clientes de esta compañía serán visibles como catálogo compartido.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="company-name">Nombre</Label>
-              <Input
-                id="company-name"
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                placeholder="Ej: Sucursal Norte"
-                data-testid="input-company-name"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="company-subdomain">Subdominio</Label>
-              <div className="flex items-center gap-1">
-                <Input
-                  id="company-subdomain"
-                  value={createSubdomain}
-                  onChange={(e) => setCreateSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                  placeholder="sucursal-norte"
-                  data-testid="input-company-subdomain"
-                />
-                <span className="text-sm text-muted-foreground whitespace-nowrap">.nexxo.com.mx</span>
-              </div>
-              <p className="text-xs text-muted-foreground">Solo letras minúsculas, números y guiones.</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={createMutation.isPending}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || !createName.trim() || !createSubdomain.trim()}
-              data-testid="button-confirm-create-company"
-            >
-              {createMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creando...</> : "Crear Compañía"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirm dialog */}
       <AlertDialog open={!!confirmDeleteId} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Desactivar compañía?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esto desactivará <strong>{confirmDeleteCompany?.name}</strong>. Los datos existentes se
-              conservarán pero la compañía dejará de ser accesible. Esta acción puede revertirse
-              contactando al equipo de Nexxo.
+              Esto desactivará <strong>{confirmDeleteCompany?.name}</strong>. Los datos existentes se conservarán pero la compañía dejará de ser accesible. Esta acción puede revertirse contactando al equipo de Nexxo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -303,7 +202,7 @@ function CompanyCard({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!isActive && company.active && (
+          {!isActive && (
             <Button
               variant="outline"
               size="sm"

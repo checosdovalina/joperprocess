@@ -687,52 +687,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // SuperAdmins can create child companies from within a tenant subdomain.
-  // The new tenant is automatically linked as a child of the admin's home company.
-  app.post("/api/companies", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
-    try {
-      if (!req.user?.isSuperAdmin) {
-        return res.status(403).json({ error: "Solo los super administradores pueden crear compañías hijas" });
-      }
-      const homeTenantId = req.user.tenantId;
-      if (!homeTenantId) {
-        return res.status(400).json({ error: "Usuario sin compañía asignada" });
-      }
-      const { name, subdomain } = req.body;
-      if (!name || typeof name !== "string" || !name.trim()) {
-        return res.status(400).json({ error: "El nombre es obligatorio" });
-      }
-      if (!subdomain || typeof subdomain !== "string" || !subdomain.trim()) {
-        return res.status(400).json({ error: "El subdominio es obligatorio" });
-      }
-      const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-      if (!cleanSubdomain) {
-        return res.status(400).json({ error: "Subdominio inválido" });
-      }
-      // Check subdomain uniqueness
-      const existing = await db.query.tenants.findFirst({ where: eq(tenants.subdomain, cleanSubdomain) });
-      if (existing) {
-        return res.status(409).json({ error: "El subdominio ya está en uso" });
-      }
-      const autoCode = cleanSubdomain.slice(0, 4).toUpperCase();
-      const [newTenant] = await db.insert(tenants).values({
-        name: name.trim(),
-        subdomain: cleanSubdomain,
-        parentId: homeTenantId,
-        companyCode: autoCode,
-        active: true,
-      }).returning();
-      res.status(201).json(newTenant);
-    } catch (error) {
-      console.error("Error creating child company:", error);
-      res.status(500).json({ error: "Error al crear la compañía hija" });
-    }
-  });
-
   // NOTE: Company/empresa structural configuration (creating and nesting companies) is
-  // handled exclusively by the platform superadmin (Nexxo) via /api/tenants or
-  // POST /api/companies. Company admins can VIEW their tree and operate inside a
-  // descendant via the company switcher — but cannot create or restructure companies.
+  // handled exclusively by the platform superadmin (Nexxo) via /api/tenants. Company
+  // admins can only VIEW their tree (GET /api/companies above) and operate inside a
+  // descendant via the company switcher — they cannot create or restructure companies.
 
   // ==================== END TENANT ENDPOINTS ====================
 
@@ -5389,17 +5347,6 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/product-instances", isAuthenticated, async (req, res) => {
     try {
       const validated = insertShipmentProductInstanceSchema.parse(req.body);
-      // Tenant + empresa isolation: verify the parent shipment AND order belong to
-      // the caller's scope before inserting, so a client-supplied foreign parent ID
-      // can't attach a new record to another company's data.
-      const scopedStorage = createTenantScopedStorage(req);
-      const [scopedShipment, scopedOrder] = await Promise.all([
-        scopedStorage.getShipment(validated.shipmentId),
-        scopedStorage.getOrder(validated.orderId),
-      ]);
-      if (!scopedShipment || !scopedOrder) {
-        return res.status(404).json({ error: "Shipment or order not found" });
-      }
       const [instance] = await db.insert(shipmentProductInstances).values(validated).returning();
       res.status(201).json(instance);
     } catch (error: any) {
@@ -5418,19 +5365,6 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "Se requiere un arreglo de instancias" });
       }
       const validated = instances.map(i => insertShipmentProductInstanceSchema.parse(i));
-      // Tenant + empresa isolation: verify every parent shipment AND order is in the
-      // caller's scope before inserting any row, so a foreign parent ID in the batch
-      // can't attach records to another company's data.
-      const scopedStorage = createTenantScopedStorage(req);
-      const uniqueShipmentIds = Array.from(new Set(validated.map(v => v.shipmentId)));
-      const uniqueOrderIds = Array.from(new Set(validated.map(v => v.orderId)));
-      const [shipmentResults, orderResults] = await Promise.all([
-        Promise.all(uniqueShipmentIds.map(id => scopedStorage.getShipment(id))),
-        Promise.all(uniqueOrderIds.map(id => scopedStorage.getOrder(id))),
-      ]);
-      if (shipmentResults.some(s => !s) || orderResults.some(o => !o)) {
-        return res.status(404).json({ error: "Shipment or order not found" });
-      }
       const created = await db.insert(shipmentProductInstances).values(validated).returning();
       res.status(201).json(created);
     } catch (error: any) {

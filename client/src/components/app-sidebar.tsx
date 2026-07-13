@@ -27,7 +27,6 @@ import {
   Store,
   Network,
 } from "lucide-react";
-import { useEffect } from "react";
 import nexxoLogo from "@assets/generated_images/nexxo_tech_company_logo.png";
 import {
   Sidebar,
@@ -172,22 +171,10 @@ export function AppSidebar() {
 
   // Company hierarchy: admins (not superadmins) can switch into descendant companies.
   const isCompanyAdmin = user?.role === UserRole.ADMIN && !user?.isSuperAdmin;
-  const { data: companies = [], isSuccess: companiesLoaded } = useQuery<Company[]>({
+  const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
     enabled: isCompanyAdmin,
   });
-
-  // Auto-clear stale selectedTenantId: if the stored company is no longer accessible
-  // (e.g. parentId was never set), clear it so the parent company is shown instead.
-  useEffect(() => {
-    if (!isCompanyAdmin || !companiesLoaded || !selectedTenantId) return;
-    const validIds = companies.map((c) => c.id);
-    if (!validIds.includes(selectedTenantId)) {
-      localStorage.removeItem("selectedTenantId");
-      window.location.reload();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companiesLoaded]); // run once after companies first load
 
   // The company currently being viewed: the switched one, or the admin's home company.
   const activeCompanyId = selectedTenantId || tenant?.id || "";

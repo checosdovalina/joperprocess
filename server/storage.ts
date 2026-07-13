@@ -17,7 +17,6 @@ import {
   customerProductPrices,
   documents,
   incidents,
-  tenants,
   empresas,
   UserRole,
   type Empresa,
@@ -60,7 +59,7 @@ import {
   type Incident,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, asc, isNull, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, or, ilike, asc, isNull, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -328,45 +327,31 @@ export class DatabaseStorage implements IStorage {
   async createQuotation(insertQuotation: InsertQuotation): Promise<Quotation> {
     const FOREIGN_RFC = 'XEXX010101000';
     // Prefijo de folio según el cliente: MEX (México) / EXT (extranjero).
-    let geoPrefix = 'MEX';
+    let prefix = 'MEX';
     if (insertQuotation.customerId) {
       const customer = await this.getCustomer(insertQuotation.customerId);
       if (customer) {
         if (customer.rfc === FOREIGN_RFC) {
-          geoPrefix = 'EXT';
+          prefix = 'EXT';
         } else {
           const country = (customer.country || '').trim().toLowerCase();
           const mexican = ['méxico', 'mexico', 'mx', 'mex'];
           if (country) {
-            geoPrefix = mexican.includes(country) ? 'MEX' : 'EXT';
+            prefix = mexican.includes(country) ? 'MEX' : 'EXT';
           }
         }
       }
     }
 
-    // Prefijo de empresa: si el tenant tiene companyCode, se antepone al geo-prefix
-    // para que los folios de distintas compañías no se mezclen (JOPE-MEX-1, TIPO-MEX-1).
-    const tenantId = (insertQuotation as any).tenantId as string | undefined;
-    let companyCode: string | null = null;
-    if (tenantId) {
-      const [tenantRow] = await db
-        .select({ companyCode: tenants.companyCode })
-        .from(tenants)
-        .where(eq(tenants.id, tenantId))
-        .limit(1);
-      companyCode = tenantRow?.companyCode ?? null;
-    }
-    // Formato: {MEX|EXT}-{companyCode}-{numero} → e.g. MEX-JOPE-1, MEX-TIPO-1
-    const prefix = companyCode ? `${geoPrefix}-${companyCode}` : geoPrefix;
-
-    // Folio secuencial y único: toma el número más alto existente para el
-    // prefijo completo y le suma 1. Reintento automático ante conflicto único.
+    // Folio secuencial y único (compartido entre empresas): toma el número más
+    // alto existente para el prefijo y le suma 1. Si dos cotizaciones toman el
+    // mismo número a la vez, el índice único lo rechaza y reintentamos con el
+    // siguiente número disponible, evitando duplicados y fallos al guardar.
     const maxAttempts = 8;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const escapedPrefix = prefix.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
       const [row] = await db
         .select({
-          next: sql<number>`COALESCE(MAX(CAST(substring(${quotations.folio} from ${`^${escapedPrefix}-([0-9]+)$`}) AS INTEGER)), 0) + 1`,
+          next: sql<number>`COALESCE(MAX(CAST(substring(${quotations.folio} from ${`^${prefix}-([0-9]+)$`}) AS INTEGER)), 0) + 1`,
         })
         .from(quotations)
         .where(sql`${quotations.folio} LIKE ${`${prefix}-%`}`);
@@ -645,9 +630,6 @@ import type { Request } from "express";
 interface TenantContext {
   tenantId: string | null;
   allowGlobal: boolean;
-  // Parent tenant: when this is a child company, parentTenantId is set so
-  // shared resources (e.g. the customer catalog) can include the parent's records.
-  parentTenantId: string | null;
   // Empresa scoping: a VENDEDOR bound to a single empresa only sees that empresa's
   // commercial documents (quotations/orders/shipments). Global roles (admin, logística,
   // crédito, fábrica, etc.) see every empresa within the tenant.
@@ -665,11 +647,9 @@ function getTenantContext(req: Request): TenantContext {
   const restrictToEmpresa =
     !user?.isSuperAdmin && user?.role === UserRole.VENDEDOR && !!empresaId;
 
-  // If on a subdomain, always use that tenant (ignore header).
-  // parentTenantId is set when this is a child company (companyHierarchyMiddleware
-  // overwrites req.tenant with the child, which now carries parentId).
+  // If on a subdomain, always use that tenant (ignore header)
   if (tenant?.id) {
-    return { tenantId: tenant.id, allowGlobal: false, parentTenantId: tenant.parentId ?? null, empresaId, restrictToEmpresa };
+    return { tenantId: tenant.id, allowGlobal: false, empresaId, restrictToEmpresa };
   }
 
   // SuperAdmin on main domain (no subdomain)
@@ -678,17 +658,16 @@ function getTenantContext(req: Request): TenantContext {
     const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
     if (selectedTenantId) {
       // SuperAdmin working in context of a specific tenant
-      return { tenantId: selectedTenantId, allowGlobal: false, parentTenantId: null, empresaId: null, restrictToEmpresa: false };
+      return { tenantId: selectedTenantId, allowGlobal: false, empresaId: null, restrictToEmpresa: false };
     }
     // SuperAdmin without selection - global access
-    return { tenantId: null, allowGlobal: true, parentTenantId: null, empresaId: null, restrictToEmpresa: false };
+    return { tenantId: null, allowGlobal: true, empresaId: null, restrictToEmpresa: false };
   }
 
   // Regular users use their assigned tenantId
   return {
     tenantId: user?.tenantId || null,
     allowGlobal: false,
-    parentTenantId: null,
     empresaId,
     restrictToEmpresa,
   };
@@ -795,11 +774,8 @@ export class TenantScopedStorage {
       return this.base.getAllCustomers();
     }
     if (!this.ctx.tenantId) return [];
-    // Child companies share the parent's customer catalog: include both.
-    const tenantIds = [this.ctx.tenantId];
-    if (this.ctx.parentTenantId) tenantIds.push(this.ctx.parentTenantId);
     return await db.select().from(customers)
-      .where(inArray(customers.tenantId, tenantIds))
+      .where(eq(customers.tenantId, this.ctx.tenantId))
       .orderBy(desc(customers.createdAt));
   }
 
@@ -810,11 +786,9 @@ export class TenantScopedStorage {
   async getCustomer(id: string): Promise<Customer | undefined> {
     const customer = await this.base.getCustomer(id);
     if (!customer) return undefined;
-    // Allow access when the customer belongs to this tenant OR the parent tenant
-    // (child companies share the parent's customer catalog).
-    if (!this.ctx.allowGlobal) {
-      const allowedTenants = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
-      if (!allowedTenants.includes(customer.tenantId)) return undefined;
+    // Verify tenant ownership
+    if (!this.ctx.allowGlobal && customer.tenantId !== this.ctx.tenantId) {
+      return undefined;
     }
     return customer;
   }
@@ -1012,16 +986,14 @@ export class TenantScopedStorage {
     return this.base.createPayment(this.withTenant(data));
   }
 
-  // Products — child companies share the parent's product catalog.
+  // Products
   async getAllProducts(): Promise<Product[]> {
     if (this.ctx.allowGlobal) {
       return this.base.getAllProducts();
     }
     if (!this.ctx.tenantId) return [];
-    const tenantIds = [this.ctx.tenantId];
-    if (this.ctx.parentTenantId) tenantIds.push(this.ctx.parentTenantId);
     return await db.select().from(products)
-      .where(inArray(products.tenantId, tenantIds))
+      .where(eq(products.tenantId, this.ctx.tenantId))
       .orderBy(products.name);
   }
 
@@ -1029,16 +1001,14 @@ export class TenantScopedStorage {
     return this.base.createProduct(this.withTenant(data));
   }
 
-  // Product Categories — child companies share the parent's categories.
+  // Product Categories
   async getAllProductCategories(): Promise<ProductCategory[]> {
     if (this.ctx.allowGlobal) {
       return this.base.getAllProductCategories();
     }
     if (!this.ctx.tenantId) return [];
-    const tenantIds = [this.ctx.tenantId];
-    if (this.ctx.parentTenantId) tenantIds.push(this.ctx.parentTenantId);
     return await db.select().from(productCategories)
-      .where(inArray(productCategories.tenantId, tenantIds))
+      .where(eq(productCategories.tenantId, this.ctx.tenantId))
       .orderBy(productCategories.name);
   }
 
@@ -1190,23 +1160,17 @@ export class TenantScopedStorage {
       .orderBy(desc(payments.paymentDate));
   }
   
-  // Product with ownership verification — also allows parent's products.
+  // Product with ownership verification
   async getProduct(id: string) {
     const product = await this.base.getProduct(id);
     if (!product) return undefined;
-    if (!this.ctx.allowGlobal) {
-      const allowed = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
-      if (!allowed.includes(product.tenantId)) return undefined;
-    }
+    if (!this.ctx.allowGlobal && product.tenantId !== this.ctx.tenantId) return undefined;
     return product;
   }
   async getProductByCode(code: string) {
     const product = await this.base.getProductByCode(code);
     if (!product) return undefined;
-    if (!this.ctx.allowGlobal) {
-      const allowed = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
-      if (!allowed.includes(product.tenantId)) return undefined;
-    }
+    if (!this.ctx.allowGlobal && product.tenantId !== this.ctx.tenantId) return undefined;
     return product;
   }
   async searchProducts(query: string) {
@@ -1214,8 +1178,7 @@ export class TenantScopedStorage {
       return this.base.searchProducts(query);
     }
     const allProducts = await this.base.searchProducts(query);
-    const allowed = [this.ctx.tenantId, this.ctx.parentTenantId].filter(Boolean);
-    return allProducts.filter(p => allowed.includes(p.tenantId));
+    return allProducts.filter(p => p.tenantId === this.ctx.tenantId);
   }
   async updateProduct(id: string, data: UpdateProduct) {
     const existing = await this.getProduct(id);
