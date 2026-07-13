@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery } from "@tanstack/react-query";
+import { getSelectedTenantId } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { Empresa } from "@shared/schema";
 import {
@@ -149,7 +150,10 @@ function ItemsList({ type, id, showPrices }: { type: string; id: string; showPri
   const { data: items = [], isLoading } = useQuery<PipelineItem[]>({
     queryKey: ["/api/pipeline/items", type, id],
     queryFn: async () => {
-      const r = await fetch(`/api/pipeline/items?type=${type}&id=${id}`);
+      const selectedTenantId = getSelectedTenantId();
+      const headers: Record<string, string> = {};
+      if (selectedTenantId) headers["X-Selected-Tenant-Id"] = selectedTenantId;
+      const r = await fetch(`/api/pipeline/items?type=${type}&id=${id}`, { credentials: "include", headers });
       if (!r.ok) throw new Error("Error");
       return r.json();
     },
@@ -517,7 +521,10 @@ export default function PipelinePage() {
       const url = selectedEmpresa !== "all"
         ? `/api/pipeline?empresaId=${encodeURIComponent(selectedEmpresa)}`
         : "/api/pipeline";
-      const r = await fetch(url, { credentials: "include" });
+      const selectedTenantId = getSelectedTenantId();
+      const headers: Record<string, string> = {};
+      if (selectedTenantId) headers["X-Selected-Tenant-Id"] = selectedTenantId;
+      const r = await fetch(url, { credentials: "include", headers });
       if (!r.ok) throw new Error("Error");
       return r.json();
     },

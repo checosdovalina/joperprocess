@@ -87,7 +87,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       const url = tenantParam
         ? `/api/tenant-config?tenant=${encodeURIComponent(tenantParam)}`
         : "/api/tenant-config";
-      const res = await fetch(url, { credentials: "include" });
+      const selectedId = typeof window !== "undefined" ? localStorage.getItem("selectedTenantId") : null;
+      const tenantHeaders: Record<string, string> = {};
+      if (selectedId) tenantHeaders["X-Selected-Tenant-Id"] = selectedId;
+      const res = await fetch(url, { credentials: "include", headers: tenantHeaders });
       if (res.status === 404) {
         // No tenant context = main marketing domain
         return null;
