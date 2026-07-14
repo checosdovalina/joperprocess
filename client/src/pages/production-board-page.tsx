@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { Empresa } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 import { format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { useI18n } from "@/hooks/use-i18n";
@@ -34,6 +36,7 @@ interface BoardOrder {
   createdAt: string;
   updatedAt: string;
   daysRemaining: number | null;
+  empresaId?: string | null;
   empresaName?: string | null;
   customerName: string;
   customerCity: string | null;
@@ -302,12 +305,26 @@ export default function ProductionBoardPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [showDelivered, setShowDelivered] = useState(false);
+  const [selectedEmpresa, setSelectedEmpresa] = useState("all");
+  const { user } = useAuth();
 
-  const { data: orders, refetch, isLoading } = useQuery<BoardOrder[]>({
+  const { data: allOrders, refetch, isLoading } = useQuery<BoardOrder[]>({
     queryKey: ["/api/board/orders"],
     refetchInterval: REFRESH_INTERVAL * 1000,
     staleTime: 30 * 1000,
   });
+
+  // Vendedores bound to an empresa are already server-restricted; others can switch boards.
+  const isRestrictedVendedor = user?.role === "vendedor" && !!user?.empresaId;
+  const { data: empresas = [] } = useQuery<Empresa[]>({
+    queryKey: ["/api/empresas"],
+    enabled: !isRestrictedVendedor,
+  });
+  const showEmpresaSelector = !isRestrictedVendedor && empresas.length > 1;
+
+  const orders = selectedEmpresa === "all"
+    ? allOrders
+    : (allOrders || []).filter(o => o.empresaId === selectedEmpresa);
 
   // Countdown timer
   useEffect(() => {
@@ -417,6 +434,19 @@ export default function ProductionBoardPage() {
 
         {/* Right: controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {showEmpresaSelector && (
+            <select
+              value={selectedEmpresa}
+              onChange={(e) => setSelectedEmpresa(e.target.value)}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "7px 10px", cursor: "pointer", color: "#fff", fontSize: 12, appearance: "auto" }}
+              data-testid="select-board-empresa"
+            >
+              <option value="all" style={{ color: "#000" }}>Todas las empresas</option>
+              {empresas.map((e) => (
+                <option key={e.id} value={e.id} style={{ color: "#000" }}>{e.name}</option>
+              ))}
+            </select>
+          )}
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", textAlign: "right" }}>
             <div>{t("board.updated")} {format(lastUpdated, "HH:mm:ss")}</div>
             <div style={{ color: countdown <= 10 ? "#f59e0b" : "rgba(255,255,255,0.3)" }}>

@@ -5128,7 +5128,8 @@ Proporciona tu análisis en el siguiente formato JSON:
       // Empresa (brand) names so the board can label which empresa each order belongs to.
       const boardEmpresaMap = new Map<string, string>();
       {
-        const empresaRows = await db.select({ id: empresas.id, name: empresas.name }).from(empresas);
+        const empresaRows = await db.select({ id: empresas.id, name: empresas.name }).from(empresas)
+          .where((!isSuperAdminGlobal && resolvedTenantId) ? eq(empresas.tenantId, resolvedTenantId) : undefined);
         empresaRows.forEach(e => boardEmpresaMap.set(e.id, e.name));
       }
 
@@ -5151,6 +5152,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           createdAt: o.createdAt,
           updatedAt: o.updatedAt,
           daysRemaining,
+          empresaId: o.empresaId ?? null,
           empresaName: o.empresaId ? boardEmpresaMap.get(o.empresaId) ?? null : null,
           customerName: q?.customer?.name || "—",
           customerCity: q?.customer?.city || null,
