@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { CreditAuthorization, Quotation, Customer, User, CreditAuthorizationComment } from "@shared/schema";
+import { CreditAuthorization, Quotation, Customer, User, CreditAuthorizationComment, type Empresa } from "@shared/schema";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -112,6 +113,7 @@ export default function CreditAuthPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [hideResolved, setHideResolved] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
   const { toast } = useToast();
 
   const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -119,6 +121,10 @@ export default function CreditAuthPage() {
   const { data: authorizations, isLoading } = useQuery<CreditAuthWithDetails[]>({
     queryKey: ["/api/credit-authorizations"],
   });
+
+  const { data: empresas } = useQuery<Empresa[]>({ queryKey: ["/api/empresas"] });
+  const empresaName = (id: string | null | undefined) =>
+    (id && empresas?.find(e => e.id === id)?.name) || "";
 
   // Load comments when auth is selected
   const { data: comments, refetch: refetchComments } = useQuery<CommentWithUser[]>({
@@ -456,6 +462,19 @@ export default function CreditAuthPage() {
                   data-testid="input-search-credit-auth"
                 />
               </div>
+              {empresas && empresas.length > 0 && (
+                <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
+                  <SelectTrigger className="w-full sm:w-52">
+                    <SelectValue placeholder="Empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las empresas</SelectItem>
+                    {empresas.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {(authorizations?.filter(a => a.status === "approved" || a.status === "rejected").length ?? 0) > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setHideResolved(v => !v)} data-testid="button-toggle-resolved">
                   {hideResolved ? <><Eye className="h-4 w-4 mr-2" />{t("credit.show-resolved")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("credit.hide-resolved")}</>}
@@ -488,6 +507,7 @@ export default function CreditAuthPage() {
                 <TableBody>
                   {(hideResolved ? authorizations.filter(a => a.status === "pending") : authorizations)
                     .filter((auth) => {
+                      if (filterEmpresa !== "all" && auth.quotation?.empresaId !== filterEmpresa) return false;
                       const q = norm(searchTerm.trim());
                       if (!q) return true;
                       return norm(auth.quotation?.folio || "").includes(q)
@@ -509,6 +529,11 @@ export default function CreditAuthPage() {
                       </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm">{auth.quotation.folio}</div>
+                        {auth.quotation.empresaId && empresaName(auth.quotation.empresaId) && (
+                          <Badge variant="secondary" className="mt-1" data-testid={`badge-empresa-${auth.id}`}>
+                            {empresaName(auth.quotation.empresaId)}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="font-medium">

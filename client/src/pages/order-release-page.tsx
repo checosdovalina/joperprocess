@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CheckCircle2,
   XCircle,
@@ -49,7 +50,7 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { QuotationForm } from "@/components/quotation-form";
-import { Customer, InsertQuotation, InsertQuotationItem } from "@shared/schema";
+import { Customer, InsertQuotation, InsertQuotationItem, type Empresa } from "@shared/schema";
 
 interface ReleaseOrderItem {
   id: string;
@@ -67,6 +68,8 @@ interface ReleaseOrder {
   id: string;
   quotationId: string;
   folio: string;
+  empresaId: string | null;
+  empresaName: string | null;
   customerName: string;
   customerRfc: string | null;
   vendedorName: string;
@@ -178,6 +181,11 @@ function OrderCard({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="font-semibold text-sm">{order.folio}</span>
+            {order.empresaName && (
+              <Badge variant="secondary" data-testid={`badge-empresa-${order.id}`}>
+                {order.empresaName}
+              </Badge>
+            )}
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[order.releaseStatus] || "bg-muted text-muted-foreground"}`}>
               {STATUS_LABEL[order.releaseStatus] ? t(STATUS_LABEL[order.releaseStatus]) : order.releaseStatus}
             </span>
@@ -409,6 +417,7 @@ export default function OrderReleasePage() {
   const { toast } = useToast();
   const { t } = useI18n();
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [approveTarget, setApproveTarget] = useState<ReleaseOrder | null>(null);
   const [approveNotes, setApproveNotes] = useState("");
   const [rejectTarget, setRejectTarget] = useState<ReleaseOrder | null>(null);
@@ -429,8 +438,10 @@ export default function OrderReleasePage() {
   });
 
   const { data: customers = [] } = useQuery<Customer[]>({ queryKey: ["/api/customers"] });
+  const { data: empresas } = useQuery<Empresa[]>({ queryKey: ["/api/empresas"] });
 
   const matchesSearch = (order: ReleaseOrder) => {
+    if (filterEmpresa !== "all" && order.empresaId !== filterEmpresa) return false;
     const q = norm(searchTerm.trim());
     if (!q) return true;
     return norm(order.folio).includes(q) || norm(order.customerName).includes(q) || norm(order.vendedorName).includes(q);
@@ -543,15 +554,30 @@ export default function OrderReleasePage() {
         )}
       </div>
 
-      <div className="relative w-full sm:w-64">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder={t("release.search-ph")}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-8"
-          data-testid="input-search-order-release"
-        />
+      <div className="flex flex-wrap gap-2">
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t("release.search-ph")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+            data-testid="input-search-order-release"
+          />
+        </div>
+        {empresas && empresas.length > 0 && (
+          <Select value={filterEmpresa} onValueChange={setFilterEmpresa} data-testid="select-filter-empresa">
+            <SelectTrigger className="w-full sm:w-52">
+              <SelectValue placeholder="Empresa" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las empresas</SelectItem>
+              {empresas.map(e => (
+                <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Tabs defaultValue="pending">

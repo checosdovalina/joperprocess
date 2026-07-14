@@ -4560,6 +4560,14 @@ Proporciona tu análisis en el siguiente formato JSON:
         filtered = orderRows.filter(o => o.releaseStatus === "approved" || o.releaseStatus === "rejected" || o.releaseStatus === "closed");
       }
 
+      // Empresa (brand) names so the release page can label each order.
+      const releaseEmpresaMap = new Map<string, string>();
+      {
+        const empresaRows = await db.select({ id: empresas.id, name: empresas.name }).from(empresas)
+          .where(resolvedTenantId ? eq(empresas.tenantId, resolvedTenantId) : undefined);
+        empresaRows.forEach(e => releaseEmpresaMap.set(e.id, e.name));
+      }
+
       const result = filtered.map(o => {
         const shipment = shipmentByOrder.get(o.id);
         const creditAuth = creditAuthByQuotation.get(o.quotationId);
@@ -4571,6 +4579,8 @@ Proporciona tu análisis en el siguiente formato JSON:
         return {
           id: o.id,
           folio: quotation?.folio || o.id.substring(0, 8),
+          empresaId: o.empresaId ?? null,
+          empresaName: o.empresaId ? releaseEmpresaMap.get(o.empresaId) ?? null : null,
           customerName: quotation?.customer?.name || "—",
           customerRfc: quotation?.customer?.rfc || null,
           vendedorName: vendedor?.fullName || "—",
