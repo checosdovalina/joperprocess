@@ -365,6 +365,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         quotTotal: quotations.total,
         quotCurrency: quotations.currency,
         quotTenantId: quotations.tenantId,
+        quotEmpresaId: quotations.empresaId,
         customerName: customers.name,
         sellerName: sellerAlias3.fullName,
       })
@@ -376,11 +377,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(sql`${creditAuthorizations.createdAt} DESC`)
         .limit(200);
 
+      // Empresa (brand) names so the board can label which empresa each document belongs to.
+      const empresaNameMap = new Map<string, string>();
+      {
+        const empresaRows = await db.select({ id: empresas.id, name: empresas.name }).from(empresas);
+        empresaRows.forEach(e => empresaNameMap.set(e.id, e.name));
+      }
+      const empresaName = (id: string | null | undefined) => (id ? empresaNameMap.get(id) ?? null : null);
+
       res.json({
-        quotations: quotRows.map(r => ({ ...r.q, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.q.tenantId ?? "") ?? null })),
-        orders: orderRows.map(r => ({ ...r.o, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.o.tenantId ?? "") ?? null })),
-        shipments: shipmentRows.map(r => ({ ...r.s, quotFolio: r.quotFolio, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.s.tenantId ?? "") ?? null })),
-        creditAuths: authRows.map(r => ({ ...r.a, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.quotTenantId ?? "") ?? null })),
+        quotations: quotRows.map(r => ({ ...r.q, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.q.tenantId ?? "") ?? null, empresaName: empresaName(r.q.empresaId) })),
+        orders: orderRows.map(r => ({ ...r.o, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.o.tenantId ?? "") ?? null, empresaName: empresaName(r.o.empresaId) })),
+        shipments: shipmentRows.map(r => ({ ...r.s, quotFolio: r.quotFolio, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.s.tenantId ?? "") ?? null, empresaName: empresaName(r.s.empresaId) })),
+        creditAuths: authRows.map(r => ({ ...r.a, quotFolio: r.quotFolio, quotTotal: r.quotTotal, quotCurrency: r.quotCurrency, customerName: r.customerName, sellerName: r.sellerName, tenantName: tenantNameMap.get(r.quotTenantId ?? "") ?? null, empresaName: empresaName(r.quotEmpresaId) })),
       });
     } catch (error) {
       console.error("Error fetching pipeline data:", error);
@@ -5106,6 +5115,13 @@ Proporciona tu análisis en el siguiente formato JSON:
         return true; // all active statuses
       });
 
+      // Empresa (brand) names so the board can label which empresa each order belongs to.
+      const boardEmpresaMap = new Map<string, string>();
+      {
+        const empresaRows = await db.select({ id: empresas.id, name: empresas.name }).from(empresas);
+        empresaRows.forEach(e => boardEmpresaMap.set(e.id, e.name));
+      }
+
       const result = filtered.map(o => {
         const q = o.quotation as any;
         const now = new Date();
@@ -5125,6 +5141,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           createdAt: o.createdAt,
           updatedAt: o.updatedAt,
           daysRemaining,
+          empresaName: o.empresaId ? boardEmpresaMap.get(o.empresaId) ?? null : null,
           customerName: q?.customer?.name || "—",
           customerCity: q?.customer?.city || null,
           purchaseOrder: q?.purchaseOrder || null,

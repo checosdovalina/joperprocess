@@ -22,24 +22,24 @@ const REFRESH_INTERVAL = 20; // seconds
 interface PipelineQuotation {
   id: string; folio: string; status: string; total: string; currency: string;
   customerName: string | null; sellerName: string | null; createdAt: string;
-  validUntil: string | null; tenantName?: string | null;
+  validUntil: string | null; tenantName?: string | null; empresaName?: string | null;
 }
 interface PipelineOrder {
   id: string; status: string; productionProgress: number;
   quotFolio: string | null; quotTotal: string | null; quotCurrency: string | null;
   customerName: string | null; sellerName: string | null; estimatedDelivery: string | null; createdAt: string;
-  tenantName?: string | null;
+  tenantName?: string | null; empresaName?: string | null;
 }
 interface PipelineShipment {
   id: string; status: string; transporter: string;
   trackingNumber: string | null; quotFolio: string | null; customerName: string | null;
   sellerName: string | null; shippedAt: string | null; createdAt: string;
-  tenantName?: string | null;
+  tenantName?: string | null; empresaName?: string | null;
 }
 interface PipelineCreditAuth {
   id: string; status: string; quotFolio: string | null; quotTotal: string | null;
   quotCurrency: string | null; customerName: string | null; sellerName: string | null; createdAt: string;
-  tenantName?: string | null;
+  tenantName?: string | null; empresaName?: string | null;
 }
 interface PipelineData {
   quotations: PipelineQuotation[];
@@ -130,6 +130,23 @@ function StatusPill({ color, label }: { color: string; label: string }) {
       letterSpacing: "0.02em",
     }}>
       {label}
+    </span>
+  );
+}
+
+function EmpresaTag({ name }: { name?: string | null }) {
+  if (!name) return null;
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, textTransform: "uppercase",
+      color: "rgba(255,255,255,0.75)",
+      background: "rgba(255,255,255,0.10)",
+      border: "1px solid rgba(255,255,255,0.18)",
+      borderRadius: 4, padding: "1px 6px",
+      letterSpacing: "0.06em", whiteSpace: "nowrap",
+      flexShrink: 0,
+    }} data-testid={`tag-empresa-${name}`}>
+      {name}
     </span>
   );
 }
@@ -230,7 +247,10 @@ function QuotCard({ q }: { q: PipelineQuotation }) {
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
-        <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: 14, letterSpacing: "0.01em" }}>{q.folio}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
+          <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: 14, letterSpacing: "0.01em", whiteSpace: "nowrap" }}>{q.folio}</span>
+          <EmpresaTag name={q.empresaName} />
+        </span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <StatusPill color={cfg.color} label={cfg.label} />
           <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
@@ -289,7 +309,10 @@ function AuthCard({ a }: { a: PipelineCreditAuth }) {
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
-        <span style={{ color: "#fcd34d", fontWeight: 700, fontSize: 14 }}>{a.quotFolio ?? "—"}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
+          <span style={{ color: "#fcd34d", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap" }}>{a.quotFolio ?? "—"}</span>
+          <EmpresaTag name={a.empresaName} />
+        </span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <StatusPill color={cfg.color} label={cfg.label} />
           <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
@@ -351,7 +374,10 @@ function OrderCard({ o }: { o: PipelineOrder }) {
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
-        <span style={{ color: "#d8b4fe", fontWeight: 700, fontSize: 14 }}>{o.quotFolio ?? "—"}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
+          <span style={{ color: "#d8b4fe", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap" }}>{o.quotFolio ?? "—"}</span>
+          <EmpresaTag name={o.empresaName} />
+        </span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <StatusPill color={cfg.color} label={cfg.label} />
           <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
@@ -427,7 +453,10 @@ function ShipmentCard({ s }: { s: PipelineShipment }) {
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
-        <span style={{ color: "#6ee7b7", fontWeight: 700, fontSize: 14 }}>{s.quotFolio ?? "—"}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
+          <span style={{ color: "#6ee7b7", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap" }}>{s.quotFolio ?? "—"}</span>
+          <EmpresaTag name={s.empresaName} />
+        </span>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <StatusPill color={cfg.color} label={cfg.label} />
           <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.2)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />

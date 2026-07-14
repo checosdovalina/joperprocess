@@ -34,6 +34,7 @@ interface BoardOrder {
   createdAt: string;
   updatedAt: string;
   daysRemaining: number | null;
+  empresaName?: string | null;
   customerName: string;
   customerCity: string | null;
   purchaseOrder: string | null;
@@ -128,6 +129,18 @@ function OrderCard({ order }: { order: BoardOrder }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, letterSpacing: "0.01em" }}>{order.folio}</span>
+            {order.empresaName && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, textTransform: "uppercase",
+                color: "rgba(255,255,255,0.75)",
+                background: "rgba(255,255,255,0.10)",
+                border: "1px solid rgba(255,255,255,0.18)",
+                borderRadius: 4, padding: "1px 6px",
+                letterSpacing: "0.06em", whiteSpace: "nowrap",
+              }} data-testid={`tag-empresa-${order.id}`}>
+                {order.empresaName}
+              </span>
+            )}
             {hasBlock && (
               <span title={order.factoryNotes || ""} style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 11, fontWeight: 600 }}>
                 <ShieldAlert size={13} />
