@@ -761,6 +761,12 @@ export class TenantScopedStorage {
     return this.base.updateEmpresa(id, rest);
   }
 
+  async deleteEmpresa(id: string): Promise<boolean> {
+    const existing = await this.getEmpresa(id);
+    if (!existing) return false;
+    return this.base.deleteEmpresa(id);
+  }
+
   // ==================== TENANT-AWARE METHODS ====================
 
   // Users
