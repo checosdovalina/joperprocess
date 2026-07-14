@@ -236,6 +236,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEmpresa(id: string): Promise<boolean> {
+    // Desvincular referencias antes de borrar (usuarios y documentos quedan sin empresa)
+    await db.update(users).set({ empresaId: null }).where(eq(users.empresaId, id));
+    await db.update(quotations).set({ empresaId: null }).where(eq(quotations.empresaId, id));
+    await db.update(orders).set({ empresaId: null }).where(eq(orders.empresaId, id));
+    await db.update(shipments).set({ empresaId: null }).where(eq(shipments.empresaId, id));
     const result = await db.delete(empresas).where(eq(empresas.id, id)).returning();
     return result.length > 0;
   }
