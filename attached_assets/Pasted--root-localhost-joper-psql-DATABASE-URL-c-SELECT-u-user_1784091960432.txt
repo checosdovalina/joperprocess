@@ -1,0 +1,46 @@
+[root@localhost joper]# psql "$DATABASE_URL" -c "SELECT u.username, u.role, t.name as tenant, t.id as tenant_id FROM users u JOIN tenants t ON u.tenant_id = t.id WHERE u.role = 'admin';"
+         username          | role  |        tenant         |              tenant
+_id               
+---------------------------+-------+-----------------------+--------------------
+------------------
+ sdovalina                 | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ admintipo                 | admin | Tipo                  | 901fff23-8024-41e5-
+a976-1312a915b423
+ Yasmin                    | admin | Tipo                  | 901fff23-8024-41e5-
+a976-1312a915b423
+ AndreaL2                  | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ AndreaL                   | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ tere@inmosa.com.mx        | admin | Demo Inmosa           | 68fb11c6-9b60-4ee2-
+aacb-2b0b0be6f8f5
+ Rodrigo                   | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ Anael                     | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ wendi                     | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ TereInmosa                | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ admin_dovalinapaintingllc | admin | Dovalina Painting LLC | 3afa3fe9-1594-4200-
+a95a-84ebe56275b0
+ AndreaL                   | admin | Joper USA             | 421c965a-03a2-4909-
+bf6a-dc6e6b2a9847
+ rodrigo                   | admin | Joper USA             | 421c965a-03a2-4909-
+bf6a-dc6e6b2a9847
+ AndreaL                   | admin | jopermovil            | 145d6f6c-feb6-4ea6-
+9739-95431370cf35
+ rodrigo                   | admin | jopermovil            | 145d6f6c-feb6-4ea6-
+9739-95431370cf35
+ tinmosa                   | admin | Joper USA             | 421c965a-03a2-4909-
+bf6a-dc6e6b2a9847
+ tinmosa                   | admin | jopermovil            | 145d6f6c-feb6-4ea6-
+9739-95431370cf35
+ superadmin123             | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+ superadmin1               | admin | Grupo Joper           | b5ca7691-3de0-47c1-
+808f-3b6baf19fb29
+(19 rows)
+
+[root@localhost joper]# 
