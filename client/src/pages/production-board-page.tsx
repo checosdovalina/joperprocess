@@ -25,6 +25,35 @@ import {
 
 const REFRESH_INTERVAL = 60; // seconds
 
+const TAG_PALETTES = [
+  { bg: "rgba(59,130,246,0.22)", border: "rgba(59,130,246,0.55)", color: "#93c5fd" },
+  { bg: "rgba(16,185,129,0.22)", border: "rgba(16,185,129,0.55)", color: "#6ee7b7" },
+  { bg: "rgba(245,158,11,0.22)", border: "rgba(245,158,11,0.55)", color: "#fcd34d" },
+  { bg: "rgba(168,85,247,0.22)", border: "rgba(168,85,247,0.55)", color: "#d8b4fe" },
+  { bg: "rgba(239,68,68,0.22)",  border: "rgba(239,68,68,0.55)",  color: "#fca5a5" },
+  { bg: "rgba(236,72,153,0.22)", border: "rgba(236,72,153,0.55)", color: "#f9a8d4" },
+  { bg: "rgba(20,184,166,0.22)", border: "rgba(20,184,166,0.55)", color: "#5eead4" },
+  { bg: "rgba(249,115,22,0.22)", border: "rgba(249,115,22,0.55)", color: "#fdba74" },
+];
+function tagPalette(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return TAG_PALETTES[h % TAG_PALETTES.length];
+}
+function EmpresaTag({ name, id }: { name: string; id: string }) {
+  const p = tagPalette(name);
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, textTransform: "uppercase",
+      color: p.color, background: p.bg, border: `1px solid ${p.border}`,
+      borderRadius: 4, padding: "1px 6px",
+      letterSpacing: "0.06em", whiteSpace: "nowrap",
+    }} data-testid={`tag-empresa-${id}`}>
+      {name}
+    </span>
+  );
+}
+
 interface BoardOrder {
   id: string;
   folio: string;
@@ -132,18 +161,7 @@ function OrderCard({ order }: { order: BoardOrder }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, letterSpacing: "0.01em" }}>{order.folio}</span>
-            {order.empresaName && (
-              <span style={{
-                fontSize: 9, fontWeight: 700, textTransform: "uppercase",
-                color: "rgba(255,255,255,0.75)",
-                background: "rgba(255,255,255,0.10)",
-                border: "1px solid rgba(255,255,255,0.18)",
-                borderRadius: 4, padding: "1px 6px",
-                letterSpacing: "0.06em", whiteSpace: "nowrap",
-              }} data-testid={`tag-empresa-${order.id}`}>
-                {order.empresaName}
-              </span>
-            )}
+            {order.empresaName && <EmpresaTag name={order.empresaName} id={order.id} />}
             {hasBlock && (
               <span title={order.factoryNotes || ""} style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 11, fontWeight: 600 }}>
                 <ShieldAlert size={13} />
@@ -311,7 +329,7 @@ export default function ProductionBoardPage() {
   const { data: allOrders, refetch, isLoading } = useQuery<BoardOrder[]>({
     queryKey: ["/api/board/orders"],
     refetchInterval: REFRESH_INTERVAL * 1000,
-    staleTime: 30 * 1000,
+    staleTime: 0,
   });
 
   // Vendedores bound to an empresa are already server-restricted; others can switch boards.
