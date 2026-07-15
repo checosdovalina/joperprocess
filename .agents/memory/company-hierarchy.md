@@ -62,3 +62,14 @@ flat (no subdomain nesting).
   effective-tenant helpers so the switch is consistent across ALL modules.
 - Superadmin has `tenantId = null`; the admin company-list endpoint returns
   empty/400 for them by design — they use the platform `/tenants` panel instead.
+
+## Empresa (marca) vs compañía hija — a recurring user confusion
+- "Empresa" rows (empresas table, per-tenant marcas like Ligero/Móvil) are NOT
+  the same as compañías hijas (child tenants via parentId). Board selectors
+  that count `empresas.length > 1` stay hidden when the user only created one
+  empresa plus a child COMPANY.
+- Pipeline board now has a company `<select>` (Todas las compañías / each
+  accessible company) for admins with hijas; picking one sends `?tenantId=`,
+  validated server-side against getAccessibleTenantIds. Pipeline item expansion
+  allows any accessible tenant for admins (header-only scoping broke expand
+  under scope=all).

@@ -554,7 +554,7 @@ export default function PipelinePage() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showActive, setShowActive] = useState(true);
-  const [scopeAll, setScopeAll] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState("all");
   const [showTvPrompt, setShowTvPrompt] = useState(true);
   const [selectedEmpresa, setSelectedEmpresa] = useState("all");
 
@@ -572,16 +572,23 @@ export default function PipelinePage() {
     enabled: user?.role === "admin",
   });
   const hasMultipleCompanies = user?.role === "admin" && companies.length > 1;
+  // "all" with multiple companies = scope=all (todas las compañías combinadas).
+  const scopeAll = hasMultipleCompanies && selectedCompany === "all";
   const showEmpresaSelector = !isRestrictedVendedor && !scopeAll && empresas.length > 1;
 
   const { data, refetch, isFetching, isLoading } = useQuery<PipelineData>({
-    queryKey: ["/api/pipeline", scopeAll ? "all" : selectedEmpresa],
+    queryKey: ["/api/pipeline", scopeAll ? "all" : selectedCompany, selectedEmpresa],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (scopeAll) {
         params.set("scope", "all");
-      } else if (selectedEmpresa !== "all") {
-        params.set("empresaId", selectedEmpresa);
+      } else {
+        if (hasMultipleCompanies && selectedCompany !== "all") {
+          params.set("tenantId", selectedCompany);
+        }
+        if (selectedEmpresa !== "all") {
+          params.set("empresaId", selectedEmpresa);
+        }
       }
       const paramStr = params.toString();
       const url = `/api/pipeline${paramStr ? `?${paramStr}` : ""}`;
@@ -741,13 +748,17 @@ export default function PipelinePage() {
           </div>
 
           {hasMultipleCompanies && (
-            <button
-              onClick={() => setScopeAll(!scopeAll)}
-              style={{ ...btnBase, background: scopeAll ? "rgba(16,185,129,0.22)" : "rgba(255,255,255,0.07)", border: scopeAll ? "1px solid rgba(16,185,129,0.5)" : "1px solid rgba(255,255,255,0.14)" }}
-              data-testid="button-scope-all"
+            <select
+              value={selectedCompany}
+              onChange={(e) => { setSelectedCompany(e.target.value); setSelectedEmpresa("all"); }}
+              style={{ ...btnBase, display: "inline-block", appearance: "auto" }}
+              data-testid="select-pipeline-company"
             >
-              <span style={{ fontSize: 11 }}>{scopeAll ? "Todos los sistemas" : "Este sistema"}</span>
-            </button>
+              <option value="all" style={{ color: "#000" }}>Todas las compañías</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id} style={{ color: "#000" }}>{c.name}</option>
+              ))}
+            </select>
           )}
 
           {showEmpresaSelector && (

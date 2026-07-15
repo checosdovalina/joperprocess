@@ -260,7 +260,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/pipeline", isAuthenticated, async (req, res) => {
     try {
-      const tenantId = getEffectiveTenantId(req);
+      let tenantId = getEffectiveTenantId(req);
+      // Company selector: ADMINs can view one specific accessible company (parent or hija).
+      const requestedCompanyId = typeof req.query.tenantId === "string" && req.query.tenantId ? req.query.tenantId : null;
+      if (requestedCompanyId && req.user?.role === UserRole.ADMIN && !req.user?.isSuperAdmin && req.user?.tenantId) {
+        const accessible = await getAccessibleTenantIds(req.user.tenantId);
+        if (!accessible.includes(requestedCompanyId)) {
+          return res.status(403).json({ error: "Compañía no accesible" });
+        }
+        tenantId = requestedCompanyId;
+      }
       // scope=all: Company ADMINs can view data from all accessible child companies at once.
       const scopeAll = req.query.scope === "all" && req.user?.role === UserRole.ADMIN && !req.user?.isSuperAdmin;
       let accessibleTenantIds: string[] = [];
@@ -407,11 +416,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Tenant isolation: never expose a record from another tenant, even by direct ID.
       const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
       const effectiveTenantId = getEffectiveTenantId(req);
+      // ADMINs viewing the pipeline across companies (scope=all or a specific hija
+      // via the company selector) may expand cards from any accessible company.
+      let allowedTenantIds: string[] | null = effectiveTenantId ? [effectiveTenantId] : null;
+      if (req.user?.role === UserRole.ADMIN && !req.user?.isSuperAdmin && req.user?.tenantId) {
+        allowedTenantIds = await getAccessibleTenantIds(req.user.tenantId);
+      }
+      const tenantAllowed = (recordTenantId: string | null | undefined) =>
+        !allowedTenantIds || (!!recordTenantId && allowedTenantIds.includes(recordTenantId));
 
       if (type === "quotation") {
         const q = await db.query.quotations.findFirst({ where: eq(quotations.id, id), columns: { tenantId: true, empresaId: true } });
         if (!q) return res.json([]);
-        if (effectiveTenantId && q.tenantId !== effectiveTenantId) return res.json([]);
+        if (!tenantAllowed(q.tenantId)) return res.json([]);
         if (restrictedEmpresaId && q.empresaId !== restrictedEmpresaId) return res.json([]);
         const items = await db.query.quotationItems.findMany({
           where: eq(quotationItems.quotationId, id),
@@ -445,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
         if (!order?.quotation) return res.json([]);
-        if (effectiveTenantId && order.tenantId !== effectiveTenantId) return res.json([]);
+        if (!tenantAllowed(order.tenantId)) return res.json([]);
         if (restrictedEmpresaId && order.empresaId !== restrictedEmpresaId) return res.json([]);
         return res.json(order.quotation.items.map(i => ({
           id: i.id,
@@ -474,7 +491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
         if (!auth?.quotation) return res.json([]);
-        if (effectiveTenantId && auth.quotation.tenantId !== effectiveTenantId) return res.json([]);
+        if (!tenantAllowed(auth.quotation.tenantId)) return res.json([]);
         if (restrictedEmpresaId && auth.quotation.empresaId !== restrictedEmpresaId) return res.json([]);
         return res.json(auth.quotation.items.map(i => ({
           id: i.id,
@@ -491,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (type === "shipment") {
         const s = await db.query.shipments.findFirst({ where: eq(shipments.id, id), columns: { tenantId: true, empresaId: true } });
         if (!s) return res.json([]);
-        if (effectiveTenantId && s.tenantId !== effectiveTenantId) return res.json([]);
+        if (!tenantAllowed(s.tenantId)) return res.json([]);
         if (restrictedEmpresaId && s.empresaId !== restrictedEmpresaId) return res.json([]);
         const instances = await db.query.shipmentProductInstances.findMany({
           where: eq(shipmentProductInstances.shipmentId, id),
