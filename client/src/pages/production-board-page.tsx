@@ -320,7 +320,7 @@ export default function ProductionBoardPage() {
     queryKey: ["/api/empresas"],
     enabled: !isRestrictedVendedor,
   });
-  const showEmpresaSelector = !isRestrictedVendedor && empresas.length > 1;
+  const showEmpresaSelector = !isRestrictedVendedor && empresas.length > 0;
 
   const orders = selectedEmpresa === "all"
     ? allOrders

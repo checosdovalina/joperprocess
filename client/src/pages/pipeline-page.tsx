@@ -574,7 +574,7 @@ export default function PipelinePage() {
   const hasMultipleCompanies = user?.role === "admin" && companies.length > 1;
   // "all" with multiple companies = scope=all (todas las compañías combinadas).
   const scopeAll = hasMultipleCompanies && selectedCompany === "all";
-  const showEmpresaSelector = !isRestrictedVendedor && !scopeAll && empresas.length > 1;
+  const showEmpresaSelector = !isRestrictedVendedor && !scopeAll && empresas.length > 0;
 
   const { data, refetch, isFetching, isLoading } = useQuery<PipelineData>({
     queryKey: ["/api/pipeline", scopeAll ? "all" : selectedCompany, selectedEmpresa],
