@@ -1562,7 +1562,7 @@ class MicrosipSyncService {
     }
   }
 
-  async testConnection(): Promise<{ success: boolean; message: string }> {
+  async testConnection(): Promise<{ success: boolean; message: string; errorCode?: string }> {
     if (!await this.loadConfig(false)) {
       return { success: false, message: 'Configuración no encontrada' };
     }
