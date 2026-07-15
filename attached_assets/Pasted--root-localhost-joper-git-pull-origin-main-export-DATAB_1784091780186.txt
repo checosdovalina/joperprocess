@@ -1,0 +1,148 @@
+[root@localhost joper]# git pull origin main
+export DATABASE_URL="postgresql://joper_user:tu_password_segura@127.0.0.1:5432/joper_db?sslmode=disable"
+bash scripts/vps-deploy.sh
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+=========================================
+  NEXXO - Despliegue Seguro VPS
+=========================================
+
+  Base de datos: OK (postgresql://joper_user:tu_password_segura@...)
+
+[1/6] Creando backup de seguridad...
+[05:00:35] Iniciando backup...
+[05:00:35] Backup guardado: /var/backups/nexxo/nexxo_20260715_050035.sql.gz (2.7M)
+[05:00:35] Backup completado exitosamente.
+
+[2/6] Descargando cambios del repositorio...
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+  Corrigiendo URLs internas de Replit en package-lock.json...
+[3/6] Instalando dependencias (incluye herramientas de compilación)...
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: vite@8.1.3
+npm warn Found: @types/node@20.16.11
+npm warn node_modules/@types/node
+npm warn   dev @types/node@"20.16.11" from the root project
+npm warn   11 more (@types/body-parser, @types/connect, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peerOptional @types/node@"^20.19.0 || >=22.12.0" from vite@8.1.3
+npm warn node_modules/vitest/node_modules/vite
+npm warn   vite@"^6.0.0 || ^7.0.0 || ^8.0.0" from vitest@4.1.10
+npm warn   node_modules/vitest
+npm warn   1 more (@vitest/mocker)
+npm warn
+npm warn Conflicting peer dependency: @types/node@26.1.1
+npm warn node_modules/@types/node
+npm warn   peerOptional @types/node@"^20.19.0 || >=22.12.0" from vite@8.1.3
+npm warn   node_modules/vitest/node_modules/vite
+npm warn     vite@"^6.0.0 || ^7.0.0 || ^8.0.0" from vitest@4.1.10
+npm warn     node_modules/vitest
+npm warn     1 more (@vitest/mocker)
+
+up to date, audited 677 packages in 3s
+
+106 packages are looking for funding
+  run `npm fund` for details
+
+30 vulnerabilities (4 low, 13 moderate, 12 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[4/6] Compilando...
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+vite v5.4.20 building for production...
+transforming (3) src/main.tsxBrowserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+transforming (4) src/App.tsx
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+✓ 2942 modules transformed.
+../dist/public/index.html                                       0.99 kB │ gzip:   0.52 kB
+../dist/public/assets/nexxo_tech_company_logo-PtiaNbSL.png    762.60 kB
+../dist/public/assets/index-rku3qhpn.css                      162.89 kB │ gzip:  25.91 kB
+../dist/public/assets/index-CLj5viL0.js                     1,787.52 kB │ gzip: 459.30 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 8.67s
+
+  dist/index.js  719.9kb
+
+⚡ Done in 38ms
+[5/6] Aplicando cambios de schema...
+psql:/var/www/joper/scripts/vps-schema-changes.sql:16: NOTICE:  column "skip_statement_email" of relation "customers" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:22: NOTICE:  column "timezone" of relation "tenants" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:28: NOTICE:  column "cxc_database" of relation "microsip_configs" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:34: NOTICE:  column "locale" of relation "tenants" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:40: NOTICE:  column "shipping_approval_token" of relation "quotations" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:56: NOTICE:  relation "account_statement_schedules" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:63: NOTICE:  column "release_status" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:65: NOTICE:  column "release_notes" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:67: NOTICE:  column "released_by_id" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:69: NOTICE:  column "released_at" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:84: NOTICE:  relation "system_logs" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:86: NOTICE:  relation "idx_system_logs_tenant_created" already exists, skipping
+CREATE INDEX
+psql:/var/www/joper/scripts/vps-schema-changes.sql:105: NOTICE:  relation "documents" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:106: NOTICE:  relation "idx_documents_tenant" already exists, skipping
+CREATE INDEX
+psql:/var/www/joper/scripts/vps-schema-changes.sql:127: NOTICE:  relation "empresas" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:128: NOTICE:  relation "idx_empresas_tenant" already exists, skipping
+CREATE INDEX
+psql:/var/www/joper/scripts/vps-schema-changes.sql:131: NOTICE:  column "empresa_id" of relation "users" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:132: NOTICE:  column "empresa_id" of relation "quotations" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:133: NOTICE:  column "empresa_id" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:134: NOTICE:  column "empresa_id" of relation "shipments" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:140: NOTICE:  column "parent_id" of relation "tenants" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:141: NOTICE:  relation "idx_tenants_parent" already exists, skipping
+CREATE INDEX
+  Schema actualizado correctamente.
+[6/6] Reiniciando servidor (joper-app)...
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [joper-app](ids: [ 0 ])
+[PM2] [joper-app](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ joper-app          │ fork     │ 188  │ online    │ 0%       │ 3.9mb    │
+│ 6  │ ots-energy         │ fork     │ 20   │ online    │ 0%       │ 64.7mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+
+=========================================
+  Despliegue completado exitosamente
+=========================================
+
+[root@localhost joper]# 
