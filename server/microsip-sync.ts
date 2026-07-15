@@ -1606,9 +1606,21 @@ class MicrosipSyncService {
       }
     } catch (err) {
       const error = err as Error;
+      const msg = error.message || '';
+
+      // Wire encryption mismatch: node-firebird always requests WireCrypt=Disabled
+      // but this Firebird server has WireCrypt=Required in firebird.conf
+      if (msg.toLowerCase().includes('wire encryption') || msg.toLowerCase().includes('incompatible wire')) {
+        return {
+          success: false,
+          errorCode: 'WIRE_CRYPT',
+          message: `Error de cifrado de red: el servidor Firebird tiene WireCrypt=Required pero el cliente no soporta cifrado.\n\nSolución: en el servidor donde está instalado Microsip, abre el archivo firebird.conf (generalmente en C:\\Program Files\\Firebird\\Firebird_X_X\\) y cambia la línea:\n  WireCrypt = Required\npor:\n  WireCrypt = Enabled\n\nLuego reinicia el servicio de Firebird.`,
+        };
+      }
+
       return { 
         success: false, 
-        message: `Error de conexión: ${error.message}` 
+        message: `Error de conexión: ${msg}` 
       };
     } finally {
       if (fbDb) {

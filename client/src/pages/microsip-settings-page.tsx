@@ -26,7 +26,9 @@ import {
   FolderTree,
   Play,
   TestTube,
-  DollarSign
+  DollarSign,
+  ShieldAlert,
+  Info
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -119,25 +121,16 @@ export default function MicrosipSettingsPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      setTestResult(data);
       if (data.success) {
-        toast({
-          title: t("microsip.conn-success"),
-          description: data.message,
-        });
-      } else {
-        toast({
-          title: t("microsip.conn-error"),
-          description: data.message,
-          variant: "destructive",
-        });
+        toast({ title: t("microsip.conn-success"), description: data.message });
+      } else if (data.errorCode !== 'WIRE_CRYPT') {
+        toast({ title: t("microsip.conn-error"), description: data.message, variant: "destructive" });
       }
     },
     onError: (error: Error) => {
-      toast({
-        title: t("label.error"),
-        description: error.message || t("microsip.test-error"),
-        variant: "destructive",
-      });
+      setTestResult({ success: false, message: error.message || t("microsip.test-error") });
+      toast({ title: t("label.error"), description: error.message || t("microsip.test-error"), variant: "destructive" });
     },
   });
 
@@ -192,6 +185,9 @@ export default function MicrosipSettingsPage() {
       });
     },
   });
+
+  // Test connection result state
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; errorCode?: string } | null>(null);
 
   // USD products query state
   const [usdProducts, setUsdProducts] = useState<{ CLAVE_ARTICULO: string; NOMBRE: string; MONEDA_ID: number }[] | null>(null);
@@ -404,7 +400,7 @@ export default function MicrosipSettingsPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => testConnectionMutation.mutate()}
+                onClick={() => { setTestResult(null); testConnectionMutation.mutate(); }}
                 disabled={testConnectionMutation.isPending || !formData.host || !formData.database}
                 data-testid="button-test-connection"
               >
@@ -424,6 +420,41 @@ export default function MicrosipSettingsPage() {
                 {t("microsip.save-config")}
               </Button>
             </div>
+
+            {/* Test connection result panel */}
+            {testResult && !testResult.success && testResult.errorCode === 'WIRE_CRYPT' && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
+                  <ShieldAlert className="h-4 w-4 shrink-0" />
+                  Error de cifrado de red (WireCrypt)
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  El servidor Firebird tiene <code className="bg-muted px-1 rounded text-xs">WireCrypt = Required</code>, pero el cliente de conexión no soporta cifrado. Para solucionar esto:
+                </p>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>En el servidor donde está instalado Microsip, abre el archivo <code className="bg-muted px-1 rounded text-xs">firebird.conf</code></li>
+                  <li>Generalmente se encuentra en <code className="bg-muted px-1 rounded text-xs">C:\Program Files\Firebird\Firebird_X_X\</code></li>
+                  <li>Busca la línea <code className="bg-muted px-1 rounded text-xs">WireCrypt = Required</code> y cámbiala a <code className="bg-muted px-1 rounded text-xs">WireCrypt = Enabled</code></li>
+                  <li>Guarda el archivo y reinicia el servicio de Firebird desde Servicios de Windows</li>
+                </ol>
+                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                  <Info className="h-3 w-3 shrink-0 mt-0.5" />
+                  <span><code>Enabled</code> permite conexiones con o sin cifrado. <code>Required</code> rechaza conexiones sin cifrado (como esta).</span>
+                </div>
+              </div>
+            )}
+            {testResult && !testResult.success && testResult.errorCode !== 'WIRE_CRYPT' && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 flex items-start gap-2">
+                <XCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{testResult.message}</p>
+              </div>
+            )}
+            {testResult && testResult.success && (
+              <div className="rounded-md border border-green-500/40 bg-green-500/10 p-3 flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                <p className="text-sm text-green-400">{testResult.message}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </form>
