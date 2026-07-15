@@ -134,20 +134,50 @@ function StatusPill({ color, label }: { color: string; label: string }) {
   );
 }
 
+// Deterministic color from string — same name always gets same color
+const TAG_PALETTES = [
+  { bg: "rgba(59,130,246,0.22)", border: "rgba(59,130,246,0.55)", color: "#93c5fd" },  // blue
+  { bg: "rgba(16,185,129,0.22)", border: "rgba(16,185,129,0.55)", color: "#6ee7b7" },  // green
+  { bg: "rgba(245,158,11,0.22)", border: "rgba(245,158,11,0.55)", color: "#fcd34d" },  // amber
+  { bg: "rgba(168,85,247,0.22)", border: "rgba(168,85,247,0.55)", color: "#d8b4fe" },  // purple
+  { bg: "rgba(239,68,68,0.22)",  border: "rgba(239,68,68,0.55)",  color: "#fca5a5" },  // red
+  { bg: "rgba(236,72,153,0.22)", border: "rgba(236,72,153,0.55)", color: "#f9a8d4" },  // pink
+  { bg: "rgba(20,184,166,0.22)", border: "rgba(20,184,166,0.55)", color: "#5eead4" },  // teal
+  { bg: "rgba(249,115,22,0.22)", border: "rgba(249,115,22,0.55)", color: "#fdba74" },  // orange
+];
+function tagPalette(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return TAG_PALETTES[h % TAG_PALETTES.length];
+}
+
 function EmpresaTag({ name }: { name?: string | null }) {
   if (!name) return null;
+  const p = tagPalette(name);
   return (
     <span style={{
       fontSize: 9, fontWeight: 700, textTransform: "uppercase",
-      color: "rgba(255,255,255,0.75)",
-      background: "rgba(255,255,255,0.10)",
-      border: "1px solid rgba(255,255,255,0.18)",
+      color: p.color, background: p.bg, border: `1px solid ${p.border}`,
       borderRadius: 4, padding: "1px 6px",
-      letterSpacing: "0.06em", whiteSpace: "nowrap",
-      flexShrink: 0,
+      letterSpacing: "0.06em", whiteSpace: "nowrap", flexShrink: 0,
     }} data-testid={`tag-empresa-${name}`}>
       {name}
     </span>
+  );
+}
+
+function TenantTag({ name }: { name?: string | null }) {
+  if (!name) return null;
+  const p = tagPalette(name);
+  return (
+    <div style={{
+      fontSize: 9, fontWeight: 700, color: p.color,
+      background: p.bg, border: `1px solid ${p.border}`,
+      borderRadius: 4, padding: "2px 6px", marginBottom: 5,
+      letterSpacing: "0.06em", display: "inline-block",
+    }}>
+      {name}
+    </div>
   );
 }
 
@@ -241,11 +271,7 @@ function QuotCard({ q }: { q: PipelineQuotation }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-quotation-${q.id}`}
     >
-      {q.tenantName && (
-        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(99,179,237,0.8)", background: "rgba(59,130,246,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
-          {q.tenantName}
-        </div>
-      )}
+      <TenantTag name={q.tenantName} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
           <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: 14, letterSpacing: "0.01em", whiteSpace: "nowrap" }}>{q.folio}</span>
@@ -303,11 +329,7 @@ function AuthCard({ a }: { a: PipelineCreditAuth }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-auth-${a.id}`}
     >
-      {a.tenantName && (
-        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(253,211,77,0.8)", background: "rgba(245,158,11,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
-          {a.tenantName}
-        </div>
-      )}
+      <TenantTag name={a.tenantName} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
           <span style={{ color: "#fcd34d", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap" }}>{a.quotFolio ?? "—"}</span>
@@ -368,11 +390,7 @@ function OrderCard({ o }: { o: PipelineOrder }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-order-${o.id}`}
     >
-      {o.tenantName && (
-        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(216,180,254,0.8)", background: "rgba(168,85,247,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
-          {o.tenantName}
-        </div>
-      )}
+      <TenantTag name={o.tenantName} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
           <span style={{ color: "#d8b4fe", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap" }}>{o.quotFolio ?? "—"}</span>
@@ -447,11 +465,7 @@ function ShipmentCard({ s }: { s: PipelineShipment }) {
       onClick={() => setExpanded(!expanded)}
       data-testid={`card-shipment-${s.id}`}
     >
-      {s.tenantName && (
-        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(110,231,183,0.8)", background: "rgba(16,185,129,0.1)", borderRadius: 4, padding: "2px 6px", marginBottom: 5, letterSpacing: "0.06em", display: "inline-block" }}>
-          {s.tenantName}
-        </div>
-      )}
+      <TenantTag name={s.tenantName} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, overflow: "hidden" }}>
           <span style={{ color: "#6ee7b7", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap" }}>{s.quotFolio ?? "—"}</span>
@@ -600,7 +614,7 @@ export default function PipelinePage() {
       return r.json();
     },
     refetchInterval: REFRESH_INTERVAL * 1000,
-    staleTime: 15_000,
+    staleTime: 0,
   });
 
   // Countdown timer
