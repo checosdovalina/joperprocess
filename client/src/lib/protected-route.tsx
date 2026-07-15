@@ -7,10 +7,12 @@ export function ProtectedRoute({
   path,
   component: Component,
   allowedRoles,
+  requireSuperAdmin,
 }: {
   path: string;
   component: () => React.JSX.Element | null;
   allowedRoles?: string[];
+  requireSuperAdmin?: boolean;
 }) {
   const { user, isLoading } = useAuth();
 
@@ -28,6 +30,15 @@ export function ProtectedRoute({
     return (
       <Route path={path}>
         <Redirect to="/auth" />
+      </Route>
+    );
+  }
+
+  // Superadmin-only routes
+  if (requireSuperAdmin && !user.isSuperAdmin) {
+    return (
+      <Route path={path}>
+        <Redirect to="/dashboard" />
       </Route>
     );
   }

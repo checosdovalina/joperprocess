@@ -137,7 +137,7 @@ const menuGroups: MenuGroup[] = [
       { titleKey: "nav.documents", url: "/documents", icon: BookOpen, roles: Object.values(UserRole) },
       { titleKey: "nav.users", url: "/users", icon: Users, roles: [UserRole.ADMIN] },
       { titleKey: "nav.companies", url: "/companies", icon: Network, roles: [UserRole.ADMIN] },
-      { titleKey: "nav.empresas", url: "/empresas", icon: Store, roles: [UserRole.ADMIN] },
+      { titleKey: "nav.empresas", url: "/empresas", icon: Store, roles: [UserRole.ADMIN], superAdminOnly: true },
       { titleKey: "nav.company-settings", url: "/company-settings", icon: Settings, roles: [UserRole.ADMIN] },
       { titleKey: "nav.microsip", url: "/microsip", icon: Database, roles: [UserRole.ADMIN] },
       { titleKey: "nav.system-logs", url: "/system-logs", icon: ScrollText, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION] },
@@ -193,7 +193,11 @@ export function AppSidebar() {
   const visibleGroups = menuGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.roles.includes(user.role as any)),
+      items: group.items.filter((item) => {
+        if (!item.roles.includes(user.role as any)) return false;
+        if ((item as any).superAdminOnly && !user.isSuperAdmin) return false;
+        return true;
+      }),
     }))
     .filter((group) => group.items.length > 0);
 

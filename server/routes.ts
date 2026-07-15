@@ -736,6 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create empresa (admin only)
   app.post("/api/empresas", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    if (!req.user?.isSuperAdmin) return res.status(403).json({ error: "Solo el superadmin puede crear marcas" });
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const tenantId = scopedStorage.getTenantId();
@@ -760,8 +761,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete empresa (admin only)
+  // Delete empresa (superadmin only)
   app.delete("/api/empresas/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    if (!req.user?.isSuperAdmin) return res.status(403).json({ error: "Solo el superadmin puede eliminar marcas" });
     try {
       const { id } = req.params;
       const scopedStorage = createTenantScopedStorage(req);
@@ -780,8 +782,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update empresa (admin only)
+  // Update empresa (superadmin only)
   app.patch("/api/empresas/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    if (!req.user?.isSuperAdmin) return res.status(403).json({ error: "Solo el superadmin puede editar marcas" });
     try {
       const { id } = req.params;
       const scopedStorage = createTenantScopedStorage(req);

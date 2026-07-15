@@ -192,7 +192,7 @@ function Router() {
       <ProtectedRoute path="/pipeline" component={PipelinePage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA]} />
       <ProtectedRoute path="/reports" component={ReportsPage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA]} />
       <ProtectedRoute path="/tenants" component={TenantsPage} />
-      <ProtectedRoute path="/empresas" component={EmpresasPage} allowedRoles={[UserRole.ADMIN]} />
+      <ProtectedRoute path="/empresas" component={EmpresasPage} allowedRoles={[UserRole.ADMIN]} requireSuperAdmin />
       <ProtectedRoute path="/companies" component={CompaniesPage} allowedRoles={[UserRole.ADMIN]} />
       <Route component={NotFound} />
     </Switch>
