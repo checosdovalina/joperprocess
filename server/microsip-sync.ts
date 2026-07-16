@@ -199,6 +199,7 @@ class MicrosipSyncService {
       lowercase_keys: false,
       role: undefined,
       pageSize: 4096,
+      WireCrypt: 'Disabled',
     };
   }
 
