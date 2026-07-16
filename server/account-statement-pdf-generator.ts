@@ -99,7 +99,8 @@ function lightenColor(hex: string, amount: number): string {
 }
 
 export async function generateAccountStatementPDF(data: AccountStatementPDFData): Promise<Readable> {
-  const { customer, invoices, payments, tenant, cxcData } = data;
+  const { customer, invoices, payments, tenant } = data;
+  let cxcData = data.cxcData;
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
