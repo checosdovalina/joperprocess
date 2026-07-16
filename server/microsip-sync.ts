@@ -1313,7 +1313,7 @@ class MicrosipSyncService {
         TIPO_CAMBIO: number;
       }>(fbDb, `
         SELECT
-          D.FOLIO,
+          COALESCE(NULLIF(FV.FOLIO_VE, ''), D.FOLIO) AS FOLIO,
           D.FECHA,
           D.FECHA + COALESCE(PCP.DIAS_PLAZO, 0) AS FECHA_VEN,
           SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0)) AS IMPORTE_TOTAL,
@@ -1323,6 +1323,13 @@ class MicrosipSyncService {
         FROM DOCTOS_CC D
         JOIN IMPORTES_DOCTOS_CC I ON D.DOCTO_CC_ID = I.DOCTO_CC_ID AND I.TIPO_IMPTE = 'C'
         LEFT JOIN PLAZOS_COND_PAG PCP ON D.COND_PAGO_ID = PCP.COND_PAGO_ID
+        LEFT JOIN (
+          /* Sales invoice folio per CXC doc (deduped to avoid row multiplication) */
+          SELECT DES.DOCTO_DEST_ID, MIN(TRIM(DV.FOLIO)) AS FOLIO_VE
+          FROM DOCTOS_ENTRE_SIS DES
+          JOIN DOCTOS_VE DV ON DV.DOCTO_VE_ID = DES.DOCTO_FTE_ID
+          GROUP BY DES.DOCTO_DEST_ID
+        ) FV ON FV.DOCTO_DEST_ID = D.DOCTO_CC_ID
         LEFT JOIN (
           -- Filter on the PAYMENT document's CANCELADO: a cancelled receipt keeps its
           -- IMPORTES_DOCTOS_CC application rows, which would otherwise be counted as
@@ -1340,7 +1347,7 @@ class MicrosipSyncService {
           AND D.NATURALEZA_CONCEPTO = 'C'
           AND D.CLIENTE_ID = ${microsipClienteId}
           AND D.FECHA >= DATEADD(-5 YEAR TO CURRENT_DATE)
-        GROUP BY D.DOCTO_CC_ID, D.FOLIO, D.FECHA, D.TIPO_CAMBIO, PCP.DIAS_PLAZO, CR.CREDITO_APLICADO
+        GROUP BY D.DOCTO_CC_ID, COALESCE(NULLIF(FV.FOLIO_VE, ''), D.FOLIO), D.FECHA, D.TIPO_CAMBIO, PCP.DIAS_PLAZO, CR.CREDITO_APLICADO
         HAVING SUM(I.IMPORTE + I.IMPUESTO - COALESCE(I.IVA_RETENIDO,0) - COALESCE(I.ISR_RETENIDO,0))
                - COALESCE(CR.CREDITO_APLICADO, 0) > 0.005
         ORDER BY D.FECHA
@@ -1356,10 +1363,16 @@ class MicrosipSyncService {
           P.FOLIO AS REFERENCIA,
           P.FECHA,
           SUM(I.IMPORTE) AS IMPORTE,
-          MIN(C.FOLIO) AS FACTURA_FOLIO
+          MIN(COALESCE(NULLIF(CFV.FOLIO_VE, ''), C.FOLIO)) AS FACTURA_FOLIO
         FROM DOCTOS_CC P
         JOIN IMPORTES_DOCTOS_CC I ON P.DOCTO_CC_ID = I.DOCTO_CC_ID
         LEFT JOIN DOCTOS_CC C ON I.DOCTO_CC_ACR_ID = C.DOCTO_CC_ID
+        LEFT JOIN (
+          SELECT DES.DOCTO_DEST_ID, MIN(TRIM(DV.FOLIO)) AS FOLIO_VE
+          FROM DOCTOS_ENTRE_SIS DES
+          JOIN DOCTOS_VE DV ON DV.DOCTO_VE_ID = DES.DOCTO_FTE_ID
+          GROUP BY DES.DOCTO_DEST_ID
+        ) CFV ON CFV.DOCTO_DEST_ID = C.DOCTO_CC_ID
         WHERE P.CANCELADO <> 'S'
           AND P.NATURALEZA_CONCEPTO = 'R'
           AND P.CLIENTE_ID = ${microsipClienteId}
