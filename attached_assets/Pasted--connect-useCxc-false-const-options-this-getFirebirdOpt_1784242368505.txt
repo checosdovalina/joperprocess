@@ -1,0 +1,44 @@
+  connect(useCxc = false) {
+    const options = this.getFirebirdOptions(useCxc);
+    return attachSerialized(options);
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [joper-app](ids: [ 0 ])
+[PM2] [joper-app](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ joper-app          │ fork     │ 195  │ online    │ 0%       │ 12.4mb   │
+│ 9  │ microsip-api       │ fork     │ 8    │ online    │ 0%       │ 73.0mb   │
+│ 6  │ ots-energy         │ fork     │ 25   │ online    │ 0%       │ 57.2mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+[root@localhost joper]# pm2 logs joper-app --lines 5
+[TAILING] Tailing last 5 lines for [joper-app] process (change the value with --lines option)
+/root/.pm2/logs/joper-app-error.log last 5 lines:
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7804:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap |     at process.processTimers (node:internal/timers:519:7)
+
+/root/.pm2/logs/joper-app-out.log last 5 lines:
+0|joper-ap | 10:47:42 PM [express] GET /api/microsip/config 304 in 7ms :: {"configured":true,"id":"d7711dd9-5ec5-4…
+0|joper-ap | 10:47:42 PM [express] GET /api/microsip/logs 304 in 12ms :: [{"id":"9d158dea-9374-41a4-8f62-96bc281c7…
+0|joper-ap | 10:47:45 PM [express] POST /api/microsip/config 200 in 10ms :: {"id":"d7711dd9-5ec5-4691-bd69-62d122b…
+0|joper-ap | 10:47:45 PM [express] GET /api/microsip/config 200 in 6ms :: {"configured":true,"id":"d7711dd9-5ec5-4…
+0|joper-ap | 10:48:03 PM [express] POST /api/microsip/test-connection 200 in 15022ms :: {"success":false,"message"…
+
+0|joper-app  | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-app  | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-app  | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-app  |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7804:9)
+0|joper-app  |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-app  |     at process.processTimers (node:internal/timers:519:7)
+0|joper-app  | [Microsip] Scheduled sync complete
+^Z
+[2]+  Stopped                 pm2 logs joper-app --lines 5
+[root@localhost joper]# pm2 show microsip-api | grep -E "script|cwd|exec_interpreter"
+│ script path       │ /var/www/microsip-dashboard/artifacts/api-server/dist/index.mjs │
+│ script args       │ N/A                                                             │
+│ script id         │ 9                                                               │
+│ exec cwd          │ /var/www/microsip-dashboard                                     │
+[root@localhost joper]# 
