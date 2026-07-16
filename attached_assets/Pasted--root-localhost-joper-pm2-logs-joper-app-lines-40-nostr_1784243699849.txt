@@ -1,0 +1,48 @@
+[root@localhost joper]# pm2 logs joper-app --lines 40 --nostream | grep -E "fb-debug|DEBUG|Timeout"
+0|joper-ap | [DEBUG] Firebird options: {"host":"200.92.216.146","port":3050,"database":"C:\\Microsip Datos\\Int Jop 2005.fdb","user":"SYSDBA","password":"***","lowercase_keys":false,"pageSize":4096,"WireCrypt":"Disabled"}
+0|joper-ap | [DEBUG] Firebird options: {"host":"200.92.216.146","port":3050,"database":"C:\\Microsip Datos\\Int Jop 2005.fdb","user":"SYSDBA","password":"***","lowercase_keys":false,"pageSize":4096,"WireCrypt":"Disabled"}
+0|joper-ap | [DEBUG] Firebird options: {"host":"200.92.216.146","port":3050,"database":"C:\\Microsip Datos\\Int Jop 2005.fdb","user":"SYSDBA","password":"***","lowercase_keys":false,"pageSize":4096,"WireCrypt":"Disabled"}
+0|joper-ap | [DEBUG] Firebird options: {"host":"200.92.216.146","port":3050,"database":"C:\\Microsip Datos\\Int Jop 2005.fdb","user":"SYSDBA","password":"***","lowercase_keys":false,"pageSize":4096,"WireCrypt":"Disabled"}
+0|joper-ap | [DEBUG] Firebird options: {"host":"200.92.216.146","port":3050,"database":"C:\\Microsip Datos\\Int Jop 2005.fdb","user":"SYSDBA","password":"***","lowercase_keys":false,"pageSize":4096,"WireCrypt":"Disabled"}
+0|joper-ap | [fb-debug] srp.clientSeed: 7ms
+0|joper-ap | [fb-debug] auth: op_connect sent plugin=Srp512 t=10ms
+0|joper-ap | [fb-debug] socket.write: length=608 bytes=0000000100000013000000030000000100000022433a5c4d6963726f736970204461746f735c496e74204a6f7020323030352e66646200000000000a00000155090653595344424108065372703531320a245372703531322c5372703338342c5372703235362c5372702c4c65676163795f4175746807ff00353062313532383139306135316537386163373965623565653335643566393232393363313639623735323831623938313636306332373039356534313330313866663364336134646133646665336133643337653366316338643137306236306337373332376532363262393566313238393337306537333161343438666366343432663865396366316566376138636136326634393834336333616665623066353266623863333362333063613837636536653734353365623133383335346437666436643634623963636238383635656332613863393766326338363362353932353739633361393339383035333262343434653261393237663107030131300b04010000000104726f6f7404096c6f63616c686f737406000000000000000a000000010000000200000003000000010000800b000000010000000500000005000000020000800c000000010000000500000005000000030000800d000000010000000500000005000000040000800e000000010000000500000005000000050000800f00000001000000050000000500000006000080100000000100000005000000050000000700008011000000010000000500000005000000080000801200000001000000050000000500000009000080130000000100000005000000050000000a encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=44 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=94(op_accept_data) pos=4 buflen=44
+0|joper-ap | [fb-debug] auth: op_accept_data received plugin=Legacy_Auth proto=32783 t=48ms
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=44
+0|joper-ap | [fb-debug] socket.write: length=96 bytes=000000130000000000000022433a5c4d6963726f736970204461746f735c496e74204a6f7020323030352e66646200000000002a013004555446384d001c065359534442414704527a2a004a046e6f6465540b4f454b7965727064324a2e0000 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=24 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=92(op_cont_auth) pos=4 buflen=24
+0|joper-ap | [fb-debug] auth: op_cont_auth received plugin=Srp pendingAccept=none t=314ms
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7804:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7804:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7804:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7804:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7804:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7805:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7806:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=314ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+[root@localhost joper]# 
