@@ -139,8 +139,8 @@ interface MicrosipInvoice {
   FECHA_VENCE: Date | null;  // explicit due date from Microsip
   IMPORTE_NETO: number;
   IMPUESTO: number;
-  IMPORTE_COBRO: number;  // original charge amount in CXC
-  SALDO_CXC: number;      // true outstanding balance from CXC (cargo - pagos aplicados)
+  IMPORTE_COBRO: number;       // original charge amount in CXC
+  SALDO_CXC: number | null;   // CXC balance (null = no CXC record for this invoice)
   DIAS_PPAG: number;
 }
 
@@ -752,9 +752,10 @@ class MicrosipSyncService {
       // Use CXC database if configured (some Microsip installations have DOCTOS_VE in a separate DB)
       fbDb = await this.connect(true);
 
-      // Query invoices with an outstanding balance directly from DOCTOS_VE.
-      // IMPORTE_COBRO is the remaining balance Microsip maintains on each invoice
-      // as payments are applied. This is the most reliable source available.
+      // Query invoices from DOCTOS_VE and compute the real outstanding balance from
+      // DOCTOS_CC (CXC module) via DOCTOS_ENTRE_SIS.  IMPORTE_COBRO on DOCTOS_VE is
+      // NOT updated when payments are applied directly in the CXC module, so using it
+      // as the balance produces stale figures.  The CXC balance is the authoritative source.
       const microsipInvoices = await this.query<MicrosipInvoice>(fbDb, `
         SELECT
           DV.DOCTO_VE_ID,
@@ -765,10 +766,41 @@ class MicrosipSyncService {
           DV.IMPORTE_NETO,
           DV.TOTAL_IMPUESTOS AS IMPUESTO,
           DV.IMPORTE_COBRO,
-          DV.IMPORTE_COBRO AS SALDO_CXC,
+          CXC_BAL.SALDO_CXC AS SALDO_CXC,
           PCP.DIAS_PLAZO AS DIAS_PPAG
         FROM DOCTOS_VE DV
         LEFT JOIN PLAZOS_COND_PAG PCP ON PCP.COND_PAGO_ID = DV.COND_PAGO_ID
+        LEFT JOIN (
+          /* Real outstanding balance from CXC module per sales invoice */
+          SELECT
+            DES.DOCTO_FTE_ID AS DOCTO_VE_ID,
+            SUM(I_TOT.CARGO - COALESCE(CR.CREDITO_APLICADO, 0)) AS SALDO_CXC
+          FROM DOCTOS_CC D
+          JOIN DOCTOS_ENTRE_SIS DES ON DES.DOCTO_DEST_ID = D.DOCTO_CC_ID
+          JOIN (
+            SELECT DOCTO_CC_ID,
+                   SUM(IMPORTE + IMPUESTO
+                       - COALESCE(IVA_RETENIDO, 0)
+                       - COALESCE(ISR_RETENIDO, 0)) AS CARGO
+            FROM IMPORTES_DOCTOS_CC
+            WHERE TIPO_IMPTE = 'C'
+            GROUP BY DOCTO_CC_ID
+          ) I_TOT ON I_TOT.DOCTO_CC_ID = D.DOCTO_CC_ID
+          LEFT JOIN (
+            SELECT IC.DOCTO_CC_ACR_ID,
+                   SUM(IC.IMPORTE + COALESCE(IC.IMPUESTO, 0)
+                       + COALESCE(IC.DSCTO_PPAG, 0)) AS CREDITO_APLICADO
+            FROM IMPORTES_DOCTOS_CC IC
+            JOIN DOCTOS_CC PC ON IC.DOCTO_CC_ID = PC.DOCTO_CC_ID
+            WHERE IC.DOCTO_CC_ACR_ID IS NOT NULL
+              AND IC.TIPO_IMPTE <> 'C'
+              AND PC.CANCELADO <> 'S'
+            GROUP BY IC.DOCTO_CC_ACR_ID
+          ) CR ON CR.DOCTO_CC_ACR_ID = D.DOCTO_CC_ID
+          WHERE D.CANCELADO <> 'S'
+            AND D.NATURALEZA_CONCEPTO = 'C'
+          GROUP BY DES.DOCTO_FTE_ID
+        ) CXC_BAL ON CXC_BAL.DOCTO_VE_ID = DV.DOCTO_VE_ID
         WHERE DV.TIPO_DOCTO = 'F'
           AND DV.ESTATUS <> 'C'
           AND DV.ESTATUS <> 'L'
@@ -834,15 +866,21 @@ class MicrosipSyncService {
 
           const subtotal = msInvoice.IMPORTE_NETO || 0;
           const tax = msInvoice.IMPUESTO || 0;
-          // IMPORTE_COBRO = original CXC charge amount (invoice total in CXC)
-          // SALDO_CXC = true outstanding balance = IMPORTE_COBRO - sum of applied payments
           const total = msInvoice.IMPORTE_COBRO || (subtotal + tax);
-          const balanceDue = msInvoice.SALDO_CXC || total;
 
-          // Determine status from CXC balance
-          const status: string = balanceDue >= total
-            ? InvoiceStatus.PENDING_PAYMENT
-            : InvoiceStatus.PARTIALLY_PAID;
+          // SALDO_CXC is null when the invoice has no DOCTOS_CC record (not yet transferred
+          // to CXC, or very old). In that case fall back to IMPORTE_COBRO.
+          // When SALDO_CXC = 0 the invoice was fully paid in CXC even if IMPORTE_COBRO > 0.
+          const hasCxcRecord = msInvoice.SALDO_CXC !== null && msInvoice.SALDO_CXC !== undefined;
+          const balanceDue = hasCxcRecord ? Number(msInvoice.SALDO_CXC) : (msInvoice.IMPORTE_COBRO || total);
+
+          // Status: PAID when CXC confirms fully settled; PARTIALLY_PAID for partial; PENDING otherwise
+          const status: string =
+            balanceDue <= 0.005
+              ? InvoiceStatus.PAID
+              : balanceDue >= total - 0.005
+                ? InvoiceStatus.PENDING_PAYMENT
+                : InvoiceStatus.PARTIALLY_PAID;
 
           const invoiceDate = msInvoice.FECHA || new Date();
           // Use FECHA_VENCE directly when available (explicit due date from Microsip).
