@@ -1,0 +1,52 @@
+root@localhost joper]# cat > /tmp/fbtest.mjs <<'EOF'
+import Firebird from 'node-firebird';
+console.log('Intentando (PM2)...');
+const start = Date.now();
+Firebird.attach({
+  host: '200.92.216.146',
+  port: 3050,
+  database: 'C:\\Microsip Datos\\Int Jop 2005.fdb',
+  user: 'SYSDBA',
+  password: 'masterkey',
+  lowercase_keys: false,
+  pageSize: 4096,
+pm2 delete fbtestogs fbtest --lines 20 --nostreamname fbtest
+[PM2] Starting /tmp/fbtest.mjs in fork_mode (1 instance)
+[PM2] Done.
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 10 │ fbtest             │ fork     │ 0    │ online    │ 0%       │ 12.5mb   │
+│ 0  │ joper-app          │ fork     │ 196  │ online    │ 0%       │ 132.1mb  │
+│ 9  │ microsip-api       │ fork     │ 8    │ online    │ 0%       │ 74.2mb   │
+│ 6  │ ots-energy         │ fork     │ 25   │ online    │ 0%       │ 56.8mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+[TAILING] Tailing last 20 lines for [fbtest] process (change the value with --lines option)
+/root/.pm2/logs/fbtest-out.log last 20 lines:
+/root/.pm2/logs/fbtest-error.log last 20 lines:
+10|fbtest  | Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'node-firebird' imported from /tmp/fbtest.mjs
+10|fbtest  |     at packageResolve (node:internal/modules/esm/resolve:873:9)
+10|fbtest  |     at moduleResolve (node:internal/modules/esm/resolve:946:18)
+10|fbtest  |     at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+10|fbtest  |     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+10|fbtest  |     at #cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+10|fbtest  |     at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+10|fbtest  |     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+10|fbtest  |     at ModuleJob._link (node:internal/modules/esm/module_job:168:49) {
+10|fbtest  |   code: 'ERR_MODULE_NOT_FOUND'
+10|fbtest  | }
+
+[PM2] Applying action deleteProcessId on app [fbtest](ids: [ 10 ])
+[PM2] [fbtest](10) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ joper-app          │ fork     │ 196  │ online    │ 0%       │ 132.1mb  │
+│ 9  │ microsip-api       │ fork     │ 8    │ online    │ 0%       │ 73.5mb   │
+│ 6  │ ots-energy         │ fork     │ 25   │ online    │ 0%       │ 56.5mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+[root@localhost joper]# pm2 show joper-app | grep -E "script path|script args|exec cwd"
+│ script path       │ /var/www/joper/start.sh             │
+│ script args       │ N/A                                 │
+│ exec cwd          │ /var/www/joper                      │
+[root@localhost joper]# 
