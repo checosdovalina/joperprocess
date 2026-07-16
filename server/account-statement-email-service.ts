@@ -108,9 +108,28 @@ export async function sendAccountStatementEmail({
   let paymentRows: string;
   let activeCount: number;
 
+  // Dedup helpers — keep highest-balance row when same folio appears more than once
+  const dedupLive = (list: CxcLiveInvoice[]) => {
+    const seen = new Map<string, CxcLiveInvoice>();
+    for (const inv of list) {
+      const prev = seen.get(inv.FOLIO);
+      if (!prev || inv.SALDO > prev.SALDO) seen.set(inv.FOLIO, inv);
+    }
+    return Array.from(seen.values());
+  };
+  const dedupLocalInvoices = (list: Invoice[]) => {
+    const seen = new Map<string, Invoice>();
+    for (const inv of list) {
+      const key = `${inv.serie ?? ""}-${inv.folio}`;
+      const prev = seen.get(key);
+      if (!prev || parseFloat(inv.balanceDue ?? inv.total ?? "0") > parseFloat(prev.balanceDue ?? prev.total ?? "0")) seen.set(key, inv);
+    }
+    return Array.from(seen.values());
+  };
+
   if (liveData) {
     // ── Live CXC path: real-time balances from Firebird ──────────────────────
-    const liveInvoices = liveData.invoices; // already filtered SALDO > 0.005
+    const liveInvoices = dedupLive(liveData.invoices); // already filtered SALDO > 0.005; also deduped by folio
     // TIPO_CAMBIO > 1.5 means the invoice was issued in USD (rate ~17-25 MXN/USD)
     const currencyOf = (inv: CxcLiveInvoice) => (inv.TIPO_CAMBIO && inv.TIPO_CAMBIO > 1.5) ? "USD" : "MXN";
 
@@ -172,9 +191,9 @@ export async function sendAccountStatementEmail({
 
   } else {
     // ── Local-DB fallback path ────────────────────────────────────────────────
-    const activeInvoices = invoices.filter(
+    const activeInvoices = dedupLocalInvoices(invoices.filter(
       (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
-    );
+    ));
     activeCount = activeInvoices.length;
 
     totalBalance = activeInvoices.reduce((sum, inv) => {

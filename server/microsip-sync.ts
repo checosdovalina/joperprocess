@@ -800,13 +800,37 @@ class MicrosipSyncService {
             continue;
           }
 
-          const [existing] = await db
+          // Primary lookup: by microsipDoctoId (stable Microsip PK)
+          let [existing] = await db
             .select()
             .from(invoices)
             .where(and(
               eq(invoices.tenantId, this.tenantId),
               eq(invoices.microsipDoctoId, msInvoice.DOCTO_VE_ID)
             ));
+
+          // Fallback: if no microsipDoctoId match, look for a manually-created invoice
+          // with the same folio+customerId so we link it rather than create a duplicate.
+          if (!existing) {
+            const folio = msInvoice.FOLIO?.trim() || String(msInvoice.DOCTO_VE_ID);
+            const [byFolio] = await db
+              .select()
+              .from(invoices)
+              .where(and(
+                eq(invoices.tenantId, this.tenantId),
+                eq(invoices.customerId, customerId),
+                eq(invoices.folio, folio)
+              ));
+            if (byFolio && !byFolio.microsipDoctoId) {
+              console.log(`[Microsip] Linking manual invoice ${folio} (id=${byFolio.id}) to microsipDoctoId=${msInvoice.DOCTO_VE_ID}`);
+              existing = byFolio;
+            } else if (byFolio && byFolio.microsipDoctoId && byFolio.microsipDoctoId !== msInvoice.DOCTO_VE_ID) {
+              // Different microsipDoctoId means truly different document — don't link
+              console.warn(`[Microsip] Duplicate folio ${folio} detected: existing microsipDoctoId=${byFolio.microsipDoctoId} vs incoming=${msInvoice.DOCTO_VE_ID}. Skipping to avoid duplicate.`);
+              stats.skipped++;
+              continue;
+            }
+          }
 
           const subtotal = msInvoice.IMPORTE_NETO || 0;
           const tax = msInvoice.IMPUESTO || 0;

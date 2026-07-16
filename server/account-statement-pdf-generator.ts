@@ -119,25 +119,46 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   let activeCount: number;
   let docCurrency = "MXN"; // overall currency for summary header
 
+  // Inline dedup helpers used for totals calculation (full helpers defined below)
+  const dedupCxc = (list: CxcOpenInvoice[]) => {
+    const seen = new Map<string, CxcOpenInvoice>();
+    for (const inv of list) {
+      const prev = seen.get(inv.folio);
+      if (!prev || Number(inv.balance) > Number(prev.balance)) seen.set(inv.folio, inv);
+    }
+    return Array.from(seen.values());
+  };
+  const dedupLocal = (list: Invoice[]) => {
+    const seen = new Map<string, Invoice>();
+    for (const inv of list) {
+      const key = `${inv.serie ?? ""}-${inv.folio}`;
+      const prev = seen.get(key);
+      if (!prev || parseFloat(inv.balanceDue ?? inv.total ?? "0") > parseFloat(prev.balanceDue ?? prev.total ?? "0")) seen.set(key, inv);
+    }
+    return Array.from(seen.values());
+  };
+
   if (cxcData) {
-    totalBalance = cxcData.invoices.reduce((s, inv) => s + (Number(inv.balance) || 0), 0);
-    totalOverdue = cxcData.invoices
+    const dedupedCxc = dedupCxc(cxcData.invoices);
+    cxcData = { ...cxcData, invoices: dedupedCxc };
+    totalBalance = dedupedCxc.reduce((s, inv) => s + (Number(inv.balance) || 0), 0);
+    totalOverdue = dedupedCxc
       .filter((inv) => inv.dueDate && new Date(inv.dueDate) < now)
       .reduce((s, inv) => s + (Number(inv.balance) || 0), 0);
-    activeCount = cxcData.invoices.length;
-    if (cxcData.invoices.some(inv => inv.currency === "USD")) docCurrency = "USD";
+    activeCount = dedupedCxc.length;
+    if (dedupedCxc.some(inv => inv.currency === "USD")) docCurrency = "USD";
   } else {
-    const activeInvoices = invoices.filter(
+    const activeInvoices = dedupLocal(invoices.filter(
       (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
-    );
+    ));
     totalBalance = activeInvoices.reduce((s, inv) => s + (parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0), 0);
     const overdueInvoices = activeInvoices.filter((inv) => inv.dueDate && new Date(inv.dueDate) < now);
     totalOverdue = overdueInvoices.reduce((s, inv) => s + (parseFloat(inv.balanceDue ?? inv.total ?? "0") || 0), 0);
     activeCount = activeInvoices.length;
   }
 
-  const localActiveInvoices = cxcData ? [] : invoices.filter(
-    (inv) => inv.status === "pending_payment" || inv.status === "partially_paid"
+  const localActiveInvoices = cxcData ? [] : dedupLocal(
+    invoices.filter((inv) => inv.status === "pending_payment" || inv.status === "partially_paid")
   );
   const currentYear = new Date().getFullYear();
   const recentPayments = [...payments]
