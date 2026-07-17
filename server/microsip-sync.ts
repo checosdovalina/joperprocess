@@ -411,7 +411,7 @@ class MicrosipSyncService {
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
             creditDays: msCustomer.DIAS_CREDITO || 0,
-            blocked: msCustomer.ESTATUS !== 'A',
+            blocked: msCustomer.ESTATUS?.toString().trim() !== 'A',
             contactName: msCustomer.CONTACTO?.trim() || msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
             microsipCode: String(msCustomer.CLIENTE_ID),
@@ -646,7 +646,8 @@ class MicrosipSyncService {
             : "0";
 
           // Product is active only if it's active in Microsip AND its category is active
-          const productActive = msProduct.ESTATUS === 'A' && categoryActive;
+          // Firebird CHAR(1) fields may arrive with trailing spaces — always trim before comparing
+          const productActive = msProduct.ESTATUS?.toString().trim() === 'A' && categoryActive;
 
           // Map MONEDA_ID to currency: 1 = MXN (Peso), anything else (e.g. 2089) = USD
           const currency = msProduct.MONEDA_ID === 1 ? "MXN" : msProduct.MONEDA_ID ? "USD" : "MXN";
