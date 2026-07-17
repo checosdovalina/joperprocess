@@ -411,7 +411,9 @@ class MicrosipSyncService {
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
             creditDays: msCustomer.DIAS_CREDITO || 0,
-            blocked: msCustomer.ESTATUS?.toString().trim() !== 'A',
+            // Query filters WHERE C.ESTATUS = 'A'; driver returns CHAR fields empty,
+            // so checking ESTATUS here would wrongly block every customer.
+            blocked: false,
             contactName: msCustomer.CONTACTO?.trim() || msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
             microsipCode: String(msCustomer.CLIENTE_ID),
@@ -645,9 +647,10 @@ class MicrosipSyncService {
             ? String(Number(rawPrice).toFixed(2)) 
             : "0";
 
-          // Product is active only if it's active in Microsip AND its category is active
-          // Firebird CHAR(1) fields may arrive with trailing spaces — always trim before comparing
-          const productActive = msProduct.ESTATUS?.toString().trim() === 'A' && categoryActive;
+          // The SQL query already filters WHERE A.ESTATUS = 'A', so every row returned
+          // is active in Microsip. Do NOT re-check ESTATUS here: the Firebird driver
+          // returns CHAR fields as empty strings, which would wrongly deactivate everything.
+          const productActive = categoryActive;
 
           // Map MONEDA_ID to currency: 1 = MXN (Peso), anything else (e.g. 2089) = USD
           const currency = msProduct.MONEDA_ID === 1 ? "MXN" : msProduct.MONEDA_ID ? "USD" : "MXN";

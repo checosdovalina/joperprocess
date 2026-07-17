@@ -1,0 +1,25 @@
+[root@localhost joper]# # 1. ¿El fix está en el bundle desplegado?
+grep -c 'ESTATUS?.toString().trim()' /var/www/joper/dist/index.js
+
+# 2. Vuelve a correr el sync de Productos desde la UI de Microsip, y mientras corre:
+pm2 logs joper-app --lines 100 | grep -i "microsip"
+2
+0|joper-ap | [Microsip] Error syncing product 57409: error: duplicate key value violates unique constraint "products_tenant_code_unique"
+0|joper-ap |     at async MicrosipSyncService.syncProducts (file:///var/www/joper/dist/index.js:8198:13)
+0|joper-ap | [Microsip] Error syncing product 57409: error: duplicate key value violates unique constraint "products_tenant_code_unique"
+0|joper-ap |     at async MicrosipSyncService.syncProducts (file:///var/www/joper/dist/index.js:8198:13)
+0|joper-ap | [Microsip] Found 3890 products to sync
+0|joper-ap | [Microsip] Products with prices (PRECIO or PRECIO_1): 249
+0|joper-ap | [Microsip] Sample with price - PRECIO: undefined, PRECIO_1: 1740
+0|joper-ap | [Microsip] Sample data: {"ARTICULO_ID":3440,"NOMBRE":"ALLANADORA MOD.AL-40 (SIN MOTOR)","LINEA_ARTICULO_ID":3414,"ESTATUS":"","PRECIO_1":1740,"MONEDA_ID":2089,"CLAVE_ARTICULO":"ALLA S/M"}
+0|joper-ap | [Microsip] First product columns: [
+0|joper-ap | [Microsip] First product all data: {"ARTICULO_ID":3434,"NOMBRE":"ACTIVO FIJO","LINEA_ARTICULO_ID":3427,"ESTATUS":"","PRECIO_1":null,"MONEDA_ID":null,"CLAVE_ARTICULO":"ACTFIJ"}
+0|joper-ap | 12:36:43 AM [express] GET /api/microsip/logs 304 in 6ms :: [{"id":"1584ba2b-adc7-4872-8e83-df5782ca4b…
+0|joper-ap | 12:36:46 AM [express] GET /api/microsip/logs 304 in 6ms :: [{"id":"1584ba2b-adc7-4872-8e83-df5782ca4b…
+0|joper-ap | 12:36:49 AM [express] GET /api/microsip/logs 304 in 5ms :: [{"id":"1584ba2b-adc7-4872-8e83-df5782ca4b…
+0|joper-ap | 12:36:53 AM [express] GET /api/microsip/logs 304 in 17ms :: [{"id":"1584ba2b-adc7-4872-8e83-df5782ca4…
+0|joper-ap | 12:36:56 AM [express] GET /api/microsip/logs 304 in 6ms :: [{"id":"1584ba2b-adc7-4872-8e83-df5782ca4b…
+0|joper-ap | [Microsip] Deactivated products no longer active in Microsip
+0|joper-ap | [Microsip] Product sync complete: 0 created, 3889 updated, 1 skipped
+0|joper-ap | 12:36:59 AM [express] GET /api/microsip/logs 200 in 6ms :: [{"id":"1584ba2b-adc7-4872-8e83-df5782ca4b…
+

@@ -8011,7 +8011,9 @@ var MicrosipSyncService = class {
             zipCode: msCustomer.CODIGO_POSTAL?.trim() || null,
             creditLimit: String(msCustomer.LIMITE_CREDITO || 0),
             creditDays: msCustomer.DIAS_CREDITO || 0,
-            blocked: msCustomer.ESTATUS?.toString().trim() !== "A",
+            // Query filters WHERE C.ESTATUS = 'A'; driver returns CHAR fields empty,
+            // so checking ESTATUS here would wrongly block every customer.
+            blocked: false,
             contactName: msCustomer.CONTACTO?.trim() || msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
             microsipCode: String(msCustomer.CLIENTE_ID),
@@ -8177,7 +8179,7 @@ var MicrosipSyncService = class {
           const categoryActive = categoryEntry ? categoryEntry.active : true;
           const rawPrice = msProduct.PRECIO ?? msProduct.PRECIO_1;
           const listPrice = rawPrice ? String(Number(rawPrice).toFixed(2)) : "0";
-          const productActive = msProduct.ESTATUS?.toString().trim() === "A" && categoryActive;
+          const productActive = categoryActive;
           const currency = msProduct.MONEDA_ID === 1 ? "MXN" : msProduct.MONEDA_ID ? "USD" : "MXN";
           const productData = {
             code: msProduct.CLAVE_ARTICULO?.toString().trim() || msProduct.CLAVE?.toString().trim() || String(msProduct.ARTICULO_ID),
