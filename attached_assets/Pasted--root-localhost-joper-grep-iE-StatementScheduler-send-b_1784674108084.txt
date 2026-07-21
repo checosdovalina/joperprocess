@@ -1,0 +1,52 @@
+[root@localhost joper]# grep -iE "StatementScheduler|send-bulk|send-account|resend|estado de cuenta|correo" ~/.pm2/logs/joper-app-out.log ~/.pm2/logs/joper-app-error.log | tail -50
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to BGG CONSTRUCCIONES, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to LUIS GABRIEL RIVAS GAYTAN: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to MAQUINARIA LIGERA GODINEZ, S.R.L. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to ADEMAQ INMOBILIARIA, SAPI DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to CONSTRURAMA SUPPLY, S.A.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to INTEGRADORA MAQUIRENT DEL NORTE,  S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to INTEGRADORA MAQUIRENT DEL NORTE, S.A. DE C.V.  (D02425): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to AGROEQUIPOS PRODUCTIVOS CHIHUAHUA S.A DE C.V. (D02429): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GRUPO KINARIA SA DE CV: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to AGROEQUIPOS PRODUCTIVOS,  S.A DE C.V.  (D02432): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to MAQUINARIA LIGERA CENTRO-SUR, S.R.L. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to ALEJANDRO OSORIO RAMIREZ: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to HOME DEPOT MEXICO, S. DE R.L. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to RUBEN OMAR OCEGUERA HERRERA: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to DAVID LORETO GONZALEZ: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GERARDO DAVID DAVILA ACOSTA: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to CAU, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to MARCO ANTONIO RODRIGUEZ RODRIGUEZ: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to NATIONAL SUPPLY CO. LTD: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GRUPO KINARIA SA DE CV (D02587): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to EQUIPAMIENTOS Y MAQUINARIAS SA: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to CARLOS ANDRES PEREZ TORRES: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to LUIS RAI GODOY JIMENEZ: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to CARLOS ANTONIO ARMAS CASTRO: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GRUPO IMPULSOR PAJEME: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GRUPO INDUSTRIAL ELECTRICO DEL SURESTE: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to ALICIA SANTOS SANCHEZ: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GRUPO REALSA EN HERRAMIENTAS, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to RECUBRIMIENTOS INDUSTRIALES Y APLICACIONES S DE R.L. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to LA FERRE COMERCIALIZADORA, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to ASAHI SHO-KO-SHA MEXICO S.A DE C.V: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GRUPO ALFA DE TOLUCA, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to JOPER, S.A. DE C.V.   (D00684): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to BOMAQ RENTA DE MAQUINARIA: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to ERNESTO PERALES OROZCO: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to JUAN ENRIQUEZ ENRIQUEZ: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to FERREMATERIALES EL GALLO: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to CONSTRUCCIONES SBA: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to MAQUIRENT OAXACA, S.A. DE C.V. (JP2281): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to MAQUINARIA MK, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to PERFILES Y HERRAMIENTAS DE MORELIA, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to ESQUIVEL ESTRADA MARIA CARLOTA.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to MARQUEZ CASAS MARGARITA: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to FERRETERA MANDIOLA, S.A. DE C.V.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to NORMA PATRICIA SOLIS RUIZ: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to ARMABISE, S.A. DE C.V.   (D01684): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to AMAKINARI, S.A. DE C.V.  (001541): {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to GILBERTO SALDIVAR GUERRERO: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to COMPAÑIA GUATEMALTECA DE RENTA Y VENTA DE MAQUINARIA Y EQUIPO, S.A.: {
+/root/.pm2/logs/joper-app-error.log:[StatementScheduler] Failed to send to MAQUINARIA DIAMANTE, S.A. DE C.V.: {
+[root@localhost joper]# 
