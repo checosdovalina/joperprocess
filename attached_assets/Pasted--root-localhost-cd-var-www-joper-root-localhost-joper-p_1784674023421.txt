@@ -1,0 +1,43 @@
+[root@localhost ~]# cd /var/www/joper
+[root@localhost joper]# pm2 logs joper-app --lines 100 --nostream | grep -iE "statement|microsip|resend|email|error" | tail -40
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=26024 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=28920 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=26024 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=23624 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=23624 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=28920 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=28920 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=23624 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=20728 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=22176 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=10136 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=4344 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=15432 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=15432 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [Microsip] queryLiveAccountStatements: 81 customers with balance
+0|joper-ap | 10:32:05 PM [express] GET /api/account-statements 304 in 2628ms :: [{"customer":{"id":"6a34bd90-ee09-…
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | [Microsip] queryLiveAccountStatements: 81 customers with balance
+0|joper-ap | 10:34:08 PM [express] GET /api/account-statements 304 in 2840ms :: [{"customer":{"id":"6a34bd90-ee09-…
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Scheduled sync complete
+[root@localhost joper]# 
