@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
-import { accountStatementSchedules, tenants, customers, invoices, payments, users } from "@shared/schema";
+import { accountStatementSchedules, tenants, customers, invoices, payments, users, microsipConfigs } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
 import { logSystemActivity } from "./system-log";
 
@@ -67,12 +67,20 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
     .flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim()))
     .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
 
-  // Try to create Microsip service for live CXC data (one connection per tenant run)
+  // Try to create Microsip service for live CXC data (one connection per tenant run).
+  // Track whether Microsip IS configured but unavailable: in that case linked customers
+  // must be skipped rather than emailed with stale local data.
+  const microsipConfigured =
+    (await db.select().from(microsipConfigs).where(eq(microsipConfigs.tenantId, tenantId)).limit(1)).length > 0;
   let msService: Awaited<ReturnType<typeof createMicrosipSyncService>> | null = null;
   try {
     msService = await createMicrosipSyncService(tenantId);
   } catch (_e) {
-    console.warn(`[StatementScheduler] Microsip not configured for tenant ${tenantId}, using local DB`);
+    if (microsipConfigured) {
+      console.error(`[StatementScheduler] Microsip configured but unavailable for tenant ${tenantId}; linked customers will be skipped`);
+    } else {
+      console.warn(`[StatementScheduler] Microsip not configured for tenant ${tenantId}, using local DB`);
+    }
   }
 
   // ── Refresh data BEFORE sending ────────────────────────────────────────────
@@ -138,13 +146,23 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
       db.query.payments.findMany({ where: eq(payments.customerId, customer.id) }),
     ]);
 
-    // Try live CXC data for accurate balances
+    // Live CXC data for accurate balances. If Microsip is configured and this
+    // customer is linked but the live query fails, SKIP the customer instead of
+    // sending stale local data that contradicts Microsip.
     let liveData: { invoices: any[]; payments: any[] } | undefined;
+    if (microsipConfigured && !msService && customer.microsipId) {
+      failed++;
+      failedCustomers.push(`${customer.name} (Microsip no disponible)`);
+      continue;
+    }
     if (msService && customer.microsipId) {
       try {
         liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
       } catch (_e) {
-        // Fall back to local DB for this customer
+        failed++;
+        failedCustomers.push(`${customer.name} (Microsip no disponible)`);
+        console.error(`[StatementScheduler] Live CXC failed for ${customer.name}, skipping:`, (_e as any)?.message);
+        continue;
       }
     }
 

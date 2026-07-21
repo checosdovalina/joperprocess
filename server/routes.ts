@@ -5806,14 +5806,20 @@ Proporciona tu análisis en el siguiente formato JSON:
         if (tenant?.name) tenantName = tenant.name;
       }
 
-      // Try live CXC data from Microsip for accurate real-time balances
+      // Live CXC data from Microsip for accurate real-time balances.
+      // If Microsip is configured for this customer but unavailable, FAIL instead of
+      // silently sending stale local data to the customer.
       let liveData: { invoices: any[]; payments: any[] } | undefined;
       if (tenantId && customer.microsipId) {
-        try {
-          const msService = await createMicrosipSyncService(tenantId);
-          liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
-        } catch (_e) {
-          console.warn("[account-statement] Live CXC fetch failed, using local DB:", (_e as any)?.message);
+        const hasMicrosip = (await db.select().from(microsipConfigs).where(eq(microsipConfigs.tenantId, tenantId)).limit(1)).length > 0;
+        if (hasMicrosip) {
+          try {
+            const msService = await createMicrosipSyncService(tenantId);
+            liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
+          } catch (_e) {
+            console.warn("[account-statement] Live CXC fetch failed:", (_e as any)?.message);
+            return res.status(502).json({ error: "No se pudo consultar Microsip para obtener el saldo actualizado. El envío se canceló para no mandar datos incorrectos. Intenta de nuevo." });
+          }
         }
       }
 
@@ -5864,6 +5870,22 @@ Proporciona tu análisis en el siguiente formato JSON:
       const { sendAccountStatementEmail } = await import("./account-statement-email-service");
       const results: { customerId: string; name: string; success: boolean; error?: string }[] = [];
 
+      // One Microsip service for the whole batch (if configured). If Microsip is
+      // configured but the service cannot start, abort: sending local fallback data
+      // would deliver stale statements to customers.
+      let msService: Awaited<ReturnType<typeof createMicrosipSyncService>> | null = null;
+      if (tenantId) {
+        const hasMicrosip = (await db.select().from(microsipConfigs).where(eq(microsipConfigs.tenantId, tenantId)).limit(1)).length > 0;
+        if (hasMicrosip) {
+          try {
+            msService = await createMicrosipSyncService(tenantId);
+          } catch (initErr: any) {
+            console.error("[send-bulk] Microsip service init failed:", initErr?.message);
+            return res.status(502).json({ error: "No se pudo conectar con Microsip. El envío masivo se canceló para no mandar datos desactualizados." });
+          }
+        }
+      }
+
       for (const custId of customerIds) {
         try {
           const customer = await scopedStorage.getCustomer(custId);
@@ -5883,7 +5905,19 @@ Proporciona tu análisis en el siguiente formato JSON:
             scopedStorage.getPaymentsByCustomer(custId),
           ]);
 
-          await sendAccountStatementEmail({ customer, invoices: custInvoices, payments: custPayments, recipientEmails, tenantName });
+          // Live CXC data — if Microsip is configured and this customer is linked,
+          // require live data; do NOT silently send stale local data.
+          let liveData: { invoices: any[]; payments: any[] } | undefined;
+          if (msService && customer.microsipId) {
+            try {
+              liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
+            } catch (liveErr: any) {
+              results.push({ customerId: custId, name: customer.name, success: false, error: `Microsip no disponible: ${liveErr?.message ?? "error"}` });
+              continue;
+            }
+          }
+
+          await sendAccountStatementEmail({ customer, invoices: custInvoices, payments: custPayments, recipientEmails, tenantName, liveData });
           results.push({ customerId: custId, name: customer.name, success: true });
         } catch (e: any) {
           const c = await scopedStorage.getCustomer(custId).catch(() => null);

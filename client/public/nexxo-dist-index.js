@@ -13404,11 +13404,15 @@ ${closeNote}` : closeNote;
       }
       let liveData;
       if (tenantId && customer.microsipId) {
-        try {
-          const msService = await createMicrosipSyncService(tenantId);
-          liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
-        } catch (_e) {
-          console.warn("[account-statement] Live CXC fetch failed, using local DB:", _e?.message);
+        const hasMicrosip = (await db.select().from(microsipConfigs).where(eq5(microsipConfigs.tenantId, tenantId)).limit(1)).length > 0;
+        if (hasMicrosip) {
+          try {
+            const msService = await createMicrosipSyncService(tenantId);
+            liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
+          } catch (_e) {
+            console.warn("[account-statement] Live CXC fetch failed:", _e?.message);
+            return res.status(502).json({ error: "No se pudo consultar Microsip para obtener el saldo actualizado. El env\xEDo se cancel\xF3 para no mandar datos incorrectos. Intenta de nuevo." });
+          }
         }
       }
       const { sendAccountStatementEmail: sendAccountStatementEmail2 } = await Promise.resolve().then(() => (init_account_statement_email_service(), account_statement_email_service_exports));
@@ -13451,6 +13455,18 @@ ${closeNote}` : closeNote;
       }
       const { sendAccountStatementEmail: sendAccountStatementEmail2 } = await Promise.resolve().then(() => (init_account_statement_email_service(), account_statement_email_service_exports));
       const results = [];
+      let msService = null;
+      if (tenantId) {
+        const hasMicrosip = (await db.select().from(microsipConfigs).where(eq5(microsipConfigs.tenantId, tenantId)).limit(1)).length > 0;
+        if (hasMicrosip) {
+          try {
+            msService = await createMicrosipSyncService(tenantId);
+          } catch (initErr) {
+            console.error("[send-bulk] Microsip service init failed:", initErr?.message);
+            return res.status(502).json({ error: "No se pudo conectar con Microsip. El env\xEDo masivo se cancel\xF3 para no mandar datos desactualizados." });
+          }
+        }
+      }
       for (const custId of customerIds) {
         try {
           const customer = await scopedStorage.getCustomer(custId);
@@ -13467,7 +13483,16 @@ ${closeNote}` : closeNote;
             scopedStorage.getInvoicesByCustomer(custId),
             scopedStorage.getPaymentsByCustomer(custId)
           ]);
-          await sendAccountStatementEmail2({ customer, invoices: custInvoices, payments: custPayments, recipientEmails, tenantName });
+          let liveData;
+          if (msService && customer.microsipId) {
+            try {
+              liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
+            } catch (liveErr) {
+              results.push({ customerId: custId, name: customer.name, success: false, error: `Microsip no disponible: ${liveErr?.message ?? "error"}` });
+              continue;
+            }
+          }
+          await sendAccountStatementEmail2({ customer, invoices: custInvoices, payments: custPayments, recipientEmails, tenantName, liveData });
           results.push({ customerId: custId, name: customer.name, success: true });
         } catch (e) {
           const c = await scopedStorage.getCustomer(custId).catch(() => null);
@@ -16482,11 +16507,16 @@ async function runForTenant(tenantId, onlyOverdue) {
     where: and5(eq6(users.tenantId, tenantId))
   });
   const ccEmails = adminUsers.filter((u) => u.role === "admin" || u.role === "credito_cobranza").flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim())).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  const microsipConfigured = (await db.select().from(microsipConfigs).where(eq6(microsipConfigs.tenantId, tenantId)).limit(1)).length > 0;
   let msService = null;
   try {
     msService = await createMicrosipSyncService(tenantId);
   } catch (_e) {
-    console.warn(`[StatementScheduler] Microsip not configured for tenant ${tenantId}, using local DB`);
+    if (microsipConfigured) {
+      console.error(`[StatementScheduler] Microsip configured but unavailable for tenant ${tenantId}; linked customers will be skipped`);
+    } else {
+      console.warn(`[StatementScheduler] Microsip not configured for tenant ${tenantId}, using local DB`);
+    }
   }
   if (msService) {
     try {
@@ -16544,10 +16574,19 @@ async function runForTenant(tenantId, onlyOverdue) {
       db.query.payments.findMany({ where: eq6(payments.customerId, customer.id) })
     ]);
     let liveData;
+    if (microsipConfigured && !msService && customer.microsipId) {
+      failed++;
+      failedCustomers.push(`${customer.name} (Microsip no disponible)`);
+      continue;
+    }
     if (msService && customer.microsipId) {
       try {
         liveData = await msService.queryLiveCxcStatementForCustomer(customer.microsipId);
       } catch (_e) {
+        failed++;
+        failedCustomers.push(`${customer.name} (Microsip no disponible)`);
+        console.error(`[StatementScheduler] Live CXC failed for ${customer.name}, skipping:`, _e?.message);
+        continue;
       }
     }
     let hasActive;
