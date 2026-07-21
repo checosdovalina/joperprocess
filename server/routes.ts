@@ -5919,6 +5919,8 @@ Proporciona tu análisis en el siguiente formato JSON:
 
           await sendAccountStatementEmail({ customer, invoices: custInvoices, payments: custPayments, recipientEmails, tenantName, liveData });
           results.push({ customerId: custId, name: customer.name, success: true });
+          // Pause between sends to stay under the mail provider's rate limit
+          await new Promise((r) => setTimeout(r, 2000));
         } catch (e: any) {
           const c = await scopedStorage.getCustomer(custId).catch(() => null);
           results.push({ customerId: custId, name: c?.name ?? custId, success: false, error: e.message });

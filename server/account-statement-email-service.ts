@@ -366,18 +366,49 @@ export async function sendAccountStatementEmail({
 
   const mailerSend = new MailerSend({ apiKey });
   const sentFrom = new Sender("noreply@nexxo.com.mx", tenantName);
-  const recipients = recipientEmails.map((e) => new Recipient(e, customer.name));
+
+  // Deduplicate recipients (MailerSend rejects the whole email if an address is
+  // duplicated in TO or CC, or appears in both lists).
+  const norm = (e: string) => e.trim().toLowerCase();
+  const toSet = new Set<string>();
+  const toList: string[] = [];
+  for (const e of recipientEmails) {
+    const k = norm(e);
+    if (k && !toSet.has(k)) { toSet.add(k); toList.push(e.trim()); }
+  }
+  const ccSet = new Set<string>();
+  const ccList: string[] = [];
+  for (const e of ccEmails ?? []) {
+    const k = norm(e);
+    if (k && !toSet.has(k) && !ccSet.has(k)) { ccSet.add(k); ccList.push(e.trim()); }
+  }
 
   let emailParams = new EmailParams()
     .setFrom(sentFrom)
-    .setTo(recipients)
+    .setTo(toList.map((e) => new Recipient(e, customer.name)))
     .setSubject(`Estado de Cuenta — ${customer.name} — ${fmtDate(now)}`)
     .setHtml(html);
 
-  if (ccEmails && ccEmails.length > 0) {
-    const cc = ccEmails.map((e) => new Recipient(e, e));
-    emailParams = emailParams.setCc(cc);
+  if (ccList.length > 0) {
+    emailParams = emailParams.setCc(ccList.map((e) => new Recipient(e, e)));
   }
 
-  await mailerSend.email.send(emailParams);
+  // Send with retry on rate limit (MailerSend error 429 / cloudflare 1015)
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await mailerSend.email.send(emailParams);
+      return;
+    } catch (err: any) {
+      const status = err?.statusCode ?? err?.status ?? err?.body?.status;
+      const isRateLimit = status === 429 || err?.body?.error_code === 1015;
+      if (isRateLimit && attempt < maxAttempts) {
+        const waitMs = 15000 * attempt;
+        console.warn(`[StatementEmail] Rate limited (intento ${attempt}/${maxAttempts}), esperando ${waitMs / 1000}s...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      throw err;
+    }
+  }
 }

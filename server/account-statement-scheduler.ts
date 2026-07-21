@@ -194,6 +194,8 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
         ccEmails: ccEmails.length > 0 ? ccEmails : undefined,
       });
       sent++;
+      // Pause between sends to stay under the mail provider's rate limit
+      await new Promise((r) => setTimeout(r, 2000));
     } catch (err) {
       failed++;
       failedCustomers.push(customer.name);

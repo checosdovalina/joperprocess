@@ -6711,13 +6711,46 @@ async function sendAccountStatementEmail({
 </html>`;
   const mailerSend3 = new MailerSend4({ apiKey });
   const sentFrom = new Sender4("noreply@nexxo.com.mx", tenantName);
-  const recipients = recipientEmails.map((e) => new Recipient4(e, customer.name));
-  let emailParams = new EmailParams4().setFrom(sentFrom).setTo(recipients).setSubject(`Estado de Cuenta \u2014 ${customer.name} \u2014 ${fmtDate2(now)}`).setHtml(html);
-  if (ccEmails && ccEmails.length > 0) {
-    const cc = ccEmails.map((e) => new Recipient4(e, e));
-    emailParams = emailParams.setCc(cc);
+  const norm = (e) => e.trim().toLowerCase();
+  const toSet = /* @__PURE__ */ new Set();
+  const toList = [];
+  for (const e of recipientEmails) {
+    const k = norm(e);
+    if (k && !toSet.has(k)) {
+      toSet.add(k);
+      toList.push(e.trim());
+    }
   }
-  await mailerSend3.email.send(emailParams);
+  const ccSet = /* @__PURE__ */ new Set();
+  const ccList = [];
+  for (const e of ccEmails ?? []) {
+    const k = norm(e);
+    if (k && !toSet.has(k) && !ccSet.has(k)) {
+      ccSet.add(k);
+      ccList.push(e.trim());
+    }
+  }
+  let emailParams = new EmailParams4().setFrom(sentFrom).setTo(toList.map((e) => new Recipient4(e, customer.name))).setSubject(`Estado de Cuenta \u2014 ${customer.name} \u2014 ${fmtDate2(now)}`).setHtml(html);
+  if (ccList.length > 0) {
+    emailParams = emailParams.setCc(ccList.map((e) => new Recipient4(e, e)));
+  }
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await mailerSend3.email.send(emailParams);
+      return;
+    } catch (err) {
+      const status = err?.statusCode ?? err?.status ?? err?.body?.status;
+      const isRateLimit = status === 429 || err?.body?.error_code === 1015;
+      if (isRateLimit && attempt < maxAttempts) {
+        const waitMs = 15e3 * attempt;
+        console.warn(`[StatementEmail] Rate limited (intento ${attempt}/${maxAttempts}), esperando ${waitMs / 1e3}s...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 var init_account_statement_email_service = __esm({
   "server/account-statement-email-service.ts"() {
@@ -13494,6 +13527,7 @@ ${closeNote}` : closeNote;
           }
           await sendAccountStatementEmail2({ customer, invoices: custInvoices, payments: custPayments, recipientEmails, tenantName, liveData });
           results.push({ customerId: custId, name: customer.name, success: true });
+          await new Promise((r) => setTimeout(r, 2e3));
         } catch (e) {
           const c = await scopedStorage.getCustomer(custId).catch(() => null);
           results.push({ customerId: custId, name: c?.name ?? custId, success: false, error: e.message });
@@ -16620,6 +16654,7 @@ async function runForTenant(tenantId, onlyOverdue) {
         ccEmails: ccEmails.length > 0 ? ccEmails : void 0
       });
       sent++;
+      await new Promise((r) => setTimeout(r, 2e3));
     } catch (err) {
       failed++;
       failedCustomers.push(customer.name);
