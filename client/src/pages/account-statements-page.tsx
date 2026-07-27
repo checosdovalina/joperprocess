@@ -543,11 +543,16 @@ export default function AccountStatementsPage() {
               className="pl-9"
               value={anySearch}
               onChange={(e) => { setAnySearch(e.target.value); setAnySearchOpen(true); }}
-              onFocus={() => setAnySearchOpen(true)}
+              onFocus={(e) => {
+                setAnySearchOpen(true);
+                // On mobile the dropdown opens at the bottom edge of the screen and
+                // gets clipped; scroll the input toward the top to make room.
+                setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 250);
+              }}
               onBlur={() => setTimeout(() => setAnySearchOpen(false), 150)}
             />
             {anySearchOpen && anyCustomerResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-popover shadow-md overflow-hidden">
+              <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-popover shadow-md overflow-y-auto max-h-60">
                 {anyCustomerResults.map((c) => (
                   <button
                     key={c.id}
