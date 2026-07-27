@@ -380,7 +380,7 @@ export default function AccountStatementsPage() {
   const customersWithOverdue = statements.filter((s) => s.overdueBalance > 0).length;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col sm:h-full">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3 px-6 py-4 border-b flex-wrap">
         <h1 className="text-xl font-semibold">{t("statements.title")}</h1>
@@ -579,7 +579,7 @@ export default function AccountStatementsPage() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto px-6 pb-6">
+      <div className="sm:flex-1 sm:overflow-auto px-6 pb-6">
         {isLoading ? (
           <div className="flex items-center justify-center h-40 text-muted-foreground">{t("label.loading")}</div>
         ) : filtered.length === 0 ? (
