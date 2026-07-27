@@ -1,0 +1,21 @@
+[root@localhost joper]# grep -iE "microsip|firebird" ~/.pm2/logs/joper-app-error.log | tail -20
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+[Microsip] Error syncing tenant b5ca7691-3de0-47c1-808f-3b6baf19fb29: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Int
