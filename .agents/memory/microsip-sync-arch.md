@@ -23,3 +23,6 @@ Do NOT mark invoices as PAID simply because they are absent from a Microsip sync
 - DB: `C:\Microsip Datos\Int Jop 2005.fdb`  
 - `cxc_database` is configured as empty string `""` — falls back to main DB (correct behavior)
 - Username: SYSDBA (standard Firebird superuser)
+
+## Diagnóstico de timeouts a Firebird
+Los errores "Timeout: No se pudo conectar" en pm2 logs no traen fecha por defecto y suelen ser viejos. Antes de asumir firewall, probar `timeout 5 bash -c 'cat < /dev/null > /dev/tcp/HOST/3050'` desde el ambiente que falla y revisar logs con `pm2 logs --timestamp`. Dev y VPS salen con IPs distintas, así que la conectividad puede diferir aunque la config sea idéntica.
