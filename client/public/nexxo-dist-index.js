@@ -13077,9 +13077,18 @@ ${closeNote}` : closeNote;
         if (!instancesByProduct[inst.productId]) instancesByProduct[inst.productId] = [];
         instancesByProduct[inst.productId].push(inst.serialNumber);
       }
-      const remisionProducts = order.quotation.items.map((item) => ({
+      const shipmentReleases = await db.query.orderReleases.findMany({
+        where: eq5(orderReleases.shipmentId, shipment.id)
+      });
+      const releasedByItem = {};
+      for (const rel of shipmentReleases) {
+        if (!rel.quotationItemId) continue;
+        releasedByItem[rel.quotationItemId] = (releasedByItem[rel.quotationItemId] ?? 0) + parseFloat(rel.quantityReleased ?? "0");
+      }
+      const hasReleases = shipmentReleases.length > 0;
+      const remisionProducts = order.quotation.items.filter((item) => !hasReleases || (releasedByItem[item.id] ?? 0) > 0).map((item) => ({
         name: item.product?.name ?? item.description ?? "Producto",
-        quantity: parseFloat(item.quantity ?? "1"),
+        quantity: hasReleases ? releasedByItem[item.id] : parseFloat(item.quantity ?? "1"),
         unitOfMeasure: item.product?.unitOfMeasure ?? "Unidades",
         desde: tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almac\xE9n/Salida",
         serialNumbers: instancesByProduct[item.productId ?? ""] ?? []

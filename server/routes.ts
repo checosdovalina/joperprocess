@@ -5378,13 +5378,27 @@ Proporciona tu análisis en el siguiente formato JSON:
         instancesByProduct[inst.productId].push(inst.serialNumber);
       }
 
-      const remisionProducts = order.quotation.items.map(item => ({
-        name: item.product?.name ?? item.description ?? "Producto",
-        quantity: parseFloat(item.quantity ?? "1"),
-        unitOfMeasure: item.product?.unitOfMeasure ?? "Unidades",
-        desde: tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almacén/Salida",
-        serialNumbers: instancesByProduct[item.productId ?? ""] ?? [],
-      }));
+      // If this shipment came from partial releases, print only the released
+      // quantities tied to THIS shipment; otherwise fall back to the full order.
+      const shipmentReleases = await db.query.orderReleases.findMany({
+        where: eq(orderReleases.shipmentId, shipment.id),
+      });
+      const releasedByItem: Record<string, number> = {};
+      for (const rel of shipmentReleases) {
+        if (!rel.quotationItemId) continue;
+        releasedByItem[rel.quotationItemId] = (releasedByItem[rel.quotationItemId] ?? 0) + parseFloat(rel.quantityReleased ?? "0");
+      }
+      const hasReleases = shipmentReleases.length > 0;
+
+      const remisionProducts = order.quotation.items
+        .filter(item => !hasReleases || (releasedByItem[item.id] ?? 0) > 0)
+        .map(item => ({
+          name: item.product?.name ?? item.description ?? "Producto",
+          quantity: hasReleases ? releasedByItem[item.id] : parseFloat(item.quantity ?? "1"),
+          unitOfMeasure: item.product?.unitOfMeasure ?? "Unidades",
+          desde: tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almacén/Salida",
+          serialNumbers: instancesByProduct[item.productId ?? ""] ?? [],
+        }));
 
       const { generateShipmentRemisionPDF } = await import("./shipment-remision-pdf-generator.js");
 
