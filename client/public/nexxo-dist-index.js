@@ -13003,6 +13003,41 @@ ${closeNote}` : closeNote;
       res.status(500).json({ error: "Error updating shipment" });
     }
   });
+  app2.delete("/api/shipments/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { id } = req.params;
+      const shipment = await scopedStorage.getShipment(id);
+      if (!shipment) {
+        return res.status(404).json({ error: "Embarque no encontrado" });
+      }
+      await db.transaction(async (tx) => {
+        if (shipment.orderId) {
+          await tx.execute(sql5`SELECT id FROM orders WHERE id = ${shipment.orderId} FOR UPDATE`);
+        }
+        await tx.delete(shipmentProductInstances).where(eq5(shipmentProductInstances.shipmentId, id));
+        await tx.update(orderReleases).set({ shipmentId: null }).where(eq5(orderReleases.shipmentId, id));
+        await tx.delete(shipments).where(eq5(shipments.id, id));
+        if (shipment.orderId) {
+          const [remaining] = await tx.select({ id: shipments.id }).from(shipments).where(eq5(shipments.orderId, shipment.orderId)).limit(1);
+          if (!remaining) {
+            await tx.update(orders).set({ status: OrderStatus.RELEASED }).where(and4(eq5(orders.id, shipment.orderId), eq5(orders.status, OrderStatus.SHIPPED)));
+          }
+        }
+      });
+      logSystemActivity({
+        tenantId: shipment.tenantId,
+        category: "system",
+        action: "delete",
+        message: `Embarque eliminado (pedido ${shipment.orderId}) por ${req.user.username}`,
+        details: { shipmentId: id, orderId: shipment.orderId }
+      }).catch((e) => console.error("Error logging shipment deletion:", e));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting shipment:", error);
+      res.status(500).json({ error: "Error al eliminar el embarque" });
+    }
+  });
   app2.get("/api/shipments/:id/remision", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;

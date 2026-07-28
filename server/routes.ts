@@ -5274,6 +5274,59 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
+  // Delete a shipment (admin only). Removes its serial-number instances and
+  // unlinks any order releases pointing at it, then deletes the shipment.
+  app.delete("/api/shipments/:id", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const { id } = req.params;
+
+      // Tenant/empresa-scoped lookup: never delete another tenant's shipment by direct ID.
+      const shipment = await scopedStorage.getShipment(id);
+      if (!shipment) {
+        return res.status(404).json({ error: "Embarque no encontrado" });
+      }
+
+      // All-or-nothing: remove serials, unlink releases, delete the shipment and
+      // reconcile the order status in one transaction. The order row is locked
+      // first so a concurrent shipment creation can't interleave with the
+      // remaining-shipments check.
+      await db.transaction(async (tx) => {
+        if (shipment.orderId) {
+          await tx.execute(sql`SELECT id FROM orders WHERE id = ${shipment.orderId} FOR UPDATE`);
+        }
+        await tx.delete(shipmentProductInstances).where(eq(shipmentProductInstances.shipmentId, id));
+        await tx.update(orderReleases).set({ shipmentId: null }).where(eq(orderReleases.shipmentId, id));
+        await tx.delete(shipments).where(eq(shipments.id, id));
+
+        // If the order has no remaining shipments and was marked SHIPPED, revert it
+        // to RELEASED so it reappears as pending-to-ship in production.
+        if (shipment.orderId) {
+          const [remaining] = await tx.select({ id: shipments.id }).from(shipments).where(eq(shipments.orderId, shipment.orderId)).limit(1);
+          if (!remaining) {
+            await tx.update(orders)
+              .set({ status: OrderStatus.RELEASED })
+              .where(and(eq(orders.id, shipment.orderId), eq(orders.status, OrderStatus.SHIPPED)));
+          }
+        }
+      });
+
+      // Logging must never turn a committed deletion into a reported failure.
+      logSystemActivity({
+        tenantId: shipment.tenantId,
+        category: "system",
+        action: "delete",
+        message: `Embarque eliminado (pedido ${shipment.orderId}) por ${req.user!.username}`,
+        details: { shipmentId: id, orderId: shipment.orderId },
+      }).catch((e) => console.error("Error logging shipment deletion:", e));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting shipment:", error);
+      res.status(500).json({ error: "Error al eliminar el embarque" });
+    }
+  });
+
   // Shipment Remisión de Salida PDF
   app.get("/api/shipments/:id/remision", isAuthenticated, async (req, res) => {
     try {

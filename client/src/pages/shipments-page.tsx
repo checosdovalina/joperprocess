@@ -29,6 +29,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -78,6 +88,8 @@ export default function ShipmentsPage() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const { user } = useAuth();
   const [filterEmpresa, setFilterEmpresa] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<ShipmentWithDetails | null>(null);
+  const isAdmin = user?.role === "admin";
 
   const { data: shipments, isLoading } = useQuery<ShipmentWithDetails[]>({
     queryKey: ["/api/shipments"],
@@ -209,6 +221,26 @@ export default function ShipmentsPage() {
     },
     onError: () => {
       toast({ title: t("label.error"), description: t("shipments.toast.update-error"), variant: "destructive" });
+    },
+  });
+
+  const deleteShipmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/shipments/${id}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error al eliminar el embarque");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Embarque eliminado", description: "El embarque se eliminó correctamente." });
+      queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
+      setDeleteTarget(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: t("label.error"), description: error.message, variant: "destructive" });
+      setDeleteTarget(null);
     },
   });
 
@@ -536,6 +568,16 @@ export default function ShipmentsPage() {
                           >
                             {t("btn.view-details")}
                           </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleteTarget(shipment)}
+                              data-testid={`button-delete-shipment-${shipment.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -555,6 +597,34 @@ export default function ShipmentsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar embarque?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará el embarque del pedido{" "}
+              <span className="font-mono font-medium">{deleteTarget?.order?.quotation?.folio}</span>
+              {" "}junto con sus números de serie registrados. El pedido volverá a aparecer como pendiente de embarcar. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-shipment">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-confirm-delete-shipment"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteShipmentMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTarget) deleteShipmentMutation.mutate(deleteTarget.id);
+              }}
+            >
+              {deleteShipmentMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={serialDialogOpen} onOpenChange={setSerialDialogOpen}>
         <DialogContent className="max-w-2xl">
