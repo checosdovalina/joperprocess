@@ -1,0 +1,33 @@
+[root@localhost joper]# psql "postgresql://joper_user:tu_password_segura@127.0.0.1:5432/joper_db?sslmode=disable" <<'EOF'
+SELECT s.id AS ship_id, s.status, s.created_at
+FROM shipments s
+JOIN orders o ON o.id = s.order_id
+JOIN quotations q ON q.id = o.quotation_id
+WHERE q.folio = 'MEX-508003';
+
+SELECT r.shipment_id, r.quotation_item_id, r.quantity_released, r.created_at
+FROM order_releases r
+JOIN orders o ON o.id = r.order_id
+JOIN quotations q ON q.id = o.quotation_id
+WHERE q.folio = 'MEX-508003'
+ORDER BY r.created_at;
+EOF
+               ship_id                |  status   |         created_at         
+--------------------------------------+-----------+----------------------------
+ 3b8665e8-68b1-4851-9cc9-20095324cc9b | delivered | 2026-07-29 18:39:48.368945
+ b2bacf08-ceeb-41bc-81b3-9fd7ef5ef934 | pending   | 2026-07-29 18:39:38.617861
+ 8ced0fba-bc0f-4cdc-903e-bff00fd0a67b | pending   | 2026-07-29 18:39:40.999926
+ 163c33f9-9648-48c3-b2f1-a6ea5f8cb792 | pending   | 2026-07-29 18:39:43.486563
+ e6e8806f-a541-4340-87c2-3e8050139c23 | pending   | 2026-07-29 18:39:45.889123
+(5 rows)
+
+             shipment_id              |          quotation_item_id           | quantity_released |         created_at         
+--------------------------------------+--------------------------------------+-------------------+----------------------------
+ b2bacf08-ceeb-41bc-81b3-9fd7ef5ef934 | 823a082a-5ac4-45fa-b597-df5548039a01 |              2.00 | 2026-07-29 18:39:38.619087
+ 8ced0fba-bc0f-4cdc-903e-bff00fd0a67b | 66cf7861-7ce4-429c-8e0c-d61ddb45d824 |              1.00 | 2026-07-29 18:39:41.001009
+ 163c33f9-9648-48c3-b2f1-a6ea5f8cb792 | 7a2a591a-8c9d-4a4f-bcc4-001b0b555acb |              1.00 | 2026-07-29 18:39:43.487407
+ e6e8806f-a541-4340-87c2-3e8050139c23 | e7d56125-052f-4cc5-8f98-de7404c30ffc |              2.00 | 2026-07-29 18:39:45.890191
+ 3b8665e8-68b1-4851-9cc9-20095324cc9b | 7836581c-5d54-4074-807f-17071acc98a0 |              1.00 | 2026-07-29 18:39:48.370094
+(5 rows)
+
+[root@localhost joper]# 
