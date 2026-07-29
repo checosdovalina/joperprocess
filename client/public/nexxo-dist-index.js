@@ -13086,13 +13086,31 @@ ${closeNote}` : closeNote;
         releasedByItem[rel.quotationItemId] = (releasedByItem[rel.quotationItemId] ?? 0) + parseFloat(rel.quantityReleased ?? "0");
       }
       const hasReleases = shipmentReleases.length > 0;
-      const remisionProducts = order.quotation.items.filter((item) => !hasReleases || (releasedByItem[item.id] ?? 0) > 0).map((item) => ({
+      const desdeLabel = tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almac\xE9n/Salida";
+      const remisionProducts = order.quotation.items.filter(
+        (item) => (
+          // Always keep items whose product has serials captured on this shipment
+          (instancesByProduct[item.productId ?? ""]?.length ?? 0) > 0 || !hasReleases || (releasedByItem[item.id] ?? 0) > 0
+        )
+      ).map((item) => ({
         name: item.product?.name ?? item.description ?? "Producto",
-        quantity: hasReleases ? releasedByItem[item.id] : parseFloat(item.quantity ?? "1"),
+        quantity: hasReleases && (releasedByItem[item.id] ?? 0) > 0 ? releasedByItem[item.id] : parseFloat(item.quantity ?? "1"),
         unitOfMeasure: item.product?.unitOfMeasure ?? "Unidades",
-        desde: tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almac\xE9n/Salida",
+        desde: desdeLabel,
         serialNumbers: instancesByProduct[item.productId ?? ""] ?? []
       }));
+      const coveredProductIds = new Set(order.quotation.items.map((i) => i.productId).filter(Boolean));
+      for (const [productId, serials] of Object.entries(instancesByProduct)) {
+        if (coveredProductIds.has(productId)) continue;
+        const prod = await db.query.products.findFirst({ where: eq5(products.id, productId) });
+        remisionProducts.push({
+          name: prod?.name ?? "Producto",
+          quantity: serials.length,
+          unitOfMeasure: prod?.unitOfMeasure ?? "Unidades",
+          desde: desdeLabel,
+          serialNumbers: serials
+        });
+      }
       const { generateShipmentRemisionPDF: generateShipmentRemisionPDF2 } = await Promise.resolve().then(() => (init_shipment_remision_pdf_generator(), shipment_remision_pdf_generator_exports));
       const stream = await generateShipmentRemisionPDF2({
         folio: order.quotation.folio,

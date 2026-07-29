@@ -5390,15 +5390,37 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
       const hasReleases = shipmentReleases.length > 0;
 
+      const desdeLabel = tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almacén/Salida";
       const remisionProducts = order.quotation.items
-        .filter(item => !hasReleases || (releasedByItem[item.id] ?? 0) > 0)
+        .filter(item =>
+          // Always keep items whose product has serials captured on this shipment
+          (instancesByProduct[item.productId ?? ""]?.length ?? 0) > 0 ||
+          !hasReleases || (releasedByItem[item.id] ?? 0) > 0
+        )
         .map(item => ({
           name: item.product?.name ?? item.description ?? "Producto",
-          quantity: hasReleases ? releasedByItem[item.id] : parseFloat(item.quantity ?? "1"),
+          quantity: (hasReleases && (releasedByItem[item.id] ?? 0) > 0)
+            ? releasedByItem[item.id]
+            : parseFloat(item.quantity ?? "1"),
           unitOfMeasure: item.product?.unitOfMeasure ?? "Unidades",
-          desde: tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almacén/Salida",
+          desde: desdeLabel,
           serialNumbers: instancesByProduct[item.productId ?? ""] ?? [],
         }));
+
+      // Safety net: serials captured for products that don't match any quotation
+      // item (e.g. product changed after quoting) must still appear on the salida.
+      const coveredProductIds = new Set(order.quotation.items.map(i => i.productId).filter(Boolean));
+      for (const [productId, serials] of Object.entries(instancesByProduct)) {
+        if (coveredProductIds.has(productId)) continue;
+        const prod = await db.query.products.findFirst({ where: eq(products.id, productId) });
+        remisionProducts.push({
+          name: prod?.name ?? "Producto",
+          quantity: serials.length,
+          unitOfMeasure: prod?.unitOfMeasure ?? "Unidades",
+          desde: desdeLabel,
+          serialNumbers: serials,
+        });
+      }
 
       const { generateShipmentRemisionPDF } = await import("./shipment-remision-pdf-generator.js");
 
