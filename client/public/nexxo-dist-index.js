@@ -12377,15 +12377,23 @@ ${closeNote}` : closeNote;
         invoiceId = invoice.id;
       }
       if (createShipment && shipmentData) {
-        const shipment = await scopedStorage.createShipment({
-          orderId: id,
-          transporter: shipmentData.transporter || "Por definir",
-          transportType: shipmentData.transportType || "propio",
-          trackingNumber: shipmentData.trackingNumber,
-          driverName: shipmentData.driverName,
-          vehiclePlates: shipmentData.vehiclePlates
+        const existingPending = await db.query.shipments.findFirst({
+          where: and4(eq5(shipments.orderId, id), eq5(shipments.status, "pending")),
+          orderBy: (s, { asc: asc2 }) => [asc2(s.createdAt)]
         });
-        shipmentId = shipment.id;
+        if (existingPending) {
+          shipmentId = existingPending.id;
+        } else {
+          const shipment = await scopedStorage.createShipment({
+            orderId: id,
+            transporter: shipmentData.transporter || "Por definir",
+            transportType: shipmentData.transportType || "propio",
+            trackingNumber: shipmentData.trackingNumber,
+            driverName: shipmentData.driverName,
+            vehiclePlates: shipmentData.vehiclePlates
+          });
+          shipmentId = shipment.id;
+        }
       }
       const release = await scopedStorage.createOrderRelease({
         quotationItemId: releaseData.quotationItemId,

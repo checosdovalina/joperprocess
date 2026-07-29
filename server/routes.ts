@@ -4471,17 +4471,27 @@ Proporciona tu análisis en el siguiente formato JSON:
         invoiceId = invoice.id;
       }
 
-      // Create shipment if requested
+      // Create shipment if requested. Reuse the order's existing pending
+      // shipment (if any) so releasing several products one by one doesn't
+      // create one shipment per product.
       if (createShipment && shipmentData) {
-        const shipment = await scopedStorage.createShipment({
-          orderId: id,
-          transporter: shipmentData.transporter || "Por definir",
-          transportType: shipmentData.transportType || "propio",
-          trackingNumber: shipmentData.trackingNumber,
-          driverName: shipmentData.driverName,
-          vehiclePlates: shipmentData.vehiclePlates,
+        const existingPending = await db.query.shipments.findFirst({
+          where: and(eq(shipments.orderId, id), eq(shipments.status, "pending")),
+          orderBy: (s, { asc }) => [asc(s.createdAt)],
         });
-        shipmentId = shipment.id;
+        if (existingPending) {
+          shipmentId = existingPending.id;
+        } else {
+          const shipment = await scopedStorage.createShipment({
+            orderId: id,
+            transporter: shipmentData.transporter || "Por definir",
+            transportType: shipmentData.transportType || "propio",
+            trackingNumber: shipmentData.trackingNumber,
+            driverName: shipmentData.driverName,
+            vehiclePlates: shipmentData.vehiclePlates,
+          });
+          shipmentId = shipment.id;
+        }
       }
 
       // Create the release with validated data
