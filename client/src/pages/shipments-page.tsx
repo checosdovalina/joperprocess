@@ -135,10 +135,40 @@ export default function ShipmentsPage() {
     enabled: !!selectedShipment && serialDialogOpen,
   });
 
-  // Products that belong to this order's quotation
-  const orderProducts = orderDetails?.quotation?.items
-    ?.map(item => item.product)
-    .filter((p, idx, arr) => p && arr.findIndex(x => x?.id === p.id) === idx) ?? [];
+  // Releases of this order: used to scope serial capture to THIS shipment when
+  // the order was split into partial shipments.
+  type OrderReleaseRow = { id: string; shipmentId: string | null; quotationItemId: string; quantityReleased: string };
+  const { data: orderReleasesData } = useQuery<OrderReleaseRow[]>({
+    queryKey: ["/api/orders", selectedShipment?.orderId, "releases"],
+    queryFn: async () => {
+      if (!selectedShipment) return [];
+      const response = await fetch(`/api/orders/${selectedShipment.orderId}/releases`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Error fetching releases");
+      return response.json();
+    },
+    enabled: !!selectedShipment && serialDialogOpen,
+  });
+
+  // Quantities released to the currently selected shipment, per quotation item
+  const shipmentReleases = (orderReleasesData ?? []).filter(r => r.shipmentId === selectedShipment?.id);
+  const releasedByItem: Record<string, number> = {};
+  for (const rel of shipmentReleases) {
+    releasedByItem[rel.quotationItemId] = (releasedByItem[rel.quotationItemId] ?? 0) + Number(rel.quantityReleased ?? 0);
+  }
+  const shipmentHasReleases = shipmentReleases.length > 0;
+
+  // Items relevant to this shipment: only the released ones when it's a partial
+  // shipment; the whole order otherwise.
+  const shipmentItems = (orderDetails?.quotation?.items ?? []).filter(
+    item => !shipmentHasReleases || (releasedByItem[item.id] ?? 0) > 0
+  );
+
+  // Products that belong to this shipment (or the whole order when not partial)
+  const orderProducts = shipmentItems
+    .map(item => item.product)
+    .filter((p, idx, arr) => p && arr.findIndex(x => x?.id === p.id) === idx);
 
   const addSerialsMutation = useMutation({
     mutationFn: async (instances: { productId: string; serialNumber: string }[]) => {
@@ -297,7 +327,10 @@ export default function ShipmentsPage() {
   };
 
   const addNewSerialRow = () => {
-    const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0) ?? 0;
+    const totalNeeded = shipmentItems.reduce(
+      (sum, item) => sum + (shipmentHasReleases ? (releasedByItem[item.id] ?? 0) : Number(item.quantity ?? 0)),
+      0
+    );
     const captured = (productInstances?.length ?? 0) + newSerials.length;
     if (totalNeeded > 0 && captured >= totalNeeded) {
       toast({
@@ -639,7 +672,10 @@ export default function ShipmentsPage() {
           </DialogHeader>
 
           {(() => {
-            const totalNeeded = orderDetails?.quotation?.items?.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0) ?? 0;
+            const totalNeeded = shipmentItems.reduce(
+      (sum, item) => sum + (shipmentHasReleases ? (releasedByItem[item.id] ?? 0) : Number(item.quantity ?? 0)),
+      0
+    );
             const captured = productInstances?.length ?? 0;
             const pct = totalNeeded > 0 ? Math.round((captured / totalNeeded) * 100) : 0;
             if (totalNeeded === 0) return null;
