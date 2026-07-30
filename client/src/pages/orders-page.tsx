@@ -516,7 +516,7 @@ export default function OrdersPage() {
                           >
                             <Truck className="h-4 w-4" />
                           </Button>
-                          {isAdmin && (order.status === OrderStatus.SHIPPED || order.status === OrderStatus.DELIVERED) && (
+                          {isAdmin && order.status !== OrderStatus.CLOSED && order.status !== OrderStatus.CANCELLED && (
                             <Button
                               variant="ghost"
                               size="icon"

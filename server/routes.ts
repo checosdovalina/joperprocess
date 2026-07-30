@@ -4309,9 +4309,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (existing.status === OrderStatus.CANCELLED) {
         return res.status(400).json({ error: "No se puede cerrar un pedido cancelado" });
       }
-      if (existing.status !== OrderStatus.SHIPPED && existing.status !== OrderStatus.DELIVERED) {
-        return res.status(400).json({ error: "Solo se pueden cerrar pedidos embarcados o entregados" });
-      }
+      // Admins can close any non-terminal order (any status except already closed/cancelled)
 
       const stamp = format(new Date(), "dd/MM/yyyy");
       const closeNote = `[Cerrado ${stamp} por ${req.user!.fullName || req.user!.username}]`;

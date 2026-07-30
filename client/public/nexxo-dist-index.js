@@ -12243,9 +12243,6 @@ ${cancelNote}` : cancelNote;
       if (existing.status === OrderStatus.CANCELLED) {
         return res.status(400).json({ error: "No se puede cerrar un pedido cancelado" });
       }
-      if (existing.status !== OrderStatus.SHIPPED && existing.status !== OrderStatus.DELIVERED) {
-        return res.status(400).json({ error: "Solo se pueden cerrar pedidos embarcados o entregados" });
-      }
       const stamp = format(/* @__PURE__ */ new Date(), "dd/MM/yyyy");
       const closeNote = `[Cerrado ${stamp} por ${req.user.fullName || req.user.username}]`;
       const factoryNotes = existing.factoryNotes ? `${existing.factoryNotes}
