@@ -12774,7 +12774,7 @@ ${closeNote}` : closeNote;
       }
       const showActiveOnly = activeOnly !== "false";
       if (showActiveOnly && (!status || status === "all")) {
-        filtered = filtered.filter((o) => o.status !== "shipped" && o.status !== "delivered");
+        filtered = filtered.filter((o) => o.status !== "shipped" && o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled");
       }
       if (status && status !== "all") {
         filtered = filtered.filter((o) => o.status === status);
