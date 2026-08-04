@@ -12797,6 +12797,13 @@ ${closeNote}` : closeNote;
           return d && new Date(d) <= to;
         });
       }
+      const filteredOrderIds = filtered.map((o) => o.id);
+      const releasesRows = filteredOrderIds.length > 0 ? await db.query.orderReleases.findMany({ where: inArray2(orderReleases.orderId, filteredOrderIds) }) : [];
+      const releasedByItemId = {};
+      for (const rel of releasesRows) {
+        if (!rel.quotationItemId) continue;
+        releasedByItemId[rel.quotationItemId] = (releasedByItemId[rel.quotationItemId] ?? 0) + parseFloat(rel.quantityReleased ?? "0");
+      }
       const result = filtered.map((o) => {
         const shipment = shipmentByOrder.get(o.id);
         const creditAuth = creditAuthByQuotation.get(o.quotationId);
@@ -12813,13 +12820,21 @@ ${closeNote}` : closeNote;
           notes: o.quotation?.notes || null,
           status: o.status,
           createdAt: o.createdAt,
-          items: (o.quotation?.items || []).map((item) => ({
-            productCode: item.productCode || null,
-            productName: item.productName,
-            quantity: item.quantity,
-            unitOfMeasure: item.unitOfMeasure,
-            unitPrice: item.unitPrice ?? null
-          }))
+          items: (o.quotation?.items || []).map((item) => {
+            const total = parseFloat(item.quantity ?? "0");
+            const released = releasedByItemId[item.id] ?? 0;
+            const pending = Math.max(total - released, 0);
+            return {
+              productCode: item.productCode || null,
+              productName: item.productName,
+              // For partially-released orders report only what's still owed
+              quantity: released > 0 ? String(pending) : item.quantity,
+              totalQuantity: item.quantity,
+              releasedQuantity: String(released),
+              unitOfMeasure: item.unitOfMeasure,
+              unitPrice: item.unitPrice ?? null
+            };
+          }).filter((it) => parseFloat(it.quantity ?? "0") > 0)
         };
       });
       res.json(result);
