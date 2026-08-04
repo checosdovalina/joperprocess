@@ -455,7 +455,7 @@ export default function OrdersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(hideDelivered ? orders.filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED && o.status !== OrderStatus.CLOSED && o.status !== OrderStatus.CANCELLED) : orders)
+                  {(hideDelivered && !searchTerm.trim() ? orders.filter(o => o.status !== OrderStatus.SHIPPED && o.status !== OrderStatus.DELIVERED && o.status !== OrderStatus.CLOSED && o.status !== OrderStatus.CANCELLED) : orders)
                     .filter((o) => filterEmpresa === "all" || o.empresaId === filterEmpresa)
                     .filter((o) => {
                       const q = searchTerm.trim().toLowerCase();
