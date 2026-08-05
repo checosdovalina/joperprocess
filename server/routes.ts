@@ -4991,7 +4991,11 @@ Proporciona tu análisis en el siguiente formato JSON:
       // Pass activeOnly=false to see all
       const showActiveOnly = activeOnly !== "false";
       if (showActiveOnly && (!status || status === "all")) {
-        filtered = filtered.filter(o => o.status !== "shipped" && o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled");
+        filtered = filtered.filter(o =>
+          o.status !== "shipped" && o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled" &&
+          // Orders rejected or closed at the release stage are also no longer active
+          o.releaseStatus !== "rejected" && o.releaseStatus !== "closed"
+        );
       }
 
       // Filter by status
