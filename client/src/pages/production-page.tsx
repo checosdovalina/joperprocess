@@ -631,6 +631,15 @@ export default function ProductionPage() {
                 </div>
               )}
 
+              {orderDetails.quotation.notes && (
+                <div className="rounded-md border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 p-3">
+                  <Label className="text-xs text-muted-foreground">{t("production.order-notes")}</Label>
+                  <div className="text-sm mt-1 whitespace-pre-wrap" data-testid="text-order-notes">
+                    {orderDetails.quotation.notes}
+                  </div>
+                </div>
+              )}
+
               <Separator />
 
               <div>
