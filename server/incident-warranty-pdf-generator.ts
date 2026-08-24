@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import { localStorageService } from "./localStorage";
+import { formatPdfDate, pdfText, resolvePdfLanguage } from "./pdf-locale";
 
 interface TenantBranding {
   name: string;
@@ -16,6 +17,7 @@ interface TenantBranding {
   website?: string | null;
   rfc?: string | null;
   timezone?: string | null;
+  locale?: string | null;
 }
 
 export interface WarrantyIncidentData {
@@ -69,12 +71,6 @@ async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffe
   } catch { return null; }
 }
 
-function fmtDate(date: string | Date | null | undefined): string {
-  if (!date) return "—";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
 function lightenColor(hex: string, amount: number): string {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
@@ -83,38 +79,34 @@ function lightenColor(hex: string, amount: number): string {
   return `#${Math.min(255, r + Math.round((255 - r) * amount)).toString(16).padStart(2, "0")}${Math.min(255, g + Math.round((255 - g) * amount)).toString(16).padStart(2, "0")}${Math.min(255, b + Math.round((255 - b) * amount)).toString(16).padStart(2, "0")}`;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  garantia: "Garantía",
-  retrabajo: "Retrabajo",
-  queja: "Queja",
-  consulta: "Consulta",
-  administrativo: "Administrativo",
+const TYPE_LABELS: Record<string, { es: string; en: string }> = {
+  garantia: { es: "Garantía", en: "Warranty" }, retrabajo: { es: "Retrabajo", en: "Rework" },
+  queja: { es: "Queja", en: "Complaint" }, consulta: { es: "Consulta", en: "Inquiry" },
+  administrativo: { es: "Administrativo", en: "Administrative" },
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  nuevo: "Nuevo",
-  asignado: "Asignado",
-  en_proceso: "En Proceso",
-  esperando_cliente: "Esperando Cliente",
-  esperando_interno: "En Revisión",
-  resuelto: "Resuelto",
-  cerrado: "Cerrado",
-  cancelado: "Cancelado",
+const STATUS_LABELS: Record<string, { es: string; en: string }> = {
+  nuevo: { es: "Nuevo", en: "New" }, asignado: { es: "Asignado", en: "Assigned" },
+  en_proceso: { es: "En Proceso", en: "In Progress" }, esperando_cliente: { es: "Esperando Cliente", en: "Waiting for Customer" },
+  esperando_interno: { es: "En Revisión", en: "Under Review" }, resuelto: { es: "Resuelto", en: "Resolved" },
+  cerrado: { es: "Cerrado", en: "Closed" }, cancelado: { es: "Cancelado", en: "Cancelled" },
 };
 
-const URGENCY_LABELS: Record<string, string> = {
-  baja: "Baja",
-  media: "Media",
-  alta: "Alta",
-  critica: "Crítica",
+const URGENCY_LABELS: Record<string, { es: string; en: string }> = {
+  baja: { es: "Baja", en: "Low" }, media: { es: "Media", en: "Medium" },
+  alta: { es: "Alta", en: "High" }, critica: { es: "Crítica", en: "Critical" },
 };
 
 export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): Promise<Readable> {
   const { tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text = <T>(values: { es: T; en: T }) => pdfText(language, values);
+  const fmtDate = (date: Date | string | null | undefined) => formatPdfDate(date, language, tenant?.timezone);
+  const label = (labels: Record<string, { es: string; en: string }>, value: string) => labels[value] ? text(labels[value]) : value;
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.92);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -140,9 +132,9 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   const infoLines: string[] = [];
   if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
   if (tenant?.address) tenant.address.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(p => infoLines.push(p));
-  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${text({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
   if (cityParts.length) infoLines.push(cityParts.join(", "));
-  if (tenant?.phone) infoLines.push(`Tel: ${tenant.phone}`);
+  if (tenant?.phone) infoLines.push(`${text({ es: "Tel", en: "Phone" })}: ${tenant.phone}`);
   if (tenant?.email) infoLines.push(tenant.email);
 
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -153,9 +145,9 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   const TITLE_H = 30;
   doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
   doc.fontSize(12).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("HOJA DE GARANTÍA", MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.65 });
+  doc.text(text({ es: "HOJA DE GARANTÍA", en: "WARRANTY SHEET" }), MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.65 });
   doc.fontSize(8.5).font("Helvetica").fillColor(primaryColor);
-  doc.text(`Generado: ${fmtDate(now)}`, MARGIN + CONTENT_W * 0.65, TITLE_Y + 10, { width: CONTENT_W * 0.35, align: "right" });
+  doc.text(`${text({ es: "Generado", en: "Generated" })}: ${fmtDate(now)}`, MARGIN + CONTENT_W * 0.65, TITLE_Y + 10, { width: CONTENT_W * 0.35, align: "right" });
 
   let Y = TITLE_Y + TITLE_H + 14;
 
@@ -166,25 +158,25 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
 
   const INFO_COL = CONTENT_W / 3;
   doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-  doc.text("Tipo:", MARGIN, Y);
-  doc.text("Estado:", MARGIN + INFO_COL, Y);
-  doc.text("Urgencia:", MARGIN + INFO_COL * 2, Y);
+  doc.text(text({ es: "Tipo:", en: "Type:" }), MARGIN, Y);
+  doc.text(text({ es: "Estado:", en: "Status:" }), MARGIN + INFO_COL, Y);
+  doc.text(text({ es: "Urgencia:", en: "Urgency:" }), MARGIN + INFO_COL * 2, Y);
   Y += 11;
   doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
-  doc.text(TYPE_LABELS[data.type] || data.type, MARGIN, Y);
-  doc.text(STATUS_LABELS[data.status] || data.status, MARGIN + INFO_COL, Y);
-  doc.text(URGENCY_LABELS[data.urgency] || data.urgency, MARGIN + INFO_COL * 2, Y);
+  doc.text(label(TYPE_LABELS, data.type), MARGIN, Y);
+  doc.text(label(STATUS_LABELS, data.status), MARGIN + INFO_COL, Y);
+  doc.text(label(URGENCY_LABELS, data.urgency), MARGIN + INFO_COL * 2, Y);
   Y += 18;
 
   // ── PRODUCT / EQUIPMENT BOX ──────────────────────────────────────────────
   // Customer data is intentionally NOT shown on this sheet per requirement.
   const productLines: { label: string; value: string }[] = [];
-  if (data.productName) productLines.push({ label: "Producto:", value: data.productName });
-  if (data.productSku) productLines.push({ label: "SKU/Modelo:", value: data.productSku });
-  if (data.warrantySerialNumber) productLines.push({ label: "No. Serie:", value: data.warrantySerialNumber });
-  if (data.referenceNumber) productLines.push({ label: "Referencia:", value: data.referenceNumber });
-  if (data.orderFolio) productLines.push({ label: "Pedido:", value: data.orderFolio });
-  if (data.invoiceFolio) productLines.push({ label: "Factura:", value: data.invoiceFolio });
+  if (data.productName) productLines.push({ label: text({ es: "Producto:", en: "Product:" }), value: data.productName });
+  if (data.productSku) productLines.push({ label: text({ es: "SKU/Modelo:", en: "SKU/Model:" }), value: data.productSku });
+  if (data.warrantySerialNumber) productLines.push({ label: text({ es: "No. Serie:", en: "Serial No.:" }), value: data.warrantySerialNumber });
+  if (data.referenceNumber) productLines.push({ label: text({ es: "Referencia:", en: "Reference:" }), value: data.referenceNumber });
+  if (data.orderFolio) productLines.push({ label: text({ es: "Pedido:", en: "Order:" }), value: data.orderFolio });
+  if (data.invoiceFolio) productLines.push({ label: text({ es: "Factura:", en: "Invoice:" }), value: data.invoiceFolio });
 
   const PROD_BOX_H = Math.max(40, 22 + Math.min(productLines.length, 6) * 11 + 6);
 
@@ -192,11 +184,11 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   doc.rect(MARGIN, Y, CONTENT_W, PROD_BOX_H).fill(lightColor);
   doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("PRODUCTO / EQUIPO", MARGIN + 6, Y + 4, { width: CONTENT_W - 12 });
+  doc.text(text({ es: "PRODUCTO / EQUIPO", en: "PRODUCT / EQUIPMENT" }), MARGIN + 6, Y + 4, { width: CONTENT_W - 12 });
 
   if (productLines.length === 0) {
     doc.fontSize(8).font("Helvetica-Oblique").fillColor("#9ca3af");
-    doc.text("Sin información de producto / equipo registrada.", MARGIN + 6, Y + 22, { width: CONTENT_W - 12 });
+    doc.text(text({ es: "Sin información de producto / equipo registrada.", en: "No product / equipment information recorded." }), MARGIN + 6, Y + 22, { width: CONTENT_W - 12 });
   } else {
     doc.fontSize(7.5);
     productLines.slice(0, 6).forEach((row, i) => {
@@ -210,7 +202,7 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   // ── SUBJECT & DESCRIPTION ─────────────────────────────────────────────────
   doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("ASUNTO Y DESCRIPCIÓN DEL PROBLEMA", MARGIN + 6, Y + 4);
+  doc.text(text({ es: "ASUNTO Y DESCRIPCIÓN DEL PROBLEMA", en: "SUBJECT AND PROBLEM DESCRIPTION" }), MARGIN + 6, Y + 4);
   Y += 15;
 
   doc.rect(MARGIN, Y, CONTENT_W, 14).fill(lightColor);
@@ -228,14 +220,14 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
     .join("\n");
   const descH = Math.max(44, Math.min(120, Math.ceil(descLines.length / 80) * 12 + 16));
   doc.rect(MARGIN, Y, CONTENT_W, descH).fill("#f9fafb");
-  doc.text(descLines || "Sin descripción.", MARGIN + 6, Y + 6, { width: CONTENT_W - 12, lineBreak: true, height: descH - 10, ellipsis: true });
+  doc.text(descLines || text({ es: "Sin descripción.", en: "No description." }), MARGIN + 6, Y + 6, { width: CONTENT_W - 12, lineBreak: true, height: descH - 10, ellipsis: true });
   Y += descH + 12;
 
   // ── RESOLUTION (if present) ───────────────────────────────────────────────
   if (data.resolution) {
     doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
     doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("RESOLUCIÓN / ACCIÓN TOMADA", MARGIN + 6, Y + 4);
+    doc.text(text({ es: "RESOLUCIÓN / ACCIÓN TOMADA", en: "RESOLUTION / ACTION TAKEN" }), MARGIN + 6, Y + 4);
     Y += 15;
     const resH = Math.max(32, Math.min(80, Math.ceil(data.resolution.length / 90) * 12 + 12));
     doc.rect(MARGIN, Y, CONTENT_W, resH).fill(lightColor);
@@ -248,8 +240,8 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   if (data.assigneeName || data.assignedArea) {
     doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
     const assignParts: string[] = [];
-    if (data.assigneeName) assignParts.push(`Responsable: ${data.assigneeName}`);
-    if (data.assignedArea) assignParts.push(`Área: ${data.assignedArea}`);
+    if (data.assigneeName) assignParts.push(`${text({ es: "Responsable", en: "Responsible" })}: ${data.assigneeName}`);
+    if (data.assignedArea) assignParts.push(`${text({ es: "Área", en: "Area" })}: ${data.assignedArea}`);
     doc.text(assignParts.join("   |   "), MARGIN, Y, { width: CONTENT_W });
     Y += 16;
   }
@@ -258,7 +250,7 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   if (Y > 580) { doc.addPage(); Y = 40; }
   doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("OBSERVACIONES / CONDICIÓN DEL EQUIPO", MARGIN + 6, Y + 4);
+  doc.text(text({ es: "OBSERVACIONES / CONDICIÓN DEL EQUIPO", en: "OBSERVATIONS / EQUIPMENT CONDITION" }), MARGIN + 6, Y + 4);
   Y += 15;
   if (data.observations) {
     const obsH = Math.max(44, Math.min(90, Math.ceil(data.observations.length / 90) * 12 + 16));
@@ -276,7 +268,9 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
 
   const SIG_W = CONTENT_W / 4 - 6;
   const SIG_H = 82;
-  const sigBoxes = ["DEPTO. DE\nSEGURIDAD", "EMBARQUES", "FACTURACIÓN", "TRANSPORTE\nO CLIENTE"];
+  const sigBoxes = language === "en"
+    ? ["SAFETY\nDEPT.", "SHIPPING", "BILLING", "TRANSPORTATION\nOR CUSTOMER"]
+    : ["DEPTO. DE\nSEGURIDAD", "EMBARQUES", "FACTURACIÓN", "TRANSPORTE\nO CLIENTE"];
 
   sigBoxes.forEach((label, i) => {
     const bx = MARGIN + i * (SIG_W + 8);
@@ -286,10 +280,10 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
     // Name line
     doc.moveTo(bx + 6, Y + 42).lineTo(bx + SIG_W - 6, Y + 42).stroke("#9ca3af");
     doc.fontSize(6).font("Helvetica").fillColor("#6b7280");
-    doc.text("NOMBRE Y FIRMA", bx + 4, Y + 44, { width: SIG_W - 8, align: "center" });
+    doc.text(text({ es: "NOMBRE Y FIRMA", en: "NAME AND SIGNATURE" }), bx + 4, Y + 44, { width: SIG_W - 8, align: "center" });
     // Date line
     doc.moveTo(bx + 6, Y + 66).lineTo(bx + SIG_W - 6, Y + 66).stroke("#9ca3af");
-    doc.text("FECHA", bx + 4, Y + 68, { width: SIG_W - 8, align: "center" });
+    doc.text(text({ es: "FECHA", en: "DATE" }), bx + 4, Y + 68, { width: SIG_W - 8, align: "center" });
   });
 
   Y += SIG_H + 16;
@@ -298,15 +292,18 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   if (Y > 710) { doc.addPage(); Y = 40; }
   doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#4b5563");
   doc.text(
-    "Declaro que el equipo descrito en este documento es entregado para revisión/garantía en las condiciones indicadas y que la información proporcionada es verídica.",
+    text({
+      es: "Declaro que el equipo descrito en este documento es entregado para revisión/garantía en las condiciones indicadas y que la información proporcionada es verídica.",
+      en: "I declare that the equipment described in this document is delivered for inspection/warranty under the stated conditions and that the information provided is accurate.",
+    }),
     MARGIN, Y, { width: CONTENT_W }
   );
   Y += 18;
   doc.fontSize(7.5).font("Helvetica").fillColor("#374151");
-  doc.text("Yo: ___________________________________", MARGIN, Y, { continued: true });
-  doc.text("   confirmo la entrega del equipo arriba descrito.", { continued: false });
+  doc.text(text({ es: "Yo", en: "I" }) + ": ___________________________________", MARGIN, Y, { continued: true });
+  doc.text(text({ es: "   confirmo la entrega del equipo arriba descrito.", en: "   confirm delivery of the equipment described above." }), { continued: false });
   Y += 14;
-  doc.text("Fecha: ___/___/______", MARGIN, Y);
+  doc.text(text({ es: "Fecha: ___/___/______", en: "Date: ___/___/______" }), MARGIN, Y);
 
   // ── FOOTER ────────────────────────────────────────────────────────────────
   const FOOTER_Y = 755;
@@ -317,7 +314,7 @@ export async function generateIncidentWarrantyPDF(data: WarrantyIncidentData): P
   if (tenant?.phone) footerParts.push(tenant.phone);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.8)");
   doc.text(footerParts.join("   |   "), MARGIN, FOOTER_Y + 8, { width: CONTENT_W, align: "center" });
-  doc.text(`${data.ticketNumber}   —   Generado el ${fmtDate(now)}`, MARGIN, FOOTER_Y + 20, { width: CONTENT_W, align: "center" });
+  doc.text(`${data.ticketNumber}   —   ${text({ es: "Generado el", en: "Generated on" })} ${fmtDate(now)}`, MARGIN, FOOTER_Y + 20, { width: CONTENT_W, align: "center" });
 
   doc.end();
   return doc as unknown as Readable;

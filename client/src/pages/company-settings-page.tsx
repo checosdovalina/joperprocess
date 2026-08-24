@@ -503,6 +503,25 @@ export default function CompanySettingsPage() {
                 {t("settings.timezone.hint")}
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="locale">{t("settings.field.language")}</Label>
+              <Select
+                value={currentData.locale || "es"}
+                onValueChange={(value) => handleChange("locale" as keyof Tenant, value)}
+              >
+                <SelectTrigger id="locale" data-testid="select-locale">
+                  <SelectValue placeholder={t("settings.ph.language")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="es">{t("settings.language.spanish")}</SelectItem>
+                  <SelectItem value="en">{t("settings.language.english")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t("settings.language.hint")}
+              </p>
+            </div>
           </CardContent>
         </Card>
 

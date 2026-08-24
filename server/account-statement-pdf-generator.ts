@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import type { Invoice, Payment, Customer } from "@shared/schema";
 import { localStorageService } from "./localStorage";
+import { formatPdfCurrency, formatPdfDate, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
 
 interface TenantBranding {
   name: string;
@@ -15,6 +16,7 @@ interface TenantBranding {
   phone?: string | null;
   email?: string | null;
   timezone?: string | null;
+  locale?: string | null;
   website?: string | null;
   rfc?: string | null;
 }
@@ -64,25 +66,12 @@ async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffe
   } catch { return null; }
 }
 
-function fmt(value: string | number, currency = "MXN"): string {
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (!Number.isFinite(num)) return currency === "USD" ? "US$0.00" : "$0.00";
-  const prefix = currency === "USD" ? "US$" : "$";
-  return prefix + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtDate(date: Date | string | null): string {
-  if (!date) return "—";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-function statusLabel(status: string): string {
+function statusLabel(status: string, language: "es" | "en"): string {
   const map: Record<string, string> = {
-    pending_payment: "Pendiente",
-    partially_paid: "Pago Parcial",
-    paid: "Pagado",
-    cancelled: "Cancelada",
+    pending_payment: pdfText(language, { es: "Pendiente", en: "Pending" }),
+    partially_paid: pdfText(language, { es: "Pago Parcial", en: "Partially Paid" }),
+    paid: pdfText(language, { es: "Pagado", en: "Paid" }),
+    cancelled: pdfText(language, { es: "Cancelada", en: "Cancelled" }),
   };
   return map[status] ?? status;
 }
@@ -100,11 +89,15 @@ function lightenColor(hex: string, amount: number): string {
 
 export async function generateAccountStatementPDF(data: AccountStatementPDFData): Promise<Readable> {
   const { customer, invoices, payments, tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const t = <T>(values: { es: T; en: T }) => pdfText(language, values);
+  const fmt = (value: string | number, currency = "MXN") => formatPdfCurrency(value, currency, language);
+  const fmtDate = (date: Date | string | null | undefined) => formatPdfDate(date, language, tenant?.timezone);
   let cxcData = data.cxcData;
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || t({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.92);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -183,9 +176,9 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   const infoLines: string[] = [];
   if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
   if (tenant?.address) tenant.address.split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean).forEach((p: string) => infoLines.push(p));
-  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${t({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
   if (cityParts.length) infoLines.push(cityParts.join(", "));
-  const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+  const contactParts = [tenant?.phone ? `${t({ es: "Tel", en: "Phone" })}: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
   if (contactParts.length) infoLines.push(contactParts.join("   |   "));
   if (tenant?.website) infoLines.push(tenant.website);
 
@@ -197,9 +190,9 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   const TITLE_H = 32;
   doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
   doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("ESTADO DE CUENTA", MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
+  doc.text(t({ es: "ESTADO DE CUENTA", en: "ACCOUNT STATEMENT" }), MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
   doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
-  doc.text(`Corte: ${fmtDate(now)}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
+  doc.text(`${t({ es: "Corte", en: "Statement date" })}: ${fmtDate(now)}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
 
   let currentY = TITLE_Y + TITLE_H + 16;
 
@@ -220,7 +213,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.rect(MARGIN, currentY, COL_W, BOX_H).fill(lightColor);
   doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
   doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("CLIENTE", MARGIN + 8, currentY + 4, { width: COL_W - 16 });
+  doc.text(t({ es: "CLIENTE", en: "CUSTOMER" }), MARGIN + 8, currentY + 4, { width: COL_W - 16 });
 
   doc.fontSize(9).font("Helvetica-Bold").fillColor("#111827");
   doc.text(customer.name, MARGIN + 8, currentY + 22, { width: COL_W - 16, lineBreak: false, ellipsis: true });
@@ -232,14 +225,14 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   if (customer.phone) {
     // Phone goes after the last email row (or at the original offset if no emails)
     const phoneOffY = 48 + Math.max(customerEmails.length, 1) * EMAIL_LINE_H;
-    doc.text(`Tel: ${customer.phone}`, MARGIN + 8, currentY + phoneOffY, { width: COL_W - 16 });
+    doc.text(`${t({ es: "Tel", en: "Phone" })}: ${customer.phone}`, MARGIN + 8, currentY + phoneOffY, { width: COL_W - 16 });
   }
 
   // Summary box — same height as customer box so they align
   doc.rect(COL2_X, currentY, COL_W, BOX_H).fill(lightColor);
   doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
   doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("RESUMEN", COL2_X + 8, currentY + 4, { width: COL_W - 16 });
+  doc.text(t({ es: "RESUMEN", en: "SUMMARY" }), COL2_X + 8, currentY + 4, { width: COL_W - 16 });
 
   // Distribute 3 summary rows evenly within the content area (below the 16px header)
   const summaryContentH = BOX_H - 16;
@@ -249,25 +242,25 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   const s3Y = currentY + 16 + summaryRowStep * 2 + 6;
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text(`Saldo Total por Cobrar${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s1Y, { width: COL_W / 2, continued: false });
+  doc.text(`${t({ es: "Saldo Total por Cobrar", en: "Total Receivable Balance" })}${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s1Y, { width: COL_W / 2, continued: false });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#dc2626");
   doc.text(fmt(totalBalance, docCurrency), COL2_X + COL_W / 2, s1Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text(`Saldo Vencido${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s2Y, { width: COL_W / 2 });
+  doc.text(`${t({ es: "Saldo Vencido", en: "Overdue Balance" })}${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s2Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor(totalOverdue > 0 ? "#ea580c" : "#374151");
   doc.text(fmt(totalOverdue, docCurrency), COL2_X + COL_W / 2, s2Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Facturas Activas:", COL2_X + 8, s3Y, { width: COL_W / 2 });
+  doc.text(`${t({ es: "Facturas Activas", en: "Active Invoices" })}:`, COL2_X + 8, s3Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#374151");
-  doc.text(`${activeCount}`, COL2_X + COL_W / 2, s3Y - 2, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(formatPdfNumber(activeCount, language), COL2_X + COL_W / 2, s3Y - 2, { width: COL_W / 2 - 8, align: "right" });
 
   currentY += BOX_H + 20;
 
   // ── INVOICES TABLE ────────────────────────────────────────
   doc.fontSize(10).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("FACTURAS PENDIENTES", MARGIN, currentY);
+  doc.text(t({ es: "FACTURAS PENDIENTES", en: "OUTSTANDING INVOICES" }), MARGIN, currentY);
   currentY += 16;
 
   const cols = { folio: MARGIN, fecha: MARGIN + 90, venc: MARGIN + 175, total: MARGIN + 265, saldo: MARGIN + 355, estado: MARGIN + 440 };
@@ -276,11 +269,11 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text("FOLIO", cols.folio + 4, currentY + 5, { width: 86 });
-  doc.text("EMISIÓN", cols.fecha + 4, currentY + 5, { width: 80 });
-  doc.text("VENCIMIENTO", cols.venc + 4, currentY + 5, { width: 85 });
+  doc.text(t({ es: "EMISIÓN", en: "ISSUE DATE" }), cols.fecha + 4, currentY + 5, { width: 80 });
+  doc.text(t({ es: "VENCIMIENTO", en: "DUE DATE" }), cols.venc + 4, currentY + 5, { width: 85 });
   doc.text("TOTAL", cols.total + 4, currentY + 5, { width: 80, align: "right" });
-  doc.text("SALDO", cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
-  doc.text("ESTADO", cols.estado + 4, currentY + 5, { width: 90 });
+  doc.text(t({ es: "SALDO", en: "BALANCE" }), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
+  doc.text(t({ es: "ESTADO", en: "STATUS" }), cols.estado + 4, currentY + 5, { width: 90 });
   currentY += ROW_H;
 
   if (cxcData) {
@@ -288,7 +281,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
     if (cxcData.invoices.length === 0) {
       doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
       doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
-      doc.text("Sin facturas pendientes.", MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
+       doc.text(t({ es: "Sin facturas pendientes.", en: "No outstanding invoices." }), MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
       currentY += ROW_H;
     } else {
       cxcData.invoices.forEach((inv, i) => {
@@ -308,7 +301,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
         doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
         doc.text(fmt(bal, cur), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica").fillColor(isOverdue ? "#dc2626" : "#374151");
-        doc.text(isOverdue ? "Vencido" : "Pendiente", cols.estado + 4, currentY + 5, { width: 90 });
+         doc.text(isOverdue ? t({ es: "Vencido", en: "Overdue" }) : t({ es: "Pendiente", en: "Pending" }), cols.estado + 4, currentY + 5, { width: 90 });
         currentY += ROW_H;
         if (currentY > 720) { doc.addPage(); currentY = 40; }
       });
@@ -318,7 +311,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
     if (localActiveInvoices.length === 0) {
       doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
       doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
-      doc.text("Sin facturas pendientes.", MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
+       doc.text(t({ es: "Sin facturas pendientes.", en: "No outstanding invoices." }), MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
       currentY += ROW_H;
     } else {
       localActiveInvoices.forEach((inv, i) => {
@@ -336,7 +329,7 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
         doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
         doc.text(fmt(bal), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica").fillColor("#374151");
-        doc.text(statusLabel(inv.status), cols.estado + 4, currentY + 5, { width: 90 });
+         doc.text(statusLabel(inv.status, language), cols.estado + 4, currentY + 5, { width: 90 });
         currentY += ROW_H;
         if (currentY > 720) { doc.addPage(); currentY = 40; }
       });
@@ -353,16 +346,16 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
     if (currentY > 620) { doc.addPage(); currentY = 40; }
 
     doc.fontSize(10).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("ÚLTIMOS PAGOS REGISTRADOS", MARGIN, currentY);
+     doc.text(t({ es: "ÚLTIMOS PAGOS REGISTRADOS", en: "LATEST RECORDED PAYMENTS" }), MARGIN, currentY);
     currentY += 16;
 
     const pcols = { fecha: MARGIN, ref: MARGIN + 90, factura: MARGIN + 270, importe: MARGIN + 420 };
     doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(mediumColor);
     doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("FECHA", pcols.fecha + 4, currentY + 5, { width: 86 });
-    doc.text("REFERENCIA", pcols.ref + 4, currentY + 5, { width: 175 });
-    doc.text("FACTURA", pcols.factura + 4, currentY + 5, { width: 145 });
-    doc.text("IMPORTE", pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
+     doc.text(t({ es: "FECHA", en: "DATE" }), pcols.fecha + 4, currentY + 5, { width: 86 });
+     doc.text(t({ es: "REFERENCIA", en: "REFERENCE" }), pcols.ref + 4, currentY + 5, { width: 175 });
+     doc.text(t({ es: "FACTURA", en: "INVOICE" }), pcols.factura + 4, currentY + 5, { width: 145 });
+     doc.text(t({ es: "IMPORTE", en: "AMOUNT" }), pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
     currentY += ROW_H;
 
     if (cxcData) {
@@ -402,10 +395,10 @@ export async function generateAccountStatementPDF(data: AccountStatementPDFData)
   doc.rect(0, FOOTER_Y, PAGE_W, 37).fill(primaryColor);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.7)");
   doc.text(
-    `Estado de cuenta generado el ${fmtDate(now)} — ${companyName}`,
+     t({ es: `Estado de cuenta generado el ${fmtDate(now)} — ${companyName}`, en: `Account statement generated on ${fmtDate(now)} — ${companyName}` }),
     MARGIN, FOOTER_Y + 8, { width: CONTENT_W, align: "center" }
   );
-  doc.text("Documento generado automáticamente — no requiere firma", MARGIN, FOOTER_Y + 20, {
+   doc.text(t({ es: "Documento generado automáticamente — no requiere firma", en: "Document generated automatically — no signature required" }), MARGIN, FOOTER_Y + 20, {
     width: CONTENT_W, align: "center",
   });
 

@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import type { Invoice, Customer } from "@shared/schema";
 import { localStorageService } from "./localStorage";
+import { formatPdfCurrency, formatPdfDate, formatPdfDateTime, pdfText, resolvePdfLanguage } from "./pdf-locale";
 
 interface TenantBranding {
   name: string;
@@ -17,6 +18,7 @@ interface TenantBranding {
   timezone?: string | null;
   website?: string | null;
   rfc?: string | null;
+  locale?: string | null;
 }
 
 interface InvoicePDFData {
@@ -42,23 +44,6 @@ async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffe
   } catch { return null; }
 }
 
-function formatCurrency(value: string | number, currency: string = "MXN"): string {
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatDate(date: Date | string | null, timezone?: string | null): string {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric", timeZone: timezone || "America/Mexico_City" });
-}
-
-function formatDateTime(date: Date | string | null, timezone?: string | null): string {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: timezone || "America/Mexico_City" });
-}
-
 function lightenColor(hex: string, amount: number): string {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
@@ -73,9 +58,11 @@ function lightenColor(hex: string, amount: number): string {
 export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { invoice, customer, tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const t = (es: string, en: string) => pdfText(language, { es, en });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || t("Empresa", "Company");
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.92);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -111,9 +98,9 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     if (tenant?.address) {
       tenant.address.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(part => infoLines.push(part));
     }
-    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${t("C.P.", "ZIP")} ${tenant.zipCode}` : null].filter(Boolean);
     if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
-    const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+    const contactParts = [tenant?.phone ? `${t("Tel:", "Phone:")} ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
 
@@ -129,9 +116,9 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     const TITLE_H = 32;
     doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("FACTURA", MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
+    doc.text(t("FACTURA", "INVOICE"), MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
     doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
-    doc.text(`Serie: ${invoice.serie}  |  Folio: ${invoice.folio}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
+    doc.text(`${t("Serie", "Series")}: ${invoice.serie}  |  ${t("Folio", "Number")}: ${invoice.folio}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
 
     let currentY = TITLE_Y + TITLE_H + 18;
 
@@ -139,7 +126,7 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     if (invoice.cfdiUuid) {
       doc.rect(MARGIN, currentY, CONTENT_W, 20).fill(lightColor);
       doc.fontSize(7.5).font("Helvetica").fillColor("#666");
-      doc.text("UUID CFDI:", MARGIN + 6, currentY + 6, { continued: true, width: 55 });
+      doc.text(t("UUID CFDI:", "CFDI UUID:"), MARGIN + 6, currentY + 6, { continued: true, width: 55 });
       doc.font("Helvetica-Bold").fillColor("#333").text(invoice.cfdiUuid, { width: CONTENT_W - 70 });
       currentY += 26;
     }
@@ -157,19 +144,19 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
 
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("DATOS DEL CLIENTE",  MARGIN + 6,  currentY + 4, { width: COL_W - 10 });
-    doc.text("DATOS DE LA FACTURA", COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DEL CLIENTE", "CUSTOMER INFORMATION"), MARGIN + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DE LA FACTURA", "INVOICE INFORMATION"), COL2_X + 6, currentY + 4, { width: COL_W - 10 });
 
     let leftY = currentY + 22;
     const customerRows: [string, string][] = [
-      ["Razón Social:", customer.name],
+      [t("Razón Social:", "Business Name:"), customer.name],
       ...(customer.rfc ? [["RFC:", customer.rfc] as [string, string]] : []),
-      ...(customer.phone ? [["Teléfono:", customer.phone] as [string, string]] : []),
+      ...(customer.phone ? [[t("Teléfono:", "Phone:"), customer.phone] as [string, string]] : []),
       ...(customer.email ? [["Email:", customer.email] as [string, string]] : []),
     ];
     if (customer.address) {
       const addr = [customer.address, customer.city, customer.state].filter(Boolean).join(", ");
-      customerRows.push(["Dirección:", addr]);
+      customerRows.push([t("Dirección:", "Address:"), addr]);
     }
     const LABEL_W = 68;
     const VALUE_X_L = MARGIN + 6 + LABEL_W;
@@ -183,11 +170,11 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
 
     let rightY = currentY + 22;
     const invoiceRows: [string, string][] = [
-      ["Fecha Emisión:", formatDate(invoice.issuedAt, tenant?.timezone)],
-      ...(invoice.dueDate ? [["Vencimiento:", formatDate(invoice.dueDate, tenant?.timezone)] as [string, string]] : []),
-      ["Método Pago:", invoice.paymentMethod || "Por definir"],
-      ["Forma Pago:",  invoice.paymentForm  || "Por definir"],
-      ["Moneda:", invoice.currency || "MXN"],
+      [t("Fecha Emisión:", "Issue Date:"), formatPdfDate(invoice.issuedAt, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })],
+      ...(invoice.dueDate ? [[t("Vencimiento:", "Due Date:"), formatPdfDate(invoice.dueDate, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })] as [string, string]] : []),
+      [t("Método Pago:", "Payment Method:"), invoice.paymentMethod || t("Por definir", "To be defined")],
+      [t("Forma Pago:", "Payment Form:"), invoice.paymentForm || t("Por definir", "To be defined")],
+      [t("Moneda:", "Currency:"), invoice.currency || "MXN"],
     ];
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
     const VALUE_W_R = COL_W - LABEL_W - 10;
@@ -204,7 +191,7 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     // ═══════════════════════════════════════════════
     doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("RESUMEN DE FACTURA", MARGIN + 6, currentY + 4);
+    doc.text(t("RESUMEN DE FACTURA", "INVOICE SUMMARY"), MARGIN + 6, currentY + 4);
     currentY += 16;
 
     // Totals box (right side)
@@ -217,12 +204,12 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     let totY = currentY + 10;
     doc.fontSize(8.5).font("Helvetica").fillColor("#444");
 
-    doc.text("Subtotal:", TOTALS_X + 6, totY, { width: 110 });
-    doc.text(formatCurrency(invoice.subtotal), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
+    doc.text(`${t("Subtotal", "Subtotal")}:`, TOTALS_X + 6, totY, { width: 110 });
+    doc.text(formatPdfCurrency(invoice.subtotal, invoice.currency || "MXN", language), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
     totY += 16;
 
-    doc.text("IVA (16%):", TOTALS_X + 6, totY, { width: 110 });
-    doc.text(formatCurrency(invoice.tax), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
+    doc.text(`${t("IVA", "VAT")} (16%):`, TOTALS_X + 6, totY, { width: 110 });
+    doc.text(formatPdfCurrency(invoice.tax, invoice.currency || "MXN", language), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
     totY += 16;
 
     // Separator
@@ -232,13 +219,15 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     // Total row
     doc.rect(TOTALS_X, totY, TOTALS_W, 22).fill(primaryColor);
     doc.fontSize(10).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text("TOTAL:", TOTALS_X + 6, totY + 6, { width: 90 });
-    doc.text(formatCurrency(invoice.total), TOTALS_X + 96, totY + 6, { width: TOTALS_W - 102, align: "right" });
+    doc.text(`${t("TOTAL", "TOTAL")}:`, TOTALS_X + 6, totY + 6, { width: 90 });
+    doc.text(formatPdfCurrency(invoice.total, invoice.currency || "MXN", language), TOTALS_X + 96, totY + 6, { width: TOTALS_W - 102, align: "right" });
 
     // Note on left
     doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#888");
-    doc.text(`Importe expresado en ${invoice.currency || "MXN"} (Pesos Mexicanos).`, MARGIN, currentY + 10, { width: TOTALS_X - MARGIN - 10 });
-    doc.text("Este documento es una representación impresa de un CFDI.", MARGIN, currentY + 22, { width: TOTALS_X - MARGIN - 10 });
+    doc.text(language === "en"
+      ? `Amount expressed in ${invoice.currency || "MXN"} (${invoice.currency === "USD" ? "US Dollars" : "Mexican Pesos"}).`
+      : `Importe expresado en ${invoice.currency || "MXN"} (${invoice.currency === "USD" ? "Dólares Americanos" : "Pesos Mexicanos"}).`, MARGIN, currentY + 10, { width: TOTALS_X - MARGIN - 10 });
+    doc.text(t("Este documento es una representación impresa de un CFDI.", "This document is a printed representation of a CFDI."), MARGIN, currentY + 22, { width: TOTALS_X - MARGIN - 10 });
 
     currentY += 85;
 
@@ -249,11 +238,11 @@ export async function generateInvoicePDFStream(data: InvoicePDFData): Promise<Re
     doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
 
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
-    doc.text("Representación impresa de Comprobante Fiscal Digital por Internet (CFDI).", MARGIN, FOOTER_Y + 6, { width: 280 });
-    doc.text(`Generado el ${formatDateTime(new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+    doc.text(t("Representación impresa de Comprobante Fiscal Digital por Internet (CFDI).", "Printed representation of a Digital Tax Receipt via Internet (CFDI)."), MARGIN, FOOTER_Y + 6, { width: 280 });
+    doc.text(`${t("Generado el", "Generated on")} ${formatPdfDateTime(new Date(), language, tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
 
     const footerRight: string[] = [];
-    if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+    if (tenant?.phone) footerRight.push(`${t("Tel:", "Phone:")} ${tenant.phone}`);
     if (tenant?.email) footerRight.push(tenant.email);
     if (tenant?.website) footerRight.push(tenant.website);
     if (footerRight.length) {

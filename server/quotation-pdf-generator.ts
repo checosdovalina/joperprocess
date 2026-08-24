@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import type { Quotation, QuotationItem, Customer, User } from "@shared/schema";
 import { localStorageService } from "./localStorage";
+import { formatPdfCurrency, formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
 
 interface TenantBranding {
   name: string;
@@ -18,6 +19,7 @@ interface TenantBranding {
   website?: string | null;
   rfc?: string | null;
   timezone?: string | null;
+  locale?: string | null;
 }
 
 interface QuotationPDFData {
@@ -50,46 +52,25 @@ async function loadLogoBuffer(logoUrl: string | null | undefined): Promise<Buffe
   }
 }
 
-const PAYMENT_TERMS_LABELS: Record<string, string> = {
-  contado: "Contado",
-  "15_dias": "15 días",
-  "30_dias": "30 días",
-  "90_dias": "90 días",
-  "120_dias": "120 días",
-  "150_dias": "150 días",
-  "45_dias": "45 días",
-  "60_dias": "60 días",
+const PAYMENT_TERMS_LABELS: Record<string, { es: string; en: string }> = {
+  contado: { es: "Contado", en: "Cash" },
+  "15_dias": { es: "15 días", en: "15 days" },
+  "30_dias": { es: "30 días", en: "30 days" },
+  "90_dias": { es: "90 días", en: "90 days" },
+  "120_dias": { es: "120 días", en: "120 days" },
+  "150_dias": { es: "150 días", en: "150 days" },
+  "45_dias": { es: "45 días", en: "45 days" },
+  "60_dias": { es: "60 días", en: "60 days" },
 };
 
-const DELIVERY_TIME_LABELS: Record<string, string> = {
-  inmediato: "Inmediato",
-  "1_semana": "1 semana",
-  "2_semanas": "2 semanas",
-  "3_semanas": "3 semanas",
-  "1_mes": "1 mes",
-  por_confirmar: "Por confirmar",
+const DELIVERY_TIME_LABELS: Record<string, { es: string; en: string }> = {
+  inmediato: { es: "Inmediato", en: "Immediate" },
+  "1_semana": { es: "1 semana", en: "1 week" },
+  "2_semanas": { es: "2 semanas", en: "2 weeks" },
+  "3_semanas": { es: "3 semanas", en: "3 weeks" },
+  "1_mes": { es: "1 mes", en: "1 month" },
+  por_confirmar: { es: "Por confirmar", en: "To be confirmed" },
 };
-
-function formatCurrency(value: string | number): string {
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatDate(date: Date | string | null, timezone?: string | null): string {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: timezone || "America/Mexico_City" });
-}
-
-function formatDateTime(date: Date | string | null, timezone?: string | null): string {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-    timeZone: timezone || "America/Mexico_City",
-  });
-}
 
 function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
@@ -110,9 +91,11 @@ function lightenColor(hex: string, amount: number): string {
 export async function generateQuotationPDFStream(data: QuotationPDFData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { quotation, items, customer, user, tenant, hideDiscount = false } = data;
+  const language = resolvePdfLanguage(tenant);
+  const t = (es: string, en: string) => pdfText(language, { es, en });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || t("Empresa", "Company");
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.92);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -152,9 +135,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     if (tenant?.address) {
       tenant.address.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(part => infoLines.push(part));
     }
-    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${t("C.P.", "ZIP")} ${tenant.zipCode}` : null].filter(Boolean);
     if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
-    const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+    const contactParts = [tenant?.phone ? `${t("Tel:", "Phone:")} ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
 
@@ -171,10 +154,10 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.rect(0, TITLE_BAND_Y, PAGE_W, TITLE_BAND_H).fill(mediumColor);
 
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("COTIZACIÓN", MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "left" });
+    doc.text(t("COTIZACIÓN", "QUOTATION"), MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "left" });
 
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text(`Folio: ${quotation.folio}`, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "right" });
+    doc.text(`${t("Folio", "Number")}: ${quotation.folio}`, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "right" });
 
     let currentY = TITLE_BAND_Y + TITLE_BAND_H + 18;
 
@@ -194,22 +177,22 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
 
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("DATOS DEL CLIENTE", MARGIN + 6, currentY + 4, { width: COL_W - 10 });
-    doc.text("DATOS DE LA COTIZACIÓN", COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DEL CLIENTE", "CUSTOMER INFORMATION"), MARGIN + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DE LA COTIZACIÓN", "QUOTATION INFORMATION"), COL2_X + 6, currentY + 4, { width: COL_W - 10 });
 
     // Customer info
     let leftY = currentY + 22;
     doc.fontSize(8).font("Helvetica").fillColor("#333333");
 
     const customerRows: [string, string][] = [
-      ["Razón Social:", customer.name],
+      [t("Razón Social:", "Business Name:"), customer.name],
       ...(customer.rfc ? [["RFC:", customer.rfc] as [string, string]] : []),
-      ...(customer.contactName ? [["Contacto:", customer.contactName] as [string, string]] : []),
-      ...(customer.phone ? [["Teléfono:", customer.phone] as [string, string]] : []),
+      ...(customer.contactName ? [[t("Contacto:", "Contact:"), customer.contactName] as [string, string]] : []),
+      ...(customer.phone ? [[t("Teléfono:", "Phone:"), customer.phone] as [string, string]] : []),
       ...(customer.email ? [["Email:", customer.email] as [string, string]] : []),
     ];
     if (customer.city || customer.state) {
-      customerRows.push(["Ciudad:", [customer.city, customer.state].filter(Boolean).join(", ")]);
+      customerRows.push([t("Ciudad:", "City:"), [customer.city, customer.state].filter(Boolean).join(", ")]);
     }
 
     const LABEL_W = 72;
@@ -226,13 +209,13 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // Quotation info
     let rightY = currentY + 22;
     const quotationRows: [string, string][] = [
-      ["Fecha:", formatDate(quotation.createdAt, tenant?.timezone)],
-      ["Moneda:", quotation.currency || "MXN"],
-      ["Vendedor:", user.fullName],
+      [t("Fecha:", "Date:"), formatPdfDate(quotation.createdAt, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })],
+      [t("Moneda:", "Currency:"), quotation.currency || "MXN"],
+      [t("Vendedor:", "Salesperson:"), user.fullName],
     ];
-    if (quotation.validUntil) quotationRows.push(["Vigencia:", formatDate(quotation.validUntil, tenant?.timezone)]);
-    if (quotation.paymentTerms) quotationRows.push(["Cond. Pago:", PAYMENT_TERMS_LABELS[quotation.paymentTerms] || quotation.paymentTerms]);
-    if (quotation.deliveryTime) quotationRows.push(["T. Entrega:", DELIVERY_TIME_LABELS[quotation.deliveryTime] || quotation.deliveryTime]);
+    if (quotation.validUntil) quotationRows.push([t("Vigencia:", "Valid Until:"), formatPdfDate(quotation.validUntil, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })]);
+    if (quotation.paymentTerms) quotationRows.push([t("Cond. Pago:", "Payment Terms:"), PAYMENT_TERMS_LABELS[quotation.paymentTerms] ? pdfText(language, PAYMENT_TERMS_LABELS[quotation.paymentTerms]) : quotation.paymentTerms]);
+    if (quotation.deliveryTime) quotationRows.push([t("T. Entrega:", "Delivery:"), DELIVERY_TIME_LABELS[quotation.deliveryTime] ? pdfText(language, DELIVERY_TIME_LABELS[quotation.deliveryTime]) : quotation.deliveryTime]);
 
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
     const VALUE_W_R = COL_W - LABEL_W - 12;
@@ -280,7 +263,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // Section label
     doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("PRODUCTOS Y SERVICIOS", MARGIN + 6, currentY + 4);
+    doc.text(t("PRODUCTOS Y SERVICIOS", "PRODUCTS AND SERVICES"), MARGIN + 6, currentY + 4);
     currentY += 16;
 
     // Table column widths — squeeze desc slightly when showing Mon. column
@@ -304,15 +287,15 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     doc.rect(MARGIN, currentY, CONTENT_W, TH).fill(primaryColor);
     doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#ffffff");
     doc.text("#",          cols.num.x  + 2, currentY + 4, { width: cols.num.w  - 2, align: "center" });
-    doc.text("Código",     cols.code.x + 2, currentY + 4, { width: cols.code.w - 2 });
-    doc.text("Descripción",cols.desc.x + 2, currentY + 4, { width: cols.desc.w - 2 });
-    doc.text("Cant.",      cols.qty.x  + 2, currentY + 4, { width: cols.qty.w  - 4, align: "center" });
-    doc.text("P. Unit.",   cols.price.x+ 2, currentY + 4, { width: cols.price.w- 4, align: "right" });
+    doc.text(t("Código", "Code"), cols.code.x + 2, currentY + 4, { width: cols.code.w - 2 });
+    doc.text(t("Descripción", "Description"),cols.desc.x + 2, currentY + 4, { width: cols.desc.w - 2 });
+    doc.text(t("Cant.", "Qty."), cols.qty.x + 2, currentY + 4, { width: cols.qty.w - 4, align: "center" });
+    doc.text(t("P. Unit.", "Unit Price"), cols.price.x + 2, currentY + 4, { width: cols.price.w - 4, align: "right" });
     if (!hideDiscount) {
-      doc.text("Desc%",    cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
+      doc.text(t("Desc%", "Disc%"), cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
     }
     if (showMonColumn) {
-      doc.text("Mon.",     cols.mon.x  + 2, currentY + 4, { width: cols.mon.w  - 2, align: "center" });
+      doc.text(t("Mon.", "Curr."), cols.mon.x + 2, currentY + 4, { width: cols.mon.w - 2, align: "center" });
     }
     doc.text("Subtotal",   cols.total.x+ 2, currentY + 4, { width: cols.total.w- 4, align: "right" });
     currentY += TH;
@@ -322,8 +305,8 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     const MIN_ROW_H = 16;
     doc.fontSize(7.5).font("Helvetica");
 
-    const fmtMXN = (v: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v);
-    const fmtUSD = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
+    const fmtMXN = (v: number) => formatPdfCurrency(v, "MXN", language);
+    const fmtUSD = (v: number) => formatPdfCurrency(v, "USD", language);
     const fmtQuote = quoteCurrency === "USD" ? fmtUSD : fmtMXN;
     // For legacy mixed-currency rows: format each item in its own currency
     const fmtItem = (v: number, cur: string) => cur === "USD" ? fmtUSD(v) : fmtMXN(v);
@@ -356,11 +339,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       doc.text(item.productCode || "-", cols.code.x + 2, rowY, { width: cols.code.w - 4, lineBreak: false });
       // Description allows wrapping
       doc.text(item.productName,   cols.desc.x + 2, rowY, { width: cols.desc.w - 4 });
-      doc.text(parseFloat(item.quantity).toString(), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
+      doc.text(formatPdfNumber(parseFloat(item.quantity), language), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
       const rowFmt = showMonColumn ? (v: number) => fmtItem(v, itemCurrency) : fmtQuote;
       doc.text(rowFmt(displayUnitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
       if (!hideDiscount) {
-        doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
+        doc.text(formatPdfNumber(parseFloat(item.discountPercent || "0"), language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
       }
       if (showMonColumn) {
         doc.fillColor(itemCurrency === "USD" ? "#1a6b3a" : "#444");
@@ -395,9 +378,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       fmtFn: (v: number) => string
     ) => {
       const rows: [string, string][] = [
-        ["Subtotal:", fmtFn(sub)],
-        ...(disc > 0 ? [[`Desc. (${discountPct}%):`, `-${fmtFn(disc)}`] as [string, string]] : []),
-        ...(isMexicoCustomer ? [["IVA (16%):", fmtFn(tax)] as [string, string]] : []),
+        [`${t("Subtotal", "Subtotal")}:`, fmtFn(sub)],
+        ...(disc > 0 ? [[`${t("Desc.", "Discount")} (${formatPdfNumber(discountPct, language)}%):`, `-${fmtFn(disc)}`] as [string, string]] : []),
+        ...(isMexicoCustomer ? [[`${t("IVA", "VAT")} (16%):`, fmtFn(tax)] as [string, string]] : []),
       ];
       const boxH = rows.length * TOTALS_ROW_H + 22 + 26;
 
@@ -420,7 +403,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       // Total row
       doc.rect(bx, by + boxH - 22, bw, 22).fill(labelColor);
       doc.fontSize(9.5).font("Helvetica-Bold").fillColor("#ffffff");
-      doc.text("TOTAL:", bx + 6, by + boxH - 16, { width: bw * 0.45 });
+      doc.text(`${t("TOTAL", "TOTAL")}:`, bx + 6, by + boxH - 16, { width: bw * 0.45 });
       doc.text(fmtFn(total), bx + bw * 0.45, by + boxH - 16, { width: bw * 0.5, align: "right" });
 
       return boxH;
@@ -442,11 +425,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const BOX2_START = PAGE_W - MARGIN - TOTALS_W * 2 - GAP;
 
       // When hideDiscount: show post-discount subtotal, pass disc=0 so no discount line appears
-      const mxnH = drawTotalsBox(BOX2_START, currentY, TOTALS_W, "PESOS MEXICANOS (MXN)", primaryColor,
+      const mxnH = drawTotalsBox(BOX2_START, currentY, TOTALS_W, t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)"), primaryColor,
         hideDiscount ? (mxnSub - mxnDisc) : mxnSub,
         hideDiscount ? 0 : mxnDisc,
         mxnTax, mxnTotal, fmtMXN);
-      const usdH = drawTotalsBox(BOX2_START + TOTALS_W + GAP, currentY, TOTALS_W, "DÓLARES AMERICANOS (USD)", "#1a6b3a",
+      const usdH = drawTotalsBox(BOX2_START + TOTALS_W + GAP, currentY, TOTALS_W, t("DÓLARES AMERICANOS (USD)", "US DOLLARS (USD)"), "#1a6b3a",
         hideDiscount ? (usdSub - usdDisc) : usdSub,
         hideDiscount ? 0 : usdDisc,
         0, usdTotal, fmtUSD);
@@ -469,7 +452,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const taxVal = isForeignCustomer ? 0 : subtotalAfterDisc * 0.16;
       const totalVal = subtotalAfterDisc + (isForeignCustomer ? 0 : taxVal);
 
-      const quoteLabel = quoteCurrency === "USD" ? "DÓLARES AMERICANOS (USD)" : "PESOS MEXICANOS (MXN)";
+      const quoteLabel = quoteCurrency === "USD" ? t("DÓLARES AMERICANOS (USD)", "US DOLLARS (USD)") : t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)");
       const quoteColor = quoteCurrency === "USD" ? "#1a6b3a" : primaryColor;
 
       // When hideDiscount: pass post-discount subtotal as "sub", disc=0 → no discount row shown
@@ -488,7 +471,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const notesH = Math.max(40, doc.heightOfString(quotation.notes, { width: CONTENT_W - 12 }) + 16);
       doc.rect(MARGIN, currentY, CONTENT_W, 14).fill(mediumColor);
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("NOTAS", MARGIN + 6, currentY + 3);
+      doc.text(t("NOTAS", "NOTES"), MARGIN + 6, currentY + 3);
       currentY += 14;
 
       doc.rect(MARGIN, currentY, CONTENT_W, notesH).fill(lightColor);
@@ -509,7 +492,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       }
       doc.rect(MARGIN, currentY, CONTENT_W, 14).fill(mediumColor);
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("CONDICIONES", MARGIN + 6, currentY + 3);
+      doc.text(t("CONDICIONES", "TERMS AND CONDITIONS"), MARGIN + 6, currentY + 3);
       currentY += 14;
 
       doc.rect(MARGIN, currentY, CONTENT_W, condH).fill(lightColor);
@@ -526,12 +509,12 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
 
     // Left: legal disclaimer
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
-    doc.text("Este documento es una cotización y no constituye un pedido en firme.", MARGIN, FOOTER_Y + 6, { width: 260 });
-    doc.text(`Generado el ${formatDateTime(new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+    doc.text(t("Este documento es una cotización y no constituye un pedido en firme.", "This document is a quotation and does not constitute a firm order."), MARGIN, FOOTER_Y + 6, { width: 260 });
+    doc.text(`${t("Generado el", "Generated on")} ${formatPdfDateTime(new Date(), language, tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
 
     // Right: company contact summary
     const footerRight: string[] = [];
-    if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+    if (tenant?.phone) footerRight.push(`${t("Tel:", "Phone:")} ${tenant.phone}`);
     if (tenant?.email) footerRight.push(tenant.email);
     if (tenant?.website) footerRight.push(tenant.website);
 

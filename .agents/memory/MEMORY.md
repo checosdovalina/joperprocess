@@ -10,3 +10,4 @@
 - [Document/blob upload binding](document-upload-binding.md) — bind issued upload entityId to requesting user (in-memory map) + stream-enforce size limit; tenant scoping alone doesn't stop cross-tenant object hijack.
 - [Empresa + tenant isolation](empresa-tenant-isolation.md) — by-id raw lookups must check BOTH empresa (getRestrictedEmpresaId) and tenant (getEffectiveTenantId); empresa scoping alone leaves the pre-existing cross-tenant IDOR open.
 - [Drizzle db instance typing](drizzle-db-typing.md) — db must be NodePgDatabase<typeof schema> or db.query.* resolves to {} and inserts lose tenantId typing.
+- [Tenant PDF localization](tenant-pdf-localization.md) — all generated PDFs follow tenants.locale: en uses en-US; unknown/missing locales fall back to es-MX.

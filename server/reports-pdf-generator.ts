@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import { localStorageService } from "./localStorage";
+import { formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
 
 export interface ReportIncident {
   ticketNumber: string;
@@ -20,7 +21,7 @@ export interface ReportIncident {
 interface IncidentReportData {
   incidents: ReportIncident[];
   tenant?: TenantBranding | null;
-  cutoffDate: string;
+  cutoffDate: Date | string;
 }
 
 interface TenantBranding {
@@ -37,6 +38,7 @@ interface TenantBranding {
   email?: string | null;
   website?: string | null;
   timezone?: string | null;
+  locale?: string | null;
 }
 
 export interface ReportOrderItem {
@@ -110,28 +112,26 @@ function lightenColor(hex: string, amount: number): string {
   return `#${lr.toString(16).padStart(2, "0")}${lg.toString(16).padStart(2, "0")}${lb.toString(16).padStart(2, "0")}`;
 }
 
-function formatDate(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pendiente",
-  in_production: "En Producción",
-  ready: "Listo",
-  partially_released: "Parcialmente Surtido",
-  released: "Surtido",
-  shipped: "Embarcado",
-  delivered: "Entregado",
+const STATUS_LABELS: Record<string, { es: string; en: string }> = {
+  pending: { es: "Pendiente", en: "Pending" },
+  in_production: { es: "En Producción", en: "In Production" },
+  ready: { es: "Listo", en: "Ready" },
+  partially_released: { es: "Parcialmente Surtido", en: "Partially Released" },
+  released: { es: "Surtido", en: "Released" },
+  shipped: { es: "Embarcado", en: "Shipped" },
+  delivered: { es: "Entregado", en: "Delivered" },
 };
 
 export async function generateOrdersReportPDF(data: ReportData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { orders, tenant, filters } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text = <T>(values: { es: T; en: T }) => pdfText(language, values);
+  const formatDate = (value: Date | string | null | undefined) => formatPdfDate(value, language, tenant?.timezone);
+  const statusLabel = (status: string) => STATUS_LABELS[status] ? text(STATUS_LABELS[status]) : status;
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.93);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -166,9 +166,9 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         if (tenant?.address) {
           tenant.address.split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean).forEach((part: string) => infoLines.push(part));
         }
-        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${text({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
         if (cityParts.length) infoLines.push(cityParts.join(", "));
-        const contact = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+        const contact = [tenant?.phone ? `${text({ es: "Tel", en: "Phone" })}: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
         if (contact.length) infoLines.push(contact.join("  |  "));
         if (tenant?.website) infoLines.push(tenant.website);
 
@@ -181,15 +181,15 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         const TITLE_Y = HEADER_H;
         doc.rect(0, TITLE_Y, PAGE_W, 28).fill(mediumColor);
         doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("REPORTE DE PEDIDOS", MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
+        doc.text(text({ es: "REPORTE DE PEDIDOS", en: "ORDERS REPORT" }), MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
 
         // Filter summary on the right
         const filterParts: string[] = [];
         if (filters.dateFrom || filters.dateTo) {
-          filterParts.push(`${filters.dateFrom || "—"} al ${filters.dateTo || "—"}`);
+          filterParts.push(`${filters.dateFrom ? formatDate(filters.dateFrom) : "—"} ${text({ es: "al", en: "to" })} ${filters.dateTo ? formatDate(filters.dateTo) : "—"}`);
         }
         if (filters.customerName) filterParts.push(filters.customerName);
-        if (filters.status && filters.status !== "all") filterParts.push(STATUS_LABELS[filters.status] || filters.status);
+        if (filters.status && filters.status !== "all") filterParts.push(statusLabel(filters.status));
 
         if (filterParts.length) {
           doc.fontSize(7.5).font("Helvetica").fillColor(primaryColor);
@@ -204,7 +204,7 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
 
       // Total count line
       doc.fontSize(8).font("Helvetica").fillColor("#555555");
-      doc.text(`Total de pedidos: ${orders.length}`, MARGIN, currentY, { lineBreak: false });
+      doc.text(`${text({ es: "Total de pedidos", en: "Total orders" })}: ${formatPdfNumber(orders.length, language)}`, MARGIN, currentY, { lineBreak: false });
       currentY += 16;
 
       // Draw each order
@@ -253,41 +253,43 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
 
         let cardY = currentY + cardPad;
 
-        // Row 1: Folio | Fecha de Cierre
+        // Row 1: Folio | Close Date
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Folio:", innerX, cardY, { lineBreak: false });
+        const folioLabel = text({ es: "Folio:", en: "Order No.:" });
+        const folioLabelW = language === "en" ? 48 : 35;
+        doc.text(folioLabel, innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(order.folio, innerX + 35, cardY, { width: halfW - 35, lineBreak: false });
+        doc.text(order.folio, innerX + folioLabelW, cardY, { width: halfW - folioLabelW, lineBreak: false });
 
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Fecha de Cierre:", col2X, cardY, { lineBreak: false });
+        doc.text(text({ es: "Fecha de Cierre:", en: "Close Date:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(formatDate(order.closeDate), col2X + 85, cardY, { lineBreak: false });
         cardY += 14;
 
-        // Row 2: Lib. Crédito y Cobranza (only right column)
+        // Row 2: Credit and collections release (only right column)
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Lib. C y Cobranza:", col2X, cardY, { lineBreak: false });
+        doc.text(text({ es: "Lib. C y Cobranza:", en: "Credit & Collections:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(formatDate(order.creditReleaseDate), col2X + 95, cardY, { lineBreak: false });
         cardY += 14;
 
-        // Row 3: Orden de Compra | Estatus
+        // Row 3: Purchase Order | Status
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Orden de Compra:", innerX, cardY, { lineBreak: false });
+        doc.text(text({ es: "Orden de Compra:", en: "Purchase Order:" }), innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(order.purchaseOrder || "—", innerX + 90, cardY, { width: halfW - 90, lineBreak: false });
 
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Estatus:", col2X, cardY, { lineBreak: false });
+        doc.text(text({ es: "Estatus:", en: "Status:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(STATUS_LABELS[order.status] || order.status, col2X + 45, cardY, { lineBreak: false });
+        doc.text(statusLabel(order.status), col2X + 45, cardY, { lineBreak: false });
         cardY += 14;
 
         // Row 4: Notas (from quotation) — allow wrapping for long notes
         if (order.notes) {
           doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-          doc.text("Notas:", innerX, cardY, { lineBreak: false });
+          doc.text(text({ es: "Notas:", en: "Notes:" }), innerX, cardY, { lineBreak: false });
           doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
           doc.text(order.notes, innerX + 38, cardY, { width: innerW - 38 });
           const renderedNotesH = doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: innerW - 38 });
@@ -301,19 +303,19 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
 
         // Items header
         doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("Cantidad", innerX + 4, cardY, { lineBreak: false });
-        doc.text("Clave / Producto", innerX + 80, cardY, { lineBreak: false });
+        doc.text(text({ es: "Cantidad", en: "Quantity" }), innerX + 4, cardY, { lineBreak: false });
+        doc.text(text({ es: "Clave / Producto", en: "Code / Product" }), innerX + 80, cardY, { lineBreak: false });
         cardY += 14;
 
         // Items rows
         if (order.items.length === 0) {
           doc.fontSize(8).font("Helvetica").fillColor("#999999");
-          doc.text("Sin artículos", innerX + 4, cardY, { lineBreak: false });
+          doc.text(text({ es: "Sin artículos", en: "No items" }), innerX + 4, cardY, { lineBreak: false });
           cardY += 14;
         } else {
           for (const item of order.items) {
             doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-            const qty = parseFloat(item.quantity).toLocaleString("es-MX", { maximumFractionDigits: 2 });
+            const qty = formatPdfNumber(parseFloat(item.quantity), language, { maximumFractionDigits: 2 });
             const productLabel = buildLabel(item);
             const labelH = doc.fontSize(8.5).font("Helvetica").heightOfString(productLabel, { width: innerW - 80 });
             doc.text(`${qty} ${item.unitOfMeasure}`, innerX + 4, cardY, { width: 70, lineBreak: false });
@@ -329,8 +331,8 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
       const footerY = PAGE_H - 36;
       doc.rect(0, footerY, PAGE_W, 36).fill(primaryColor);
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.75)");
-      const generated = new Date().toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-      doc.text(`Generado el ${generated}  —  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
+      const generated = formatPdfDateTime(new Date(), language, tenant?.timezone);
+      doc.text(`${text({ es: "Generado el", en: "Generated on" })} ${generated}  —  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
 
       doc.end();
     } catch (err) {
@@ -344,38 +346,36 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
 
 // ── INCIDENTS REPORT PDF ─────────────────────────────────────────────────────
 
-const INCIDENT_TYPE_LABELS: Record<string, string> = {
-  garantia: "Garantía",
-  retrabajo: "Retrabajo",
-  queja: "Queja",
-  consulta: "Consulta",
-  administrativo: "Administrativo",
+const INCIDENT_TYPE_LABELS: Record<string, { es: string; en: string }> = {
+  garantia: { es: "Garantía", en: "Warranty" },
+  retrabajo: { es: "Retrabajo", en: "Rework" },
+  queja: { es: "Queja", en: "Complaint" },
+  consulta: { es: "Consulta", en: "Inquiry" },
+  administrativo: { es: "Administrativo", en: "Administrative" },
 };
 
-const INCIDENT_STATUS_LABELS: Record<string, string> = {
-  nuevo: "Nuevo",
-  asignado: "Asignado",
-  en_proceso: "En Proceso",
-  esperando_cliente: "Esperando Cliente",
-  esperando_interno: "Esperando Interno",
-  resuelto: "Resuelto",
-  cerrado: "Cerrado",
-  cancelado: "Cancelado",
+const INCIDENT_STATUS_LABELS: Record<string, { es: string; en: string }> = {
+  nuevo: { es: "Nuevo", en: "New" }, asignado: { es: "Asignado", en: "Assigned" },
+  en_proceso: { es: "En Proceso", en: "In Progress" }, esperando_cliente: { es: "Esperando Cliente", en: "Waiting for Customer" },
+  esperando_interno: { es: "Esperando Interno", en: "Waiting Internally" }, resuelto: { es: "Resuelto", en: "Resolved" },
+  cerrado: { es: "Cerrado", en: "Closed" }, cancelado: { es: "Cancelado", en: "Cancelled" },
 };
 
-const INCIDENT_URGENCY_LABELS: Record<string, string> = {
-  baja: "Baja",
-  media: "Media",
-  alta: "Alta",
-  critica: "Crítica",
+const INCIDENT_URGENCY_LABELS: Record<string, { es: string; en: string }> = {
+  baja: { es: "Baja", en: "Low" }, media: { es: "Media", en: "Medium" },
+  alta: { es: "Alta", en: "High" }, critica: { es: "Crítica", en: "Critical" },
 };
 
 export async function generateIncidentsReportPDF(data: IncidentReportData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { incidents, tenant, cutoffDate } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text = <T>(values: { es: T; en: T }) => pdfText(language, values);
+  const formatDate = (value: Date | string | null | undefined) => formatPdfDate(value, language, tenant?.timezone);
+  const incidentLabel = (labels: Record<string, { es: string; en: string }>, value: string) => labels[value] ? text(labels[value]) : value;
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.93);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -402,9 +402,9 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
         if (tenant?.address) {
           tenant.address.split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean).forEach((p: string) => infoLines.push(p));
         }
-        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${text({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
         if (cityParts.length) infoLines.push(cityParts.join(", "));
-        const contact = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+        const contact = [tenant?.phone ? `${text({ es: "Tel", en: "Phone" })}: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
         if (contact.length) infoLines.push(contact.join("  |  "));
         if (tenant?.website) infoLines.push(tenant.website);
         doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -416,9 +416,9 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
         const TITLE_Y = HEADER_H;
         doc.rect(0, TITLE_Y, PAGE_W, 28).fill(mediumColor);
         doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("REPORTE DE INCIDENTES VIGENTES", MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
+        doc.text(text({ es: "REPORTE DE INCIDENTES VIGENTES", en: "ACTIVE INCIDENTS REPORT" }), MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
         doc.fontSize(8).font("Helvetica").fillColor(primaryColor);
-        doc.text(`Corte: ${cutoffDate}`, PAGE_W - MARGIN - 130, TITLE_Y + 10, { width: 130, align: "right", lineBreak: false });
+        doc.text(`${text({ es: "Corte", en: "As of" })}: ${formatDate(cutoffDate)}`, PAGE_W - MARGIN - 130, TITLE_Y + 10, { width: 130, align: "right", lineBreak: false });
       }
 
       drawHeader();
@@ -426,7 +426,7 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
 
       // Total count line
       doc.fontSize(8).font("Helvetica").fillColor("#555555");
-      doc.text(`Total de incidentes vigentes: ${incidents.length}`, MARGIN, currentY, { lineBreak: false });
+      doc.text(`${text({ es: "Total de incidentes vigentes", en: "Total active incidents" })}: ${formatPdfNumber(incidents.length, language)}`, MARGIN, currentY, { lineBreak: false });
       currentY += 16;
 
       for (let ii = 0; ii < incidents.length; ii++) {
@@ -465,40 +465,40 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
         doc.text(inc.ticketNumber, innerX + 40, cardY, { width: halfW - 40, lineBreak: false });
 
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Fecha:", col2X, cardY, { lineBreak: false });
+        doc.text(text({ es: "Fecha:", en: "Date:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(formatDate(inc.createdAt), col2X + 38, cardY, { lineBreak: false });
         cardY += 14;
 
         // Row 2: Tipo (only right column)
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Tipo:", col2X, cardY, { lineBreak: false });
+        doc.text(text({ es: "Tipo:", en: "Type:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(INCIDENT_TYPE_LABELS[inc.type] || inc.type, col2X + 30, cardY, { lineBreak: false });
+        doc.text(incidentLabel(INCIDENT_TYPE_LABELS, inc.type), col2X + 30, cardY, { lineBreak: false });
         cardY += 14;
 
         // Row 3: Urgencia | Estatus
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Urgencia:", innerX, cardY, { lineBreak: false });
+        doc.text(text({ es: "Urgencia:", en: "Urgency:" }), innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(INCIDENT_URGENCY_LABELS[inc.urgency] || inc.urgency, innerX + 52, cardY, { lineBreak: false });
+        doc.text(incidentLabel(INCIDENT_URGENCY_LABELS, inc.urgency), innerX + 52, cardY, { lineBreak: false });
 
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Estatus:", col2X, cardY, { lineBreak: false });
+        doc.text(text({ es: "Estatus:", en: "Status:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(INCIDENT_STATUS_LABELS[inc.status] || inc.status, col2X + 45, cardY, { lineBreak: false });
+        doc.text(incidentLabel(INCIDENT_STATUS_LABELS, inc.status), col2X + 45, cardY, { lineBreak: false });
         cardY += 14;
 
         // Row 4: Asunto
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Asunto:", innerX, cardY, { lineBreak: false });
+        doc.text(text({ es: "Asunto:", en: "Subject:" }), innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(inc.subject, innerX + 42, cardY, { width: innerW - 42, lineBreak: false });
         cardY += 14;
 
         // Row 5: Descripción (wrappable)
         doc.fontSize(8).font("Helvetica-Bold").fillColor("#555555");
-        doc.text("Descripción:", innerX, cardY, { lineBreak: false });
+        doc.text(text({ es: "Descripción:", en: "Description:" }), innerX, cardY, { lineBreak: false });
         cardY += 11;
         doc.fontSize(8).font("Helvetica").fillColor("#333333");
         doc.text(inc.description || "—", innerX + 4, cardY, { width: innerW - 4 });
@@ -507,7 +507,7 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
         // Row 6: Resolución (if any)
         if (inc.resolution) {
           doc.fontSize(8).font("Helvetica-Bold").fillColor("#555555");
-          doc.text("Resolución:", innerX, cardY, { lineBreak: false });
+          doc.text(text({ es: "Resolución:", en: "Resolution:" }), innerX, cardY, { lineBreak: false });
           cardY += 11;
           doc.fontSize(8).font("Helvetica").fillColor("#333333");
           doc.text(inc.resolution, innerX + 4, cardY, { width: innerW - 4 });
@@ -520,8 +520,8 @@ export async function generateIncidentsReportPDF(data: IncidentReportData): Prom
       const footerY = PAGE_H - 36;
       doc.rect(0, footerY, PAGE_W, 36).fill(primaryColor);
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.75)");
-      const generated = new Date().toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-      doc.text(`Generado el ${generated}  —  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
+      const generated = formatPdfDateTime(new Date(), language, tenant?.timezone);
+      doc.text(`${text({ es: "Generado el", en: "Generated on" })} ${generated}  —  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
 
       doc.end();
     } catch (err) {

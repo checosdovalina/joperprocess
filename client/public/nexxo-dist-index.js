@@ -4825,6 +4825,65 @@ var init_quotation_email_service = __esm({
   }
 });
 
+// server/pdf-locale.ts
+var pdf_locale_exports = {};
+__export(pdf_locale_exports, {
+  formatPdfCurrency: () => formatPdfCurrency,
+  formatPdfDate: () => formatPdfDate,
+  formatPdfDateTime: () => formatPdfDateTime,
+  formatPdfNumber: () => formatPdfNumber,
+  pdfText: () => pdfText,
+  resolveIntlLocale: () => resolveIntlLocale,
+  resolvePdfLanguage: () => resolvePdfLanguage
+});
+function resolvePdfLanguage(tenant) {
+  return tenant?.locale?.toLowerCase().startsWith("en") ? "en" : "es";
+}
+function resolveIntlLocale(language) {
+  return language === "en" ? "en-US" : "es-MX";
+}
+function pdfText(language, values) {
+  return values[language];
+}
+function formatPdfDate(value, language, timezone, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
+  if (!value) return "\u2014";
+  const dateOnly = typeof value === "string" && /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = dateOnly ? new Date(Date.UTC(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 12)) : typeof value === "string" ? new Date(value) : value;
+  return date.toLocaleDateString(resolveIntlLocale(language), {
+    ...options,
+    timeZone: dateOnly ? "UTC" : timezone || (language === "en" ? "America/Chicago" : "America/Mexico_City")
+  });
+}
+function formatPdfDateTime(value, language, timezone) {
+  if (!value) return "\u2014";
+  const date = typeof value === "string" ? new Date(value) : value;
+  return date.toLocaleString(resolveIntlLocale(language), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: timezone || (language === "en" ? "America/Chicago" : "America/Mexico_City")
+  });
+}
+function formatPdfNumber(value, language, options) {
+  return value.toLocaleString(resolveIntlLocale(language), options);
+}
+function formatPdfCurrency(value, currency, language) {
+  const number = typeof value === "string" ? parseFloat(value) : value ?? 0;
+  return new Intl.NumberFormat(resolveIntlLocale(language), {
+    style: "currency",
+    currency: currency || "MXN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number.isFinite(number) ? number : 0);
+}
+var init_pdf_locale = __esm({
+  "server/pdf-locale.ts"() {
+    "use strict";
+  }
+});
+
 // server/quotation-pdf-generator.ts
 var quotation_pdf_generator_exports = {};
 __export(quotation_pdf_generator_exports, {
@@ -4851,23 +4910,6 @@ async function loadLogoBuffer(logoUrl) {
     return null;
   }
 }
-function formatDate(date, timezone) {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: timezone || "America/Mexico_City" });
-}
-function formatDateTime(date, timezone) {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: timezone || "America/Mexico_City"
-  });
-}
 function hexToRgb(hex) {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
@@ -4885,8 +4927,10 @@ function lightenColor(hex, amount) {
 async function generateQuotationPDFStream(data) {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { quotation, items, customer, user, tenant, hideDiscount = false } = data;
+  const language = resolvePdfLanguage(tenant);
+  const t = (es2, en) => pdfText(language, { es: es2, en });
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || t("Empresa", "Company");
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.92);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -4914,9 +4958,9 @@ async function generateQuotationPDFStream(data) {
     if (tenant?.address) {
       tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((part) => infoLines.push(part));
     }
-    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${t("C.P.", "ZIP")} ${tenant.zipCode}` : null].filter(Boolean);
     if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
-    const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+    const contactParts = [tenant?.phone ? `${t("Tel:", "Phone:")} ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
     doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -4927,9 +4971,9 @@ async function generateQuotationPDFStream(data) {
     const TITLE_BAND_H = 32;
     doc.rect(0, TITLE_BAND_Y, PAGE_W, TITLE_BAND_H).fill(mediumColor);
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("COTIZACI\xD3N", MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "left" });
+    doc.text(t("COTIZACI\xD3N", "QUOTATION"), MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "left" });
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text(`Folio: ${quotation.folio}`, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "right" });
+    doc.text(`${t("Folio", "Number")}: ${quotation.folio}`, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 8, { width: CONTENT_W / 2, align: "right" });
     let currentY = TITLE_BAND_Y + TITLE_BAND_H + 18;
     const COL_W = CONTENT_W / 2 - 8;
     const COL2_X = MARGIN + COL_W + 16;
@@ -4939,19 +4983,19 @@ async function generateQuotationPDFStream(data) {
     doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
     doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("DATOS DEL CLIENTE", MARGIN + 6, currentY + 4, { width: COL_W - 10 });
-    doc.text("DATOS DE LA COTIZACI\xD3N", COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DEL CLIENTE", "CUSTOMER INFORMATION"), MARGIN + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DE LA COTIZACI\xD3N", "QUOTATION INFORMATION"), COL2_X + 6, currentY + 4, { width: COL_W - 10 });
     let leftY = currentY + 22;
     doc.fontSize(8).font("Helvetica").fillColor("#333333");
     const customerRows = [
-      ["Raz\xF3n Social:", customer.name],
+      [t("Raz\xF3n Social:", "Business Name:"), customer.name],
       ...customer.rfc ? [["RFC:", customer.rfc]] : [],
-      ...customer.contactName ? [["Contacto:", customer.contactName]] : [],
-      ...customer.phone ? [["Tel\xE9fono:", customer.phone]] : [],
+      ...customer.contactName ? [[t("Contacto:", "Contact:"), customer.contactName]] : [],
+      ...customer.phone ? [[t("Tel\xE9fono:", "Phone:"), customer.phone]] : [],
       ...customer.email ? [["Email:", customer.email]] : []
     ];
     if (customer.city || customer.state) {
-      customerRows.push(["Ciudad:", [customer.city, customer.state].filter(Boolean).join(", ")]);
+      customerRows.push([t("Ciudad:", "City:"), [customer.city, customer.state].filter(Boolean).join(", ")]);
     }
     const LABEL_W = 72;
     const ROW_H = 13;
@@ -4965,13 +5009,13 @@ async function generateQuotationPDFStream(data) {
     }
     let rightY = currentY + 22;
     const quotationRows = [
-      ["Fecha:", formatDate(quotation.createdAt, tenant?.timezone)],
-      ["Moneda:", quotation.currency || "MXN"],
-      ["Vendedor:", user.fullName]
+      [t("Fecha:", "Date:"), formatPdfDate(quotation.createdAt, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })],
+      [t("Moneda:", "Currency:"), quotation.currency || "MXN"],
+      [t("Vendedor:", "Salesperson:"), user.fullName]
     ];
-    if (quotation.validUntil) quotationRows.push(["Vigencia:", formatDate(quotation.validUntil, tenant?.timezone)]);
-    if (quotation.paymentTerms) quotationRows.push(["Cond. Pago:", PAYMENT_TERMS_LABELS[quotation.paymentTerms] || quotation.paymentTerms]);
-    if (quotation.deliveryTime) quotationRows.push(["T. Entrega:", DELIVERY_TIME_LABELS[quotation.deliveryTime] || quotation.deliveryTime]);
+    if (quotation.validUntil) quotationRows.push([t("Vigencia:", "Valid Until:"), formatPdfDate(quotation.validUntil, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })]);
+    if (quotation.paymentTerms) quotationRows.push([t("Cond. Pago:", "Payment Terms:"), PAYMENT_TERMS_LABELS[quotation.paymentTerms] ? pdfText(language, PAYMENT_TERMS_LABELS[quotation.paymentTerms]) : quotation.paymentTerms]);
+    if (quotation.deliveryTime) quotationRows.push([t("T. Entrega:", "Delivery:"), DELIVERY_TIME_LABELS[quotation.deliveryTime] ? pdfText(language, DELIVERY_TIME_LABELS[quotation.deliveryTime]) : quotation.deliveryTime]);
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
     const VALUE_W_R = COL_W - LABEL_W - 12;
     for (const [label, value] of quotationRows) {
@@ -5000,7 +5044,7 @@ async function generateQuotationPDFStream(data) {
     const discountPct = parseFloat(quotation.globalDiscount || "0");
     doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("PRODUCTOS Y SERVICIOS", MARGIN + 6, currentY + 4);
+    doc.text(t("PRODUCTOS Y SERVICIOS", "PRODUCTS AND SERVICES"), MARGIN + 6, currentY + 4);
     currentY += 16;
     const MON_W = showMonColumn ? 32 : 0;
     const DISC_W = hideDiscount ? 0 : 42;
@@ -5019,23 +5063,23 @@ async function generateQuotationPDFStream(data) {
     doc.rect(MARGIN, currentY, CONTENT_W, TH).fill(primaryColor);
     doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#ffffff");
     doc.text("#", cols.num.x + 2, currentY + 4, { width: cols.num.w - 2, align: "center" });
-    doc.text("C\xF3digo", cols.code.x + 2, currentY + 4, { width: cols.code.w - 2 });
-    doc.text("Descripci\xF3n", cols.desc.x + 2, currentY + 4, { width: cols.desc.w - 2 });
-    doc.text("Cant.", cols.qty.x + 2, currentY + 4, { width: cols.qty.w - 4, align: "center" });
-    doc.text("P. Unit.", cols.price.x + 2, currentY + 4, { width: cols.price.w - 4, align: "right" });
+    doc.text(t("C\xF3digo", "Code"), cols.code.x + 2, currentY + 4, { width: cols.code.w - 2 });
+    doc.text(t("Descripci\xF3n", "Description"), cols.desc.x + 2, currentY + 4, { width: cols.desc.w - 2 });
+    doc.text(t("Cant.", "Qty."), cols.qty.x + 2, currentY + 4, { width: cols.qty.w - 4, align: "center" });
+    doc.text(t("P. Unit.", "Unit Price"), cols.price.x + 2, currentY + 4, { width: cols.price.w - 4, align: "right" });
     if (!hideDiscount) {
-      doc.text("Desc%", cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
+      doc.text(t("Desc%", "Disc%"), cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
     }
     if (showMonColumn) {
-      doc.text("Mon.", cols.mon.x + 2, currentY + 4, { width: cols.mon.w - 2, align: "center" });
+      doc.text(t("Mon.", "Curr."), cols.mon.x + 2, currentY + 4, { width: cols.mon.w - 2, align: "center" });
     }
     doc.text("Subtotal", cols.total.x + 2, currentY + 4, { width: cols.total.w - 4, align: "right" });
     currentY += TH;
     const ROW_PAD = 4;
     const MIN_ROW_H = 16;
     doc.fontSize(7.5).font("Helvetica");
-    const fmtMXN = (v) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v);
-    const fmtUSD = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
+    const fmtMXN = (v) => formatPdfCurrency(v, "MXN", language);
+    const fmtUSD = (v) => formatPdfCurrency(v, "USD", language);
     const fmtQuote = quoteCurrency === "USD" ? fmtUSD : fmtMXN;
     const fmtItem = (v, cur) => cur === "USD" ? fmtUSD(v) : fmtMXN(v);
     items.forEach((item, index) => {
@@ -5055,11 +5099,11 @@ async function generateQuotationPDFStream(data) {
       doc.text(String(index + 1), cols.num.x + 2, rowY, { width: cols.num.w - 2, align: "center", lineBreak: false });
       doc.text(item.productCode || "-", cols.code.x + 2, rowY, { width: cols.code.w - 4, lineBreak: false });
       doc.text(item.productName, cols.desc.x + 2, rowY, { width: cols.desc.w - 4 });
-      doc.text(parseFloat(item.quantity).toString(), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
+      doc.text(formatPdfNumber(parseFloat(item.quantity), language), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
       const rowFmt = showMonColumn ? (v) => fmtItem(v, itemCurrency) : fmtQuote;
       doc.text(rowFmt(displayUnitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
       if (!hideDiscount) {
-        doc.text(parseFloat(item.discountPercent || "0").toFixed(1) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
+        doc.text(formatPdfNumber(parseFloat(item.discountPercent || "0"), language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
       }
       if (showMonColumn) {
         doc.fillColor(itemCurrency === "USD" ? "#1a6b3a" : "#444");
@@ -5077,9 +5121,9 @@ async function generateQuotationPDFStream(data) {
     const isMexicoCustomer = !isForeignCustomer && (!customer.country || ["mx", "mexico", "m\xE9xico", "mex"].includes(customer.country.toLowerCase().trim()));
     const drawTotalsBox = (bx, by, bw, label, labelColor, sub, disc, tax, total, fmtFn) => {
       const rows = [
-        ["Subtotal:", fmtFn(sub)],
-        ...disc > 0 ? [[`Desc. (${discountPct}%):`, `-${fmtFn(disc)}`]] : [],
-        ...isMexicoCustomer ? [["IVA (16%):", fmtFn(tax)]] : []
+        [`${t("Subtotal", "Subtotal")}:`, fmtFn(sub)],
+        ...disc > 0 ? [[`${t("Desc.", "Discount")} (${formatPdfNumber(discountPct, language)}%):`, `-${fmtFn(disc)}`]] : [],
+        ...isMexicoCustomer ? [[`${t("IVA", "VAT")} (16%):`, fmtFn(tax)]] : []
       ];
       const boxH = rows.length * TOTALS_ROW_H + 22 + 26;
       doc.rect(bx, by, bw, 14).fill(labelColor);
@@ -5096,7 +5140,7 @@ async function generateQuotationPDFStream(data) {
       }
       doc.rect(bx, by + boxH - 22, bw, 22).fill(labelColor);
       doc.fontSize(9.5).font("Helvetica-Bold").fillColor("#ffffff");
-      doc.text("TOTAL:", bx + 6, by + boxH - 16, { width: bw * 0.45 });
+      doc.text(`${t("TOTAL", "TOTAL")}:`, bx + 6, by + boxH - 16, { width: bw * 0.45 });
       doc.text(fmtFn(total), bx + bw * 0.45, by + boxH - 16, { width: bw * 0.5, align: "right" });
       return boxH;
     };
@@ -5115,7 +5159,7 @@ async function generateQuotationPDFStream(data) {
         BOX2_START,
         currentY,
         TOTALS_W,
-        "PESOS MEXICANOS (MXN)",
+        t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)"),
         primaryColor,
         hideDiscount ? mxnSub - mxnDisc : mxnSub,
         hideDiscount ? 0 : mxnDisc,
@@ -5127,7 +5171,7 @@ async function generateQuotationPDFStream(data) {
         BOX2_START + TOTALS_W + GAP,
         currentY,
         TOTALS_W,
-        "D\xD3LARES AMERICANOS (USD)",
+        t("D\xD3LARES AMERICANOS (USD)", "US DOLLARS (USD)"),
         "#1a6b3a",
         hideDiscount ? usdSub - usdDisc : usdSub,
         hideDiscount ? 0 : usdDisc,
@@ -5148,7 +5192,7 @@ async function generateQuotationPDFStream(data) {
       const subtotalAfterDisc = subtotalVal - discountAmt;
       const taxVal = isForeignCustomer ? 0 : subtotalAfterDisc * 0.16;
       const totalVal = subtotalAfterDisc + (isForeignCustomer ? 0 : taxVal);
-      const quoteLabel = quoteCurrency === "USD" ? "D\xD3LARES AMERICANOS (USD)" : "PESOS MEXICANOS (MXN)";
+      const quoteLabel = quoteCurrency === "USD" ? t("D\xD3LARES AMERICANOS (USD)", "US DOLLARS (USD)") : t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)");
       const quoteColor = quoteCurrency === "USD" ? "#1a6b3a" : primaryColor;
       const singleH = drawTotalsBox(
         TOTALS_X,
@@ -5168,7 +5212,7 @@ async function generateQuotationPDFStream(data) {
       const notesH = Math.max(40, doc.heightOfString(quotation.notes, { width: CONTENT_W - 12 }) + 16);
       doc.rect(MARGIN, currentY, CONTENT_W, 14).fill(mediumColor);
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("NOTAS", MARGIN + 6, currentY + 3);
+      doc.text(t("NOTAS", "NOTES"), MARGIN + 6, currentY + 3);
       currentY += 14;
       doc.rect(MARGIN, currentY, CONTENT_W, notesH).fill(lightColor);
       doc.fontSize(8).font("Helvetica").fillColor("#444");
@@ -5184,7 +5228,7 @@ async function generateQuotationPDFStream(data) {
       }
       doc.rect(MARGIN, currentY, CONTENT_W, 14).fill(mediumColor);
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("CONDICIONES", MARGIN + 6, currentY + 3);
+      doc.text(t("CONDICIONES", "TERMS AND CONDITIONS"), MARGIN + 6, currentY + 3);
       currentY += 14;
       doc.rect(MARGIN, currentY, CONTENT_W, condH).fill(lightColor);
       doc.fontSize(8).font("Helvetica").fillColor("#444");
@@ -5194,10 +5238,10 @@ async function generateQuotationPDFStream(data) {
     const FOOTER_Y = PAGE_H - 42;
     doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
-    doc.text("Este documento es una cotizaci\xF3n y no constituye un pedido en firme.", MARGIN, FOOTER_Y + 6, { width: 260 });
-    doc.text(`Generado el ${formatDateTime(/* @__PURE__ */ new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+    doc.text(t("Este documento es una cotizaci\xF3n y no constituye un pedido en firme.", "This document is a quotation and does not constitute a firm order."), MARGIN, FOOTER_Y + 6, { width: 260 });
+    doc.text(`${t("Generado el", "Generated on")} ${formatPdfDateTime(/* @__PURE__ */ new Date(), language, tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
     const footerRight = [];
-    if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+    if (tenant?.phone) footerRight.push(`${t("Tel:", "Phone:")} ${tenant.phone}`);
     if (tenant?.email) footerRight.push(tenant.email);
     if (tenant?.website) footerRight.push(tenant.website);
     if (footerRight.length) {
@@ -5218,23 +5262,24 @@ var init_quotation_pdf_generator = __esm({
   "server/quotation-pdf-generator.ts"() {
     "use strict";
     init_localStorage();
+    init_pdf_locale();
     PAYMENT_TERMS_LABELS = {
-      contado: "Contado",
-      "15_dias": "15 d\xEDas",
-      "30_dias": "30 d\xEDas",
-      "90_dias": "90 d\xEDas",
-      "120_dias": "120 d\xEDas",
-      "150_dias": "150 d\xEDas",
-      "45_dias": "45 d\xEDas",
-      "60_dias": "60 d\xEDas"
+      contado: { es: "Contado", en: "Cash" },
+      "15_dias": { es: "15 d\xEDas", en: "15 days" },
+      "30_dias": { es: "30 d\xEDas", en: "30 days" },
+      "90_dias": { es: "90 d\xEDas", en: "90 days" },
+      "120_dias": { es: "120 d\xEDas", en: "120 days" },
+      "150_dias": { es: "150 d\xEDas", en: "150 days" },
+      "45_dias": { es: "45 d\xEDas", en: "45 days" },
+      "60_dias": { es: "60 d\xEDas", en: "60 days" }
     };
     DELIVERY_TIME_LABELS = {
-      inmediato: "Inmediato",
-      "1_semana": "1 semana",
-      "2_semanas": "2 semanas",
-      "3_semanas": "3 semanas",
-      "1_mes": "1 mes",
-      por_confirmar: "Por confirmar"
+      inmediato: { es: "Inmediato", en: "Immediate" },
+      "1_semana": { es: "1 semana", en: "1 week" },
+      "2_semanas": { es: "2 semanas", en: "2 weeks" },
+      "3_semanas": { es: "3 semanas", en: "3 weeks" },
+      "1_mes": { es: "1 mes", en: "1 month" },
+      por_confirmar: { es: "Por confirmar", en: "To be confirmed" }
     };
   }
 });
@@ -5263,23 +5308,13 @@ async function loadLogoBuffer2(logoUrl) {
     return null;
   }
 }
-function formatCurrency(value, currency = "MXN") {
-  if (value === null || value === void 0) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function formatDate2(date, timezone) {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric", timeZone: timezone || "America/Mexico_City" });
-}
-function formatDateTime2(date, timezone) {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: timezone || "America/Mexico_City" });
-}
-function getStatusLabel(status) {
-  return { pending: "Pendiente", approved: "Aprobada", rejected: "Rechazada" }[status] || status;
+function getStatusLabel(status, language) {
+  const labels = {
+    pending: pdfText(language, { es: "Pendiente", en: "Pending" }),
+    approved: pdfText(language, { es: "Aprobada", en: "Approved" }),
+    rejected: pdfText(language, { es: "Rechazada", en: "Rejected" })
+  };
+  return labels[status] || status;
 }
 function getStatusColor(status) {
   return { pending: "#d69e2e", approved: "#38a169", rejected: "#e53e3e" }[status] || "#4a5568";
@@ -5297,8 +5332,13 @@ function lightenColor2(hex, amount) {
 async function generateCreditAuthPDFStream(data) {
   const doc = new PDFDocument2({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { authorization, quotation, customer, requestedBy, approvedBy, tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text2 = (values) => pdfText(language, values);
+  const formatCurrency2 = (value, currency = "MXN") => formatPdfCurrency(value, currency, language);
+  const formatDate2 = (value) => formatPdfDate(value, language, tenant?.timezone, { year: "numeric", month: "long", day: "numeric" });
+  const formatDateTime = (value) => formatPdfDateTime(value, language, tenant?.timezone);
   const logoBuffer = await loadLogoBuffer2(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text2({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor2(primaryColor, 0.92);
   const mediumColor = lightenColor2(primaryColor, 0.75);
@@ -5321,13 +5361,13 @@ async function generateCreditAuthPDFStream(data) {
     doc.fontSize(13).font("Helvetica-Bold").fillColor("#ffffff");
     doc.text(companyName.toUpperCase(), TEXT_X, 14, { width: TEXT_W, align: "right", lineBreak: false });
     const infoLines = [];
-    if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
+    if (tenant?.rfc) infoLines.push(`${text2({ es: "RFC:", en: "Tax ID:" })} ${tenant.rfc}`);
     if (tenant?.address) {
       tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((part) => infoLines.push(part));
     }
-    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${text2({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
     if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
-    const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+    const contactParts = [tenant?.phone ? `${text2({ es: "Tel:", en: "Phone:" })} ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
     doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -5338,12 +5378,12 @@ async function generateCreditAuthPDFStream(data) {
     const TITLE_H = 32;
     doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("AUTORIZACI\xD3N DE CR\xC9DITO", MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.6 });
+    doc.text(text2({ es: "AUTORIZACI\xD3N DE CR\xC9DITO", en: "CREDIT AUTHORIZATION" }), MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.6 });
     const statusBadgeW = 160;
     const statusBadgeX = PAGE_W - MARGIN - statusBadgeW;
     doc.rect(statusBadgeX, TITLE_Y + 5, statusBadgeW, 22).fill(statusColor2);
     doc.fontSize(9.5).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text(getStatusLabel(authorization.status).toUpperCase(), statusBadgeX, TITLE_Y + 11, { width: statusBadgeW, align: "center" });
+    doc.text(getStatusLabel(authorization.status, language).toUpperCase(), statusBadgeX, TITLE_Y + 11, { width: statusBadgeW, align: "center" });
     let currentY = TITLE_Y + TITLE_H + 18;
     const COL_W = CONTENT_W / 2 - 8;
     const COL2_X = MARGIN + COL_W + 16;
@@ -5353,14 +5393,14 @@ async function generateCreditAuthPDFStream(data) {
     doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
     doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("DATOS DEL CLIENTE", MARGIN + 6, currentY + 4, { width: COL_W - 10 });
-    doc.text("DATOS DE LA COTIZACI\xD3N", COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(text2({ es: "DATOS DEL CLIENTE", en: "CUSTOMER INFORMATION" }), MARGIN + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(text2({ es: "DATOS DE LA COTIZACI\xD3N", en: "QUOTATION INFORMATION" }), COL2_X + 6, currentY + 4, { width: COL_W - 10 });
     let leftY = currentY + 22;
     const customerRows = [
-      ["Raz\xF3n Social:", customer.name],
-      ...customer.rfc ? [["RFC:", customer.rfc]] : [],
-      ...customer.contactName ? [["Contacto:", customer.contactName]] : [],
-      ...customer.phone ? [["Tel\xE9fono:", customer.phone]] : [],
+      [text2({ es: "Raz\xF3n Social:", en: "Legal Name:" }), customer.name],
+      ...customer.rfc ? [[text2({ es: "RFC:", en: "Tax ID:" }), customer.rfc]] : [],
+      ...customer.contactName ? [[text2({ es: "Contacto:", en: "Contact:" }), customer.contactName]] : [],
+      ...customer.phone ? [[text2({ es: "Tel\xE9fono:", en: "Phone:" }), customer.phone]] : [],
       ...customer.email ? [["Email:", customer.email]] : []
     ];
     const LABEL_W = 72;
@@ -5374,11 +5414,11 @@ async function generateCreditAuthPDFStream(data) {
     }
     let rightY = currentY + 22;
     const quotRows = [
-      ["Folio:", quotation.folio],
-      ["Importe:", formatCurrency(quotation.total, quotation.currency || "MXN")],
-      ["Fecha:", formatDate2(quotation.createdAt, tenant?.timezone)],
-      ["Solicitado por:", requestedBy.fullName],
-      ["Solicitud:", formatDate2(authorization.createdAt, tenant?.timezone)]
+      [text2({ es: "Folio:", en: "Reference:" }), quotation.folio],
+      [text2({ es: "Importe:", en: "Amount:" }), formatCurrency2(quotation.total, quotation.currency || "MXN")],
+      [text2({ es: "Fecha:", en: "Date:" }), formatDate2(quotation.createdAt)],
+      [text2({ es: "Solicitado por:", en: "Requested by:" }), requestedBy.fullName],
+      [text2({ es: "Solicitud:", en: "Request:" }), formatDate2(authorization.createdAt)]
     ];
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
     const VALUE_W_R = COL_W - LABEL_W - 10;
@@ -5390,13 +5430,13 @@ async function generateCreditAuthPDFStream(data) {
     currentY += BOX_H + 18;
     doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("AN\xC1LISIS DE CR\xC9DITO", MARGIN + 6, currentY + 4);
+    doc.text(text2({ es: "AN\xC1LISIS DE CR\xC9DITO", en: "CREDIT ANALYSIS" }), MARGIN + 6, currentY + 4);
     currentY += 16;
     const creditFields = [
-      ["Cr\xE9dito Disponible", formatCurrency(authorization.creditAvailable), "#38a169"],
-      ["Cr\xE9dito Utilizado", formatCurrency(authorization.creditUsed), "#d69e2e"],
-      ["Saldo Vencido", formatCurrency(authorization.overdueBalance), "#e53e3e"],
-      ["Monto Solicitado", formatCurrency(quotation.total, quotation.currency || "MXN"), primaryColor]
+      [text2({ es: "Cr\xE9dito Disponible", en: "Available Credit" }), formatCurrency2(authorization.creditAvailable), "#38a169"],
+      [text2({ es: "Cr\xE9dito Utilizado", en: "Credit Used" }), formatCurrency2(authorization.creditUsed), "#d69e2e"],
+      [text2({ es: "Saldo Vencido", en: "Overdue Balance" }), formatCurrency2(authorization.overdueBalance), "#e53e3e"],
+      [text2({ es: "Monto Solicitado", en: "Amount Requested" }), formatCurrency2(quotation.total, quotation.currency || "MXN"), primaryColor]
     ];
     const CREDIT_COL_W = CONTENT_W / 4;
     doc.rect(MARGIN, currentY, CONTENT_W, 50).fill(lightColor);
@@ -5410,7 +5450,7 @@ async function generateCreditAuthPDFStream(data) {
     if (authorization.notes) {
       doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("NOTAS", MARGIN + 6, currentY + 4);
+      doc.text(text2({ es: "NOTAS", en: "NOTES" }), MARGIN + 6, currentY + 4);
       currentY += 16;
       const textH = Math.max(36, doc.heightOfString(authorization.notes, { width: CONTENT_W - 16 }) + 16);
       doc.rect(MARGIN, currentY, CONTENT_W, textH).fill(lightColor);
@@ -5421,14 +5461,14 @@ async function generateCreditAuthPDFStream(data) {
     if (authorization.status === "approved" && approvedBy) {
       doc.rect(MARGIN, currentY, CONTENT_W, 16).fill("#38a169");
       doc.fontSize(8).font("Helvetica-Bold").fillColor("#ffffff");
-      doc.text("APROBACI\xD3N", MARGIN + 6, currentY + 4);
+      doc.text(text2({ es: "APROBACI\xD3N", en: "APPROVAL" }), MARGIN + 6, currentY + 4);
       currentY += 16;
       doc.rect(MARGIN, currentY, CONTENT_W, 50).fill("#f0fff4");
       doc.fontSize(8).font("Helvetica").fillColor("#333");
-      doc.font("Helvetica-Bold").fillColor("#555").text("Aprobado por:", MARGIN + 8, currentY + 8, { continued: true, width: 90 });
+      doc.font("Helvetica-Bold").fillColor("#555").text(text2({ es: "Aprobado por:", en: "Approved by:" }), MARGIN + 8, currentY + 8, { continued: true, width: 90 });
       doc.font("Helvetica").fillColor("#222").text(approvedBy.fullName);
-      doc.font("Helvetica-Bold").fillColor("#555").text("Fecha:", MARGIN + 8, currentY + 20, { continued: true, width: 90 });
-      doc.font("Helvetica").fillColor("#222").text(formatDate2(authorization.authorizedAt, tenant?.timezone));
+      doc.font("Helvetica-Bold").fillColor("#555").text(text2({ es: "Fecha:", en: "Date:" }), MARGIN + 8, currentY + 20, { continued: true, width: 90 });
+      doc.font("Helvetica").fillColor("#222").text(formatDate2(authorization.authorizedAt));
       currentY += 50;
       if (authorization.approvalSignature) {
         currentY += 10;
@@ -5437,11 +5477,11 @@ async function generateCreditAuthPDFStream(data) {
           if (sigData.startsWith("data:image")) {
             const imageBuffer = Buffer.from(sigData.split(",")[1], "base64");
             doc.image(imageBuffer, MARGIN, currentY, { width: 200, height: 80 });
-            doc.fontSize(7).font("Helvetica").fillColor("#777").text("Firma Digital", MARGIN, currentY + 84, { width: 200, align: "center" });
+            doc.fontSize(7).font("Helvetica").fillColor("#777").text(text2({ es: "Firma Digital", en: "Digital Signature" }), MARGIN, currentY + 84, { width: 200, align: "center" });
             currentY += 100;
           }
         } catch {
-          doc.fontSize(8).font("Helvetica").fillColor("#777").text("[Firma registrada]", MARGIN + 8, currentY + 8);
+          doc.fontSize(8).font("Helvetica").fillColor("#777").text(text2({ es: "[Firma registrada]", en: "[Signature on file]" }), MARGIN + 8, currentY + 8);
           currentY += 30;
         }
       }
@@ -5449,9 +5489,9 @@ async function generateCreditAuthPDFStream(data) {
     if (authorization.status === "rejected") {
       doc.rect(MARGIN, currentY, CONTENT_W, 16).fill("#e53e3e");
       doc.fontSize(8).font("Helvetica-Bold").fillColor("#ffffff");
-      doc.text("MOTIVO DE RECHAZO", MARGIN + 6, currentY + 4);
+      doc.text(text2({ es: "MOTIVO DE RECHAZO", en: "REJECTION REASON" }), MARGIN + 6, currentY + 4);
       currentY += 16;
-      const rejText = authorization.rejectionNotes || "Sin motivo especificado";
+      const rejText = authorization.rejectionNotes || text2({ es: "Sin motivo especificado", en: "No reason specified" });
       const textH = Math.max(36, doc.heightOfString(rejText, { width: CONTENT_W - 16 }) + 16);
       doc.rect(MARGIN, currentY, CONTENT_W, textH).fill("#fff5f5");
       doc.fontSize(8.5).font("Helvetica").fillColor("#c53030");
@@ -5461,10 +5501,10 @@ async function generateCreditAuthPDFStream(data) {
     const FOOTER_Y = PAGE_H - 42;
     doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
-    doc.text("Documento generado autom\xE1ticamente. V\xE1lido como constancia de autorizaci\xF3n de cr\xE9dito.", MARGIN, FOOTER_Y + 6, { width: 280 });
-    doc.text(`Generado el ${formatDateTime2(/* @__PURE__ */ new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+    doc.text(text2({ es: "Documento generado autom\xE1ticamente. V\xE1lido como constancia de autorizaci\xF3n de cr\xE9dito.", en: "Automatically generated document. Valid as proof of credit authorization." }), MARGIN, FOOTER_Y + 6, { width: 280 });
+    doc.text(text2({ es: "Generado el ", en: "Generated on " }) + formatDateTime(/* @__PURE__ */ new Date()), MARGIN, FOOTER_Y + 16, { width: 280 });
     const footerRight = [];
-    if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+    if (tenant?.phone) footerRight.push(`${text2({ es: "Tel:", en: "Phone:" })} ${tenant.phone}`);
     if (tenant?.email) footerRight.push(tenant.email);
     if (tenant?.website) footerRight.push(tenant.website);
     if (footerRight.length) {
@@ -5484,6 +5524,7 @@ var init_credit_auth_pdf_generator = __esm({
   "server/credit-auth-pdf-generator.ts"() {
     "use strict";
     init_localStorage();
+    init_pdf_locale();
   }
 });
 
@@ -5529,16 +5570,15 @@ function lightenColor3(hex, amount) {
   const lb = Math.min(255, b + Math.round((255 - b) * amount));
   return `#${lr.toString(16).padStart(2, "0")}${lg.toString(16).padStart(2, "0")}${lb.toString(16).padStart(2, "0")}`;
 }
-function formatDate3(d) {
-  if (!d) return "\u2014";
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 async function generateOrdersReportPDF(data) {
   const doc = new PDFDocument3({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { orders: orders2, tenant, filters } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text2 = (values) => pdfText(language, values);
+  const formatDate2 = (value) => formatPdfDate(value, language, tenant?.timezone);
+  const statusLabel3 = (status) => STATUS_LABELS[status] ? text2(STATUS_LABELS[status]) : status;
   const logoBuffer = await loadLogoBuffer3(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text2({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor3(primaryColor, 0.93);
   const mediumColor = lightenColor3(primaryColor, 0.75);
@@ -5566,9 +5606,9 @@ async function generateOrdersReportPDF(data) {
         if (tenant?.address) {
           tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((part) => infoLines.push(part));
         }
-        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${text2({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
         if (cityParts.length) infoLines.push(cityParts.join(", "));
-        const contact = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+        const contact = [tenant?.phone ? `${text2({ es: "Tel", en: "Phone" })}: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
         if (contact.length) infoLines.push(contact.join("  |  "));
         if (tenant?.website) infoLines.push(tenant.website);
         doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -5578,13 +5618,13 @@ async function generateOrdersReportPDF(data) {
         const TITLE_Y = HEADER_H;
         doc.rect(0, TITLE_Y, PAGE_W, 28).fill(mediumColor);
         doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("REPORTE DE PEDIDOS", MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
+        doc.text(text2({ es: "REPORTE DE PEDIDOS", en: "ORDERS REPORT" }), MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
         const filterParts = [];
         if (filters.dateFrom || filters.dateTo) {
-          filterParts.push(`${filters.dateFrom || "\u2014"} al ${filters.dateTo || "\u2014"}`);
+          filterParts.push(`${filters.dateFrom ? formatDate2(filters.dateFrom) : "\u2014"} ${text2({ es: "al", en: "to" })} ${filters.dateTo ? formatDate2(filters.dateTo) : "\u2014"}`);
         }
         if (filters.customerName) filterParts.push(filters.customerName);
-        if (filters.status && filters.status !== "all") filterParts.push(STATUS_LABELS[filters.status] || filters.status);
+        if (filters.status && filters.status !== "all") filterParts.push(statusLabel3(filters.status));
         if (filterParts.length) {
           doc.fontSize(7.5).font("Helvetica").fillColor(primaryColor);
           doc.text(filterParts.join("  \u2022  "), MARGIN + CONTENT_W / 2, TITLE_Y + 10, {
@@ -5599,7 +5639,7 @@ async function generateOrdersReportPDF(data) {
       drawHeader2();
       let currentY = 100 + 28 + 14;
       doc.fontSize(8).font("Helvetica").fillColor("#555555");
-      doc.text(`Total de pedidos: ${orders2.length}`, MARGIN, currentY, { lineBreak: false });
+      doc.text(`${text2({ es: "Total de pedidos", en: "Total orders" })}: ${formatPdfNumber(orders2.length, language)}`, MARGIN, currentY, { lineBreak: false });
       currentY += 16;
       for (let oi = 0; oi < orders2.length; oi++) {
         const order = orders2[oi];
@@ -5629,31 +5669,33 @@ async function generateOrdersReportPDF(data) {
         const col2X = innerX + halfW + 12;
         let cardY = currentY + cardPad;
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Folio:", innerX, cardY, { lineBreak: false });
+        const folioLabel = text2({ es: "Folio:", en: "Order No.:" });
+        const folioLabelW = language === "en" ? 48 : 35;
+        doc.text(folioLabel, innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(order.folio, innerX + 35, cardY, { width: halfW - 35, lineBreak: false });
+        doc.text(order.folio, innerX + folioLabelW, cardY, { width: halfW - folioLabelW, lineBreak: false });
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Fecha de Cierre:", col2X, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Fecha de Cierre:", en: "Close Date:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(formatDate3(order.closeDate), col2X + 85, cardY, { lineBreak: false });
+        doc.text(formatDate2(order.closeDate), col2X + 85, cardY, { lineBreak: false });
         cardY += 14;
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Lib. C y Cobranza:", col2X, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Lib. C y Cobranza:", en: "Credit & Collections:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(formatDate3(order.creditReleaseDate), col2X + 95, cardY, { lineBreak: false });
+        doc.text(formatDate2(order.creditReleaseDate), col2X + 95, cardY, { lineBreak: false });
         cardY += 14;
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Orden de Compra:", innerX, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Orden de Compra:", en: "Purchase Order:" }), innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(order.purchaseOrder || "\u2014", innerX + 90, cardY, { width: halfW - 90, lineBreak: false });
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Estatus:", col2X, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Estatus:", en: "Status:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(STATUS_LABELS[order.status] || order.status, col2X + 45, cardY, { lineBreak: false });
+        doc.text(statusLabel3(order.status), col2X + 45, cardY, { lineBreak: false });
         cardY += 14;
         if (order.notes) {
           doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-          doc.text("Notas:", innerX, cardY, { lineBreak: false });
+          doc.text(text2({ es: "Notas:", en: "Notes:" }), innerX, cardY, { lineBreak: false });
           doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
           doc.text(order.notes, innerX + 38, cardY, { width: innerW - 38 });
           const renderedNotesH = doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: innerW - 38 });
@@ -5663,17 +5705,17 @@ async function generateOrdersReportPDF(data) {
         doc.moveTo(innerX, cardY).lineTo(MARGIN + CONTENT_W - cardPad, cardY).strokeColor(mediumColor).lineWidth(0.5).stroke();
         cardY += 6;
         doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("Cantidad", innerX + 4, cardY, { lineBreak: false });
-        doc.text("Clave / Producto", innerX + 80, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Cantidad", en: "Quantity" }), innerX + 4, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Clave / Producto", en: "Code / Product" }), innerX + 80, cardY, { lineBreak: false });
         cardY += 14;
         if (order.items.length === 0) {
           doc.fontSize(8).font("Helvetica").fillColor("#999999");
-          doc.text("Sin art\xEDculos", innerX + 4, cardY, { lineBreak: false });
+          doc.text(text2({ es: "Sin art\xEDculos", en: "No items" }), innerX + 4, cardY, { lineBreak: false });
           cardY += 14;
         } else {
           for (const item of order.items) {
             doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-            const qty = parseFloat(item.quantity).toLocaleString("es-MX", { maximumFractionDigits: 2 });
+            const qty = formatPdfNumber(parseFloat(item.quantity), language, { maximumFractionDigits: 2 });
             const productLabel = buildLabel(item);
             const labelH = doc.fontSize(8.5).font("Helvetica").heightOfString(productLabel, { width: innerW - 80 });
             doc.text(`${qty} ${item.unitOfMeasure}`, innerX + 4, cardY, { width: 70, lineBreak: false });
@@ -5686,8 +5728,8 @@ async function generateOrdersReportPDF(data) {
       const footerY = PAGE_H - 36;
       doc.rect(0, footerY, PAGE_W, 36).fill(primaryColor);
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.75)");
-      const generated = (/* @__PURE__ */ new Date()).toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-      doc.text(`Generado el ${generated}  \u2014  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
+      const generated = formatPdfDateTime(/* @__PURE__ */ new Date(), language, tenant?.timezone);
+      doc.text(`${text2({ es: "Generado el", en: "Generated on" })} ${generated}  \u2014  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
       doc.end();
     } catch (err) {
       console.error("Error generating report PDF:", err);
@@ -5699,8 +5741,12 @@ async function generateOrdersReportPDF(data) {
 async function generateIncidentsReportPDF(data) {
   const doc = new PDFDocument3({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { incidents: incidents2, tenant, cutoffDate } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text2 = (values) => pdfText(language, values);
+  const formatDate2 = (value) => formatPdfDate(value, language, tenant?.timezone);
+  const incidentLabel = (labels, value) => labels[value] ? text2(labels[value]) : value;
   const logoBuffer = await loadLogoBuffer3(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text2({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor3(primaryColor, 0.93);
   const mediumColor = lightenColor3(primaryColor, 0.75);
@@ -5728,9 +5774,9 @@ async function generateIncidentsReportPDF(data) {
         if (tenant?.address) {
           tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((p) => infoLines.push(p));
         }
-        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+        const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${text2({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
         if (cityParts.length) infoLines.push(cityParts.join(", "));
-        const contact = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+        const contact = [tenant?.phone ? `${text2({ es: "Tel", en: "Phone" })}: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
         if (contact.length) infoLines.push(contact.join("  |  "));
         if (tenant?.website) infoLines.push(tenant.website);
         doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -5740,15 +5786,15 @@ async function generateIncidentsReportPDF(data) {
         const TITLE_Y = HEADER_H;
         doc.rect(0, TITLE_Y, PAGE_W, 28).fill(mediumColor);
         doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("REPORTE DE INCIDENTES VIGENTES", MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
+        doc.text(text2({ es: "REPORTE DE INCIDENTES VIGENTES", en: "ACTIVE INCIDENTS REPORT" }), MARGIN, TITLE_Y + 7, { width: CONTENT_W / 2, lineBreak: false });
         doc.fontSize(8).font("Helvetica").fillColor(primaryColor);
-        doc.text(`Corte: ${cutoffDate}`, PAGE_W - MARGIN - 130, TITLE_Y + 10, { width: 130, align: "right", lineBreak: false });
+        doc.text(`${text2({ es: "Corte", en: "As of" })}: ${formatDate2(cutoffDate)}`, PAGE_W - MARGIN - 130, TITLE_Y + 10, { width: 130, align: "right", lineBreak: false });
       };
       var drawHeader = drawHeader2;
       drawHeader2();
       let currentY = 100 + 28 + 14;
       doc.fontSize(8).font("Helvetica").fillColor("#555555");
-      doc.text(`Total de incidentes vigentes: ${incidents2.length}`, MARGIN, currentY, { lineBreak: false });
+      doc.text(`${text2({ es: "Total de incidentes vigentes", en: "Total active incidents" })}: ${formatPdfNumber(incidents2.length, language)}`, MARGIN, currentY, { lineBreak: false });
       currentY += 16;
       for (let ii = 0; ii < incidents2.length; ii++) {
         const inc = incidents2[ii];
@@ -5774,38 +5820,38 @@ async function generateIncidentsReportPDF(data) {
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor(primaryColor);
         doc.text(inc.ticketNumber, innerX + 40, cardY, { width: halfW - 40, lineBreak: false });
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Fecha:", col2X, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Fecha:", en: "Date:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(formatDate3(inc.createdAt), col2X + 38, cardY, { lineBreak: false });
+        doc.text(formatDate2(inc.createdAt), col2X + 38, cardY, { lineBreak: false });
         cardY += 14;
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Tipo:", col2X, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Tipo:", en: "Type:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(INCIDENT_TYPE_LABELS2[inc.type] || inc.type, col2X + 30, cardY, { lineBreak: false });
+        doc.text(incidentLabel(INCIDENT_TYPE_LABELS2, inc.type), col2X + 30, cardY, { lineBreak: false });
         cardY += 14;
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Urgencia:", innerX, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Urgencia:", en: "Urgency:" }), innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(INCIDENT_URGENCY_LABELS2[inc.urgency] || inc.urgency, innerX + 52, cardY, { lineBreak: false });
+        doc.text(incidentLabel(INCIDENT_URGENCY_LABELS2, inc.urgency), innerX + 52, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Estatus:", col2X, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Estatus:", en: "Status:" }), col2X, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
-        doc.text(INCIDENT_STATUS_LABELS2[inc.status] || inc.status, col2X + 45, cardY, { lineBreak: false });
+        doc.text(incidentLabel(INCIDENT_STATUS_LABELS2, inc.status), col2X + 45, cardY, { lineBreak: false });
         cardY += 14;
         doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
-        doc.text("Asunto:", innerX, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Asunto:", en: "Subject:" }), innerX, cardY, { lineBreak: false });
         doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
         doc.text(inc.subject, innerX + 42, cardY, { width: innerW - 42, lineBreak: false });
         cardY += 14;
         doc.fontSize(8).font("Helvetica-Bold").fillColor("#555555");
-        doc.text("Descripci\xF3n:", innerX, cardY, { lineBreak: false });
+        doc.text(text2({ es: "Descripci\xF3n:", en: "Description:" }), innerX, cardY, { lineBreak: false });
         cardY += 11;
         doc.fontSize(8).font("Helvetica").fillColor("#333333");
         doc.text(inc.description || "\u2014", innerX + 4, cardY, { width: innerW - 4 });
         cardY += descH;
         if (inc.resolution) {
           doc.fontSize(8).font("Helvetica-Bold").fillColor("#555555");
-          doc.text("Resoluci\xF3n:", innerX, cardY, { lineBreak: false });
+          doc.text(text2({ es: "Resoluci\xF3n:", en: "Resolution:" }), innerX, cardY, { lineBreak: false });
           cardY += 11;
           doc.fontSize(8).font("Helvetica").fillColor("#333333");
           doc.text(inc.resolution, innerX + 4, cardY, { width: innerW - 4 });
@@ -5815,8 +5861,8 @@ async function generateIncidentsReportPDF(data) {
       const footerY = PAGE_H - 36;
       doc.rect(0, footerY, PAGE_W, 36).fill(primaryColor);
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.75)");
-      const generated = (/* @__PURE__ */ new Date()).toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-      doc.text(`Generado el ${generated}  \u2014  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
+      const generated = formatPdfDateTime(/* @__PURE__ */ new Date(), language, tenant?.timezone);
+      doc.text(`${text2({ es: "Generado el", en: "Generated on" })} ${generated}  \u2014  ${companyName}`, MARGIN, footerY + 14, { width: CONTENT_W, align: "center", lineBreak: false });
       doc.end();
     } catch (err) {
       console.error("Error generating incidents PDF:", err);
@@ -5830,37 +5876,38 @@ var init_reports_pdf_generator = __esm({
   "server/reports-pdf-generator.ts"() {
     "use strict";
     init_localStorage();
+    init_pdf_locale();
     STATUS_LABELS = {
-      pending: "Pendiente",
-      in_production: "En Producci\xF3n",
-      ready: "Listo",
-      partially_released: "Parcialmente Surtido",
-      released: "Surtido",
-      shipped: "Embarcado",
-      delivered: "Entregado"
+      pending: { es: "Pendiente", en: "Pending" },
+      in_production: { es: "En Producci\xF3n", en: "In Production" },
+      ready: { es: "Listo", en: "Ready" },
+      partially_released: { es: "Parcialmente Surtido", en: "Partially Released" },
+      released: { es: "Surtido", en: "Released" },
+      shipped: { es: "Embarcado", en: "Shipped" },
+      delivered: { es: "Entregado", en: "Delivered" }
     };
     INCIDENT_TYPE_LABELS2 = {
-      garantia: "Garant\xEDa",
-      retrabajo: "Retrabajo",
-      queja: "Queja",
-      consulta: "Consulta",
-      administrativo: "Administrativo"
+      garantia: { es: "Garant\xEDa", en: "Warranty" },
+      retrabajo: { es: "Retrabajo", en: "Rework" },
+      queja: { es: "Queja", en: "Complaint" },
+      consulta: { es: "Consulta", en: "Inquiry" },
+      administrativo: { es: "Administrativo", en: "Administrative" }
     };
     INCIDENT_STATUS_LABELS2 = {
-      nuevo: "Nuevo",
-      asignado: "Asignado",
-      en_proceso: "En Proceso",
-      esperando_cliente: "Esperando Cliente",
-      esperando_interno: "Esperando Interno",
-      resuelto: "Resuelto",
-      cerrado: "Cerrado",
-      cancelado: "Cancelado"
+      nuevo: { es: "Nuevo", en: "New" },
+      asignado: { es: "Asignado", en: "Assigned" },
+      en_proceso: { es: "En Proceso", en: "In Progress" },
+      esperando_cliente: { es: "Esperando Cliente", en: "Waiting for Customer" },
+      esperando_interno: { es: "Esperando Interno", en: "Waiting Internally" },
+      resuelto: { es: "Resuelto", en: "Resolved" },
+      cerrado: { es: "Cerrado", en: "Closed" },
+      cancelado: { es: "Cancelado", en: "Cancelled" }
     };
     INCIDENT_URGENCY_LABELS2 = {
-      baja: "Baja",
-      media: "Media",
-      alta: "Alta",
-      critica: "Cr\xEDtica"
+      baja: { es: "Baja", en: "Low" },
+      media: { es: "Media", en: "Medium" },
+      alta: { es: "Alta", en: "High" },
+      critica: { es: "Cr\xEDtica", en: "Critical" }
     };
   }
 });
@@ -5888,11 +5935,6 @@ async function loadLogoBuffer4(logoUrl) {
     return null;
   }
 }
-function fmtDate(date) {
-  if (!date) return "\u2014";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 function lightenColor4(hex, amount) {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
@@ -5902,9 +5944,23 @@ function lightenColor4(hex, amount) {
 }
 async function generateShipmentRemisionPDF(data) {
   const { tenant, products: products2 } = data;
+  const language = resolvePdfLanguage(tenant);
+  const t = (values) => pdfText(language, values);
+  const fmtDate2 = (date) => formatPdfDate(date, language, tenant?.timezone);
+  const orderStatus = (status) => ({
+    pending: t({ es: "Pendiente", en: "Pending" }),
+    in_production: t({ es: "En producci\xF3n", en: "In Production" }),
+    ready: t({ es: "Listo", en: "Ready" }),
+    partially_released: t({ es: "Parcialmente liberado", en: "Partially Released" }),
+    released: t({ es: "Liberado", en: "Released" }),
+    shipped: t({ es: "Enviado", en: "Shipped" }),
+    delivered: t({ es: "Entregado", en: "Delivered" }),
+    closed: t({ es: "Cerrado", en: "Closed" }),
+    cancelled: t({ es: "Cancelada", en: "Cancelled" })
+  })[status] ?? status;
   const doc = new PDFDocument4({ size: "LETTER", margin: 0, autoFirstPage: true });
   const logoBuffer = await loadLogoBuffer4(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || t({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor4(primaryColor, 0.92);
   const mediumColor = lightenColor4(primaryColor, 0.75);
@@ -5927,9 +5983,9 @@ async function generateShipmentRemisionPDF(data) {
   const infoLines = [];
   if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
   if (tenant?.address) tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((p) => infoLines.push(p));
-  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${t({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
   if (cityParts.length) infoLines.push(cityParts.join(", "));
-  if (tenant?.phone) infoLines.push(`Tel: ${tenant.phone}`);
+  if (tenant?.phone) infoLines.push(`${t({ es: "Tel", en: "Phone" })}: ${tenant.phone}`);
   if (tenant?.email) infoLines.push(tenant.email);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
   infoLines.forEach((line, i) => doc.text(line, TEXT_X, 34 + i * 10.5, { width: TEXT_W, align: "right", lineBreak: false }));
@@ -5937,23 +5993,23 @@ async function generateShipmentRemisionPDF(data) {
   const TITLE_H = 30;
   doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
   doc.fontSize(12).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("REMISI\xD3N DE SALIDA", MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.6 });
+  doc.text(t({ es: "REMISI\xD3N DE SALIDA", en: "OUTBOUND DELIVERY NOTE" }), MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.6 });
   doc.fontSize(8.5).font("Helvetica").fillColor(primaryColor);
-  doc.text(`Fecha: ${fmtDate(now)}`, MARGIN + CONTENT_W * 0.6, TITLE_Y + 10, { width: CONTENT_W * 0.4, align: "right" });
+  doc.text(`${t({ es: "Fecha", en: "Date" })}: ${fmtDate2(now)}`, MARGIN + CONTENT_W * 0.6, TITLE_Y + 10, { width: CONTENT_W * 0.4, align: "right" });
   let Y = TITLE_Y + TITLE_H + 14;
   doc.fontSize(18).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text(data.invoiceNumber || data.folio, MARGIN, Y);
   Y += 28;
   const INFO_COL = CONTENT_W / 3;
   doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-  doc.text("Orden:", MARGIN, Y);
-  doc.text("Estado:", MARGIN + INFO_COL, Y);
-  doc.text("Fecha programada:", MARGIN + INFO_COL * 2, Y);
+  doc.text(`${t({ es: "Orden", en: "Order" })}:`, MARGIN, Y);
+  doc.text(`${t({ es: "Estado", en: "Status" })}:`, MARGIN + INFO_COL, Y);
+  doc.text(`${t({ es: "Fecha programada", en: "Scheduled date" })}:`, MARGIN + INFO_COL * 2, Y);
   Y += 11;
   doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
   doc.text(data.folio, MARGIN, Y);
-  doc.text(data.orderStatus, MARGIN + INFO_COL, Y);
-  doc.text(fmtDate(data.scheduledDate), MARGIN + INFO_COL * 2, Y);
+  doc.text(orderStatus(data.orderStatus), MARGIN + INFO_COL, Y);
+  doc.text(fmtDate2(data.scheduledDate), MARGIN + INFO_COL * 2, Y);
   Y += 18;
   const BOX_W = CONTENT_W / 2 - 6;
   const BOX2_X = MARGIN + BOX_W + 12;
@@ -5961,7 +6017,7 @@ async function generateShipmentRemisionPDF(data) {
   doc.rect(MARGIN, Y, BOX_W, BOX_H).fill(lightColor);
   doc.rect(MARGIN, Y, BOX_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("CLIENTE / DESTINATARIO", MARGIN + 6, Y + 4, { width: BOX_W - 12 });
+  doc.text(t({ es: "CLIENTE / DESTINATARIO", en: "CUSTOMER / RECIPIENT" }), MARGIN + 6, Y + 4, { width: BOX_W - 12 });
   if (data.customerAddress) {
     doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
     doc.text(data.customerAddress, MARGIN + 6, Y + 20, { width: BOX_W - 12, lineBreak: false, ellipsis: true });
@@ -5969,12 +6025,12 @@ async function generateShipmentRemisionPDF(data) {
   doc.rect(BOX2_X, Y, BOX_W, BOX_H).fill(lightColor);
   doc.rect(BOX2_X, Y, BOX_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("DATOS DE TRANSPORTE", BOX2_X + 6, Y + 4, { width: BOX_W - 12 });
+  doc.text(t({ es: "DATOS DE TRANSPORTE", en: "TRANSPORT DETAILS" }), BOX2_X + 6, Y + 4, { width: BOX_W - 12 });
   const transportLines = [
-    { label: "Transportista:", value: data.transporter },
-    { label: "Tipo:", value: data.transportType === "propio" ? "Transporte Propio" : "Paqueter\xEDa" },
-    { label: "Chofer:", value: data.driverName || "\u2014" },
-    { label: "Placas:", value: data.vehiclePlates || "\u2014" }
+    { label: `${t({ es: "Transportista", en: "Carrier" })}:`, value: data.transporter },
+    { label: `${t({ es: "Tipo", en: "Type" })}:`, value: data.transportType === "propio" ? t({ es: "Transporte Propio", en: "Company Transport" }) : t({ es: "Paqueter\xEDa", en: "Courier" }) },
+    { label: `${t({ es: "Chofer", en: "Driver" })}:`, value: data.driverName || "\u2014" },
+    { label: `${t({ es: "Placas", en: "License plates" })}:`, value: data.vehiclePlates || "\u2014" }
   ];
   doc.fontSize(7.5).font("Helvetica").fillColor("#374151");
   transportLines.forEach((row, i) => {
@@ -5983,20 +6039,20 @@ async function generateShipmentRemisionPDF(data) {
   });
   Y += BOX_H + 14;
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Nombre: _______________________________________________", MARGIN, Y);
+  doc.text(`${t({ es: "Nombre", en: "Name" })}: _______________________________________________`, MARGIN, Y);
   Y += 16;
-  doc.text("A quien corresponda:", MARGIN, Y);
+  doc.text(t({ es: "A quien corresponda:", en: "To whom it may concern:" }), MARGIN, Y);
   Y += 12;
   doc.fontSize(8).font("Helvetica-Oblique").fillColor("#4b5563");
   doc.text(
-    "Por medio de la presente autorizamos al portador trasladar nuestros equipos desde las instalaciones de la empresa hasta el destino marcado previamente.",
+    t({ es: "Por medio de la presente autorizamos al portador trasladar nuestros equipos desde las instalaciones de la empresa hasta el destino marcado previamente.", en: "We hereby authorize the bearer to transport our equipment from the company's facilities to the destination previously indicated." }),
     MARGIN,
     Y,
     { width: CONTENT_W }
   );
   Y += 24;
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Atte. DIRECCI\xD3N", MARGIN, Y);
+  doc.text(t({ es: "Atte. DIRECCI\xD3N", en: "Sincerely, MANAGEMENT" }), MARGIN, Y);
   Y += 18;
   const COL = {
     producto: MARGIN,
@@ -6007,10 +6063,10 @@ async function generateShipmentRemisionPDF(data) {
   const ROW_H = 18;
   doc.rect(MARGIN, Y, CONTENT_W, ROW_H).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("PRODUCTO", COL.producto + 4, Y + 5, { width: 232 });
-  doc.text("CANTIDAD", COL.cantidad + 4, Y + 5, { width: 76 });
-  doc.text("DESDE", COL.desde + 4, Y + 5, { width: 76 });
-  doc.text("N\xDAMERO DE LOTE/SERIE", COL.serie + 4, Y + 5, { width: 128 });
+  doc.text(t({ es: "PRODUCTO", en: "PRODUCT" }), COL.producto + 4, Y + 5, { width: 232 });
+  doc.text(t({ es: "CANTIDAD", en: "QUANTITY" }), COL.cantidad + 4, Y + 5, { width: 76 });
+  doc.text(t({ es: "DESDE", en: "FROM" }), COL.desde + 4, Y + 5, { width: 76 });
+  doc.text(t({ es: "N\xDAMERO DE LOTE/SERIE", en: "LOT/SERIAL NUMBER" }), COL.serie + 4, Y + 5, { width: 128 });
   Y += ROW_H;
   let rowIndex = 0;
   for (const p of products2) {
@@ -6020,7 +6076,7 @@ async function generateShipmentRemisionPDF(data) {
       if (rowIndex % 2 === 0) doc.rect(MARGIN, Y, CONTENT_W, ROW_H).fill(lightColor);
       doc.fontSize(7.5).font("Helvetica").fillColor("#111827");
       doc.text(p.name, COL.producto + 4, Y + 5, { width: 232, lineBreak: false, ellipsis: true });
-      doc.text(`${qtyPerRow.toFixed(2)} ${p.unitOfMeasure}`, COL.cantidad + 4, Y + 5, { width: 76 });
+      doc.text(`${formatPdfNumber(qtyPerRow, language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${p.unitOfMeasure}`, COL.cantidad + 4, Y + 5, { width: 76 });
       doc.text(p.desde, COL.desde + 4, Y + 5, { width: 76 });
       doc.font("Helvetica-Bold").text(serial, COL.serie + 4, Y + 5, { width: 128, lineBreak: false, ellipsis: true });
       Y += ROW_H;
@@ -6038,7 +6094,7 @@ async function generateShipmentRemisionPDF(data) {
   }
   const SIG_W = CONTENT_W / 4 - 6;
   const SIG_H = 80;
-  const sigBoxes = ["DEPTO. DE SEGURIDAD", "EMBARQUES", "FACTURACI\xD3N", "TRANSPORTACI\xD3N"];
+  const sigBoxes = t({ es: ["DEPTO. DE SEGURIDAD", "EMBARQUES", "FACTURACI\xD3N", "TRANSPORTACI\xD3N"], en: ["SECURITY DEPT.", "SHIPPING", "BILLING", "TRANSPORTATION"] });
   sigBoxes.forEach((label, i) => {
     const bx = MARGIN + i * (SIG_W + 8);
     doc.rect(bx, Y, SIG_W, SIG_H).stroke(mediumColor);
@@ -6046,9 +6102,9 @@ async function generateShipmentRemisionPDF(data) {
     doc.text(label, bx + 4, Y + 5, { width: SIG_W - 8 });
     doc.moveTo(bx + 4, Y + 45).lineTo(bx + SIG_W - 4, Y + 45).stroke("#9ca3af");
     doc.fontSize(6.5).font("Helvetica").fillColor("#6b7280");
-    doc.text("FIRMA", bx + 4, Y + 47, { width: SIG_W - 8 });
+    doc.text(t({ es: "FIRMA", en: "SIGNATURE" }), bx + 4, Y + 47, { width: SIG_W - 8 });
     doc.moveTo(bx + 4, Y + 68).lineTo(bx + SIG_W - 4, Y + 68).stroke("#9ca3af");
-    doc.text("FECHA", bx + 4, Y + 70, { width: SIG_W - 8 });
+    doc.text(t({ es: "FECHA", en: "DATE" }), bx + 4, Y + 70, { width: SIG_W - 8 });
   });
   Y += SIG_H + 20;
   if (Y > 710) {
@@ -6056,14 +6112,14 @@ async function generateShipmentRemisionPDF(data) {
     Y = 40;
   }
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Yo ", MARGIN, Y, { continued: true });
+  doc.text(t({ es: "Yo ", en: "I, " }), MARGIN, Y, { continued: true });
   doc.text("___________________________________", { continued: true });
-  doc.text(" firmo de que he recibido completa la mercanc\xEDa arriba descrita.", { continued: false });
+  doc.text(t({ es: " firmo de que he recibido completa la mercanc\xEDa arriba descrita.", en: " confirm that I have received all of the merchandise described above." }), { continued: false });
   Y += 22;
-  doc.text("Fecha ___/___/______", MARGIN, Y);
+  doc.text(t({ es: "Fecha ___/___/______", en: "Date ___/___/______" }), MARGIN, Y);
   doc.moveTo(PAGE_W - MARGIN - 160, Y).lineTo(PAGE_W - MARGIN, Y).stroke("#374151");
   doc.fontSize(7).font("Helvetica").fillColor("#6b7280");
-  doc.text("FIRMA DE RECIBIDO POR PARTE DEL CLIENTE", PAGE_W - MARGIN - 160, Y + 4, { width: 160, align: "right" });
+  doc.text(t({ es: "FIRMA DE RECIBIDO POR PARTE DEL CLIENTE", en: "CUSTOMER RECEIPT SIGNATURE" }), PAGE_W - MARGIN - 160, Y + 4, { width: 160, align: "right" });
   const FOOTER_Y = 755;
   doc.rect(0, FOOTER_Y, PAGE_W, 37).fill(primaryColor);
   const footerParts = [];
@@ -6072,7 +6128,7 @@ async function generateShipmentRemisionPDF(data) {
   if (tenant?.phone) footerParts.push(tenant.phone);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.8)");
   doc.text(footerParts.join("   |   "), MARGIN, FOOTER_Y + 8, { width: CONTENT_W, align: "center" });
-  doc.text("P\xE1gina: 1 / 1", MARGIN, FOOTER_Y + 20, { width: CONTENT_W, align: "center" });
+  doc.text(t({ es: "P\xE1gina: 1 / 1", en: "Page: 1 / 1" }), MARGIN, FOOTER_Y + 20, { width: CONTENT_W, align: "center" });
   doc.end();
   return doc;
 }
@@ -6080,6 +6136,7 @@ var init_shipment_remision_pdf_generator = __esm({
   "server/shipment-remision-pdf-generator.ts"() {
     "use strict";
     init_localStorage();
+    init_pdf_locale();
   }
 });
 
@@ -6107,20 +6164,6 @@ async function loadLogoBuffer5(logoUrl) {
     return null;
   }
 }
-function formatCurrency2(value, currency = "MXN") {
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  return "$" + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function formatDate4(date, timezone) {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric", timeZone: timezone || "America/Mexico_City" });
-}
-function formatDateTime3(date, timezone) {
-  if (!date) return "N/A";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: timezone || "America/Mexico_City" });
-}
 function lightenColor5(hex, amount) {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
@@ -6134,8 +6177,10 @@ function lightenColor5(hex, amount) {
 async function generateInvoicePDFStream(data) {
   const doc = new PDFDocument5({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { invoice, customer, tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const t = (es2, en) => pdfText(language, { es: es2, en });
   const logoBuffer = await loadLogoBuffer5(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || t("Empresa", "Company");
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor5(primaryColor, 0.92);
   const mediumColor = lightenColor5(primaryColor, 0.75);
@@ -6161,9 +6206,9 @@ async function generateInvoicePDFStream(data) {
     if (tenant?.address) {
       tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((part) => infoLines.push(part));
     }
-    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+    const cityStateParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${t("C.P.", "ZIP")} ${tenant.zipCode}` : null].filter(Boolean);
     if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
-    const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+    const contactParts = [tenant?.phone ? `${t("Tel:", "Phone:")} ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
     doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -6174,14 +6219,14 @@ async function generateInvoicePDFStream(data) {
     const TITLE_H = 32;
     doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
     doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("FACTURA", MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
+    doc.text(t("FACTURA", "INVOICE"), MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
     doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
-    doc.text(`Serie: ${invoice.serie}  |  Folio: ${invoice.folio}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
+    doc.text(`${t("Serie", "Series")}: ${invoice.serie}  |  ${t("Folio", "Number")}: ${invoice.folio}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
     let currentY = TITLE_Y + TITLE_H + 18;
     if (invoice.cfdiUuid) {
       doc.rect(MARGIN, currentY, CONTENT_W, 20).fill(lightColor);
       doc.fontSize(7.5).font("Helvetica").fillColor("#666");
-      doc.text("UUID CFDI:", MARGIN + 6, currentY + 6, { continued: true, width: 55 });
+      doc.text(t("UUID CFDI:", "CFDI UUID:"), MARGIN + 6, currentY + 6, { continued: true, width: 55 });
       doc.font("Helvetica-Bold").fillColor("#333").text(invoice.cfdiUuid, { width: CONTENT_W - 70 });
       currentY += 26;
     }
@@ -6193,18 +6238,18 @@ async function generateInvoicePDFStream(data) {
     doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
     doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("DATOS DEL CLIENTE", MARGIN + 6, currentY + 4, { width: COL_W - 10 });
-    doc.text("DATOS DE LA FACTURA", COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DEL CLIENTE", "CUSTOMER INFORMATION"), MARGIN + 6, currentY + 4, { width: COL_W - 10 });
+    doc.text(t("DATOS DE LA FACTURA", "INVOICE INFORMATION"), COL2_X + 6, currentY + 4, { width: COL_W - 10 });
     let leftY = currentY + 22;
     const customerRows = [
-      ["Raz\xF3n Social:", customer.name],
+      [t("Raz\xF3n Social:", "Business Name:"), customer.name],
       ...customer.rfc ? [["RFC:", customer.rfc]] : [],
-      ...customer.phone ? [["Tel\xE9fono:", customer.phone]] : [],
+      ...customer.phone ? [[t("Tel\xE9fono:", "Phone:"), customer.phone]] : [],
       ...customer.email ? [["Email:", customer.email]] : []
     ];
     if (customer.address) {
       const addr = [customer.address, customer.city, customer.state].filter(Boolean).join(", ");
-      customerRows.push(["Direcci\xF3n:", addr]);
+      customerRows.push([t("Direcci\xF3n:", "Address:"), addr]);
     }
     const LABEL_W = 68;
     const VALUE_X_L = MARGIN + 6 + LABEL_W;
@@ -6217,11 +6262,11 @@ async function generateInvoicePDFStream(data) {
     }
     let rightY = currentY + 22;
     const invoiceRows = [
-      ["Fecha Emisi\xF3n:", formatDate4(invoice.issuedAt, tenant?.timezone)],
-      ...invoice.dueDate ? [["Vencimiento:", formatDate4(invoice.dueDate, tenant?.timezone)]] : [],
-      ["M\xE9todo Pago:", invoice.paymentMethod || "Por definir"],
-      ["Forma Pago:", invoice.paymentForm || "Por definir"],
-      ["Moneda:", invoice.currency || "MXN"]
+      [t("Fecha Emisi\xF3n:", "Issue Date:"), formatPdfDate(invoice.issuedAt, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })],
+      ...invoice.dueDate ? [[t("Vencimiento:", "Due Date:"), formatPdfDate(invoice.dueDate, language, tenant?.timezone, { day: "numeric", month: "long", year: "numeric" })]] : [],
+      [t("M\xE9todo Pago:", "Payment Method:"), invoice.paymentMethod || t("Por definir", "To be defined")],
+      [t("Forma Pago:", "Payment Form:"), invoice.paymentForm || t("Por definir", "To be defined")],
+      [t("Moneda:", "Currency:"), invoice.currency || "MXN"]
     ];
     const VALUE_X_R = COL2_X + 6 + LABEL_W;
     const VALUE_W_R = COL_W - LABEL_W - 10;
@@ -6233,7 +6278,7 @@ async function generateInvoicePDFStream(data) {
     currentY += BOX_H + 20;
     doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
     doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("RESUMEN DE FACTURA", MARGIN + 6, currentY + 4);
+    doc.text(t("RESUMEN DE FACTURA", "INVOICE SUMMARY"), MARGIN + 6, currentY + 4);
     currentY += 16;
     const TOTALS_W = 220;
     const TOTALS_X = PAGE_W - MARGIN - TOTALS_W;
@@ -6241,29 +6286,29 @@ async function generateInvoicePDFStream(data) {
     doc.rect(TOTALS_X, currentY, TOTALS_W, 75).stroke(mediumColor);
     let totY = currentY + 10;
     doc.fontSize(8.5).font("Helvetica").fillColor("#444");
-    doc.text("Subtotal:", TOTALS_X + 6, totY, { width: 110 });
-    doc.text(formatCurrency2(invoice.subtotal), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
+    doc.text(`${t("Subtotal", "Subtotal")}:`, TOTALS_X + 6, totY, { width: 110 });
+    doc.text(formatPdfCurrency(invoice.subtotal, invoice.currency || "MXN", language), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
     totY += 16;
-    doc.text("IVA (16%):", TOTALS_X + 6, totY, { width: 110 });
-    doc.text(formatCurrency2(invoice.tax), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
+    doc.text(`${t("IVA", "VAT")} (16%):`, TOTALS_X + 6, totY, { width: 110 });
+    doc.text(formatPdfCurrency(invoice.tax, invoice.currency || "MXN", language), TOTALS_X + 116, totY, { width: TOTALS_W - 122, align: "right" });
     totY += 16;
     doc.rect(TOTALS_X, totY, TOTALS_W, 1).fill(mediumColor);
     totY += 6;
     doc.rect(TOTALS_X, totY, TOTALS_W, 22).fill(primaryColor);
     doc.fontSize(10).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text("TOTAL:", TOTALS_X + 6, totY + 6, { width: 90 });
-    doc.text(formatCurrency2(invoice.total), TOTALS_X + 96, totY + 6, { width: TOTALS_W - 102, align: "right" });
+    doc.text(`${t("TOTAL", "TOTAL")}:`, TOTALS_X + 6, totY + 6, { width: 90 });
+    doc.text(formatPdfCurrency(invoice.total, invoice.currency || "MXN", language), TOTALS_X + 96, totY + 6, { width: TOTALS_W - 102, align: "right" });
     doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#888");
-    doc.text(`Importe expresado en ${invoice.currency || "MXN"} (Pesos Mexicanos).`, MARGIN, currentY + 10, { width: TOTALS_X - MARGIN - 10 });
-    doc.text("Este documento es una representaci\xF3n impresa de un CFDI.", MARGIN, currentY + 22, { width: TOTALS_X - MARGIN - 10 });
+    doc.text(language === "en" ? `Amount expressed in ${invoice.currency || "MXN"} (${invoice.currency === "USD" ? "US Dollars" : "Mexican Pesos"}).` : `Importe expresado en ${invoice.currency || "MXN"} (${invoice.currency === "USD" ? "D\xF3lares Americanos" : "Pesos Mexicanos"}).`, MARGIN, currentY + 10, { width: TOTALS_X - MARGIN - 10 });
+    doc.text(t("Este documento es una representaci\xF3n impresa de un CFDI.", "This document is a printed representation of a CFDI."), MARGIN, currentY + 22, { width: TOTALS_X - MARGIN - 10 });
     currentY += 85;
     const FOOTER_Y = PAGE_H - 42;
     doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
-    doc.text("Representaci\xF3n impresa de Comprobante Fiscal Digital por Internet (CFDI).", MARGIN, FOOTER_Y + 6, { width: 280 });
-    doc.text(`Generado el ${formatDateTime3(/* @__PURE__ */ new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
+    doc.text(t("Representaci\xF3n impresa de Comprobante Fiscal Digital por Internet (CFDI).", "Printed representation of a Digital Tax Receipt via Internet (CFDI)."), MARGIN, FOOTER_Y + 6, { width: 280 });
+    doc.text(`${t("Generado el", "Generated on")} ${formatPdfDateTime(/* @__PURE__ */ new Date(), language, tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 280 });
     const footerRight = [];
-    if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+    if (tenant?.phone) footerRight.push(`${t("Tel:", "Phone:")} ${tenant.phone}`);
     if (tenant?.email) footerRight.push(tenant.email);
     if (tenant?.website) footerRight.push(tenant.website);
     if (footerRight.length) {
@@ -6283,6 +6328,7 @@ var init_invoice_pdf_generator = __esm({
   "server/invoice-pdf-generator.ts"() {
     "use strict";
     init_localStorage();
+    init_pdf_locale();
   }
 });
 
@@ -6292,7 +6338,7 @@ __export(invoice_email_service_exports, {
   sendInvoiceEmail: () => sendInvoiceEmail
 });
 import { MailerSend as MailerSend3, EmailParams as EmailParams3, Sender as Sender3, Recipient as Recipient3 } from "mailersend";
-function formatCurrency3(value) {
+function formatCurrency(value) {
   const num = typeof value === "string" ? parseFloat(value) : value;
   return num.toLocaleString("es-MX", {
     style: "currency",
@@ -6301,7 +6347,7 @@ function formatCurrency3(value) {
     maximumFractionDigits: 2
   });
 }
-function formatDate5(date) {
+function formatDate(date) {
   if (!date) return "N/A";
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleDateString("es-MX", {
@@ -6368,29 +6414,29 @@ async function sendInvoiceEmail({
           
           <div class="info-row">
             <span class="label">Fecha de Emisi\xF3n:</span>
-            <span class="value">${formatDate5(invoice.issuedAt)}</span>
+            <span class="value">${formatDate(invoice.issuedAt)}</span>
           </div>
           
           ${invoice.dueDate ? `
           <div class="info-row">
             <span class="label">Fecha de Vencimiento:</span>
-            <span class="value">${formatDate5(invoice.dueDate)}</span>
+            <span class="value">${formatDate(invoice.dueDate)}</span>
           </div>
           ` : ""}
           
           <div class="total-section">
             <div class="info-row">
               <span class="label">Subtotal:</span>
-              <span class="value">${formatCurrency3(invoice.subtotal)}</span>
+              <span class="value">${formatCurrency(invoice.subtotal)}</span>
             </div>
             <div class="info-row">
               <span class="label">IVA (16%):</span>
-              <span class="value">${formatCurrency3(invoice.tax)}</span>
+              <span class="value">${formatCurrency(invoice.tax)}</span>
             </div>
             <hr style="border: none; border-top: 1px solid #cbd5e0; margin: 10px 0;">
             <div class="info-row">
               <span class="label">Total a Pagar:</span>
-              <span class="total-amount">${formatCurrency3(invoice.total)}</span>
+              <span class="total-amount">${formatCurrency(invoice.total)}</span>
             </div>
           </div>
           
@@ -6438,7 +6484,7 @@ function fmt(value, currency = "MXN") {
     maximumFractionDigits: 2
   });
 }
-function fmtDate2(date) {
+function fmtDate(date) {
   if (!date) return "\u2014";
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
@@ -6519,9 +6565,9 @@ async function sendAccountStatementEmail({
       return `
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:8px 10px;font-weight:600;">${inv.FOLIO}</td>
-        <td style="padding:8px 10px;color:#6b7280;">${fmtDate2(inv.FECHA)}</td>
+        <td style="padding:8px 10px;color:#6b7280;">${fmtDate(inv.FECHA)}</td>
         <td style="padding:8px 10px;color:${isOverdue ? "#dc2626" : "#374151"};">
-          ${inv.FECHA_VEN ? fmtDate2(inv.FECHA_VEN) : "\u2014"}${isOverdue ? " \u26A0" : ""}
+          ${inv.FECHA_VEN ? fmtDate(inv.FECHA_VEN) : "\u2014"}${isOverdue ? " \u26A0" : ""}
         </td>
         <td style="padding:8px 10px;text-align:right;">${fmt(inv.IMPORTE_TOTAL, cur)}</td>
         <td style="padding:8px 10px;text-align:right;font-weight:600;color:${statusCol};">
@@ -6548,7 +6594,7 @@ async function sendAccountStatementEmail({
           </tr>`;
     paymentRows = liveData.payments.slice(0, 10).map((pay) => `
       <tr style="border-bottom:1px solid #e5e7eb;">
-        <td style="padding:8px 10px;color:#6b7280;">${fmtDate2(pay.FECHA)}</td>
+        <td style="padding:8px 10px;color:#6b7280;">${fmtDate(pay.FECHA)}</td>
         <td style="padding:8px 10px;">${pay.REFERENCIA ?? "\u2014"}</td>
         <td style="padding:8px 10px;color:#6b7280;">${pay.FACTURA_FOLIO ?? "\u2014"}</td>
         <td style="padding:8px 10px;text-align:right;color:#16a34a;font-weight:600;">+${fmt(pay.IMPORTE)}</td>
@@ -6577,9 +6623,9 @@ async function sendAccountStatementEmail({
       return `
       <tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:8px 10px;font-weight:600;">${inv.serie}-${inv.folio}</td>
-        <td style="padding:8px 10px;color:#6b7280;">${fmtDate2(inv.issuedAt)}</td>
+        <td style="padding:8px 10px;color:#6b7280;">${fmtDate(inv.issuedAt)}</td>
         <td style="padding:8px 10px;color:${isOverdue ? "#dc2626" : "#374151"};">
-          ${inv.dueDate ? fmtDate2(inv.dueDate) : "\u2014"}${isOverdue ? " \u26A0" : ""}
+          ${inv.dueDate ? fmtDate(inv.dueDate) : "\u2014"}${isOverdue ? " \u26A0" : ""}
         </td>
         <td style="padding:8px 10px;text-align:right;">${fmt(inv.total, inv.currency)}</td>
         <td style="padding:8px 10px;text-align:right;font-weight:600;color:${statusColor(inv.status)};">
@@ -6596,7 +6642,7 @@ async function sendAccountStatementEmail({
       const inv = invoices2.find((i) => i.id === pay.invoiceId);
       return `
       <tr style="border-bottom:1px solid #e5e7eb;">
-        <td style="padding:8px 10px;color:#6b7280;">${fmtDate2(pay.paymentDate)}</td>
+        <td style="padding:8px 10px;color:#6b7280;">${fmtDate(pay.paymentDate)}</td>
         <td style="padding:8px 10px;">${pay.reference ?? "\u2014"}</td>
         <td style="padding:8px 10px;color:#6b7280;">${inv ? `${inv.serie}-${inv.folio}` : "\u2014"}</td>
         <td style="padding:8px 10px;text-align:right;color:#16a34a;font-weight:600;">+${fmt(pay.amount)}</td>
@@ -6612,7 +6658,7 @@ async function sendAccountStatementEmail({
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Estado</th>
           </tr>`;
   }
-  const cutoffStr = cutoffDate ? fmtDate2(cutoffDate) : fmtDate2(now);
+  const cutoffStr = cutoffDate ? fmtDate(cutoffDate) : fmtDate(now);
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -6702,7 +6748,7 @@ async function sendAccountStatementEmail({
     <!-- Footer -->
     <div style="background:#f8fafc;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">
       <p style="margin:0;font-size:12px;color:#9ca3af;">
-        Estado de cuenta generado autom\xE1ticamente por ${tenantName} \xB7 ${fmtDate2(now)}
+        Estado de cuenta generado autom\xE1ticamente por ${tenantName} \xB7 ${fmtDate(now)}
       </p>
       <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">Por favor, no responda a este correo.</p>
     </div>
@@ -6730,7 +6776,7 @@ async function sendAccountStatementEmail({
       ccList.push(e.trim());
     }
   }
-  let emailParams = new EmailParams4().setFrom(sentFrom).setTo(toList.map((e) => new Recipient4(e, customer.name))).setSubject(`Estado de Cuenta \u2014 ${customer.name} \u2014 ${fmtDate2(now)}`).setHtml(html);
+  let emailParams = new EmailParams4().setFrom(sentFrom).setTo(toList.map((e) => new Recipient4(e, customer.name))).setSubject(`Estado de Cuenta \u2014 ${customer.name} \u2014 ${fmtDate(now)}`).setHtml(html);
   if (ccList.length > 0) {
     emailParams = emailParams.setCc(ccList.map((e) => new Recipient4(e, e)));
   }
@@ -6782,23 +6828,12 @@ async function loadLogoBuffer6(logoUrl) {
     return null;
   }
 }
-function fmt2(value, currency = "MXN") {
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (!Number.isFinite(num)) return currency === "USD" ? "US$0.00" : "$0.00";
-  const prefix = currency === "USD" ? "US$" : "$";
-  return prefix + num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtDate3(date) {
-  if (!date) return "\u2014";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-function statusLabel2(status) {
+function statusLabel2(status, language) {
   const map = {
-    pending_payment: "Pendiente",
-    partially_paid: "Pago Parcial",
-    paid: "Pagado",
-    cancelled: "Cancelada"
+    pending_payment: pdfText(language, { es: "Pendiente", en: "Pending" }),
+    partially_paid: pdfText(language, { es: "Pago Parcial", en: "Partially Paid" }),
+    paid: pdfText(language, { es: "Pagado", en: "Paid" }),
+    cancelled: pdfText(language, { es: "Cancelada", en: "Cancelled" })
   };
   return map[status] ?? status;
 }
@@ -6814,10 +6849,14 @@ function lightenColor6(hex, amount) {
 }
 async function generateAccountStatementPDF(data) {
   const { customer, invoices: invoices2, payments: payments2, tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const t = (values) => pdfText(language, values);
+  const fmt2 = (value, currency = "MXN") => formatPdfCurrency(value, currency, language);
+  const fmtDate2 = (date) => formatPdfDate(date, language, tenant?.timezone);
   let cxcData = data.cxcData;
   const doc = new PDFDocument6({ size: "LETTER", margin: 0, autoFirstPage: true });
   const logoBuffer = await loadLogoBuffer6(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || t({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor6(primaryColor, 0.92);
   const mediumColor = lightenColor6(primaryColor, 0.75);
@@ -6882,9 +6921,9 @@ async function generateAccountStatementPDF(data) {
   const infoLines = [];
   if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
   if (tenant?.address) tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((p) => infoLines.push(p));
-  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${t({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
   if (cityParts.length) infoLines.push(cityParts.join(", "));
-  const contactParts = [tenant?.phone ? `Tel: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
+  const contactParts = [tenant?.phone ? `${t({ es: "Tel", en: "Phone" })}: ${tenant.phone}` : "", tenant?.email || ""].filter(Boolean);
   if (contactParts.length) infoLines.push(contactParts.join("   |   "));
   if (tenant?.website) infoLines.push(tenant.website);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
@@ -6893,9 +6932,9 @@ async function generateAccountStatementPDF(data) {
   const TITLE_H = 32;
   doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
   doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("ESTADO DE CUENTA", MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
+  doc.text(t({ es: "ESTADO DE CUENTA", en: "ACCOUNT STATEMENT" }), MARGIN, TITLE_Y + 8, { width: CONTENT_W * 0.5 });
   doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
-  doc.text(`Corte: ${fmtDate3(now)}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
+  doc.text(`${t({ es: "Corte", en: "Statement date" })}: ${fmtDate2(now)}`, MARGIN + CONTENT_W * 0.5, TITLE_Y + 11, { width: CONTENT_W * 0.5, align: "right" });
   let currentY = TITLE_Y + TITLE_H + 16;
   const COL_W = CONTENT_W / 2 - 8;
   const COL2_X = MARGIN + COL_W + 16;
@@ -6906,7 +6945,7 @@ async function generateAccountStatementPDF(data) {
   doc.rect(MARGIN, currentY, COL_W, BOX_H).fill(lightColor);
   doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
   doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("CLIENTE", MARGIN + 8, currentY + 4, { width: COL_W - 16 });
+  doc.text(t({ es: "CLIENTE", en: "CUSTOMER" }), MARGIN + 8, currentY + 4, { width: COL_W - 16 });
   doc.fontSize(9).font("Helvetica-Bold").fillColor("#111827");
   doc.text(customer.name, MARGIN + 8, currentY + 22, { width: COL_W - 16, lineBreak: false, ellipsis: true });
   doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
@@ -6916,49 +6955,49 @@ async function generateAccountStatementPDF(data) {
   });
   if (customer.phone) {
     const phoneOffY = 48 + Math.max(customerEmails.length, 1) * EMAIL_LINE_H;
-    doc.text(`Tel: ${customer.phone}`, MARGIN + 8, currentY + phoneOffY, { width: COL_W - 16 });
+    doc.text(`${t({ es: "Tel", en: "Phone" })}: ${customer.phone}`, MARGIN + 8, currentY + phoneOffY, { width: COL_W - 16 });
   }
   doc.rect(COL2_X, currentY, COL_W, BOX_H).fill(lightColor);
   doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
   doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("RESUMEN", COL2_X + 8, currentY + 4, { width: COL_W - 16 });
+  doc.text(t({ es: "RESUMEN", en: "SUMMARY" }), COL2_X + 8, currentY + 4, { width: COL_W - 16 });
   const summaryContentH = BOX_H - 16;
   const summaryRowStep = summaryContentH / 3;
   const s1Y = currentY + 16 + summaryRowStep * 0 + 6;
   const s2Y = currentY + 16 + summaryRowStep * 1 + 6;
   const s3Y = currentY + 16 + summaryRowStep * 2 + 6;
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text(`Saldo Total por Cobrar${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s1Y, { width: COL_W / 2, continued: false });
+  doc.text(`${t({ es: "Saldo Total por Cobrar", en: "Total Receivable Balance" })}${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s1Y, { width: COL_W / 2, continued: false });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#dc2626");
   doc.text(fmt2(totalBalance, docCurrency), COL2_X + COL_W / 2, s1Y - 2, { width: COL_W / 2 - 8, align: "right" });
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text(`Saldo Vencido${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s2Y, { width: COL_W / 2 });
+  doc.text(`${t({ es: "Saldo Vencido", en: "Overdue Balance" })}${docCurrency === "USD" ? " (USD)" : ""}:`, COL2_X + 8, s2Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor(totalOverdue > 0 ? "#ea580c" : "#374151");
   doc.text(fmt2(totalOverdue, docCurrency), COL2_X + COL_W / 2, s2Y - 2, { width: COL_W / 2 - 8, align: "right" });
   doc.fontSize(8).font("Helvetica").fillColor("#374151");
-  doc.text("Facturas Activas:", COL2_X + 8, s3Y, { width: COL_W / 2 });
+  doc.text(`${t({ es: "Facturas Activas", en: "Active Invoices" })}:`, COL2_X + 8, s3Y, { width: COL_W / 2 });
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#374151");
-  doc.text(`${activeCount}`, COL2_X + COL_W / 2, s3Y - 2, { width: COL_W / 2 - 8, align: "right" });
+  doc.text(formatPdfNumber(activeCount, language), COL2_X + COL_W / 2, s3Y - 2, { width: COL_W / 2 - 8, align: "right" });
   currentY += BOX_H + 20;
   doc.fontSize(10).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("FACTURAS PENDIENTES", MARGIN, currentY);
+  doc.text(t({ es: "FACTURAS PENDIENTES", en: "OUTSTANDING INVOICES" }), MARGIN, currentY);
   currentY += 16;
   const cols = { folio: MARGIN, fecha: MARGIN + 90, venc: MARGIN + 175, total: MARGIN + 265, saldo: MARGIN + 355, estado: MARGIN + 440 };
   const ROW_H = 18;
   doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text("FOLIO", cols.folio + 4, currentY + 5, { width: 86 });
-  doc.text("EMISI\xD3N", cols.fecha + 4, currentY + 5, { width: 80 });
-  doc.text("VENCIMIENTO", cols.venc + 4, currentY + 5, { width: 85 });
+  doc.text(t({ es: "EMISI\xD3N", en: "ISSUE DATE" }), cols.fecha + 4, currentY + 5, { width: 80 });
+  doc.text(t({ es: "VENCIMIENTO", en: "DUE DATE" }), cols.venc + 4, currentY + 5, { width: 85 });
   doc.text("TOTAL", cols.total + 4, currentY + 5, { width: 80, align: "right" });
-  doc.text("SALDO", cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
-  doc.text("ESTADO", cols.estado + 4, currentY + 5, { width: 90 });
+  doc.text(t({ es: "SALDO", en: "BALANCE" }), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
+  doc.text(t({ es: "ESTADO", en: "STATUS" }), cols.estado + 4, currentY + 5, { width: 90 });
   currentY += ROW_H;
   if (cxcData) {
     if (cxcData.invoices.length === 0) {
       doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
       doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
-      doc.text("Sin facturas pendientes.", MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
+      doc.text(t({ es: "Sin facturas pendientes.", en: "No outstanding invoices." }), MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
       currentY += ROW_H;
     } else {
       cxcData.invoices.forEach((inv, i) => {
@@ -6969,16 +7008,16 @@ async function generateAccountStatementPDF(data) {
         doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#111827");
         doc.text(inv.folio, cols.folio + 4, currentY + 5, { width: 86 });
         doc.font("Helvetica").fillColor("#6b7280");
-        doc.text(fmtDate3(inv.issueDate), cols.fecha + 4, currentY + 5, { width: 80 });
+        doc.text(fmtDate2(inv.issueDate), cols.fecha + 4, currentY + 5, { width: 80 });
         doc.fillColor(isOverdue ? "#dc2626" : "#6b7280");
-        doc.text(fmtDate3(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
+        doc.text(fmtDate2(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
         const cur = inv.currency ?? "MXN";
         doc.fillColor("#374151");
         doc.text(fmt2(tot, cur), cols.total + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
         doc.text(fmt2(bal, cur), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica").fillColor(isOverdue ? "#dc2626" : "#374151");
-        doc.text(isOverdue ? "Vencido" : "Pendiente", cols.estado + 4, currentY + 5, { width: 90 });
+        doc.text(isOverdue ? t({ es: "Vencido", en: "Overdue" }) : t({ es: "Pendiente", en: "Pending" }), cols.estado + 4, currentY + 5, { width: 90 });
         currentY += ROW_H;
         if (currentY > 720) {
           doc.addPage();
@@ -6990,7 +7029,7 @@ async function generateAccountStatementPDF(data) {
     if (localActiveInvoices.length === 0) {
       doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
       doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
-      doc.text("Sin facturas pendientes.", MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
+      doc.text(t({ es: "Sin facturas pendientes.", en: "No outstanding invoices." }), MARGIN + 8, currentY + 5, { width: CONTENT_W - 16 });
       currentY += ROW_H;
     } else {
       localActiveInvoices.forEach((inv, i) => {
@@ -7000,15 +7039,15 @@ async function generateAccountStatementPDF(data) {
         doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#111827");
         doc.text(`${inv.serie}-${inv.folio}`, cols.folio + 4, currentY + 5, { width: 86 });
         doc.font("Helvetica").fillColor("#6b7280");
-        doc.text(fmtDate3(inv.issuedAt), cols.fecha + 4, currentY + 5, { width: 80 });
+        doc.text(fmtDate2(inv.issuedAt), cols.fecha + 4, currentY + 5, { width: 80 });
         doc.fillColor(isOverdue ? "#dc2626" : "#6b7280");
-        doc.text(fmtDate3(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
+        doc.text(fmtDate2(inv.dueDate), cols.venc + 4, currentY + 5, { width: 85 });
         doc.fillColor("#374151");
         doc.text(fmt2(inv.total), cols.total + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica-Bold").fillColor(bal > 0 ? "#dc2626" : "#16a34a");
         doc.text(fmt2(bal), cols.saldo + 4, currentY + 5, { width: 80, align: "right" });
         doc.font("Helvetica").fillColor("#374151");
-        doc.text(statusLabel2(inv.status), cols.estado + 4, currentY + 5, { width: 90 });
+        doc.text(statusLabel2(inv.status, language), cols.estado + 4, currentY + 5, { width: 90 });
         currentY += ROW_H;
         if (currentY > 720) {
           doc.addPage();
@@ -7026,21 +7065,21 @@ async function generateAccountStatementPDF(data) {
       currentY = 40;
     }
     doc.fontSize(10).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("\xDALTIMOS PAGOS REGISTRADOS", MARGIN, currentY);
+    doc.text(t({ es: "\xDALTIMOS PAGOS REGISTRADOS", en: "LATEST RECORDED PAYMENTS" }), MARGIN, currentY);
     currentY += 16;
     const pcols = { fecha: MARGIN, ref: MARGIN + 90, factura: MARGIN + 270, importe: MARGIN + 420 };
     doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(mediumColor);
     doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("FECHA", pcols.fecha + 4, currentY + 5, { width: 86 });
-    doc.text("REFERENCIA", pcols.ref + 4, currentY + 5, { width: 175 });
-    doc.text("FACTURA", pcols.factura + 4, currentY + 5, { width: 145 });
-    doc.text("IMPORTE", pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
+    doc.text(t({ es: "FECHA", en: "DATE" }), pcols.fecha + 4, currentY + 5, { width: 86 });
+    doc.text(t({ es: "REFERENCIA", en: "REFERENCE" }), pcols.ref + 4, currentY + 5, { width: 175 });
+    doc.text(t({ es: "FACTURA", en: "INVOICE" }), pcols.factura + 4, currentY + 5, { width: 145 });
+    doc.text(t({ es: "IMPORTE", en: "AMOUNT" }), pcols.importe + 4, currentY + 5, { width: 115, align: "right" });
     currentY += ROW_H;
     if (cxcData) {
       cxcData.payments.forEach((pay, i) => {
         if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
         doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-        doc.text(fmtDate3(pay.date), pcols.fecha + 4, currentY + 5, { width: 86 });
+        doc.text(fmtDate2(pay.date), pcols.fecha + 4, currentY + 5, { width: 86 });
         doc.fillColor("#374151");
         doc.text(pay.reference ?? "\u2014", pcols.ref + 4, currentY + 5, { width: 175 });
         doc.fillColor("#6b7280");
@@ -7058,7 +7097,7 @@ async function generateAccountStatementPDF(data) {
         const inv = invoices2.find((inv2) => inv2.id === pay.invoiceId);
         if (i % 2 === 0) doc.rect(MARGIN, currentY, CONTENT_W, ROW_H).fill(lightColor);
         doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-        doc.text(fmtDate3(pay.paymentDate), pcols.fecha + 4, currentY + 5, { width: 86 });
+        doc.text(fmtDate2(pay.paymentDate), pcols.fecha + 4, currentY + 5, { width: 86 });
         doc.fillColor("#374151");
         doc.text(pay.reference ?? "\u2014", pcols.ref + 4, currentY + 5, { width: 175 });
         doc.fillColor("#6b7280");
@@ -7077,12 +7116,12 @@ async function generateAccountStatementPDF(data) {
   doc.rect(0, FOOTER_Y, PAGE_W, 37).fill(primaryColor);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.7)");
   doc.text(
-    `Estado de cuenta generado el ${fmtDate3(now)} \u2014 ${companyName}`,
+    t({ es: `Estado de cuenta generado el ${fmtDate2(now)} \u2014 ${companyName}`, en: `Account statement generated on ${fmtDate2(now)} \u2014 ${companyName}` }),
     MARGIN,
     FOOTER_Y + 8,
     { width: CONTENT_W, align: "center" }
   );
-  doc.text("Documento generado autom\xE1ticamente \u2014 no requiere firma", MARGIN, FOOTER_Y + 20, {
+  doc.text(t({ es: "Documento generado autom\xE1ticamente \u2014 no requiere firma", en: "Document generated automatically \u2014 no signature required" }), MARGIN, FOOTER_Y + 20, {
     width: CONTENT_W,
     align: "center"
   });
@@ -7093,6 +7132,7 @@ var init_account_statement_pdf_generator = __esm({
   "server/account-statement-pdf-generator.ts"() {
     "use strict";
     init_localStorage();
+    init_pdf_locale();
   }
 });
 
@@ -7176,22 +7216,14 @@ function lightenColor7(hex, amount) {
   const lb = Math.min(255, b + Math.round((255 - b) * amount));
   return `#${lr.toString(16).padStart(2, "0")}${lg.toString(16).padStart(2, "0")}${lb.toString(16).padStart(2, "0")}`;
 }
-function formatDateTime4(date, timezone) {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: timezone || "America/Mexico_City"
-  });
-}
 async function generateMinutePDFStream(data) {
   const doc = new PDFDocument7({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { checkin, customer, user, tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text2 = (values) => pdfText(language, values);
+  const formatDateTime = (value) => formatPdfDateTime(value, language, tenant?.timezone);
   const logoBuffer = await loadLogoBuffer7(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text2({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor7(primaryColor, 0.92);
   const mediumColor = lightenColor7(primaryColor, 0.75);
@@ -7216,18 +7248,18 @@ async function generateMinutePDFStream(data) {
       doc.fontSize(12).font("Helvetica-Bold").fillColor("#ffffff");
       doc.text(companyName.toUpperCase(), TEXT_X, 12, { width: TEXT_W, align: "right", lineBreak: false });
       const infoLines = [];
-      if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
+      if (tenant?.rfc) infoLines.push(`${text2({ es: "RFC:", en: "Tax ID:" })} ${tenant.rfc}`);
       if (tenant?.address) {
         tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((part) => infoLines.push(part));
       }
       const cityStateParts = [
         tenant?.city,
         tenant?.state,
-        tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null
+        tenant?.zipCode ? `${text2({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null
       ].filter(Boolean);
       if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
       const contactParts = [
-        tenant?.phone ? `Tel: ${tenant.phone}` : "",
+        tenant?.phone ? `${text2({ es: "Tel:", en: "Phone:" })} ${tenant.phone}` : "",
         tenant?.email || ""
       ].filter(Boolean);
       if (contactParts.length) infoLines.push(contactParts.join("  |  "));
@@ -7242,8 +7274,8 @@ async function generateMinutePDFStream(data) {
       const TITLE_BAND_H = 32;
       doc.rect(0, TITLE_BAND_Y, PAGE_W, TITLE_BAND_H).fill(mediumColor);
       doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("MINUTA DE VISITA A CLIENTE", MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2 });
-      const visitDate = formatDateTime4(checkin.checkinAt, tenant?.timezone);
+      doc.text(text2({ es: "MINUTA DE VISITA A CLIENTE", en: "CUSTOMER VISIT MINUTES" }), MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2 });
+      const visitDate = formatDateTime(checkin.checkinAt);
       doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
       doc.text(visitDate, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 11, { width: CONTENT_W / 2, align: "right" });
       let currentY = TITLE_BAND_Y + TITLE_BAND_H + 18;
@@ -7255,18 +7287,18 @@ async function generateMinutePDFStream(data) {
       doc.rect(MARGIN, currentY, COL_W, 16).fill(mediumColor);
       doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("INFORMACI\xD3N DEL CLIENTE", MARGIN + 6, currentY + 4, { width: COL_W - 10 });
-      doc.text("DATOS DE LA VISITA", COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+      doc.text(text2({ es: "INFORMACI\xD3N DEL CLIENTE", en: "CUSTOMER INFORMATION" }), MARGIN + 6, currentY + 4, { width: COL_W - 10 });
+      doc.text(text2({ es: "DATOS DE LA VISITA", en: "VISIT DETAILS" }), COL2_X + 6, currentY + 4, { width: COL_W - 10 });
       let leftY = currentY + 22;
       const customerRows = [
-        ["Cliente:", customer.name],
-        ...customer.rfc ? [["RFC:", customer.rfc]] : [],
-        ...customer.contactName ? [["Contacto:", customer.contactName]] : [],
-        ...customer.phone ? [["Tel\xE9fono:", customer.phone]] : []
+        [text2({ es: "Cliente:", en: "Customer:" }), customer.name],
+        ...customer.rfc ? [[text2({ es: "RFC:", en: "Tax ID:" }), customer.rfc]] : [],
+        ...customer.contactName ? [[text2({ es: "Contacto:", en: "Contact:" }), customer.contactName]] : [],
+        ...customer.phone ? [[text2({ es: "Tel\xE9fono:", en: "Phone:" }), customer.phone]] : []
       ];
       if (customer.address) {
         const addr = [customer.address, customer.city, customer.state].filter(Boolean).join(", ");
-        customerRows.push(["Direcci\xF3n:", addr]);
+        customerRows.push([text2({ es: "Direcci\xF3n:", en: "Address:" }), addr]);
       }
       const LABEL_W = 64;
       const VALUE_X_L = MARGIN + 6 + LABEL_W;
@@ -7281,12 +7313,15 @@ async function generateMinutePDFStream(data) {
       }
       let rightY = currentY + 22;
       const visitRows = [
-        ["Vendedor:", user.fullName],
-        ["Check-in:", formatDateTime4(checkin.checkinAt, tenant?.timezone)],
-        ...checkin.checkoutAt ? [["Check-out:", formatDateTime4(checkin.checkoutAt, tenant?.timezone)]] : []
+        [text2({ es: "Vendedor:", en: "Salesperson:" }), user.fullName],
+        ["Check-in:", formatDateTime(checkin.checkinAt)],
+        ...checkin.checkoutAt ? [["Check-out:", formatDateTime(checkin.checkoutAt)]] : []
       ];
       if (checkin.latitude && checkin.longitude) {
-        visitRows.push(["Ubicaci\xF3n:", `${Number(checkin.latitude).toFixed(4)}, ${Number(checkin.longitude).toFixed(4)}`]);
+        visitRows.push([
+          text2({ es: "Ubicaci\xF3n:", en: "Location:" }),
+          `${formatPdfNumber(Number(checkin.latitude), language, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}, ${formatPdfNumber(Number(checkin.longitude), language, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`
+        ]);
       }
       const VALUE_X_R = COL2_X + 6 + LABEL_W;
       const VALUE_W_R = COL_W - LABEL_W - 10;
@@ -7299,7 +7334,7 @@ async function generateMinutePDFStream(data) {
       if (checkin.topics && checkin.topics.length > 0) {
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("TEMAS TRATADOS", MARGIN + 6, currentY + 4);
+        doc.text(text2({ es: "TEMAS TRATADOS", en: "TOPICS DISCUSSED" }), MARGIN + 6, currentY + 4);
         currentY += 16;
         const topicsH = checkin.topics.length * 14 + 12;
         doc.rect(MARGIN, currentY, CONTENT_W, topicsH).fill(lightColor);
@@ -7314,7 +7349,7 @@ async function generateMinutePDFStream(data) {
       if (checkin.notes) {
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("NOTAS Y OBSERVACIONES", MARGIN + 6, currentY + 4);
+        doc.text(text2({ es: "NOTAS Y OBSERVACIONES", en: "NOTES AND OBSERVATIONS" }), MARGIN + 6, currentY + 4);
         currentY += 16;
         const textHeight = Math.max(40, doc.heightOfString(checkin.notes, { width: CONTENT_W - 16 }) + 16);
         doc.rect(MARGIN, currentY, CONTENT_W, textHeight).fill(lightColor);
@@ -7325,7 +7360,7 @@ async function generateMinutePDFStream(data) {
       if (data.checkoutNotes) {
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("ACUERDOS Y COMPROMISOS", MARGIN + 6, currentY + 4);
+        doc.text(text2({ es: "ACUERDOS Y COMPROMISOS", en: "AGREEMENTS AND COMMITMENTS" }), MARGIN + 6, currentY + 4);
         currentY += 16;
         const textHeight = Math.max(40, doc.heightOfString(data.checkoutNotes, { width: CONTENT_W - 16 }) + 16);
         doc.rect(MARGIN, currentY, CONTENT_W, textHeight).fill(lightColor);
@@ -7337,7 +7372,10 @@ async function generateMinutePDFStream(data) {
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
         doc.text(
-          `FOTOGRAF\xCDAS DE LA VISITA${checkin.photos.length > MAX_PHOTOS_PER_PDF ? ` (mostrando ${MAX_PHOTOS_PER_PDF} de ${checkin.photos.length})` : ""}`,
+          text2({
+            es: `FOTOGRAF\xCDAS DE LA VISITA${checkin.photos.length > MAX_PHOTOS_PER_PDF ? ` (mostrando ${MAX_PHOTOS_PER_PDF} de ${checkin.photos.length})` : ""}`,
+            en: `VISIT PHOTOS${checkin.photos.length > MAX_PHOTOS_PER_PDF ? ` (showing ${MAX_PHOTOS_PER_PDF} of ${checkin.photos.length})` : ""}`
+          }),
           MARGIN + 6,
           currentY + 4
         );
@@ -7362,13 +7400,13 @@ async function generateMinutePDFStream(data) {
             doc.image(leftBuf, MARGIN, photoY, { fit: [PHOTO_COL_W, PHOTO_MAX_H] });
           } else {
             doc.rect(MARGIN, photoY, PHOTO_COL_W, PHOTO_MAX_H).fill("#f0f0f0");
-            doc.fontSize(8).fillColor("#999").text("[Foto no disponible]", MARGIN, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
+            doc.fontSize(8).fillColor("#999").text(text2({ es: "[Foto no disponible]", en: "[Photo unavailable]" }), MARGIN, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
           }
           if (rightBuf) {
             doc.image(rightBuf, MARGIN + PHOTO_COL_W + 10, photoY, { fit: [PHOTO_COL_W, PHOTO_MAX_H] });
           } else if (i + 1 < photosToProcess.length) {
             doc.rect(MARGIN + PHOTO_COL_W + 10, photoY, PHOTO_COL_W, PHOTO_MAX_H).fill("#f0f0f0");
-            doc.fontSize(8).fillColor("#999").text("[Foto no disponible]", MARGIN + PHOTO_COL_W + 10, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
+            doc.fontSize(8).fillColor("#999").text(text2({ es: "[Foto no disponible]", en: "[Photo unavailable]" }), MARGIN + PHOTO_COL_W + 10, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
           }
           currentY += PHOTO_MAX_H + 10;
         }
@@ -7376,10 +7414,10 @@ async function generateMinutePDFStream(data) {
       const FOOTER_Y = PAGE_H - 42;
       doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
-      doc.text("Documento generado autom\xE1ticamente. V\xE1lido como constancia de visita comercial.", MARGIN, FOOTER_Y + 6, { width: 260 });
-      doc.text(`Generado el ${formatDateTime4(/* @__PURE__ */ new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+      doc.text(text2({ es: "Documento generado autom\xE1ticamente. V\xE1lido como constancia de visita comercial.", en: "Automatically generated document. Valid as proof of commercial visit." }), MARGIN, FOOTER_Y + 6, { width: 260 });
+      doc.text(text2({ es: "Generado el ", en: "Generated on " }) + formatDateTime(/* @__PURE__ */ new Date()), MARGIN, FOOTER_Y + 16, { width: 260 });
       const footerRight = [];
-      if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+      if (tenant?.phone) footerRight.push(`${text2({ es: "Tel:", en: "Phone:" })} ${tenant.phone}`);
       if (tenant?.email) footerRight.push(tenant.email);
       if (tenant?.website) footerRight.push(tenant.website);
       if (footerRight.length) {
@@ -7402,6 +7440,7 @@ var init_pdf_generator = __esm({
     "use strict";
     init_objectStorage();
     init_localStorage();
+    init_pdf_locale();
     MAX_PHOTOS_PER_PDF = 6;
     MAX_PHOTO_WIDTH = 1280;
     PHOTO_CONCURRENCY = 3;
@@ -7433,11 +7472,6 @@ async function loadLogoBuffer8(logoUrl) {
     return null;
   }
 }
-function fmtDate4(date) {
-  if (!date) return "\u2014";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 function lightenColor8(hex, amount) {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
@@ -7447,9 +7481,13 @@ function lightenColor8(hex, amount) {
 }
 async function generateIncidentWarrantyPDF(data) {
   const { tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text2 = (values) => pdfText(language, values);
+  const fmtDate2 = (date) => formatPdfDate(date, language, tenant?.timezone);
+  const label = (labels, value) => labels[value] ? text2(labels[value]) : value;
   const doc = new PDFDocument8({ size: "LETTER", margin: 0, autoFirstPage: true });
   const logoBuffer = await loadLogoBuffer8(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text2({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor8(primaryColor, 0.92);
   const mediumColor = lightenColor8(primaryColor, 0.75);
@@ -7472,9 +7510,9 @@ async function generateIncidentWarrantyPDF(data) {
   const infoLines = [];
   if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
   if (tenant?.address) tenant.address.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).forEach((p) => infoLines.push(p));
-  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null].filter(Boolean);
+  const cityParts = [tenant?.city, tenant?.state, tenant?.zipCode ? `${text2({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null].filter(Boolean);
   if (cityParts.length) infoLines.push(cityParts.join(", "));
-  if (tenant?.phone) infoLines.push(`Tel: ${tenant.phone}`);
+  if (tenant?.phone) infoLines.push(`${text2({ es: "Tel", en: "Phone" })}: ${tenant.phone}`);
   if (tenant?.email) infoLines.push(tenant.email);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
   infoLines.forEach((line, i) => doc.text(line, TEXT_X, 34 + i * 10.5, { width: TEXT_W, align: "right", lineBreak: false }));
@@ -7482,39 +7520,39 @@ async function generateIncidentWarrantyPDF(data) {
   const TITLE_H = 30;
   doc.rect(0, TITLE_Y, PAGE_W, TITLE_H).fill(mediumColor);
   doc.fontSize(12).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("HOJA DE GARANT\xCDA", MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.65 });
+  doc.text(text2({ es: "HOJA DE GARANT\xCDA", en: "WARRANTY SHEET" }), MARGIN, TITLE_Y + 7, { width: CONTENT_W * 0.65 });
   doc.fontSize(8.5).font("Helvetica").fillColor(primaryColor);
-  doc.text(`Generado: ${fmtDate4(now)}`, MARGIN + CONTENT_W * 0.65, TITLE_Y + 10, { width: CONTENT_W * 0.35, align: "right" });
+  doc.text(`${text2({ es: "Generado", en: "Generated" })}: ${fmtDate2(now)}`, MARGIN + CONTENT_W * 0.65, TITLE_Y + 10, { width: CONTENT_W * 0.35, align: "right" });
   let Y = TITLE_Y + TITLE_H + 14;
   doc.fontSize(18).font("Helvetica-Bold").fillColor(primaryColor);
   doc.text(data.ticketNumber, MARGIN, Y);
   Y += 28;
   const INFO_COL = CONTENT_W / 3;
   doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
-  doc.text("Tipo:", MARGIN, Y);
-  doc.text("Estado:", MARGIN + INFO_COL, Y);
-  doc.text("Urgencia:", MARGIN + INFO_COL * 2, Y);
+  doc.text(text2({ es: "Tipo:", en: "Type:" }), MARGIN, Y);
+  doc.text(text2({ es: "Estado:", en: "Status:" }), MARGIN + INFO_COL, Y);
+  doc.text(text2({ es: "Urgencia:", en: "Urgency:" }), MARGIN + INFO_COL * 2, Y);
   Y += 11;
   doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
-  doc.text(TYPE_LABELS[data.type] || data.type, MARGIN, Y);
-  doc.text(STATUS_LABELS2[data.status] || data.status, MARGIN + INFO_COL, Y);
-  doc.text(URGENCY_LABELS[data.urgency] || data.urgency, MARGIN + INFO_COL * 2, Y);
+  doc.text(label(TYPE_LABELS, data.type), MARGIN, Y);
+  doc.text(label(STATUS_LABELS2, data.status), MARGIN + INFO_COL, Y);
+  doc.text(label(URGENCY_LABELS, data.urgency), MARGIN + INFO_COL * 2, Y);
   Y += 18;
   const productLines = [];
-  if (data.productName) productLines.push({ label: "Producto:", value: data.productName });
-  if (data.productSku) productLines.push({ label: "SKU/Modelo:", value: data.productSku });
-  if (data.warrantySerialNumber) productLines.push({ label: "No. Serie:", value: data.warrantySerialNumber });
-  if (data.referenceNumber) productLines.push({ label: "Referencia:", value: data.referenceNumber });
-  if (data.orderFolio) productLines.push({ label: "Pedido:", value: data.orderFolio });
-  if (data.invoiceFolio) productLines.push({ label: "Factura:", value: data.invoiceFolio });
+  if (data.productName) productLines.push({ label: text2({ es: "Producto:", en: "Product:" }), value: data.productName });
+  if (data.productSku) productLines.push({ label: text2({ es: "SKU/Modelo:", en: "SKU/Model:" }), value: data.productSku });
+  if (data.warrantySerialNumber) productLines.push({ label: text2({ es: "No. Serie:", en: "Serial No.:" }), value: data.warrantySerialNumber });
+  if (data.referenceNumber) productLines.push({ label: text2({ es: "Referencia:", en: "Reference:" }), value: data.referenceNumber });
+  if (data.orderFolio) productLines.push({ label: text2({ es: "Pedido:", en: "Order:" }), value: data.orderFolio });
+  if (data.invoiceFolio) productLines.push({ label: text2({ es: "Factura:", en: "Invoice:" }), value: data.invoiceFolio });
   const PROD_BOX_H = Math.max(40, 22 + Math.min(productLines.length, 6) * 11 + 6);
   doc.rect(MARGIN, Y, CONTENT_W, PROD_BOX_H).fill(lightColor);
   doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("PRODUCTO / EQUIPO", MARGIN + 6, Y + 4, { width: CONTENT_W - 12 });
+  doc.text(text2({ es: "PRODUCTO / EQUIPO", en: "PRODUCT / EQUIPMENT" }), MARGIN + 6, Y + 4, { width: CONTENT_W - 12 });
   if (productLines.length === 0) {
     doc.fontSize(8).font("Helvetica-Oblique").fillColor("#9ca3af");
-    doc.text("Sin informaci\xF3n de producto / equipo registrada.", MARGIN + 6, Y + 22, { width: CONTENT_W - 12 });
+    doc.text(text2({ es: "Sin informaci\xF3n de producto / equipo registrada.", en: "No product / equipment information recorded." }), MARGIN + 6, Y + 22, { width: CONTENT_W - 12 });
   } else {
     doc.fontSize(7.5);
     productLines.slice(0, 6).forEach((row, i) => {
@@ -7525,7 +7563,7 @@ async function generateIncidentWarrantyPDF(data) {
   Y += PROD_BOX_H + 14;
   doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("ASUNTO Y DESCRIPCI\xD3N DEL PROBLEMA", MARGIN + 6, Y + 4);
+  doc.text(text2({ es: "ASUNTO Y DESCRIPCI\xD3N DEL PROBLEMA", en: "SUBJECT AND PROBLEM DESCRIPTION" }), MARGIN + 6, Y + 4);
   Y += 15;
   doc.rect(MARGIN, Y, CONTENT_W, 14).fill(lightColor);
   doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#111827");
@@ -7536,12 +7574,12 @@ async function generateIncidentWarrantyPDF(data) {
   const descLines = data.description.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join("\n");
   const descH = Math.max(44, Math.min(120, Math.ceil(descLines.length / 80) * 12 + 16));
   doc.rect(MARGIN, Y, CONTENT_W, descH).fill("#f9fafb");
-  doc.text(descLines || "Sin descripci\xF3n.", MARGIN + 6, Y + 6, { width: CONTENT_W - 12, lineBreak: true, height: descH - 10, ellipsis: true });
+  doc.text(descLines || text2({ es: "Sin descripci\xF3n.", en: "No description." }), MARGIN + 6, Y + 6, { width: CONTENT_W - 12, lineBreak: true, height: descH - 10, ellipsis: true });
   Y += descH + 12;
   if (data.resolution) {
     doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
     doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text("RESOLUCI\xD3N / ACCI\xD3N TOMADA", MARGIN + 6, Y + 4);
+    doc.text(text2({ es: "RESOLUCI\xD3N / ACCI\xD3N TOMADA", en: "RESOLUTION / ACTION TAKEN" }), MARGIN + 6, Y + 4);
     Y += 15;
     const resH = Math.max(32, Math.min(80, Math.ceil(data.resolution.length / 90) * 12 + 12));
     doc.rect(MARGIN, Y, CONTENT_W, resH).fill(lightColor);
@@ -7552,8 +7590,8 @@ async function generateIncidentWarrantyPDF(data) {
   if (data.assigneeName || data.assignedArea) {
     doc.fontSize(7.5).font("Helvetica").fillColor("#6b7280");
     const assignParts = [];
-    if (data.assigneeName) assignParts.push(`Responsable: ${data.assigneeName}`);
-    if (data.assignedArea) assignParts.push(`\xC1rea: ${data.assignedArea}`);
+    if (data.assigneeName) assignParts.push(`${text2({ es: "Responsable", en: "Responsible" })}: ${data.assigneeName}`);
+    if (data.assignedArea) assignParts.push(`${text2({ es: "\xC1rea", en: "Area" })}: ${data.assignedArea}`);
     doc.text(assignParts.join("   |   "), MARGIN, Y, { width: CONTENT_W });
     Y += 16;
   }
@@ -7563,7 +7601,7 @@ async function generateIncidentWarrantyPDF(data) {
   }
   doc.rect(MARGIN, Y, CONTENT_W, 15).fill(mediumColor);
   doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text("OBSERVACIONES / CONDICI\xD3N DEL EQUIPO", MARGIN + 6, Y + 4);
+  doc.text(text2({ es: "OBSERVACIONES / CONDICI\xD3N DEL EQUIPO", en: "OBSERVATIONS / EQUIPMENT CONDITION" }), MARGIN + 6, Y + 4);
   Y += 15;
   if (data.observations) {
     const obsH = Math.max(44, Math.min(90, Math.ceil(data.observations.length / 90) * 12 + 16));
@@ -7581,17 +7619,17 @@ async function generateIncidentWarrantyPDF(data) {
   }
   const SIG_W = CONTENT_W / 4 - 6;
   const SIG_H = 82;
-  const sigBoxes = ["DEPTO. DE\nSEGURIDAD", "EMBARQUES", "FACTURACI\xD3N", "TRANSPORTE\nO CLIENTE"];
-  sigBoxes.forEach((label, i) => {
+  const sigBoxes = language === "en" ? ["SAFETY\nDEPT.", "SHIPPING", "BILLING", "TRANSPORTATION\nOR CUSTOMER"] : ["DEPTO. DE\nSEGURIDAD", "EMBARQUES", "FACTURACI\xD3N", "TRANSPORTE\nO CLIENTE"];
+  sigBoxes.forEach((label2, i) => {
     const bx = MARGIN + i * (SIG_W + 8);
     doc.rect(bx, Y, SIG_W, SIG_H).stroke(mediumColor);
     doc.fontSize(6.5).font("Helvetica-Bold").fillColor(primaryColor);
-    doc.text(label, bx + 4, Y + 5, { width: SIG_W - 8, align: "center" });
+    doc.text(label2, bx + 4, Y + 5, { width: SIG_W - 8, align: "center" });
     doc.moveTo(bx + 6, Y + 42).lineTo(bx + SIG_W - 6, Y + 42).stroke("#9ca3af");
     doc.fontSize(6).font("Helvetica").fillColor("#6b7280");
-    doc.text("NOMBRE Y FIRMA", bx + 4, Y + 44, { width: SIG_W - 8, align: "center" });
+    doc.text(text2({ es: "NOMBRE Y FIRMA", en: "NAME AND SIGNATURE" }), bx + 4, Y + 44, { width: SIG_W - 8, align: "center" });
     doc.moveTo(bx + 6, Y + 66).lineTo(bx + SIG_W - 6, Y + 66).stroke("#9ca3af");
-    doc.text("FECHA", bx + 4, Y + 68, { width: SIG_W - 8, align: "center" });
+    doc.text(text2({ es: "FECHA", en: "DATE" }), bx + 4, Y + 68, { width: SIG_W - 8, align: "center" });
   });
   Y += SIG_H + 16;
   if (Y > 710) {
@@ -7600,17 +7638,20 @@ async function generateIncidentWarrantyPDF(data) {
   }
   doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#4b5563");
   doc.text(
-    "Declaro que el equipo descrito en este documento es entregado para revisi\xF3n/garant\xEDa en las condiciones indicadas y que la informaci\xF3n proporcionada es ver\xEDdica.",
+    text2({
+      es: "Declaro que el equipo descrito en este documento es entregado para revisi\xF3n/garant\xEDa en las condiciones indicadas y que la informaci\xF3n proporcionada es ver\xEDdica.",
+      en: "I declare that the equipment described in this document is delivered for inspection/warranty under the stated conditions and that the information provided is accurate."
+    }),
     MARGIN,
     Y,
     { width: CONTENT_W }
   );
   Y += 18;
   doc.fontSize(7.5).font("Helvetica").fillColor("#374151");
-  doc.text("Yo: ___________________________________", MARGIN, Y, { continued: true });
-  doc.text("   confirmo la entrega del equipo arriba descrito.", { continued: false });
+  doc.text(text2({ es: "Yo", en: "I" }) + ": ___________________________________", MARGIN, Y, { continued: true });
+  doc.text(text2({ es: "   confirmo la entrega del equipo arriba descrito.", en: "   confirm delivery of the equipment described above." }), { continued: false });
   Y += 14;
-  doc.text("Fecha: ___/___/______", MARGIN, Y);
+  doc.text(text2({ es: "Fecha: ___/___/______", en: "Date: ___/___/______" }), MARGIN, Y);
   const FOOTER_Y = 755;
   doc.rect(0, FOOTER_Y, PAGE_W, 37).fill(primaryColor);
   const footerParts = [];
@@ -7619,7 +7660,7 @@ async function generateIncidentWarrantyPDF(data) {
   if (tenant?.phone) footerParts.push(tenant.phone);
   doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.8)");
   doc.text(footerParts.join("   |   "), MARGIN, FOOTER_Y + 8, { width: CONTENT_W, align: "center" });
-  doc.text(`${data.ticketNumber}   \u2014   Generado el ${fmtDate4(now)}`, MARGIN, FOOTER_Y + 20, { width: CONTENT_W, align: "center" });
+  doc.text(`${data.ticketNumber}   \u2014   ${text2({ es: "Generado el", en: "Generated on" })} ${fmtDate2(now)}`, MARGIN, FOOTER_Y + 20, { width: CONTENT_W, align: "center" });
   doc.end();
   return doc;
 }
@@ -7628,28 +7669,143 @@ var init_incident_warranty_pdf_generator = __esm({
   "server/incident-warranty-pdf-generator.ts"() {
     "use strict";
     init_localStorage();
+    init_pdf_locale();
     TYPE_LABELS = {
-      garantia: "Garant\xEDa",
-      retrabajo: "Retrabajo",
-      queja: "Queja",
-      consulta: "Consulta",
-      administrativo: "Administrativo"
+      garantia: { es: "Garant\xEDa", en: "Warranty" },
+      retrabajo: { es: "Retrabajo", en: "Rework" },
+      queja: { es: "Queja", en: "Complaint" },
+      consulta: { es: "Consulta", en: "Inquiry" },
+      administrativo: { es: "Administrativo", en: "Administrative" }
     };
     STATUS_LABELS2 = {
-      nuevo: "Nuevo",
-      asignado: "Asignado",
-      en_proceso: "En Proceso",
-      esperando_cliente: "Esperando Cliente",
-      esperando_interno: "En Revisi\xF3n",
-      resuelto: "Resuelto",
-      cerrado: "Cerrado",
-      cancelado: "Cancelado"
+      nuevo: { es: "Nuevo", en: "New" },
+      asignado: { es: "Asignado", en: "Assigned" },
+      en_proceso: { es: "En Proceso", en: "In Progress" },
+      esperando_cliente: { es: "Esperando Cliente", en: "Waiting for Customer" },
+      esperando_interno: { es: "En Revisi\xF3n", en: "Under Review" },
+      resuelto: { es: "Resuelto", en: "Resolved" },
+      cerrado: { es: "Cerrado", en: "Closed" },
+      cancelado: { es: "Cancelado", en: "Cancelled" }
     };
     URGENCY_LABELS = {
-      baja: "Baja",
-      media: "Media",
-      alta: "Alta",
-      critica: "Cr\xEDtica"
+      baja: { es: "Baja", en: "Low" },
+      media: { es: "Media", en: "Medium" },
+      alta: { es: "Alta", en: "High" },
+      critica: { es: "Cr\xEDtica", en: "Critical" }
+    };
+  }
+});
+
+// server/public-incident-pdf-generator.ts
+var public_incident_pdf_generator_exports = {};
+__export(public_incident_pdf_generator_exports, {
+  generatePublicIncidentPDFStream: () => generatePublicIncidentPDFStream
+});
+import PDFDocument9 from "pdfkit";
+function lighten(hex, amount) {
+  const value = hex.replace("#", "");
+  const component = (offset) => {
+    const color = parseInt(value.substring(offset, offset + 2), 16);
+    return Math.min(255, color + Math.round((255 - color) * amount)).toString(16).padStart(2, "0");
+  };
+  return `#${component(0)}${component(2)}${component(4)}`;
+}
+function generatePublicIncidentPDFStream(incident, tenant) {
+  const language = resolvePdfLanguage(tenant);
+  const text2 = (values) => pdfText(language, values);
+  const date = (value) => formatPdfDate(value, language, tenant?.timezone);
+  const dateTime = (value) => formatPdfDateTime(value, language, tenant?.timezone);
+  const label = (labels, value) => labels[value] ? text2(labels[value]) : value;
+  const doc = new PDFDocument9({ size: "LETTER", margin: 0, autoFirstPage: true });
+  const primary = tenant?.primaryColor || "#1a365d";
+  const light = lighten(primary, 0.92);
+  const medium = lighten(primary, 0.75);
+  const pageWidth = 612, margin = 40, contentWidth = pageWidth - margin * 2;
+  doc.rect(0, 0, pageWidth, 90).fill(primary);
+  doc.fontSize(18).font("Helvetica-Bold").fillColor("#ffffff").text(tenant?.legalName || tenant?.name || text2({ es: "Empresa", en: "Company" }), margin, 18, { width: contentWidth });
+  doc.fontSize(10).font("Helvetica").fillColor("rgba(255,255,255,0.8)").text(text2({ es: "REPORTE DE INCIDENTE / TICKET DE SERVICIO", en: "INCIDENT REPORT / SERVICE TICKET" }), margin, 44, { width: contentWidth });
+  if (tenant?.rfc) doc.text(`${text2({ es: "RFC", en: "TAX ID" })}: ${tenant.rfc}`, margin, 58, { width: contentWidth });
+  doc.rect(0, 90, pageWidth, 28).fill(medium);
+  doc.fontSize(13).font("Helvetica-Bold").fillColor(primary).text(incident.ticketNumber, margin, 97, { width: contentWidth * 0.5 });
+  doc.fontSize(9).font("Helvetica").text(`${text2({ es: "Estado", en: "Status" })}: ${label(statuses, incident.status)}`, margin + contentWidth * 0.5, 100, { width: contentWidth * 0.5, align: "right" });
+  let y = 130;
+  const info = [
+    [text2({ es: "Tipo", en: "Type" }), label(types, incident.type)],
+    [text2({ es: "Urgencia", en: "Urgency" }), label(urgencies, incident.urgency)],
+    [text2({ es: "Asignado a", en: "Assigned to" }), incident.assignee?.fullName || text2({ es: "Sin asignar", en: "Unassigned" })],
+    [text2({ es: "Fecha creaci\xF3n", en: "Created on" }), date(incident.createdAt)],
+    [text2({ es: "Asunto", en: "Subject" }), incident.subject]
+  ];
+  const columnWidth = contentWidth / 2 - 6;
+  info.forEach(([heading, value], index) => {
+    const x = margin + index % 2 * (columnWidth + 12), boxY = y + Math.floor(index / 2) * 38;
+    doc.rect(x, boxY, columnWidth, 34).fill(light);
+    doc.fontSize(7).font("Helvetica").fillColor("#6b7280").text(heading.toUpperCase(), x + 6, boxY + 5, { width: columnWidth - 12 });
+    doc.fontSize(9).font("Helvetica-Bold").fillColor("#111827").text(value, x + 6, boxY + 16, { width: columnWidth - 12, lineBreak: false, ellipsis: true });
+  });
+  y += Math.ceil(info.length / 2) * 38 + 16;
+  const section = (heading, content) => {
+    doc.rect(margin, y, contentWidth, 14).fill(medium);
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(primary).text(heading, margin + 6, y + 3);
+    y += 14;
+    const height = Math.max(40, doc.heightOfString(content, { width: contentWidth - 12 }) + 16);
+    doc.rect(margin, y, contentWidth, height).fill(light);
+    doc.fontSize(9).font("Helvetica").fillColor("#374151").text(content, margin + 6, y + 8, { width: contentWidth - 12 });
+    y += height + 14;
+  };
+  section(text2({ es: "DESCRIPCI\xD3N", en: "DESCRIPTION" }), incident.description);
+  if (incident.resolution) section(text2({ es: "RESOLUCI\xD3N", en: "RESOLUTION" }), incident.resolution);
+  if (incident.comments?.length) {
+    doc.rect(margin, y, contentWidth, 14).fill(medium);
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(primary).text(text2({ es: "CONVERSACI\xD3N", en: "CONVERSATION" }), margin + 6, y + 3);
+    y += 14;
+    for (const comment of incident.comments) {
+      const height = Math.max(32, doc.heightOfString(comment.content, { width: contentWidth - 24 }) + 20);
+      if (y + height > 720) {
+        doc.addPage({ size: "LETTER", margin: 0 });
+        y = 40;
+      }
+      doc.rect(margin, y, contentWidth, height).fill(comment.isFromCustomer ? lighten(primary, 0.85) : light);
+      const author = comment.isFromCustomer ? text2({ es: "Cliente", en: "Customer" }) : comment.user?.fullName || text2({ es: "Soporte", en: "Support" });
+      doc.fontSize(7).font("Helvetica-Bold").fillColor("#374151").text(`${author}  \xB7  ${dateTime(comment.createdAt)}`, margin + 8, y + 6, { width: contentWidth - 16 });
+      doc.fontSize(8.5).font("Helvetica").fillColor("#111827").text(comment.content, margin + 8, y + 17, { width: contentWidth - 16 });
+      y += height + 4;
+    }
+  }
+  doc.rect(0, 755, pageWidth, 37).fill(primary);
+  const footer = [tenant?.rfc ? `${text2({ es: "RFC", en: "TAX ID" })}: ${tenant.rfc}` : null, tenant?.email, tenant?.phone].filter(Boolean).join("   |   ");
+  doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.8)").text(footer, margin, 763, { width: contentWidth, align: "center" });
+  doc.text(`${text2({ es: "Generado el", en: "Generated on" })} ${formatPdfDate(/* @__PURE__ */ new Date(), language, tenant?.timezone, { day: "2-digit", month: "long", year: "numeric" })}`, margin, 775, { width: contentWidth, align: "center" });
+  doc.end();
+  return doc;
+}
+var statuses, types, urgencies;
+var init_public_incident_pdf_generator = __esm({
+  "server/public-incident-pdf-generator.ts"() {
+    "use strict";
+    init_pdf_locale();
+    statuses = {
+      nuevo: { es: "Nuevo", en: "New" },
+      asignado: { es: "Asignado", en: "Assigned" },
+      en_proceso: { es: "En Proceso", en: "In Progress" },
+      esperando_cliente: { es: "Esperando Cliente", en: "Waiting for Customer" },
+      esperando_interno: { es: "En Revisi\xF3n", en: "Under Review" },
+      resuelto: { es: "Resuelto", en: "Resolved" },
+      cerrado: { es: "Cerrado", en: "Closed" },
+      cancelado: { es: "Cancelado", en: "Cancelled" }
+    };
+    types = {
+      garantia: { es: "Garant\xEDa", en: "Warranty" },
+      retrabajo: { es: "Retrabajo", en: "Rework" },
+      queja: { es: "Queja", en: "Complaint" },
+      consulta: { es: "Consulta", en: "Inquiry" },
+      administrativo: { es: "Administrativo", en: "Administrative" }
+    };
+    urgencies = {
+      baja: { es: "Baja", en: "Low" },
+      media: { es: "Media", en: "Medium" },
+      alta: { es: "Alta", en: "High" },
+      critica: { es: "Cr\xEDtica", en: "Critical" }
     };
   }
 });
@@ -9640,7 +9796,8 @@ async function registerRoutes(app2) {
         "country",
         "primaryColor",
         "secondaryColor",
-        "timezone"
+        "timezone",
+        "locale"
       ];
       const updateData = {};
       for (const field of allowedFields) {
@@ -11487,16 +11644,16 @@ async function registerRoutes(app2) {
           const rawCurrency = quotForAuth.currency;
           const safeCurrency = rawCurrency && /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "MXN";
           const totalDisplay = new Intl.NumberFormat("es-MX", { style: "currency", currency: safeCurrency }).format(parseFloat(quotForAuth.total || "0"));
-          const fmt3 = (val) => val ? `$${parseFloat(val).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "$0.00";
+          const fmt2 = (val) => val ? `$${parseFloat(val).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "$0.00";
           const { sendCreditAuthNewRequestEmail: sendCreditAuthNewRequestEmail2 } = await Promise.resolve().then(() => (init_quotation_email_service(), quotation_email_service_exports));
           await sendCreditAuthNewRequestEmail2({
             quotationFolio: quotForAuth.folio,
             customerName: quotForAuth.customer?.name || "\u2014",
             quotationTotal: totalDisplay,
             vendedorName: quotForAuth.user?.fullName || "\u2014",
-            creditAvailable: fmt3(auth.creditAvailable),
-            creditUsed: fmt3(auth.creditUsed),
-            overdueBalance: fmt3(auth.overdueBalance),
+            creditAvailable: fmt2(auth.creditAvailable),
+            creditUsed: fmt2(auth.creditUsed),
+            overdueBalance: fmt2(auth.overdueBalance),
             tenantName,
             tenantSubdomain: tenantRecord?.subdomain || void 0,
             recipients: creditoUsers.filter((u) => u.email).map((u) => ({ email: u.email, name: u.fullName }))
@@ -12851,7 +13008,7 @@ ${closeNote}` : closeNote;
       const { incidents: incidentData } = req.body;
       const tenantId = getEffectiveTenantId(req);
       const tenantBranding = tenantId ? await db.query.tenants.findFirst({ where: eq5(tenants.id, tenantId) }) ?? null : null;
-      const cutoffDate = (/* @__PURE__ */ new Date()).toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+      const cutoffDate = /* @__PURE__ */ new Date();
       const { generateIncidentsReportPDF: generateIncidentsReportPDF2 } = await Promise.resolve().then(() => (init_reports_pdf_generator(), reports_pdf_generator_exports));
       const pdfStream = await generateIncidentsReportPDF2({
         incidents: incidentData,
@@ -13109,16 +13266,17 @@ ${closeNote}` : closeNote;
         releasedByItem[rel.quotationItemId] = (releasedByItem[rel.quotationItemId] ?? 0) + parseFloat(rel.quantityReleased ?? "0");
       }
       const hasReleases = shipmentReleases.length > 0;
-      const desdeLabel = tenantBranding?.city ? `${tenantBranding.city}/Salida` : "Almac\xE9n/Salida";
+      const isEnglishPdf = tenantBranding?.locale?.toLowerCase().startsWith("en");
+      const desdeLabel = tenantBranding?.city ? `${tenantBranding.city}/${isEnglishPdf ? "Outbound" : "Salida"}` : isEnglishPdf ? "Warehouse/Outbound" : "Almac\xE9n/Salida";
       const remisionProducts = order.quotation.items.filter(
         (item) => (
           // Always keep items whose product has serials captured on this shipment
           (instancesByProduct[item.productId ?? ""]?.length ?? 0) > 0 || !hasReleases || (releasedByItem[item.id] ?? 0) > 0
         )
       ).map((item) => ({
-        name: item.product?.name ?? item.description ?? "Producto",
+        name: item.product?.name ?? item.description ?? (isEnglishPdf ? "Product" : "Producto"),
         quantity: hasReleases && (releasedByItem[item.id] ?? 0) > 0 ? releasedByItem[item.id] : parseFloat(item.quantity ?? "1"),
-        unitOfMeasure: item.product?.unitOfMeasure ?? "Unidades",
+        unitOfMeasure: item.product?.unitOfMeasure ?? (isEnglishPdf ? "Units" : "Unidades"),
         desde: desdeLabel,
         serialNumbers: instancesByProduct[item.productId ?? ""] ?? []
       }));
@@ -13127,9 +13285,9 @@ ${closeNote}` : closeNote;
         if (coveredProductIds.has(productId)) continue;
         const prod = await db.query.products.findFirst({ where: eq5(products.id, productId) });
         remisionProducts.push({
-          name: prod?.name ?? "Producto",
+          name: prod?.name ?? (isEnglishPdf ? "Product" : "Producto"),
           quantity: serials.length,
-          unitOfMeasure: prod?.unitOfMeasure ?? "Unidades",
+          unitOfMeasure: prod?.unitOfMeasure ?? (isEnglishPdf ? "Units" : "Unidades"),
           desde: desdeLabel,
           serialNumbers: serials
         });
@@ -15732,109 +15890,14 @@ ${closeNote}` : closeNote;
         return res.status(403).json({ error: "El enlace ha expirado" });
       }
       const tenant = await db.query.tenants.findFirst({ where: eq5(tenants.id, incident.tenantId) });
-      const PDFDocument9 = (await import("pdfkit")).default;
-      const doc = new PDFDocument9({ size: "LETTER", margin: 0, autoFirstPage: true });
+      const { generatePublicIncidentPDFStream: generatePublicIncidentPDFStream2 } = await Promise.resolve().then(() => (init_public_incident_pdf_generator(), public_incident_pdf_generator_exports));
+      const { resolvePdfLanguage: resolvePdfLanguage2, pdfText: pdfText2 } = await Promise.resolve().then(() => (init_pdf_locale(), pdf_locale_exports));
+      const pdfLanguage = resolvePdfLanguage2(tenant);
+      const text2 = (values) => pdfText2(pdfLanguage, values);
+      const document = generatePublicIncidentPDFStream2(incident, tenant);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="Incidente-${incident.ticketNumber}.pdf"`);
-      doc.pipe(res);
-      const primaryColor = tenant?.primaryColor || "#1a365d";
-      const lighten = (hex, amt) => {
-        const c = hex.replace("#", "");
-        const r = Math.min(255, parseInt(c.substring(0, 2), 16) + Math.round((255 - parseInt(c.substring(0, 2), 16)) * amt));
-        const g = Math.min(255, parseInt(c.substring(2, 4), 16) + Math.round((255 - parseInt(c.substring(2, 4), 16)) * amt));
-        const b = Math.min(255, parseInt(c.substring(4, 6), 16) + Math.round((255 - parseInt(c.substring(4, 6), 16)) * amt));
-        return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-      };
-      const lightColor = lighten(primaryColor, 0.92);
-      const mediumColor = lighten(primaryColor, 0.75);
-      const PAGE_W = 612;
-      const MARGIN = 40;
-      const CONTENT_W = PAGE_W - MARGIN * 2;
-      doc.rect(0, 0, PAGE_W, 90).fill(primaryColor);
-      doc.fontSize(18).font("Helvetica-Bold").fillColor("#ffffff");
-      doc.text(tenant?.legalName || tenant?.name || "Empresa", MARGIN, 18, { width: CONTENT_W });
-      doc.fontSize(10).font("Helvetica").fillColor("rgba(255,255,255,0.8)");
-      doc.text("REPORTE DE INCIDENTE / TICKET DE SERVICIO", MARGIN, 44, { width: CONTENT_W });
-      if (tenant?.rfc) doc.text(`RFC: ${tenant.rfc}`, MARGIN, 58, { width: CONTENT_W });
-      doc.rect(0, 90, PAGE_W, 28).fill(mediumColor);
-      doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text(incident.ticketNumber, MARGIN, 97, { width: CONTENT_W * 0.5 });
-      doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
-      const statusMap = { nuevo: "Nuevo", asignado: "Asignado", en_proceso: "En Proceso", esperando_cliente: "Esperando Cliente", esperando_interno: "En Revisi\xF3n", resuelto: "Resuelto", cerrado: "Cerrado", cancelado: "Cancelado" };
-      doc.text(`Estado: ${statusMap[incident.status] || incident.status}`, MARGIN + CONTENT_W * 0.5, 100, { width: CONTENT_W * 0.5, align: "right" });
-      let Y = 130;
-      const infoItems = [
-        ["Tipo", { garantia: "Garant\xEDa", retrabajo: "Retrabajo", queja: "Queja", consulta: "Consulta", administrativo: "Administrativo" }[incident.type] || incident.type],
-        ["Urgencia", { baja: "Baja", media: "Media", alta: "Alta", critica: "Cr\xEDtica" }[incident.urgency] || incident.urgency],
-        ["Asignado a", incident.assignee?.fullName || "Sin asignar"],
-        ["Fecha creaci\xF3n", new Date(incident.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" })],
-        ["Asunto", incident.subject]
-      ];
-      const COL_W = CONTENT_W / 2 - 6;
-      infoItems.forEach((pair, i) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const bx = MARGIN + col * (COL_W + 12);
-        const by = Y + row * 38;
-        doc.rect(bx, by, COL_W, 34).fill(lightColor);
-        doc.fontSize(7).font("Helvetica").fillColor("#6b7280");
-        doc.text(pair[0].toUpperCase(), bx + 6, by + 5, { width: COL_W - 12 });
-        doc.fontSize(9).font("Helvetica-Bold").fillColor("#111827");
-        doc.text(pair[1], bx + 6, by + 16, { width: COL_W - 12, lineBreak: false, ellipsis: true });
-      });
-      Y += Math.ceil(infoItems.length / 2) * 38 + 16;
-      doc.rect(MARGIN, Y, CONTENT_W, 14).fill(mediumColor);
-      doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("DESCRIPCI\xD3N", MARGIN + 6, Y + 3);
-      Y += 14;
-      const descH = Math.max(40, doc.heightOfString(incident.description, { width: CONTENT_W - 12 }) + 16);
-      doc.rect(MARGIN, Y, CONTENT_W, descH).fill(lightColor);
-      doc.fontSize(9).font("Helvetica").fillColor("#374151");
-      doc.text(incident.description, MARGIN + 6, Y + 8, { width: CONTENT_W - 12 });
-      Y += descH + 14;
-      if (incident.resolution) {
-        doc.rect(MARGIN, Y, CONTENT_W, 14).fill(mediumColor);
-        doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("RESOLUCI\xD3N", MARGIN + 6, Y + 3);
-        Y += 14;
-        const resH = Math.max(40, doc.heightOfString(incident.resolution, { width: CONTENT_W - 12 }) + 16);
-        doc.rect(MARGIN, Y, CONTENT_W, resH).fill(lightColor);
-        doc.fontSize(9).font("Helvetica").fillColor("#374151");
-        doc.text(incident.resolution, MARGIN + 6, Y + 8, { width: CONTENT_W - 12 });
-        Y += resH + 14;
-      }
-      if (incident.comments && incident.comments.length > 0) {
-        doc.rect(MARGIN, Y, CONTENT_W, 14).fill(mediumColor);
-        doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("CONVERSACI\xD3N", MARGIN + 6, Y + 3);
-        Y += 14;
-        for (const comment of incident.comments) {
-          const who = comment.isFromCustomer ? "Cliente" : comment.user?.fullName || "Soporte";
-          const when = new Date(comment.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-          const cH = Math.max(32, doc.heightOfString(comment.content, { width: CONTENT_W - 24 }) + 20);
-          if (Y + cH > 720) {
-            doc.addPage({ size: "LETTER", margin: 0 });
-            Y = 40;
-          }
-          doc.rect(MARGIN, Y, CONTENT_W, cH).fill(comment.isFromCustomer ? lighten(primaryColor, 0.85) : lightColor);
-          doc.fontSize(7).font("Helvetica-Bold").fillColor("#374151");
-          doc.text(`${who}  \xB7  ${when}`, MARGIN + 8, Y + 6, { width: CONTENT_W - 16 });
-          doc.fontSize(8.5).font("Helvetica").fillColor("#111827");
-          doc.text(comment.content, MARGIN + 8, Y + 17, { width: CONTENT_W - 16 });
-          Y += cH + 4;
-        }
-        Y += 10;
-      }
-      if (Y > 720) {
-        doc.addPage({ size: "LETTER", margin: 0 });
-        Y = 40;
-      }
-      doc.rect(0, 755, PAGE_W, 37).fill(primaryColor);
-      doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.8)");
-      const footerParts = [tenant?.rfc ? `RFC: ${tenant.rfc}` : null, tenant?.email, tenant?.phone].filter(Boolean);
-      doc.text(footerParts.join("   |   "), MARGIN, 763, { width: CONTENT_W, align: "center" });
-      doc.text(`Generado el ${(/* @__PURE__ */ new Date()).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}`, MARGIN, 775, { width: CONTENT_W, align: "center" });
-      doc.end();
+      res.setHeader("Content-Disposition", `attachment; filename="${text2({ es: "Incidente", en: "Incident" })}-${incident.ticketNumber}.pdf"`);
+      document.pipe(res);
     } catch (error) {
       console.error("Error generating incident PDF:", error);
       if (!res.headersSent) res.status(500).json({ error: "Error al generar el PDF" });

@@ -5,6 +5,7 @@ import { localStorageService } from "./localStorage";
 import sharp from "sharp";
 import pLimit from "p-limit";
 import { Readable } from "stream";
+import { formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
 
 interface TenantBranding {
   name: string;
@@ -21,6 +22,7 @@ interface TenantBranding {
   website?: string | null;
   rfc?: string | null;
   timezone?: string | null;
+  locale?: string | null;
 }
 
 interface MinuteData {
@@ -131,21 +133,16 @@ function lightenColor(hex: string, amount: number): string {
   return `#${lr.toString(16).padStart(2, "0")}${lg.toString(16).padStart(2, "0")}${lb.toString(16).padStart(2, "0")}`;
 }
 
-function formatDateTime(date: Date | string, timezone?: string | null): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es-MX", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-    timeZone: timezone || "America/Mexico_City",
-  });
-}
-
 export async function generateMinutePDFStream(data: MinuteData): Promise<Readable> {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, autoFirstPage: true });
   const { checkin, customer, user, tenant } = data;
+  const language = resolvePdfLanguage(tenant);
+  const text = <T>(values: { es: T; en: T }) => pdfText(language, values);
+  const formatDateTime = (value: Date | string | null | undefined) =>
+    formatPdfDateTime(value, language, tenant?.timezone);
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const companyName = tenant?.legalName || tenant?.name || "Empresa";
+  const companyName = tenant?.legalName || tenant?.name || text({ es: "Empresa", en: "Company" });
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.92);
   const mediumColor = lightenColor(primaryColor, 0.75);
@@ -181,18 +178,18 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
 
       // Build info lines — split address into street and city/state for readability
       const infoLines: string[] = [];
-      if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
+      if (tenant?.rfc) infoLines.push(`${text({ es: "RFC:", en: "Tax ID:" })} ${tenant.rfc}`);
       if (tenant?.address) {
         tenant.address.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(part => infoLines.push(part));
       }
       const cityStateParts = [
         tenant?.city,
         tenant?.state,
-        tenant?.zipCode ? `C.P. ${tenant.zipCode}` : null,
+        tenant?.zipCode ? `${text({ es: "C.P.", en: "ZIP" })} ${tenant.zipCode}` : null,
       ].filter(Boolean);
       if (cityStateParts.length) infoLines.push(cityStateParts.join(", "));
       const contactParts = [
-        tenant?.phone ? `Tel: ${tenant.phone}` : "",
+        tenant?.phone ? `${text({ es: "Tel:", en: "Phone:" })} ${tenant.phone}` : "",
         tenant?.email || "",
       ].filter(Boolean);
       if (contactParts.length) infoLines.push(contactParts.join("  |  "));
@@ -214,10 +211,10 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       doc.rect(0, TITLE_BAND_Y, PAGE_W, TITLE_BAND_H).fill(mediumColor);
 
       doc.fontSize(13).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("MINUTA DE VISITA A CLIENTE", MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2 });
+      doc.text(text({ es: "MINUTA DE VISITA A CLIENTE", en: "CUSTOMER VISIT MINUTES" }), MARGIN, TITLE_BAND_Y + 8, { width: CONTENT_W / 2 });
 
       // Visit date on right
-      const visitDate = formatDateTime(checkin.checkinAt, tenant?.timezone);
+      const visitDate = formatDateTime(checkin.checkinAt);
       doc.fontSize(9).font("Helvetica").fillColor(primaryColor);
       doc.text(visitDate, MARGIN + CONTENT_W / 2, TITLE_BAND_Y + 11, { width: CONTENT_W / 2, align: "right" });
 
@@ -236,20 +233,20 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       doc.rect(COL2_X, currentY, COL_W, 16).fill(mediumColor);
 
       doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-      doc.text("INFORMACIÓN DEL CLIENTE", MARGIN + 6, currentY + 4, { width: COL_W - 10 });
-      doc.text("DATOS DE LA VISITA",       COL2_X + 6, currentY + 4, { width: COL_W - 10 });
+      doc.text(text({ es: "INFORMACIÓN DEL CLIENTE", en: "CUSTOMER INFORMATION" }), MARGIN + 6, currentY + 4, { width: COL_W - 10 });
+      doc.text(text({ es: "DATOS DE LA VISITA", en: "VISIT DETAILS" }), COL2_X + 6, currentY + 4, { width: COL_W - 10 });
 
       // Customer info
       let leftY = currentY + 22;
       const customerRows: [string, string][] = [
-        ["Cliente:", customer.name],
-        ...(customer.rfc ? [["RFC:", customer.rfc] as [string, string]] : []),
-        ...(customer.contactName ? [["Contacto:", customer.contactName] as [string, string]] : []),
-        ...(customer.phone ? [["Teléfono:", customer.phone] as [string, string]] : []),
+        [text({ es: "Cliente:", en: "Customer:" }), customer.name],
+        ...(customer.rfc ? [[text({ es: "RFC:", en: "Tax ID:" }), customer.rfc] as [string, string]] : []),
+        ...(customer.contactName ? [[text({ es: "Contacto:", en: "Contact:" }), customer.contactName] as [string, string]] : []),
+        ...(customer.phone ? [[text({ es: "Teléfono:", en: "Phone:" }), customer.phone] as [string, string]] : []),
       ];
       if (customer.address) {
         const addr = [customer.address, customer.city, customer.state].filter(Boolean).join(", ");
-        customerRows.push(["Dirección:", addr]);
+        customerRows.push([text({ es: "Dirección:", en: "Address:" }), addr]);
       }
 
       const LABEL_W = 64;
@@ -268,12 +265,15 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       // Visit info
       let rightY = currentY + 22;
       const visitRows: [string, string][] = [
-        ["Vendedor:", user.fullName],
-        ["Check-in:", formatDateTime(checkin.checkinAt, tenant?.timezone)],
-        ...(checkin.checkoutAt ? [["Check-out:", formatDateTime(checkin.checkoutAt, tenant?.timezone)] as [string, string]] : []),
+        [text({ es: "Vendedor:", en: "Salesperson:" }), user.fullName],
+        ["Check-in:", formatDateTime(checkin.checkinAt)],
+        ...(checkin.checkoutAt ? [["Check-out:", formatDateTime(checkin.checkoutAt)] as [string, string]] : []),
       ];
       if (checkin.latitude && checkin.longitude) {
-        visitRows.push(["Ubicación:", `${Number(checkin.latitude).toFixed(4)}, ${Number(checkin.longitude).toFixed(4)}`]);
+        visitRows.push([
+          text({ es: "Ubicación:", en: "Location:" }),
+          `${formatPdfNumber(Number(checkin.latitude), language, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}, ${formatPdfNumber(Number(checkin.longitude), language, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`,
+        ]);
       }
 
       const VALUE_X_R = COL2_X + 6 + LABEL_W;
@@ -292,7 +292,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       if (checkin.topics && checkin.topics.length > 0) {
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("TEMAS TRATADOS", MARGIN + 6, currentY + 4);
+        doc.text(text({ es: "TEMAS TRATADOS", en: "TOPICS DISCUSSED" }), MARGIN + 6, currentY + 4);
         currentY += 16;
 
         const topicsH = checkin.topics.length * 14 + 12;
@@ -314,7 +314,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       if (checkin.notes) {
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("NOTAS Y OBSERVACIONES", MARGIN + 6, currentY + 4);
+        doc.text(text({ es: "NOTAS Y OBSERVACIONES", en: "NOTES AND OBSERVATIONS" }), MARGIN + 6, currentY + 4);
         currentY += 16;
 
         const textHeight = Math.max(40, doc.heightOfString(checkin.notes, { width: CONTENT_W - 16 }) + 16);
@@ -330,7 +330,7 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       if (data.checkoutNotes) {
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
-        doc.text("ACUERDOS Y COMPROMISOS", MARGIN + 6, currentY + 4);
+        doc.text(text({ es: "ACUERDOS Y COMPROMISOS", en: "AGREEMENTS AND COMMITMENTS" }), MARGIN + 6, currentY + 4);
         currentY += 16;
 
         const textHeight = Math.max(40, doc.heightOfString(data.checkoutNotes, { width: CONTENT_W - 16 }) + 16);
@@ -347,7 +347,10 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
         doc.rect(MARGIN, currentY, CONTENT_W, 16).fill(mediumColor);
         doc.fontSize(8).font("Helvetica-Bold").fillColor(primaryColor);
         doc.text(
-          `FOTOGRAFÍAS DE LA VISITA${checkin.photos.length > MAX_PHOTOS_PER_PDF ? ` (mostrando ${MAX_PHOTOS_PER_PDF} de ${checkin.photos.length})` : ""}`,
+          text({
+            es: `FOTOGRAFÍAS DE LA VISITA${checkin.photos.length > MAX_PHOTOS_PER_PDF ? ` (mostrando ${MAX_PHOTOS_PER_PDF} de ${checkin.photos.length})` : ""}`,
+            en: `VISIT PHOTOS${checkin.photos.length > MAX_PHOTOS_PER_PDF ? ` (showing ${MAX_PHOTOS_PER_PDF} of ${checkin.photos.length})` : ""}`,
+          }),
           MARGIN + 6, currentY + 4
         );
         currentY += 20;
@@ -380,14 +383,14 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
             doc.image(leftBuf, MARGIN, photoY, { fit: [PHOTO_COL_W, PHOTO_MAX_H] as [number, number] });
           } else {
             doc.rect(MARGIN, photoY, PHOTO_COL_W, PHOTO_MAX_H).fill("#f0f0f0");
-            doc.fontSize(8).fillColor("#999").text("[Foto no disponible]", MARGIN, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
+            doc.fontSize(8).fillColor("#999").text(text({ es: "[Foto no disponible]", en: "[Photo unavailable]" }), MARGIN, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
           }
 
           if (rightBuf) {
             doc.image(rightBuf, MARGIN + PHOTO_COL_W + 10, photoY, { fit: [PHOTO_COL_W, PHOTO_MAX_H] as [number, number] });
           } else if (i + 1 < photosToProcess.length) {
             doc.rect(MARGIN + PHOTO_COL_W + 10, photoY, PHOTO_COL_W, PHOTO_MAX_H).fill("#f0f0f0");
-            doc.fontSize(8).fillColor("#999").text("[Foto no disponible]", MARGIN + PHOTO_COL_W + 10, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
+            doc.fontSize(8).fillColor("#999").text(text({ es: "[Foto no disponible]", en: "[Photo unavailable]" }), MARGIN + PHOTO_COL_W + 10, photoY + PHOTO_MAX_H / 2 - 5, { width: PHOTO_COL_W, align: "center" });
           }
 
           currentY += PHOTO_MAX_H + 10;
@@ -401,11 +404,11 @@ export async function generateMinutePDFStream(data: MinuteData): Promise<Readabl
       doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
 
       doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.80)");
-      doc.text("Documento generado automáticamente. Válido como constancia de visita comercial.", MARGIN, FOOTER_Y + 6, { width: 260 });
-      doc.text(`Generado el ${formatDateTime(new Date(), tenant?.timezone)}`, MARGIN, FOOTER_Y + 16, { width: 260 });
+      doc.text(text({ es: "Documento generado automáticamente. Válido como constancia de visita comercial.", en: "Automatically generated document. Valid as proof of commercial visit." }), MARGIN, FOOTER_Y + 6, { width: 260 });
+      doc.text(text({ es: "Generado el ", en: "Generated on " }) + formatDateTime(new Date()), MARGIN, FOOTER_Y + 16, { width: 260 });
 
       const footerRight: string[] = [];
-      if (tenant?.phone) footerRight.push(`Tel: ${tenant.phone}`);
+      if (tenant?.phone) footerRight.push(`${text({ es: "Tel:", en: "Phone:" })} ${tenant.phone}`);
       if (tenant?.email) footerRight.push(tenant.email);
       if (tenant?.website) footerRight.push(tenant.website);
 
