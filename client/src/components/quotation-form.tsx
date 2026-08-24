@@ -116,7 +116,10 @@ const CURRENCIES = [
 const buildQuotationFormSchema = (t: (key: string) => string) => z.object({
   customerId: z.string().min(1, t("val.select-customer")),
   currency: z.string().default("MXN"),
-  taxRate: z.string().default("16"),
+  taxRate: z.string().refine((value) => {
+    const rate = Number(value);
+    return Number.isFinite(rate) && rate >= 0 && rate <= 100;
+  }, "Enter a sales tax rate from 0 to 100.").default("16"),
   exchangeRate: z.string().default("18.00"),
   paymentTerms: z.string().optional(),
   deliveryTime: z.string().optional(),
@@ -139,7 +142,7 @@ const createEmptyLineItem = (position: number, usa = false): QuotationLineItem =
   productCode: "",
   productName: "",
   description: "",
-  unitOfMeasure: usa ? "Pallet" : "PZA",
+  unitOfMeasure: "PZA",
   quantity: "1",
   listPrice: "0",
   unitPrice: "0",
@@ -169,10 +172,9 @@ export function QuotationForm({
 }: QuotationFormProps) {
   const { t, locale } = useI18n();
   const { tenant } = useTenant();
-  // Tenant locale is the source of truth. Use the active English interface as
-  // a safe fallback for USA-branded subdomains whose tenant locale has not yet
-  // been saved, so a new USA quotation never starts with Mexican defaults.
-  const isUsaTenant = tenant?.locale?.toLowerCase().startsWith("en") || locale === "en";
+  // Commercial defaults are controlled by the tenant, never by an individual
+  // user's display language. This keeps Grupo Joper's Mexican workflow intact.
+  const isUsaTenant = tenant?.locale?.toLowerCase().startsWith("en") ?? false;
   const quotationFormSchema = useMemo(() => buildQuotationFormSchema(t), [locale]);
   const companyName = tenant?.name || t("quotations.the-company");
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0, isUsaTenant)]);
@@ -224,6 +226,7 @@ export function QuotationForm({
   });
 
   const watchedCustomerId = form.watch("customerId");
+  const watchedTaxRate = form.watch("taxRate");
   const isForeignCustomer = useMemo(() => {
     const c = customers.find(c => c.id === watchedCustomerId);
     return c?.rfc === FOREIGN_RFC;
@@ -277,7 +280,7 @@ export function QuotationForm({
             productCode: item.productCode || "",
             productName: item.productName || "",
             description: item.description || "",
-            unitOfMeasure: item.unitOfMeasure || (isUsaTenant ? "Pallet" : "PZA"),
+            unitOfMeasure: item.unitOfMeasure || "PZA",
             quantity: item.quantity?.toString() || "1",
             listPrice: item.listPrice?.toString() || "0",
             unitPrice: item.unitPrice?.toString() || "0",
@@ -329,7 +332,8 @@ export function QuotationForm({
   const calculateLineItem = useCallback((item: QuotationLineItem, field: 'discountPercent' | 'unitPrice'): QuotationLineItem => {
     const quantity = parseFloat(item.quantity) || 0;
     const listPrice = parseFloat(item.listPrice) || 0;
-    const taxRate = parseFloat(item.taxRate) || 16;
+    const parsedTaxRate = Number(item.taxRate);
+    const taxRate = Number.isFinite(parsedTaxRate) ? Math.max(0, parsedTaxRate) : 16;
     const maxDiscount = parseFloat(item.maxDiscount) || 0;
 
     let unitPrice: number;
@@ -365,18 +369,38 @@ export function QuotationForm({
     };
   }, []);
 
-  // When customer changes, update taxRates on all line items
+  // Mexican quotations adjust tax by customer type. USA quotations keep the
+  // manually entered quote-level sales-tax rate regardless of customer changes.
   useEffect(() => {
     const prevId = prevCustomerIdRef.current;
     prevCustomerIdRef.current = watchedCustomerId;
     // Only update if there was already a customer selected before (avoids overwriting on initial load)
     if (!prevId || prevId === watchedCustomerId) return;
     setLineItems(prev => prev.map(item => {
-      const newTaxRate = isForeignCustomer ? "0" : "16";
+      const newTaxRate = isUsaTenant
+        ? String(Math.max(0, Number(form.getValues("taxRate")) || 0))
+        : (isForeignCustomer ? "0" : "16");
       const newItem = { ...item, taxRate: newTaxRate };
       return calculateLineItem(newItem, "discountPercent");
     }));
-  }, [watchedCustomerId, isForeignCustomer, calculateLineItem]);
+  }, [watchedCustomerId, isForeignCustomer, isUsaTenant, form, calculateLineItem]);
+
+  // Keep all USA line-item tax values in sync with the user-entered sales-tax
+  // percentage so the saved line items match the summary and server totals.
+  useEffect(() => {
+    if (!isUsaTenant) return;
+    const rate = Math.max(0, Number(watchedTaxRate) || 0);
+    setLineItems(prev => prev.map(item => {
+      const subtotal = Math.max(0, Number(item.subtotal) || 0);
+      const taxAmount = subtotal * rate / 100;
+      return {
+        ...item,
+        taxRate: String(rate),
+        taxAmount: taxAmount.toFixed(2),
+        total: (subtotal + taxAmount).toFixed(2),
+      };
+    }));
+  }, [isUsaTenant, watchedTaxRate]);
 
   const normalizeDecimal = (value: string) => value.replace(',', '.');
   const normalizeDecimal2 = (value: string) => {
@@ -439,7 +463,7 @@ export function QuotationForm({
       productCode: product.code,
       productName: product.name,
       description: product.description || "",
-      unitOfMeasure: isUsaTenant ? "Pallet" : product.unitOfMeasure,
+      unitOfMeasure: product.unitOfMeasure,
       quantity: quantity.toString(),
       listPrice: product.listPrice,
       unitPrice: unitPrice.toFixed(2),
@@ -856,7 +880,8 @@ export function QuotationForm({
                                   const lp = parseFloat(item.listPrice) || 0;
                                   const up = parseFloat(item.unitPrice) || 0;
                                   const qty = parseFloat(item.quantity) || 0;
-                                  const taxRate = parseFloat(item.taxRate) || 16;
+                                  const parsedTaxRate = Number(item.taxRate);
+                                  const taxRate = Number.isFinite(parsedTaxRate) ? Math.max(0, parsedTaxRate) : 16;
                                   const newUp = toNew(up, itemCurrency);
                                   const newLp = toNew(lp, itemCurrency);
                                   const newSubtotal = qty * newUp;

@@ -106,8 +106,8 @@ async function seed() {
   ctx.subA = `${RUN}a`;
   ctx.subB = `${RUN}b`;
 
-  ctx.tenantA = await insertReturningId(tenants, { name: `TenantA ${RUN}`, subdomain: ctx.subA, active: true });
-  ctx.tenantB = await insertReturningId(tenants, { name: `TenantB ${RUN}`, subdomain: ctx.subB, active: true });
+  ctx.tenantA = await insertReturningId(tenants, { name: `TenantA ${RUN}`, subdomain: ctx.subA, locale: "en", active: true });
+  ctx.tenantB = await insertReturningId(tenants, { name: `TenantB ${RUN}`, subdomain: ctx.subB, locale: "es", active: true });
 
   ctx.empresaA1 = await insertReturningId(empresas, { tenantId: ctx.tenantA, name: `A1 ${RUN}`, clave: "A1" });
   ctx.empresaA2 = await insertReturningId(empresas, { tenantId: ctx.tenantA, name: `A2 ${RUN}`, clave: "A2" });
@@ -405,6 +405,127 @@ describe("PATCH /api/quotations/:id", () => {
     expect(r.status).toBe(200);
     const [row] = await db.select({ empresaId: quotations.empresaId }).from(quotations).where(eq(quotations.id, ctx.qA1));
     expect(row.empresaId).toBe(ctx.empresaA1);
+  });
+});
+
+describe("locale-specific quotation defaults", () => {
+  const quotationPayload = (customerId: string, unitOfMeasure = "BOX") => ({
+    customerId,
+    items: [{
+      productName: `Locale item ${RUN}`,
+      unitOfMeasure,
+      quantity: "1",
+      listPrice: "100",
+      unitPrice: "100",
+      subtotal: "100",
+      total: "100",
+      position: 0,
+    }],
+  });
+
+  it("uses USA defaults when omitted and persists a manually entered sales-tax rate", async () => {
+    const defaultsResponse = await asAdminA("POST", "/api/quotations", quotationPayload(ctx.customerA));
+    expect(defaultsResponse.status).toBe(201);
+    const defaultsQuotation = await defaultsResponse.json();
+    const [defaultsRow] = await db.select({
+      currency: quotations.currency,
+      taxRate: quotations.taxRate,
+      requiresPallet: quotations.requiresPallet,
+    }).from(quotations).where(eq(quotations.id, defaultsQuotation.id));
+    expect(defaultsRow).toMatchObject({ currency: "USD", taxRate: "0.00", requiresPallet: true });
+
+    const manualResponse = await asAdminA("POST", "/api/quotations", {
+      ...quotationPayload(ctx.customerA),
+      taxRate: "7.25",
+    });
+    expect(manualResponse.status).toBe(201);
+    const manualQuotation = await manualResponse.json();
+    const [manualRow] = await db.select({
+      taxRate: quotations.taxRate,
+      tax: quotations.tax,
+      total: quotations.total,
+    }).from(quotations).where(eq(quotations.id, manualQuotation.id));
+    const [manualItem] = await db.select({
+      taxRate: quotationItems.taxRate,
+      taxAmount: quotationItems.taxAmount,
+      total: quotationItems.total,
+    }).from(quotationItems).where(eq(quotationItems.quotationId, manualQuotation.id));
+    expect(manualRow).toMatchObject({ taxRate: "7.25", tax: "7.25", total: "107.25" });
+    expect(manualItem).toMatchObject({ taxRate: "7.25", taxAmount: "7.25", total: "107.25" });
+
+    const updateResponse = await asAdminA("PATCH", `/api/quotations/${manualQuotation.id}`, {
+      taxRate: "8.5",
+    });
+    expect(updateResponse.status).toBe(200);
+    const [updatedRow] = await db.select({
+      taxRate: quotations.taxRate,
+      tax: quotations.tax,
+      total: quotations.total,
+    }).from(quotations).where(eq(quotations.id, manualQuotation.id));
+    const [updatedItem] = await db.select({
+      taxRate: quotationItems.taxRate,
+      taxAmount: quotationItems.taxAmount,
+      total: quotationItems.total,
+    }).from(quotationItems).where(eq(quotationItems.quotationId, manualQuotation.id));
+    expect(updatedRow).toMatchObject({ taxRate: "8.50", tax: "8.50", total: "108.50" });
+    expect(updatedItem).toMatchObject({ taxRate: "8.50", taxAmount: "8.50", total: "108.50" });
+  });
+
+  it("rejects an English-tenant sales-tax rate outside the allowed range", async () => {
+    const response = await asAdminA("POST", "/api/quotations", {
+      ...quotationPayload(ctx.customerA),
+      taxRate: 100.01,
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("Sales tax rate must be between 0 and 100");
+  });
+
+  it("returns validation feedback instead of a server error for an invalid USA tax update", async () => {
+    const createResponse = await asAdminA("POST", "/api/quotations", quotationPayload(ctx.customerA));
+    expect(createResponse.status).toBe(201);
+    const quotation = await createResponse.json();
+
+    const response = await asAdminA("PATCH", `/api/quotations/${quotation.id}`, { taxRate: "7.255" });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("at most two decimal places");
+  });
+
+  it("leaves Mexican quotation defaults and an explicitly supplied item unit unchanged", async () => {
+    const response = await asAdminB("POST", "/api/quotations", quotationPayload(ctx.customerB, "Caja"));
+    expect(response.status).toBe(201);
+    const quotation = await response.json();
+    const [quotationRow] = await db.select({
+      currency: quotations.currency,
+      taxRate: quotations.taxRate,
+      requiresPallet: quotations.requiresPallet,
+    }).from(quotations).where(eq(quotations.id, quotation.id));
+    const [item] = await db.select({
+      unitOfMeasure: quotationItems.unitOfMeasure,
+    }).from(quotationItems).where(eq(quotationItems.quotationId, quotation.id));
+    expect(quotationRow).toMatchObject({ currency: "MXN", taxRate: "16.00", requiresPallet: false });
+    expect(item.unitOfMeasure).toBe("Caja");
+  });
+});
+
+describe("DELETE /api/quotations/:id", () => {
+  it("blocks a tenant admin from deleting another tenant's quotation and leaves its records intact", async () => {
+    const response = await asAdminA("DELETE", `/api/quotations/${ctx.qB1}`);
+    expect(response.status).toBe(404);
+
+    const [quotation] = await db.select({ id: quotations.id }).from(quotations).where(eq(quotations.id, ctx.qB1));
+    const [order] = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, ctx.oB1));
+    expect(quotation?.id).toBe(ctx.qB1);
+    expect(order?.id).toBe(ctx.oB1);
+  });
+
+  it("blocks a restricted user from deleting another empresa's quotation and leaves it intact", async () => {
+    const response = await asVendedorA1("DELETE", `/api/quotations/${ctx.qA2}`);
+    expect(response.status).toBe(403);
+
+    const [quotation] = await db.select({ id: quotations.id }).from(quotations).where(eq(quotations.id, ctx.qA2));
+    const [order] = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, ctx.oA2));
+    expect(quotation?.id).toBe(ctx.qA2);
+    expect(order?.id).toBe(ctx.oA2);
   });
 });
 

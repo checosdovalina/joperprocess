@@ -73,7 +73,7 @@ import {
 } from "@shared/schema";
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
-import { calculateQuotationTotals } from "@shared/quotation-calculations";
+import { allocateManualTaxToLines, calculateQuotationTotals, ManualTaxRateValidationError, validateManualTaxRate } from "@shared/quotation-calculations";
 import { logSystemActivity } from "./system-log";
 import { randomBytes } from "crypto";
 import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc, inArray } from "drizzle-orm";
@@ -2291,9 +2291,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scopedStorage = createTenantScopedStorage(req);
       const { items, ...quotationData } = req.body;
       const isEnglishTenant = req.tenant?.locale?.toLowerCase().startsWith("en") ?? false;
+      const manualTaxRate = isEnglishTenant
+        ? validateManualTaxRate(quotationData.taxRate ?? 0)
+        : null;
       if (isEnglishTenant) {
         quotationData.currency ??= "USD";
-        quotationData.taxRate ??= "0";
+        quotationData.taxRate = String(manualTaxRate);
+        quotationData.requiresPallet ??= true;
       }
       
       // Convert validUntil from string to Date if present
@@ -2319,16 +2323,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const validatedItem = insertQuotationItemSchema.parse({
             ...item,
             quotationId: quotation.id,
-            ...(isEnglishTenant && !item.unitOfMeasure ? { unitOfMeasure: "Pallet" } : {}),
+            ...(isEnglishTenant ? {
+              taxRate: String(manualTaxRate),
+            } : {}),
           });
           await scopedStorage.createQuotationItem(validatedItem);
         }
         if (isEnglishTenant) {
           const createdItems = await db.query.quotationItems.findMany({ where: eq(quotationItems.quotationId, quotation.id) });
+          const allocation = allocateManualTaxToLines(
+            createdItems.map((item) => Number(item.subtotal || 0)),
+            manualTaxRate!,
+            Number(quotation.globalDiscount || 0),
+          );
+          await Promise.all(createdItems.map((item, index) => db.update(quotationItems).set({
+            taxRate: String(manualTaxRate),
+            taxAmount: allocation.lines[index].taxAmount.toFixed(2),
+            total: allocation.lines[index].total.toFixed(2),
+          }).where(eq(quotationItems.id, item.id))));
           const totals = calculateQuotationTotals({
-            subtotal: createdItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
+            subtotal: allocation.totals.subtotal,
             globalDiscount: Number(quotation.globalDiscount || 0),
-            manualTaxRate: Number(quotation.taxRate || 0),
+            manualTaxRate,
             shippingCost: Number(quotation.shippingCost || 0),
           });
           await db.update(quotations).set({
@@ -2495,9 +2511,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await db.query.tenants.findFirst({ where: eq(tenants.id, existingQuotation.tenantId) })
         : null;
       const isEnglishTenant = tenantRecord?.locale?.toLowerCase().startsWith("en") ?? false;
+      const manualTaxRate = isEnglishTenant
+        ? validateManualTaxRate(quotationData.taxRate ?? existingQuotation.taxRate ?? 0)
+        : null;
       if (isEnglishTenant) {
         quotationData.currency ??= existingQuotation.currency || "USD";
-        quotationData.taxRate ??= existingQuotation.taxRate || "0";
+        quotationData.taxRate = String(manualTaxRate);
       }
       // empresaId is an immutable inherited invariant; never allow reassignment via update.
       delete quotationData.empresaId;
@@ -2544,7 +2563,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const validatedItem = insertQuotationItemSchema.parse({
             ...item,
             quotationId: id,
-            ...(isEnglishTenant && !item.unitOfMeasure ? { unitOfMeasure: "Pallet" } : {}),
+            ...(isEnglishTenant ? {
+              taxRate: String(manualTaxRate),
+            } : {}),
           });
           await scopedStorage.createQuotationItem(validatedItem);
         }
@@ -2555,11 +2576,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(quotations.id, id),
         with: { customer: true, user: true },
       });
-      const finalItems = await db.query.quotationItems.findMany({
+      let finalItems = await db.query.quotationItems.findMany({
         where: eq(quotationItems.quotationId, id),
         orderBy: (items, { asc }) => [asc(items.position)],
       });
       if (isEnglishTenant && finalQuotation) {
+        // A quote-level sales tax is authoritative for USA quotations. The
+        // same quote-level rounding rule is allocated back to every line.
+        const allocation = allocateManualTaxToLines(
+          finalItems.map((item) => Number(item.subtotal || 0)),
+          manualTaxRate!,
+          Number(finalQuotation.globalDiscount || 0),
+        );
+        finalItems = await Promise.all(finalItems.map(async (item, index) => {
+          const line = allocation.lines[index];
+          await db.update(quotationItems).set({
+            taxRate: String(manualTaxRate),
+            taxAmount: line.taxAmount.toFixed(2),
+            total: line.total.toFixed(2),
+          }).where(eq(quotationItems.id, item.id));
+          return {
+            ...item,
+            taxRate: String(manualTaxRate),
+            taxAmount: line.taxAmount.toFixed(2),
+            total: line.total.toFixed(2),
+          };
+        }));
         const totals = calculateQuotationTotals({
           subtotal: finalItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
           globalDiscount: Number(finalQuotation.globalDiscount || 0),
@@ -2647,6 +2689,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ...finalQuotation, items: finalItems });
     } catch (error) {
       console.error("Error updating quotation:", error);
+      if (error instanceof ManualTaxRateValidationError) {
+        return res.status(400).json({ error: error.message });
+      }
       res.status(500).json({ error: "Error updating quotation" });
     }
   });
@@ -2662,6 +2707,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!existing) {
         return res.status(404).json({ error: "Cotización no encontrada" });
+      }
+
+      // Scope the entire cascade before reading or deleting any linked record.
+      // An administrator on one tenant must never be able to use a guessed
+      // quotation ID to remove a different tenant's order, shipment, credit
+      // authorization, or quotation.
+      if (!assertTenantScope(req, res, existing, {
+        notFoundMessage: "Cotización no encontrada",
+        forbiddenMessage: "No autorizado para eliminar esta cotización",
+        checkEmpresa: true,
+      })) {
+        return;
       }
 
       // Full cascade delete — handle linked order if it exists
