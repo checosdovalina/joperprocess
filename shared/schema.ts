@@ -371,6 +371,7 @@ export const quotations = pgTable("quotations", {
   validUntil: timestamp("valid_until"),
   subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
   globalDiscount: decimal("global_discount", { precision: 5, scale: 2 }).default("0"),
+  taxRate: decimal("tax_rate", { precision: 8, scale: 2 }).default("16"),
   tax: decimal("tax", { precision: 12, scale: 2 }).notNull().default("0"),
   total: decimal("total", { precision: 12, scale: 2 }).notNull().default("0"),
   totalSavings: decimal("total_savings", { precision: 12, scale: 2 }).default("0"),

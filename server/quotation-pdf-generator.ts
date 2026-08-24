@@ -370,6 +370,9 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       !customer.country ||
       ["mx", "mexico", "méxico", "mex"].includes(customer.country.toLowerCase().trim())
     );
+    const quotationTaxRate = language === "en"
+      ? Math.max(0, Number(quotation.taxRate ?? 0))
+      : (isMexicoCustomer ? 16 : 0);
 
     const drawTotalsBox = (
       bx: number, by: number, bw: number,
@@ -380,7 +383,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const rows: [string, string][] = [
         [`${t("Subtotal", "Subtotal")}:`, fmtFn(sub)],
         ...(disc > 0 ? [[`${t("Desc.", "Discount")} (${formatPdfNumber(discountPct, language)}%):`, `-${fmtFn(disc)}`] as [string, string]] : []),
-        ...(isMexicoCustomer ? [[`${t("IVA", "VAT")} (16%):`, fmtFn(tax)] as [string, string]] : []),
+        ...(quotationTaxRate > 0 ? [[`${t("IVA", "Sales tax")} (${formatPdfNumber(quotationTaxRate, language)}%):`, fmtFn(tax)] as [string, string]] : []),
       ];
       const boxH = rows.length * TOTALS_ROW_H + 22 + 26;
 
@@ -416,7 +419,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const usdSub = usdItems.reduce((s, i) => s + (parseFloat(String(i.subtotal)) || 0), 0);
       const mxnDisc = discountPct > 0 ? mxnSub * (discountPct / 100) : 0;
       const usdDisc = discountPct > 0 ? usdSub * (discountPct / 100) : 0;
-      const mxnTax = isMexicoCustomer ? (mxnSub - mxnDisc) * 0.16 : 0;
+      const mxnTax = (mxnSub - mxnDisc) * quotationTaxRate / 100;
       const mxnTotal = mxnSub - mxnDisc + mxnTax;
       const usdTotal = usdSub - usdDisc;
 
@@ -449,8 +452,8 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       }, 0);
       const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
       const subtotalAfterDisc = subtotalVal - discountAmt;
-      const taxVal = isForeignCustomer ? 0 : subtotalAfterDisc * 0.16;
-      const totalVal = subtotalAfterDisc + (isForeignCustomer ? 0 : taxVal);
+      const taxVal = subtotalAfterDisc * quotationTaxRate / 100;
+      const totalVal = subtotalAfterDisc + taxVal;
 
       const quoteLabel = quoteCurrency === "USD" ? t("DÓLARES AMERICANOS (USD)", "US DOLLARS (USD)") : t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)");
       const quoteColor = quoteCurrency === "USD" ? "#1a6b3a" : primaryColor;

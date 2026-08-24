@@ -73,6 +73,7 @@ import {
 } from "@shared/schema";
 import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
+import { calculateQuotationTotals } from "@shared/quotation-calculations";
 import { logSystemActivity } from "./system-log";
 import { randomBytes } from "crypto";
 import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc, inArray } from "drizzle-orm";
@@ -2289,6 +2290,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { items, ...quotationData } = req.body;
+      const isEnglishTenant = req.tenant?.locale?.toLowerCase().startsWith("en") ?? false;
+      if (isEnglishTenant) {
+        quotationData.currency ??= "USD";
+        quotationData.taxRate ??= "0";
+      }
       
       // Convert validUntil from string to Date if present
       if (quotationData.validUntil && typeof quotationData.validUntil === 'string') {
@@ -2313,8 +2319,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const validatedItem = insertQuotationItemSchema.parse({
             ...item,
             quotationId: quotation.id,
+            ...(isEnglishTenant && !item.unitOfMeasure ? { unitOfMeasure: "Pallet" } : {}),
           });
           await scopedStorage.createQuotationItem(validatedItem);
+        }
+        if (isEnglishTenant) {
+          const createdItems = await db.query.quotationItems.findMany({ where: eq(quotationItems.quotationId, quotation.id) });
+          const totals = calculateQuotationTotals({
+            subtotal: createdItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
+            globalDiscount: Number(quotation.globalDiscount || 0),
+            manualTaxRate: Number(quotation.taxRate || 0),
+            shippingCost: Number(quotation.shippingCost || 0),
+          });
+          await db.update(quotations).set({
+            subtotal: totals.subtotal.toFixed(2),
+            tax: totals.tax.toFixed(2),
+            total: totals.total.toFixed(2),
+          }).where(eq(quotations.id, quotation.id));
         }
       }
 
@@ -2470,6 +2491,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { items, ...quotationData } = req.body;
+      const tenantRecord = existingQuotation.tenantId
+        ? await db.query.tenants.findFirst({ where: eq(tenants.id, existingQuotation.tenantId) })
+        : null;
+      const isEnglishTenant = tenantRecord?.locale?.toLowerCase().startsWith("en") ?? false;
+      if (isEnglishTenant) {
+        quotationData.currency ??= existingQuotation.currency || "USD";
+        quotationData.taxRate ??= existingQuotation.taxRate || "0";
+      }
       // empresaId is an immutable inherited invariant; never allow reassignment via update.
       delete quotationData.empresaId;
 
@@ -2515,6 +2544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const validatedItem = insertQuotationItemSchema.parse({
             ...item,
             quotationId: id,
+            ...(isEnglishTenant && !item.unitOfMeasure ? { unitOfMeasure: "Pallet" } : {}),
           });
           await scopedStorage.createQuotationItem(validatedItem);
         }
@@ -2529,6 +2559,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(quotationItems.quotationId, id),
         orderBy: (items, { asc }) => [asc(items.position)],
       });
+      if (isEnglishTenant && finalQuotation) {
+        const totals = calculateQuotationTotals({
+          subtotal: finalItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
+          globalDiscount: Number(finalQuotation.globalDiscount || 0),
+          manualTaxRate: Number(finalQuotation.taxRate || 0),
+          shippingCost: Number(finalQuotation.shippingCost || 0),
+        });
+        await db.update(quotations).set({
+          subtotal: totals.subtotal.toFixed(2),
+          tax: totals.tax.toFixed(2),
+          total: totals.total.toFixed(2),
+        }).where(eq(quotations.id, id));
+        finalQuotation.subtotal = totals.subtotal.toFixed(2);
+        finalQuotation.tax = totals.tax.toFixed(2);
+        finalQuotation.total = totals.total.toFixed(2);
+      }
 
       // Send shipping approval email when the vendor explicitly clicked "Enviar a Autorización"
       // (requestedStatus === PENDING_APPROVAL) and the quotation has shipping handled by Joper.
@@ -4450,8 +4496,11 @@ Proporciona tu análisis en el siguiente formato JSON:
         const unitPrice = Number(quotationItem.unitPrice);
         const subtotal = unitPrice * quantityToRelease;
         const customerRfc = order.quotation.customer?.rfc ?? "";
+        const isEnglishTenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, order.quotation.tenantId) }))?.locale?.toLowerCase().startsWith("en") ?? false;
         const isForeignCustomer = customerRfc === "XEXX010101000";
-        const itemTaxRate = isForeignCustomer ? 0 : Number(quotationItem.taxRate ?? 16) / 100;
+        const itemTaxRate = isEnglishTenant
+          ? Number(order.quotation.taxRate ?? 0) / 100
+          : (isForeignCustomer ? 0 : Number(quotationItem.taxRate ?? 16) / 100);
         const tax = subtotal * itemTaxRate;
         const total = subtotal + tax;
 
@@ -4464,7 +4513,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           tax: tax.toFixed(2),
           total: total.toFixed(2),
           balanceDue: total.toFixed(2),
-          currency: "MXN",
+          currency: order.quotation.currency || (isEnglishTenant ? "USD" : "MXN"),
         });
         invoiceId = invoice.id;
       }

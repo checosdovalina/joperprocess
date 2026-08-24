@@ -47,6 +47,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CustomerCombobox } from "@/components/customer-combobox";
 import { Customer } from "@shared/schema";
+import { calculateQuotationTotals } from "@shared/quotation-calculations";
 
 type ProductWithCategory = Product & { category?: ProductCategory | null };
 
@@ -115,6 +116,7 @@ const CURRENCIES = [
 const buildQuotationFormSchema = (t: (key: string) => string) => z.object({
   customerId: z.string().min(1, t("val.select-customer")),
   currency: z.string().default("MXN"),
+  taxRate: z.string().default("16"),
   exchangeRate: z.string().default("18.00"),
   paymentTerms: z.string().optional(),
   deliveryTime: z.string().optional(),
@@ -132,25 +134,25 @@ const buildQuotationFormSchema = (t: (key: string) => string) => z.object({
 
 type QuotationFormData = z.infer<ReturnType<typeof buildQuotationFormSchema>>;
 
-const createEmptyLineItem = (position: number): QuotationLineItem => ({
+const createEmptyLineItem = (position: number, usa = false): QuotationLineItem => ({
   productId: null,
   productCode: "",
   productName: "",
   description: "",
-  unitOfMeasure: "PZA",
+  unitOfMeasure: usa ? "Pallet" : "PZA",
   quantity: "1",
   listPrice: "0",
   unitPrice: "0",
   discountPercent: "0",
   discountAmount: "0",
   subtotal: "0",
-  taxRate: "16",
+  taxRate: usa ? "0" : "16",
   taxAmount: "0",
   total: "0",
   exceedsMaxDiscount: false,
   maxDiscount: "0",
   position,
-  currency: "MXN",
+  currency: usa ? "USD" : "MXN",
 });
 
 export function QuotationForm({ 
@@ -167,9 +169,10 @@ export function QuotationForm({
 }: QuotationFormProps) {
   const { t, locale } = useI18n();
   const { tenant } = useTenant();
+  const isUsaTenant = tenant?.locale?.toLowerCase().startsWith("en") ?? false;
   const quotationFormSchema = useMemo(() => buildQuotationFormSchema(t), [locale]);
   const companyName = tenant?.name || t("quotations.the-company");
-  const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0)]);
+  const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0, isUsaTenant)]);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("");
@@ -200,6 +203,7 @@ export function QuotationForm({
     defaultValues: {
       customerId: "",
       currency: "AMBAS",
+      taxRate: "16",
       exchangeRate: "18.00",
       paymentTerms: "",
       deliveryTime: "",
@@ -223,11 +227,25 @@ export function QuotationForm({
   }, [customers, watchedCustomerId]);
   const prevCustomerIdRef = useRef<string>("");
 
+  // Tenant config loads asynchronously; apply USA defaults only to a new,
+  // untouched form so existing quotations and in-progress edits are preserved.
+  useEffect(() => {
+    if (!open || isEditing || initialized || !tenant) return;
+    if (form.getValues("currency") === "AMBAS") {
+      form.setValue("currency", isUsaTenant ? "USD" : "AMBAS");
+      form.setValue("taxRate", isUsaTenant ? "0" : "16");
+      setLineItems(prev => prev.length === 1 && !prev[0].productName
+        ? [createEmptyLineItem(0, isUsaTenant)]
+        : prev);
+    }
+  }, [open, isEditing, initialized, tenant, isUsaTenant, form]);
+
   useEffect(() => {
     if (isEditing && initialData && open && !initialized && products !== undefined) {
       form.reset({
         customerId: initialData.customerId || "",
-        currency: initialData.currency || "AMBAS",
+        currency: initialData.currency || (isUsaTenant ? "USD" : "AMBAS"),
+        taxRate: initialData.taxRate?.toString() || (isUsaTenant ? "0" : "16"),
         exchangeRate: initialData.exchangeRate?.toString() || "18.00",
         paymentTerms: initialData.paymentTerms || "",
         deliveryTime: initialData.deliveryTime || "",
@@ -255,7 +273,7 @@ export function QuotationForm({
             productCode: item.productCode || "",
             productName: item.productName || "",
             description: item.description || "",
-            unitOfMeasure: item.unitOfMeasure || "PZA",
+            unitOfMeasure: item.unitOfMeasure || (isUsaTenant ? "Pallet" : "PZA"),
             quantity: item.quantity?.toString() || "1",
             listPrice: item.listPrice?.toString() || "0",
             unitPrice: item.unitPrice?.toString() || "0",
@@ -283,7 +301,8 @@ export function QuotationForm({
       if (!isEditing) {
         form.reset({
           customerId: "",
-          currency: "MXN",
+          currency: isUsaTenant ? "USD" : "MXN",
+          taxRate: isUsaTenant ? "0" : "16",
           exchangeRate: "18.00",
           paymentTerms: "",
           deliveryTime: "",
@@ -298,10 +317,10 @@ export function QuotationForm({
           shippingCost: "0",
           shippingCostStatus: "confirmed",
         });
-        setLineItems([createEmptyLineItem(0)]);
+        setLineItems([createEmptyLineItem(0, isUsaTenant)]);
       }
     }
-  }, [open, form, isEditing]);
+  }, [open, form, isEditing, isUsaTenant]);
 
   const calculateLineItem = useCallback((item: QuotationLineItem, field: 'discountPercent' | 'unitPrice'): QuotationLineItem => {
     const quantity = parseFloat(item.quantity) || 0;
@@ -406,7 +425,7 @@ export function QuotationForm({
     const unitPrice = listPrice - discountAmount;
     const quantity = 1;
     const subtotal = unitPrice * quantity;
-    const taxRate = isForeignCustomer ? 0 : parseFloat(product.taxRate);
+    const taxRate = isUsaTenant ? parseFloat(form.getValues("taxRate")) || 0 : (isForeignCustomer ? 0 : parseFloat(product.taxRate));
     const taxAmount = subtotal * (taxRate / 100);
     const total = subtotal + taxAmount;
     const exceedsMaxDiscount = maxDiscount > 0 && discountPercent > maxDiscount;
@@ -416,14 +435,14 @@ export function QuotationForm({
       productCode: product.code,
       productName: product.name,
       description: product.description || "",
-      unitOfMeasure: product.unitOfMeasure,
+      unitOfMeasure: isUsaTenant ? "Pallet" : product.unitOfMeasure,
       quantity: quantity.toString(),
       listPrice: product.listPrice,
       unitPrice: unitPrice.toFixed(2),
       discountPercent: discountPercent.toString(),
       discountAmount: discountAmount.toFixed(2),
       subtotal: subtotal.toFixed(2),
-      taxRate: isForeignCustomer ? "0" : product.taxRate,
+      taxRate: taxRate.toString(),
       taxAmount: taxAmount.toFixed(2),
       total: total.toFixed(2),
       exceedsMaxDiscount,
@@ -462,11 +481,11 @@ export function QuotationForm({
     });
     setProductSearchOpen(null);
     setSearchQuery("");
-  }, [isForeignCustomer]);
+  }, [isForeignCustomer, isUsaTenant, form]);
 
   const addNewLine = useCallback(() => {
-    setLineItems(prev => [...prev, createEmptyLineItem(prev.length)]);
-  }, []);
+    setLineItems(prev => [...prev, createEmptyLineItem(prev.length, isUsaTenant)]);
+  }, [isUsaTenant]);
 
   const removeLine = useCallback((index: number) => {
     setLineItems(prev => {
@@ -500,8 +519,15 @@ export function QuotationForm({
       sum + toQuote(parseFloat(item.taxAmount), item.currency), 0);
     const globalDiscountAmount = subtotalBeforeDiscount * (globalDiscountPercent / 100);
     const subtotalAfterDiscount = subtotalBeforeDiscount - globalDiscountAmount;
-    const adjustedTax = totalTax * (1 - globalDiscountPercent / 100);
-    const total = subtotalAfterDiscount + adjustedTax;
+    const manualTaxRate = isUsaTenant ? parseFloat(form.watch("taxRate")) || 0 : null;
+    const calculated = calculateQuotationTotals({
+      subtotal: subtotalBeforeDiscount,
+      globalDiscount: globalDiscountPercent,
+      automaticTaxRate: subtotalBeforeDiscount > 0 ? (totalTax / subtotalBeforeDiscount) * 100 : 0,
+      manualTaxRate,
+    });
+    const adjustedTax = calculated.tax;
+    const total = calculated.taxableSubtotal + adjustedTax;
     const totalSavings = lineItems.reduce((sum, item) =>
       sum + toQuote(parseFloat(item.quantity) * parseFloat(item.discountAmount), item.currency), 0) + globalDiscountAmount;
 
@@ -523,7 +549,7 @@ export function QuotationForm({
       mxnSubtotal: mxnSubtotal.toFixed(2),
       usdSubtotal: usdSubtotal.toFixed(2),
     };
-  }, [lineItems, form]);
+  }, [lineItems, form, isUsaTenant]);
 
   const totals = calculateTotals();
 
@@ -606,8 +632,14 @@ export function QuotationForm({
     const submitSubtotalBefore = validItems.reduce((s, i) => s + toQuoteSubmit(parseFloat(i.subtotal), i.currency), 0);
     const submitTotalTax = validItems.reduce((s, i) => s + toQuoteSubmit(parseFloat(i.taxAmount), i.currency), 0);
     const submitGlobalDiscAmt = submitSubtotalBefore * (globalDiscountPercent / 100);
-    const submitAdjustedTax = submitTotalTax * (1 - globalDiscountPercent / 100);
-    const submitTotal = (submitSubtotalBefore - submitGlobalDiscAmt) + submitAdjustedTax;
+    const submitCalculation = calculateQuotationTotals({
+      subtotal: submitSubtotalBefore,
+      globalDiscount: globalDiscountPercent,
+      automaticTaxRate: submitSubtotalBefore > 0 ? (submitTotalTax / submitSubtotalBefore) * 100 : 0,
+      manualTaxRate: isUsaTenant ? parseFloat(data.taxRate) || 0 : null,
+    });
+    const submitAdjustedTax = submitCalculation.tax;
+    const submitTotal = submitCalculation.total - submitCalculation.shipping;
     const submitTotalSavings = validItems.reduce((s, i) =>
       s + toQuoteSubmit(parseFloat(i.quantity) * parseFloat(i.discountAmount), i.currency), 0) + submitGlobalDiscAmt;
 
@@ -646,6 +678,7 @@ export function QuotationForm({
       validUntil: data.validUntil ? new Date(data.validUntil + "T12:00:00") : null,
       subtotal: freshTotals.subtotal,
       globalDiscount: data.globalDiscount,
+      taxRate: data.taxRate,
       tax: freshTotals.tax,
       total: freshTotals.total,
       totalSavings: freshTotals.totalSavings,
@@ -884,6 +917,31 @@ export function QuotationForm({
                     )}
                   />
                 </div>
+
+                {isUsaTenant && (
+                  <FormField
+                    control={form.control}
+                    name="taxRate"
+                    render={({ field }) => (
+                      <FormItem className="max-w-xs">
+                        <FormLabel>Sales tax rate (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            {...field}
+                            onChange={(e) => field.onChange(normalizeDecimal2(e.target.value))}
+                            onKeyDown={preventEnter}
+                            placeholder="0.00"
+                            data-testid="input-tax-rate"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Enter the applicable tax rate for this quote.</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
