@@ -421,6 +421,7 @@ var init_schema = __esm({
       validUntil: timestamp("valid_until"),
       subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
       globalDiscount: decimal("global_discount", { precision: 5, scale: 2 }).default("0"),
+      taxRate: decimal("tax_rate", { precision: 8, scale: 2 }).default("16"),
       tax: decimal("tax", { precision: 12, scale: 2 }).notNull().default("0"),
       total: decimal("total", { precision: 12, scale: 2 }).notNull().default("0"),
       totalSavings: decimal("total_savings", { precision: 12, scale: 2 }).default("0"),
@@ -5119,11 +5120,12 @@ async function generateQuotationPDFStream(data) {
     const FOREIGN_RFC = "XEXX010101000";
     const isForeignCustomer = customer.rfc === FOREIGN_RFC;
     const isMexicoCustomer = !isForeignCustomer && (!customer.country || ["mx", "mexico", "m\xE9xico", "mex"].includes(customer.country.toLowerCase().trim()));
+    const quotationTaxRate = language === "en" ? Math.max(0, Number(quotation.taxRate ?? 0)) : isMexicoCustomer ? 16 : 0;
     const drawTotalsBox = (bx, by, bw, label, labelColor, sub, disc, tax, total, fmtFn) => {
       const rows = [
         [`${t("Subtotal", "Subtotal")}:`, fmtFn(sub)],
         ...disc > 0 ? [[`${t("Desc.", "Discount")} (${formatPdfNumber(discountPct, language)}%):`, `-${fmtFn(disc)}`]] : [],
-        ...isMexicoCustomer ? [[`${t("IVA", "VAT")} (16%):`, fmtFn(tax)]] : []
+        ...quotationTaxRate > 0 ? [[`${t("IVA", "Sales tax")} (${formatPdfNumber(quotationTaxRate, language)}%):`, fmtFn(tax)]] : []
       ];
       const boxH = rows.length * TOTALS_ROW_H + 22 + 26;
       doc.rect(bx, by, bw, 14).fill(labelColor);
@@ -5149,7 +5151,7 @@ async function generateQuotationPDFStream(data) {
       const usdSub = usdItems.reduce((s, i) => s + (parseFloat(String(i.subtotal)) || 0), 0);
       const mxnDisc = discountPct > 0 ? mxnSub * (discountPct / 100) : 0;
       const usdDisc = discountPct > 0 ? usdSub * (discountPct / 100) : 0;
-      const mxnTax = isMexicoCustomer ? (mxnSub - mxnDisc) * 0.16 : 0;
+      const mxnTax = (mxnSub - mxnDisc) * quotationTaxRate / 100;
       const mxnTotal = mxnSub - mxnDisc + mxnTax;
       const usdTotal = usdSub - usdDisc;
       const TOTALS_W = 195;
@@ -5190,8 +5192,8 @@ async function generateQuotationPDFStream(data) {
       }, 0);
       const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
       const subtotalAfterDisc = subtotalVal - discountAmt;
-      const taxVal = isForeignCustomer ? 0 : subtotalAfterDisc * 0.16;
-      const totalVal = subtotalAfterDisc + (isForeignCustomer ? 0 : taxVal);
+      const taxVal = subtotalAfterDisc * quotationTaxRate / 100;
+      const totalVal = subtotalAfterDisc + taxVal;
       const quoteLabel = quoteCurrency === "USD" ? t("D\xD3LARES AMERICANOS (USD)", "US DOLLARS (USD)") : t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)");
       const quoteColor = quoteCurrency === "USD" ? "#1a6b3a" : primaryColor;
       const singleH = drawTotalsBox(
@@ -9221,6 +9223,18 @@ async function cleanupOrphanedSyncLogs() {
   }
 }
 
+// shared/quotation-calculations.ts
+function calculateQuotationTotals(input) {
+  const subtotal = Math.max(0, Number(input.subtotal) || 0);
+  const discountRate = Math.min(100, Math.max(0, Number(input.globalDiscount) || 0));
+  const discount = subtotal * discountRate / 100;
+  const taxableSubtotal = subtotal - discount;
+  const taxRate = input.manualTaxRate != null ? Math.min(100, Math.max(0, Number(input.manualTaxRate) || 0)) : Math.max(0, Number(input.automaticTaxRate) || 0);
+  const tax = taxableSubtotal * taxRate / 100;
+  const shipping = Math.max(0, Number(input.shippingCost) || 0);
+  return { subtotal, discount, taxableSubtotal, taxRate, tax, shipping, total: taxableSubtotal + tax + shipping };
+}
+
 // server/system-log.ts
 init_db();
 init_schema();
@@ -10850,6 +10864,11 @@ async function registerRoutes(app2) {
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { items, ...quotationData } = req.body;
+      const isEnglishTenant = req.tenant?.locale?.toLowerCase().startsWith("en") ?? false;
+      if (isEnglishTenant) {
+        quotationData.currency ??= "USD";
+        quotationData.taxRate ??= "0";
+      }
       if (quotationData.validUntil && typeof quotationData.validUntil === "string") {
         quotationData.validUntil = new Date(quotationData.validUntil);
       }
@@ -10863,9 +10882,24 @@ async function registerRoutes(app2) {
         for (const item of items) {
           const validatedItem = insertQuotationItemSchema.parse({
             ...item,
-            quotationId: quotation.id
+            quotationId: quotation.id,
+            ...isEnglishTenant && !item.unitOfMeasure ? { unitOfMeasure: "Pallet" } : {}
           });
           await scopedStorage.createQuotationItem(validatedItem);
+        }
+        if (isEnglishTenant) {
+          const createdItems = await db.query.quotationItems.findMany({ where: eq5(quotationItems.quotationId, quotation.id) });
+          const totals = calculateQuotationTotals({
+            subtotal: createdItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
+            globalDiscount: Number(quotation.globalDiscount || 0),
+            manualTaxRate: Number(quotation.taxRate || 0),
+            shippingCost: Number(quotation.shippingCost || 0)
+          });
+          await db.update(quotations).set({
+            subtotal: totals.subtotal.toFixed(2),
+            tax: totals.tax.toFixed(2),
+            total: totals.total.toFixed(2)
+          }).where(eq5(quotations.id, quotation.id));
         }
       }
       if (validated.shippingHandledByJoper && quotation.tenantId) {
@@ -10983,6 +11017,12 @@ async function registerRoutes(app2) {
         return res.status(400).json({ error: "Solo se pueden editar cotizaciones en estado Borrador, Enviada o Pendiente de Aprobaci\xF3n" });
       }
       const { items, ...quotationData } = req.body;
+      const tenantRecord = existingQuotation.tenantId ? await db.query.tenants.findFirst({ where: eq5(tenants.id, existingQuotation.tenantId) }) : null;
+      const isEnglishTenant = tenantRecord?.locale?.toLowerCase().startsWith("en") ?? false;
+      if (isEnglishTenant) {
+        quotationData.currency ??= existingQuotation.currency || "USD";
+        quotationData.taxRate ??= existingQuotation.taxRate || "0";
+      }
       delete quotationData.empresaId;
       const requestedStatus = quotationData.status || QuotationStatus.DRAFT;
       const isStatusPreserved = isPrivilegedRole && requestedStatus === existingQuotation.status;
@@ -11007,7 +11047,8 @@ async function registerRoutes(app2) {
         for (const item of items) {
           const validatedItem = insertQuotationItemSchema.parse({
             ...item,
-            quotationId: id
+            quotationId: id,
+            ...isEnglishTenant && !item.unitOfMeasure ? { unitOfMeasure: "Pallet" } : {}
           });
           await scopedStorage.createQuotationItem(validatedItem);
         }
@@ -11020,6 +11061,22 @@ async function registerRoutes(app2) {
         where: eq5(quotationItems.quotationId, id),
         orderBy: (items2, { asc: asc2 }) => [asc2(items2.position)]
       });
+      if (isEnglishTenant && finalQuotation) {
+        const totals = calculateQuotationTotals({
+          subtotal: finalItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
+          globalDiscount: Number(finalQuotation.globalDiscount || 0),
+          manualTaxRate: Number(finalQuotation.taxRate || 0),
+          shippingCost: Number(finalQuotation.shippingCost || 0)
+        });
+        await db.update(quotations).set({
+          subtotal: totals.subtotal.toFixed(2),
+          tax: totals.tax.toFixed(2),
+          total: totals.total.toFixed(2)
+        }).where(eq5(quotations.id, id));
+        finalQuotation.subtotal = totals.subtotal.toFixed(2);
+        finalQuotation.tax = totals.tax.toFixed(2);
+        finalQuotation.total = totals.total.toFixed(2);
+      }
       const needsShippingEmail = requestedStatus === QuotationStatus.PENDING_APPROVAL && finalQuotation?.shippingHandledByJoper && finalQuotation?.tenantId;
       if (needsShippingEmail) {
         (async () => {
@@ -12513,8 +12570,9 @@ ${closeNote}` : closeNote;
         const unitPrice = Number(quotationItem.unitPrice);
         const subtotal = unitPrice * quantityToRelease;
         const customerRfc = order.quotation.customer?.rfc ?? "";
+        const isEnglishTenant = (await db.query.tenants.findFirst({ where: eq5(tenants.id, order.quotation.tenantId) }))?.locale?.toLowerCase().startsWith("en") ?? false;
         const isForeignCustomer = customerRfc === "XEXX010101000";
-        const itemTaxRate = isForeignCustomer ? 0 : Number(quotationItem.taxRate ?? 16) / 100;
+        const itemTaxRate = isEnglishTenant ? Number(order.quotation.taxRate ?? 0) / 100 : isForeignCustomer ? 0 : Number(quotationItem.taxRate ?? 16) / 100;
         const tax = subtotal * itemTaxRate;
         const total = subtotal + tax;
         const invoice = await scopedStorage.createInvoice({
@@ -12526,7 +12584,7 @@ ${closeNote}` : closeNote;
           tax: tax.toFixed(2),
           total: total.toFixed(2),
           balanceDue: total.toFixed(2),
-          currency: "MXN"
+          currency: order.quotation.currency || (isEnglishTenant ? "USD" : "MXN")
         });
         invoiceId = invoice.id;
       }

@@ -169,7 +169,10 @@ export function QuotationForm({
 }: QuotationFormProps) {
   const { t, locale } = useI18n();
   const { tenant } = useTenant();
-  const isUsaTenant = tenant?.locale?.toLowerCase().startsWith("en") ?? false;
+  // Tenant locale is the source of truth. Use the active English interface as
+  // a safe fallback for USA-branded subdomains whose tenant locale has not yet
+  // been saved, so a new USA quotation never starts with Mexican defaults.
+  const isUsaTenant = tenant?.locale?.toLowerCase().startsWith("en") || locale === "en";
   const quotationFormSchema = useMemo(() => buildQuotationFormSchema(t), [locale]);
   const companyName = tenant?.name || t("quotations.the-company");
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0, isUsaTenant)]);
@@ -230,15 +233,16 @@ export function QuotationForm({
   // Tenant config loads asynchronously; apply USA defaults only to a new,
   // untouched form so existing quotations and in-progress edits are preserved.
   useEffect(() => {
-    if (!open || isEditing || initialized || !tenant) return;
+    if (!open || isEditing || initialized) return;
     if (form.getValues("currency") === "AMBAS") {
       form.setValue("currency", isUsaTenant ? "USD" : "AMBAS");
       form.setValue("taxRate", isUsaTenant ? "0" : "16");
+      form.setValue("requiresPallet", isUsaTenant);
       setLineItems(prev => prev.length === 1 && !prev[0].productName
         ? [createEmptyLineItem(0, isUsaTenant)]
         : prev);
     }
-  }, [open, isEditing, initialized, tenant, isUsaTenant, form]);
+  }, [open, isEditing, initialized, isUsaTenant, form]);
 
   useEffect(() => {
     if (isEditing && initialData && open && !initialized && products !== undefined) {
@@ -255,7 +259,7 @@ export function QuotationForm({
         conditions: initialData.conditions || "",
         shippingHandledByJoper: initialData.shippingHandledByJoper || false,
         shippingMethod: initialData.shippingMethod || "truck",
-        requiresPallet: initialData.requiresPallet || false,
+        requiresPallet: initialData.requiresPallet ?? isUsaTenant,
         shippingNotes: initialData.shippingNotes || "",
         shippingCost: initialData.shippingCost || "0",
         shippingCostStatus: initialData.shippingCostStatus || "confirmed",
@@ -312,7 +316,7 @@ export function QuotationForm({
           conditions: "",
           shippingHandledByJoper: false,
           shippingMethod: "truck",
-          requiresPallet: false,
+          requiresPallet: isUsaTenant,
           shippingNotes: "",
           shippingCost: "0",
           shippingCostStatus: "confirmed",
