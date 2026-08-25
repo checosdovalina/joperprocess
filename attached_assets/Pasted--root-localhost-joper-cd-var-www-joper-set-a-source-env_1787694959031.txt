@@ -1,0 +1,130 @@
+
+[root@localhost joper]# cd /var/www/joper
+
+set -a
+source .env
+set +a
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+"ALTER TABLE quotations ADD COLUMN IF NOT EXISTS tax_rate numeric(8,2) DEFAULT 16;"
+
+pm2 restart joper-app
+pm2 logs joper-app --lines 50 --nostream
+ALTER TABLE
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [joper-app](ids: [ 0 ])
+[PM2] [joper-app](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ joper-app          │ fork     │ 231  │ online    │ 0%       │ 9.1mb    │
+│ 9  │ microsip-api       │ fork     │ 63   │ errored   │ 0%       │ 0b       │
+│ 16 │ nexxobi-api        │ fork     │ 6    │ online    │ 0%       │ 119.5mb  │
+│ 6  │ ots-energy         │ fork     │ 68   │ online    │ 0%       │ 64.0mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+[TAILING] Tailing last 50 lines for [joper-app] process (change the value with --lines option)
+/root/.pm2/logs/joper-app-error.log last 50 lines:
+0|joper-ap |   routine: 'errorMissingColumn'
+0|joper-ap | }
+0|joper-ap | Error fetching orders: error: column orders_quotation.tax_rate does not exist
+0|joper-ap |     at /var/www/joper/node_modules/pg-pool/index.js:45:11
+0|joper-ap |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+0|joper-ap |     at async file:///var/www/joper/node_modules/drizzle-orm/node-postgres/session.js:83:22
+0|joper-ap |     at async TenantScopedStorage.getAllOrders (file:///var/www/joper/dist/index.js:1943:16)
+0|joper-ap |     at async file:///var/www/joper/dist/index.js:12408:25 {
+0|joper-ap |   length: 124,
+0|joper-ap |   severity: 'ERROR',
+0|joper-ap |   code: '42703',
+0|joper-ap |   detail: undefined,
+0|joper-ap |   hint: undefined,
+0|joper-ap |   position: '952',
+0|joper-ap |   internalPosition: undefined,
+0|joper-ap |   internalQuery: undefined,
+0|joper-ap |   where: undefined,
+0|joper-ap |   schema: undefined,
+0|joper-ap |   table: undefined,
+0|joper-ap |   column: undefined,
+0|joper-ap |   dataType: undefined,
+0|joper-ap |   constraint: undefined,
+0|joper-ap |   file: 'parse_relation.c',
+0|joper-ap |   line: '3665',
+0|joper-ap |   routine: 'errorMissingColumn'
+0|joper-ap | }
+0|joper-ap | Error fetching orders: error: column orders_quotation.tax_rate does not exist
+0|joper-ap |     at /var/www/joper/node_modules/pg-pool/index.js:45:11
+0|joper-ap |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+0|joper-ap |     at async file:///var/www/joper/node_modules/drizzle-orm/node-postgres/session.js:83:22
+0|joper-ap |     at async TenantScopedStorage.getAllOrders (file:///var/www/joper/dist/index.js:1943:16)
+0|joper-ap |     at async file:///var/www/joper/dist/index.js:12408:25 {
+0|joper-ap |   length: 124,
+0|joper-ap |   severity: 'ERROR',
+0|joper-ap |   code: '42703',
+0|joper-ap |   detail: undefined,
+0|joper-ap |   hint: undefined,
+0|joper-ap |   position: '952',
+0|joper-ap |   internalPosition: undefined,
+0|joper-ap |   internalQuery: undefined,
+0|joper-ap |   where: undefined,
+0|joper-ap |   schema: undefined,
+0|joper-ap |   table: undefined,
+0|joper-ap |   column: undefined,
+0|joper-ap |   dataType: undefined,
+0|joper-ap |   constraint: undefined,
+0|joper-ap |   file: 'parse_relation.c',
+0|joper-ap |   line: '3665',
+0|joper-ap |   routine: 'errorMissingColumn'
+0|joper-ap | }
+
+/root/.pm2/logs/joper-app-out.log last 50 lines:
+0|joper-ap | 9:49:53 PM [express] GET /api/product-categories 304 in 11ms :: [{"id":"83134de1-25d3-4584-b46a-fbe4…
+0|joper-ap | 9:49:53 PM [express] GET /api/customers 304 in 171ms :: [{"id":"45aa8fe7-f796-4815-b783-8f9b418e3e12…
+0|joper-ap | 9:49:53 PM [express] GET /api/products 304 in 188ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-ap | 9:49:53 PM [express] GET /api/users 304 in 46ms :: [{"id":"49aecf02-b225-4518-8fb9-a33e09e942d5","te…
+0|joper-ap | 9:49:53 PM [express] GET /api/empresas 304 in 8ms :: []
+0|joper-ap | 9:49:55 PM [express] GET /api/dashboard/recent-contacts 304 in 8ms :: []
+0|joper-ap | 9:49:55 PM [express] GET /api/dashboard/stats 200 in 19ms :: {"pendingQuotations":"41","activeOrders…
+0|joper-ap | 9:49:55 PM [express] GET /api/dashboard/sales-by-category 200 in 23ms :: [{"id":"f546c2c9-8210-41ca-…
+0|joper-ap | 9:49:56 PM [express] GET /api/user 304 in 6ms :: {"id":"90aedb83-2e52-4ea5-9eb9-9230b5e14d87","tenan…
+0|joper-ap | 9:49:56 PM [express] GET /api/tenant-config 304 in 7ms :: {"id":"b5ca7691-3de0-47c1-808f-3b6baf19fb2…
+0|joper-ap | 9:49:56 PM [express] GET /api/empresas 304 in 4ms :: []
+0|joper-ap | 9:49:56 PM [express] GET /api/companies 400 in 7ms :: {"error":"Usuario sin compañía asignada"}
+0|joper-ap | 9:49:56 PM [express] GET /api/pipeline 500 in 8ms :: {"error":"Error fetching pipeline data"}
+0|joper-ap | 9:50:31 PM [express] GET /api/user 304 in 5ms :: {"id":"3576af95-66d6-49fc-9cf3-8eae09221886","tenan…
+0|joper-ap | 9:50:31 PM [express] GET /api/tenant-config 304 in 13ms :: {"id":"b5ca7691-3de0-47c1-808f-3b6baf19fb…
+0|joper-ap | 9:50:31 PM [express] GET /api/orders 500 in 7ms :: {"error":"Error fetching orders"}
+0|joper-ap | 9:50:31 PM [express] GET /api/empresas 304 in 5ms :: []
+0|joper-ap | 9:52:01 PM [express] GET /api/user 304 in 4ms :: {"id":"3576af95-66d6-49fc-9cf3-8eae09221886","tenan…
+0|joper-ap | 9:52:01 PM [express] GET /api/tenant-config 304 in 4ms :: {"id":"b5ca7691-3de0-47c1-808f-3b6baf19fb2…
+0|joper-ap | 9:52:01 PM [express] GET /api/orders 500 in 9ms :: {"error":"Error fetching orders"}
+0|joper-ap | 9:52:01 PM [express] GET /api/empresas 304 in 13ms :: []
+0|joper-ap | 9:52:27 PM [express] Microsip scheduler started (poll every 5 min)
+0|joper-ap | 9:52:27 PM [express] Account statement scheduler started (poll every 60 min)
+0|joper-ap | 9:52:27 PM [express] serving on port 5000
+0|joper-ap | 9:52:51 PM [express] GET /api/tenant-config 304 in 7ms :: {"id":"b5ca7691-3de0-47c1-808f-3b6baf19fb2…
+0|joper-ap | 9:52:51 PM [express] GET /api/user 304 in 15ms :: {"id":"90aedb83-2e52-4ea5-9eb9-9230b5e14d87","tena…
+0|joper-ap | 9:52:51 PM [express] GET /api/companies 400 in 6ms :: {"error":"Usuario sin compañía asignada"}
+0|joper-ap | 9:52:51 PM [express] GET /api/empresas 304 in 11ms :: []
+0|joper-ap | 9:52:51 PM [express] GET /api/pipeline 200 in 82ms :: {"quotations":[{"id":"7daba646-6795-4fd3-833e-…
+0|joper-ap | 9:52:55 PM [express] GET /api/dashboard/recent-contacts 304 in 8ms :: []
+0|joper-ap | 9:52:55 PM [express] GET /api/dashboard/stats 304 in 14ms :: {"pendingQuotations":"41","activeOrders…
+0|joper-ap | 9:52:55 PM [express] GET /api/dashboard/sales-by-category 304 in 26ms :: [{"id":"f546c2c9-8210-41ca-…
+0|joper-ap | 9:52:56 PM [express] GET /api/tenant-config 304 in 5ms :: {"id":"b5ca7691-3de0-47c1-808f-3b6baf19fb2…
+0|joper-ap | 9:52:56 PM [express] GET /api/user 304 in 5ms :: {"id":"90aedb83-2e52-4ea5-9eb9-9230b5e14d87","tenan…
+0|joper-ap | 9:52:56 PM [express] GET /api/tenants 403 in 8ms :: {"error":"Tenant management only available on ma…
+0|joper-ap | 9:52:56 PM [express] GET /api/dashboard/sales-by-category 304 in 25ms :: [{"id":"f546c2c9-8210-41ca-…
+0|joper-ap | 9:52:56 PM [express] GET /api/dashboard/recent-contacts 304 in 29ms :: []
+0|joper-ap | 9:52:56 PM [express] GET /api/dashboard/stats 304 in 33ms :: {"pendingQuotations":"41","activeOrders…
+0|joper-ap | 9:52:58 PM [express] GET /api/quotations 200 in 36ms :: [{"id":"7daba646-6795-4fd3-833e-7838364a5553…
+0|joper-ap | 9:52:58 PM [express] GET /api/product-categories 304 in 39ms :: [{"id":"83134de1-25d3-4584-b46a-fbe4…
+0|joper-ap | 9:52:58 PM [express] GET /api/users 304 in 39ms :: [{"id":"49aecf02-b225-4518-8fb9-a33e09e942d5","te…
+0|joper-ap | 9:52:58 PM [express] GET /api/empresas 304 in 6ms :: []
+0|joper-ap | 9:52:59 PM [express] GET /api/customers 304 in 251ms :: [{"id":"45aa8fe7-f796-4815-b783-8f9b418e3e12…
+0|joper-ap | 9:52:59 PM [express] GET /api/products 304 in 267ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-ap | 9:54:10 PM [express] GET /api/tenant-config 304 in 5ms :: {"id":"b5ca7691-3de0-47c1-808f-3b6baf19fb2…
+0|joper-ap | 9:54:10 PM [express] GET /api/user 304 in 13ms :: {"id":"3576af95-66d6-49fc-9cf3-8eae09221886","tena…
+0|joper-ap | 9:54:11 PM [express] GET /api/orders 200 in 59ms :: [{"id":"e8e25bee-5aec-420e-8a18-b8fa7ddc056a","t…
+0|joper-ap | 9:54:11 PM [express] GET /api/empresas 304 in 8ms :: []
+0|joper-ap | 9:54:59 PM [express] GET /api/incidents 200 in 25ms :: [{"id":"b6d85e96-c682-4e8e-b943-a91466327c42"…
+0|joper-ap | 9:55:00 PM [express] GET /api/customers 304 in 88ms :: [{"id":"45aa8fe7-f796-4815-b783-8f9b418e3e12"…
+
+[root@localhost joper]# 
