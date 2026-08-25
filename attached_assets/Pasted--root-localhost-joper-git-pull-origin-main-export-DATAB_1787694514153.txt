@@ -1,0 +1,586 @@
+[root@localhost joper]# git pull origin main
+export DATABASE_URL="postgresql://joper_user:tu_password_segura@127.0.0.1:5432/joper_db?sslmode=disable"
+bash scripts/vps-deploy.sh
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+Updating 00cc38c..83a474d
+Fast-forward
+ ...26-08-24_a_la(s)_4.34.15_p.m._1787610910023.png | Bin 0 -> 526947 bytes
+ ...26-08-24_a_la(s)_4.34.40_p.m._1787610910021.png | Bin 0 -> 521949 bytes
+ client/public/nexxo-dist-index.js                  |  74 ++++++-
+ client/src/components/quotation-form.tsx           | 137 ++++++++++---
+ server/isolation.test.ts                           | 125 +++++++++++-
+ server/quotation-calculations.test.ts              |  53 +++++
+ server/quotation-pdf-generator.ts                  |  11 +-
+ server/routes.ts                                   | 112 ++++++++++-
+ shared/quotation-calculations.ts                   |  99 +++++++++
+ shared/schema.ts                                   |   1 +
+ storage/documents/doc-1783379382480-n3e8ut1x.pdf   | 223 ---------------------
+ storage/incidents/incident-1781308192757-3w70m.png | Bin 647615 -> 0 bytes
+ .../incidents/incident-1781308390756-q7gy6b.png    | Bin 317684 -> 0 bytes
+ ...-f429-44e6-a616-f5ac209f7346-1774476802050.jpeg | Bin 8745 -> 0 bytes
+ .../3da9c802-a0e3-4a42-a6fc-4e7fa8528081.pdf       | Bin 521924 -> 0 bytes
+ .../74c1c80c-ff62-4481-9e36-96b35b6b79e4.pdf       | Bin 11655 -> 0 bytes
+ .../9dfa6d41-508c-49bb-81bc-d57c21902c85.pdf       | Bin 11451 -> 0 bytes
+ .../a06481a1-2d8e-4e63-8325-3e99c4002ef2.pdf       | Bin 11452 -> 0 bytes
+ .../cd43f40d-1548-4632-a240-6d0a5edff8fc.pdf       | Bin 257359 -> 0 bytes
+ .../ddaa076c-5acc-49fc-ae4d-a84484125cca.pdf       | Bin 1905286 -> 0 bytes
+ .../de9c48e2-817b-4a98-9e97-ad7070fa4a23.pdf       | Bin 2773 -> 0 bytes
+ .../f5316f11-df31-4f5f-94a3-39c2a6e472ce.pdf       | Bin 11540 -> 0 bytes
+ .../f7a63092-b7f6-408e-858d-5a012a75f34d.pdf       | Bin 11501 -> 0 bytes
+ storage/photos/local-1774478668853-nq2pir.png      | Bin 2475298 -> 0 bytes
+ storage/photos/local-1774478692780-emzvba.png      | Bin 3046327 -> 0 bytes
+ storage/photos/local-1774479281104-rnz2ua.png      | Bin 2432364 -> 0 bytes
+ storage/photos/local-1774479298310-7htefs.png      | Bin 2369220 -> 0 bytes
+ storage/photos/local-1779152377333-l63g9f.png      | Bin 602357 -> 0 bytes
+ storage/photos/local-1779152377335-kmdpnh.png      | Bin 1217294 -> 0 bytes
+ storage/photos/local-1779152656244-36mt6h.jpg      | Bin 363289 -> 0 bytes
+ storage/photos/local-1779154372425-y9ycqi.jpg      | Bin 363289 -> 0 bytes
+ storage/photos/local-1779154372426-fn62r.jpg       | Bin 363289 -> 0 bytes
+ storage/photos/local-1779154372429-p4qbcg.jpg      | Bin 331967 -> 0 bytes
+ storage/photos/local-1779154372430-3ngcoe.jpg      | Bin 346901 -> 0 bytes
+ storage/photos/local-1779154372432-d8mlcn.jpg      | Bin 346901 -> 0 bytes
+ storage/photos/local-1779154372435-1ygioc.jpg      | Bin 270617 -> 0 bytes
+ storage/photos/local-1779154372627-x33g3t.jpg      | Bin 342981 -> 0 bytes
+ storage/photos/local-1779219505213-nxjo4.jpg       | Bin 110151 -> 0 bytes
+ storage/photos/local-1779219525145-d47vd.jpg       | Bin 293258 -> 0 bytes
+ storage/photos/local-1779219525153-ijc14d.jpg      | Bin 53192 -> 0 bytes
+ .../F-zziso_mrbgtpfr_hl27ka-A1-1783478124796.pdf   | Bin 2512 -> 0 bytes
+ .../F-zziso_mrbguaf2_sas0z2-A1-1783478151397.pdf   | Bin 2515 -> 0 bytes
+ .../F-zziso_mrbgwn1h_fxjlvz-A1-1783478261463.pdf   | Bin 2518 -> 0 bytes
+ .../F-zziso_mrbhdutv_adyr3b-A1-1783479064730.pdf   | Bin 2525 -> 0 bytes
+ .../F-zziso_mrbhibxa_8gz8x0-A1-1783479273711.pdf   | Bin 2515 -> 0 bytes
+ .../F-zziso_mrbhjsxl_dxrctu-A1-1783479342324.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrbhk7f0_0809e7-A1-1783479360794.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrbhkfem_qk2imy-A1-1783479371531.pdf   | Bin 2528 -> 0 bytes
+ .../F-zziso_mrbhm4r4_d5334z-A1-1783479450732.pdf   | Bin 2504 -> 0 bytes
+ .../F-zziso_mrbhmof8_zukzxq-A1-1783479476534.pdf   | Bin 2509 -> 0 bytes
+ .../F-zziso_mrbhmysy_o8vyc1-A1-1783479489905.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrbhoeh3_ydkk4r-A1-1783479556802.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mrbhqtzf_q9njnz-A1-1783479670512.pdf   | Bin 2509 -> 0 bytes
+ .../F-zziso_mrbhvftj_3royh9-A1-1783479885493.pdf   | Bin 2528 -> 0 bytes
+ .../F-zziso_mrbhwvsg_co8ebc-A1-1783479952897.pdf   | Bin 2510 -> 0 bytes
+ .../F-zziso_mrbhy2cg_8xygm8-A1-1783480007559.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrbiki5g_hq1tsv-A1-1783481054823.pdf   | Bin 2513 -> 0 bytes
+ .../F-zziso_mrbipcr2_ditdaf-A1-1783481281141.pdf   | Bin 2507 -> 0 bytes
+ .../F-zziso_mrbjuxci_yv8woq-A1-1783483223553.pdf   | Bin 2518 -> 0 bytes
+ .../F-zziso_mrbkbpun_pdrdi3-A1-1783484004500.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrbkmdui_nyqrlk-A1-1783484501875.pdf   | Bin 2527 -> 0 bytes
+ .../F-zziso_mrbkqjyw_431lmv-A1-1783484696583.pdf   | Bin 2510 -> 0 bytes
+ .../F-zziso_mrbkrccg_we3yy1-A1-1783484733058.pdf   | Bin 2524 -> 0 bytes
+ .../F-zziso_mrbkulbv_vp5fmv-A1-1783484884751.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mrbkw8wy_i2c4bh-A1-1783484962017.pdf   | Bin 2513 -> 0 bytes
+ .../F-zziso_mrbl6lb1_uekatl-A1-1783485445314.pdf   | Bin 2519 -> 0 bytes
+ .../F-zziso_mrblrgnj_o4t3t6-A1-1783486418136.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrbmcdbh_r5d12z-A1-1783487393493.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrbnhmk9_0gz1sh-A1-1783489319269.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mrbon5cu_hmdjva-A1-1783491256625.pdf   | Bin 2521 -> 0 bytes
+ .../F-zziso_mrbybq9r_aou216-A1-1783507520229.pdf   | Bin 2509 -> 0 bytes
+ .../F-zziso_mrc4e9sq_wrbn7i-A1-1783517716309.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrc5jxss_3uktii-A1-1783519660340.pdf   | Bin 2517 -> 0 bytes
+ .../F-zziso_mrc7r00y_etdloh-A1-1783523349028.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrc9vl43_u03scj-A1-1783526922119.pdf   | Bin 2515 -> 0 bytes
+ .../F-zziso_mrcaxm0w_rxjxq8-A1-1783528696159.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrcc3roi_yebpux-A1-1783530663428.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrcgkntp_ttsj9o-A1-1783538170143.pdf   | Bin 2521 -> 0 bytes
+ .../F-zziso_mrchpfoc_3m2krw-A1-1783540071951.pdf   | Bin 2530 -> 0 bytes
+ .../F-zziso_mrchzmxw_v2yrxh-A1-1783540547231.pdf   | Bin 2525 -> 0 bytes
+ .../F-zziso_mrcn94le_mcj69g-A1-1783549388760.pdf   | Bin 2517 -> 0 bytes
+ .../F-zziso_mrcpp5p6_3l0bcf-A1-1783553495866.pdf   | 121 -----------
+ .../F-zziso_mrcq8xtm_jih1k4-A1-1783554418115.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrcqkudd_omwvgm-A1-1783554973540.pdf   | Bin 2529 -> 0 bytes
+ .../F-zziso_mrcqo1e0_uc5xrj-A1-1783555122304.pdf   | Bin 2519 -> 0 bytes
+ .../F-zziso_mrczjv78_rrapt9-A1-1783570046115.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrdymcbe_ou0wgy-A1-1783628947071.pdf   | Bin 2530 -> 0 bytes
+ .../F-zziso_mrdzi21h_oyf3bs-A1-1783630426953.pdf   | Bin 2530 -> 0 bytes
+ .../F-zziso_mre1x63v_k66bl8-A1-1783634490623.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mre31p79_vlyt3b-A1-1783636382477.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mre3s55q_z8owdm-A1-1783637615591.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mre5ohbx_ihfq8o-A1-1783640804424.pdf   | Bin 2512 -> 0 bytes
+ .../F-zziso_mre76w2r_jq6tlg-A1-1783643343011.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mred5gsy_o7sijv-A1-1783653354400.pdf   | Bin 2513 -> 0 bytes
+ .../F-zziso_mrefjmvy_nl766e-A1-1783657374118.pdf   | Bin 2511 -> 0 bytes
+ .../F-zziso_mrf1lh1j_b3x1zc-A1-1783694411872.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrf1o5db_nlu37p-A1-1783694535711.pdf   | Bin 2512 -> 0 bytes
+ .../F-zziso_mrf1ompp_1dj489-A1-1783694558365.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrf1ubka_8art51-A1-1783694823961.pdf   | Bin 2521 -> 0 bytes
+ .../F-zziso_mrf1vbfk_gcdk28-A1-1783694870407.pdf   | Bin 2515 -> 0 bytes
+ .../F-zziso_mrf1xemw_54oemk-A1-1783694968060.pdf   | Bin 2517 -> 0 bytes
+ .../F-zziso_mrf1zbw7_xr7dx0-A1-1783695058413.pdf   | Bin 2516 -> 0 bytes
+ .../F-zziso_mrf209tw_j79vtp-A1-1783695103172.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrf20ess_sp5w6f-A1-1783695107974.pdf   | Bin 2509 -> 0 bytes
+ .../F-zziso_mrf2nk60_pnkp2s-A1-1783696189672.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrf38h3m_n9yvsi-A1-1783697164253.pdf   | Bin 2509 -> 0 bytes
+ .../F-zziso_mrfv26ft_18eqj8-A1-1783743900041.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrfwfcv0_wu3hvs-A1-1783746194006.pdf   | Bin 2513 -> 0 bytes
+ .../F-zziso_mrfx073b_dfxk72-A1-1783747167107.pdf   | Bin 2511 -> 0 bytes
+ .../F-zziso_mrfxl3cr_2h40wq-A1-1783748141939.pdf   | Bin 2512 -> 0 bytes
+ .../F-zziso_mrfyr2h0_uww0pg-A1-1783750100553.pdf   | Bin 2510 -> 0 bytes
+ .../F-zziso_mrfzm5f1_d1ixo1-A1-1783751550987.pdf   | Bin 2509 -> 0 bytes
+ .../F-zziso_mrg0rrrg_d2bx7f-A1-1783753492305.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrg1y8zn_fdyozz-A1-1783755474247.pdf   | Bin 2531 -> 0 bytes
+ .../F-zziso_mrg3ovot_z1jros-A1-1783758396147.pdf   | Bin 2542 -> 0 bytes
+ .../F-zziso_mrg5eizn_i4ycgl-A1-1783761272522.pdf   | Bin 2521 -> 0 bytes
+ .../F-zziso_mrg7qxay_bilrmv-A1-1783765210190.pdf   | Bin 2538 -> 0 bytes
+ .../F-zziso_mrg983g6_cdcbqf-A1-1783767690565.pdf   | Bin 2515 -> 0 bytes
+ .../F-zziso_mrgayage_xrm4o1-A1-1783770592196.pdf   | Bin 2550 -> 0 bytes
+ .../F-zziso_mrgc3roz_j7zq36-A1-1783772527834.pdf   | Bin 2524 -> 0 bytes
+ .../F-zziso_mrgvo33c_8fl3rk-A1-1783805388849.pdf   | Bin 2537 -> 0 bytes
+ .../F-zziso_mrjdpoas_k3zdo5-A1-1783956627748.pdf   | Bin 2516 -> 0 bytes
+ .../F-zziso_mrje14gk_gb7lbr-A1-1783957161197.pdf   | Bin 2516 -> 0 bytes
+ .../F-zziso_mrje63kc_dulyys-A1-1783957395479.pdf   | 122 -----------
+ .../F-zziso_mrje7hw2_mpf170-A1-1783957458741.pdf   | Bin 2511 -> 0 bytes
+ .../F-zziso_mrjfnrd3_levdh4-A1-1783959897261.pdf   | Bin 2526 -> 0 bytes
+ .../F-zziso_mrjfsak3_ufm7ns-A1-1783960108961.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mrjfve7m_74o6z0-A1-1783960254504.pdf   | Bin 2521 -> 0 bytes
+ .../F-zziso_mrjfx3ly_se1syh-A1-1783960333792.pdf   | Bin 2526 -> 0 bytes
+ .../F-zziso_mrjfxvvz_qn4dig-A1-1783960369487.pdf   | Bin 2511 -> 0 bytes
+ .../F-zziso_mrjidz3v_w0ys7j-A1-1783964480591.pdf   | Bin 2510 -> 0 bytes
+ .../F-zziso_mrjj8tly_qycglz-A1-1783965919348.pdf   | Bin 2528 -> 0 bytes
+ .../F-zziso_mrjjascp_m8bqb5-A1-1783966010540.pdf   | Bin 2516 -> 0 bytes
+ .../F-zziso_mrjjaxui_puomwl-A1-1783966017287.pdf   | Bin 2515 -> 0 bytes
+ .../F-zziso_mrjkceab_9tu39s-A1-1783967766079.pdf   | Bin 2517 -> 0 bytes
+ .../F-zziso_mrjl0cha_b92y96-A1-1783968882672.pdf   | Bin 2519 -> 0 bytes
+ .../F-zziso_mrjm57my_8yjljy-A1-1783970789804.pdf   | Bin 2524 -> 0 bytes
+ .../F-zziso_mrjoq577_ev5yps-A1-1783975125800.pdf   | Bin 2524 -> 0 bytes
+ .../F-zziso_mrjpr59m_04c3ix-A1-1783976852290.pdf   | Bin 2511 -> 0 bytes
+ .../F-zziso_mrjr3o6m_vxblw8-A1-1783979116392.pdf   | Bin 2533 -> 0 bytes
+ .../F-zziso_mrjrx2u7_5gpz31-A1-1783980488057.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mrju4wya_u530zr-A1-1783984212686.pdf   | Bin 2528 -> 0 bytes
+ .../F-zziso_mrjviis8_83hksz-A1-1783986527101.pdf   | Bin 2511 -> 0 bytes
+ .../F-zziso_mrjy74bz_up7wua-A1-1783991034241.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mrk0id1y_pha8bb-A1-1783994917946.pdf   | Bin 2527 -> 0 bytes
+ .../F-zziso_mrk73ijn_dyw1ab-A1-1784005982612.pdf   | Bin 2533 -> 0 bytes
+ .../F-zziso_mrk74l90_hg3ysw-A1-1784006032059.pdf   | Bin 2526 -> 0 bytes
+ .../F-zziso_mrk76a2q_dfszko-A1-1784006110698.pdf   | Bin 2531 -> 0 bytes
+ .../F-zziso_mrk790h0_el674l-A1-1784006238391.pdf   | Bin 2514 -> 0 bytes
+ .../F-zziso_mrk8grrf_ohn35r-A1-1784008281103.pdf   | Bin 2535 -> 0 bytes
+ .../F-zziso_mrl50izs_pn6y8b-A1-1784062950385.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrl7ixa6_gepdjm-A1-1784067166814.pdf   | Bin 2532 -> 0 bytes
+ .../F-zziso_mrl7ki0j_u713p8-A1-1784067241298.pdf   | Bin 2519 -> 0 bytes
+ .../F-zziso_mrl7leb7_xeduqu-A1-1784067282820.pdf   | Bin 2533 -> 0 bytes
+ .../F-zziso_mrl7n4vb_n53nho-A1-1784067363587.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrl7u4hg_e8y6lo-A1-1784067691267.pdf   | Bin 2525 -> 0 bytes
+ .../F-zziso_mrl7v3vi_0xfpaf-A1-1784067736165.pdf   | Bin 2526 -> 0 bytes
+ .../F-zziso_mrl7wb5m_bam4pw-A1-1784067792870.pdf   | Bin 2524 -> 0 bytes
+ .../F-zziso_mrl7x3i6_uybyr1-A1-1784067828145.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrl7xlk6_8f0jdm-A1-1784067851711.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrl7zu6b_uiojwf-A1-1784067956530.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrl80ck9_y9voux-A1-1784067979633.pdf   | Bin 2532 -> 0 bytes
+ .../F-zziso_mrl8upyi_2gaclh-A1-1784069396859.pdf   | Bin 2539 -> 0 bytes
+ .../F-zziso_mrl8w7cz_5efll1-A1-1784069466597.pdf   | Bin 2519 -> 0 bytes
+ .../F-zziso_mrl8wsug_5o44od-A1-1784069494097.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrli0vmj_q02cwf-A1-1784084801372.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrlkan3y_zz4ve7-A1-1784088616121.pdf   | Bin 2527 -> 0 bytes
+ .../F-zziso_mrllh8ex_00wpky-A1-1784090602571.pdf   | Bin 2531 -> 0 bytes
+ .../F-zziso_mrllk0ll_39lfjn-A1-1784090732552.pdf   | Bin 2519 -> 0 bytes
+ .../F-zziso_mrlll1su_9wqh10-A1-1784090780818.pdf   | 118 -----------
+ .../F-zziso_mrllnwe4_q84us9-A1-1784090914063.pdf   | Bin 2527 -> 0 bytes
+ .../F-zziso_mrllooa4_ymgftf-A1-1784090949824.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrllp47e_zpbm1v-A1-1784090970383.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrllq7r7_l1jub7-A1-1784091021694.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrllzbl2_jphkgw-A1-1784091447233.pdf   | Bin 2527 -> 0 bytes
+ .../F-zziso_mrln1ihd_rsfir9-A1-1784093228952.pdf   | Bin 2531 -> 0 bytes
+ .../F-zziso_mrln1wbx_lrmhd5-A1-1784093246719.pdf   | Bin 2528 -> 0 bytes
+ .../F-zziso_mrlner1y_kvedw0-A1-1784093846665.pdf   | Bin 2539 -> 0 bytes
+ .../F-zziso_mrlng14i_e2nypv-A1-1784093906288.pdf   | Bin 2529 -> 0 bytes
+ .../F-zziso_mrlngu3o_0wclu1-A1-1784093943422.pdf   | Bin 2528 -> 0 bytes
+ .../F-zziso_mrlnhbxs_bt10dg-A1-1784093966473.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrlnjest_voepfu-A1-1784094064109.pdf   | Bin 2531 -> 0 bytes
+ .../F-zziso_mrlnl1e3_napbsr-A1-1784094139876.pdf   | Bin 2524 -> 0 bytes
+ .../F-zziso_mrlnlmzj_jw01g9-A1-1784094167720.pdf   | Bin 2521 -> 0 bytes
+ .../F-zziso_mrlnmml9_68or25-A1-1784094213570.pdf   | Bin 2518 -> 0 bytes
+ .../F-zziso_mrlnn6rv_kx0td2-A1-1784094240120.pdf   | Bin 2536 -> 0 bytes
+ .../F-zziso_mrlnnx3k_c3typ6-A1-1784094274151.pdf   | Bin 2523 -> 0 bytes
+ .../F-zziso_mrlnohyo_0nr568-A1-1784094300993.pdf   | Bin 2540 -> 0 bytes
+ .../F-zziso_mrlnp07i_f173hz-A1-1784094324944.pdf   | Bin 2516 -> 0 bytes
+ .../F-zziso_mrmeb963_92qn4z-A1-1784139033663.pdf   | Bin 2509 -> 0 bytes
+ .../F-zziso_mrmeefp1_rfa4o0-A1-1784139181020.pdf   | Bin 2524 -> 0 bytes
+ .../F-zziso_mrmefr6l_fmui8d-A1-1784139242765.pdf   | Bin 2525 -> 0 bytes
+ .../F-zziso_mrmeh3cb_ymss22-A1-1784139304977.pdf   | Bin 2515 -> 0 bytes
+ .../F-zziso_mrmehpiq_prdwdp-A1-1784139334203.pdf   | 119 -----------
+ .../F-zziso_mrmehwjz_q707x7-A1-1784139342903.pdf   | Bin 2513 -> 0 bytes
+ .../F-zziso_mrmenaax_sc4yj8-A1-1784139594335.pdf   | Bin 2512 -> 0 bytes
+ .../F-zziso_mrmeotgs_c5y2qk-A1-1784139665833.pdf   | Bin 2517 -> 0 bytes
+ .../F-zziso_mrmept1u_rahg4e-A1-1784139712106.pdf   | Bin 2520 -> 0 bytes
+ .../F-zziso_mrmeq67s_lbnz48-A1-1784139729046.pdf   | Bin 2516 -> 0 bytes
+ .../F-zziso_mrmerdzi_3uvmkm-A1-1784139785359.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrnrcg3g_6y6058-A1-1784221390489.pdf   | Bin 2519 -> 0 bytes
+ .../F-zziso_mrnre6w6_9l71z4-A1-1784221470888.pdf   | Bin 2511 -> 0 bytes
+ .../F-zziso_mrnrg2tp_ume6c7-A1-1784221558880.pdf   | Bin 2522 -> 0 bytes
+ .../F-zziso_mrnrilj7_nrqze5-A1-1784221676963.pdf   | Bin 2532 -> 0 bytes
+ .../F-zziso_mrnrjxo0_04714d-A1-1784221739013.pdf   | Bin 2508 -> 0 bytes
+ .../F-zziso_mrnrkcw6_tfy67u-A1-1784221758918.pdf   | Bin 2527 -> 0 bytes
+ .../F-zziso_mrnrlk73_2863mh-A1-1784221814759.pdf   | Bin 2522 -> 0 bytes
+ storage/quotations/MEX-093203-1777090508518.pdf    | Bin 12273 -> 0 bytes
+ storage/quotations/MEX-093203-1777090547583.pdf    | Bin 12273 -> 0 bytes
+ storage/quotations/MEX-244808-1777087371758.pdf    | Bin 12667 -> 0 bytes
+ storage/quotations/MEX-244808-1777087403513.pdf    | Bin 12667 -> 0 bytes
+ storage/quotations/MEX-244808-1777088515150.pdf    | Bin 12957 -> 0 bytes
+ storage/quotations/MEX-453722-1781818469001.pdf    | Bin 12128 -> 0 bytes
+ storage/quotations/MEX-599833-1781654717253.pdf    | Bin 12290 -> 0 bytes
+ storage/quotations/MEX-634102-1781584661785.pdf    | Bin 12083 -> 0 bytes
+ storage/quotations/MEX-634383-1781818635175.pdf    | Bin 12128 -> 0 bytes
+ storage/quotations/MEX-649692-1775779665086.pdf    | Bin 12180 -> 0 bytes
+ storage/quotations/MEX-649692-1775779795400.pdf    | Bin 12180 -> 0 bytes
+ storage/quotations/MEX-764276-1778005677934.pdf    | Bin 12445 -> 0 bytes
+ storage/quotations/MEX-820585-1781635740214.pdf    | Bin 12132 -> 0 bytes
+ 220 files changed, 570 insertions(+), 745 deletions(-)
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-08-24_a_la(s)_4.34.15_p.m._1787610910023.png
+ create mode 100644 attached_assets/Captura_de_pantalla_2026-08-24_a_la(s)_4.34.40_p.m._1787610910021.png
+ create mode 100644 server/quotation-calculations.test.ts
+ create mode 100644 shared/quotation-calculations.ts
+ delete mode 100644 storage/documents/doc-1783379382480-n3e8ut1x.pdf
+ delete mode 100644 storage/incidents/incident-1781308192757-3w70m.png
+ delete mode 100644 storage/incidents/incident-1781308390756-q7gy6b.png
+ delete mode 100644 storage/logos/3f6a2ffc-f429-44e6-a616-f5ac209f7346-1774476802050.jpeg
+ delete mode 100644 storage/minutes/3da9c802-a0e3-4a42-a6fc-4e7fa8528081.pdf
+ delete mode 100644 storage/minutes/74c1c80c-ff62-4481-9e36-96b35b6b79e4.pdf
+ delete mode 100644 storage/minutes/9dfa6d41-508c-49bb-81bc-d57c21902c85.pdf
+ delete mode 100644 storage/minutes/a06481a1-2d8e-4e63-8325-3e99c4002ef2.pdf
+ delete mode 100644 storage/minutes/cd43f40d-1548-4632-a240-6d0a5edff8fc.pdf
+ delete mode 100644 storage/minutes/ddaa076c-5acc-49fc-ae4d-a84484125cca.pdf
+ delete mode 100644 storage/minutes/de9c48e2-817b-4a98-9e97-ad7070fa4a23.pdf
+ delete mode 100644 storage/minutes/f5316f11-df31-4f5f-94a3-39c2a6e472ce.pdf
+ delete mode 100644 storage/minutes/f7a63092-b7f6-408e-858d-5a012a75f34d.pdf
+ delete mode 100644 storage/photos/local-1774478668853-nq2pir.png
+ delete mode 100644 storage/photos/local-1774478692780-emzvba.png
+ delete mode 100644 storage/photos/local-1774479281104-rnz2ua.png
+ delete mode 100644 storage/photos/local-1774479298310-7htefs.png
+ delete mode 100644 storage/photos/local-1779152377333-l63g9f.png
+ delete mode 100644 storage/photos/local-1779152377335-kmdpnh.png
+ delete mode 100644 storage/photos/local-1779152656244-36mt6h.jpg
+ delete mode 100644 storage/photos/local-1779154372425-y9ycqi.jpg
+ delete mode 100644 storage/photos/local-1779154372426-fn62r.jpg
+ delete mode 100644 storage/photos/local-1779154372429-p4qbcg.jpg
+ delete mode 100644 storage/photos/local-1779154372430-3ngcoe.jpg
+ delete mode 100644 storage/photos/local-1779154372432-d8mlcn.jpg
+ delete mode 100644 storage/photos/local-1779154372435-1ygioc.jpg
+ delete mode 100644 storage/photos/local-1779154372627-x33g3t.jpg
+ delete mode 100644 storage/photos/local-1779219505213-nxjo4.jpg
+ delete mode 100644 storage/photos/local-1779219525145-d47vd.jpg
+ delete mode 100644 storage/photos/local-1779219525153-ijc14d.jpg
+ delete mode 100644 storage/quotations/F-zziso_mrbgtpfr_hl27ka-A1-1783478124796.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbguaf2_sas0z2-A1-1783478151397.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbgwn1h_fxjlvz-A1-1783478261463.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhdutv_adyr3b-A1-1783479064730.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhibxa_8gz8x0-A1-1783479273711.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhjsxl_dxrctu-A1-1783479342324.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhk7f0_0809e7-A1-1783479360794.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhkfem_qk2imy-A1-1783479371531.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhm4r4_d5334z-A1-1783479450732.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhmof8_zukzxq-A1-1783479476534.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhmysy_o8vyc1-A1-1783479489905.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhoeh3_ydkk4r-A1-1783479556802.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhqtzf_q9njnz-A1-1783479670512.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhvftj_3royh9-A1-1783479885493.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhwvsg_co8ebc-A1-1783479952897.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbhy2cg_8xygm8-A1-1783480007559.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbiki5g_hq1tsv-A1-1783481054823.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbipcr2_ditdaf-A1-1783481281141.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbjuxci_yv8woq-A1-1783483223553.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbkbpun_pdrdi3-A1-1783484004500.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbkmdui_nyqrlk-A1-1783484501875.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbkqjyw_431lmv-A1-1783484696583.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbkrccg_we3yy1-A1-1783484733058.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbkulbv_vp5fmv-A1-1783484884751.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbkw8wy_i2c4bh-A1-1783484962017.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbl6lb1_uekatl-A1-1783485445314.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrblrgnj_o4t3t6-A1-1783486418136.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbmcdbh_r5d12z-A1-1783487393493.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbnhmk9_0gz1sh-A1-1783489319269.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbon5cu_hmdjva-A1-1783491256625.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrbybq9r_aou216-A1-1783507520229.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrc4e9sq_wrbn7i-A1-1783517716309.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrc5jxss_3uktii-A1-1783519660340.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrc7r00y_etdloh-A1-1783523349028.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrc9vl43_u03scj-A1-1783526922119.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcaxm0w_rxjxq8-A1-1783528696159.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcc3roi_yebpux-A1-1783530663428.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcgkntp_ttsj9o-A1-1783538170143.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrchpfoc_3m2krw-A1-1783540071951.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrchzmxw_v2yrxh-A1-1783540547231.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcn94le_mcj69g-A1-1783549388760.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcpp5p6_3l0bcf-A1-1783553495866.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcq8xtm_jih1k4-A1-1783554418115.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcqkudd_omwvgm-A1-1783554973540.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrcqo1e0_uc5xrj-A1-1783555122304.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrczjv78_rrapt9-A1-1783570046115.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrdymcbe_ou0wgy-A1-1783628947071.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrdzi21h_oyf3bs-A1-1783630426953.pdf
+ delete mode 100644 storage/quotations/F-zziso_mre1x63v_k66bl8-A1-1783634490623.pdf
+ delete mode 100644 storage/quotations/F-zziso_mre31p79_vlyt3b-A1-1783636382477.pdf
+ delete mode 100644 storage/quotations/F-zziso_mre3s55q_z8owdm-A1-1783637615591.pdf
+ delete mode 100644 storage/quotations/F-zziso_mre5ohbx_ihfq8o-A1-1783640804424.pdf
+ delete mode 100644 storage/quotations/F-zziso_mre76w2r_jq6tlg-A1-1783643343011.pdf
+ delete mode 100644 storage/quotations/F-zziso_mred5gsy_o7sijv-A1-1783653354400.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrefjmvy_nl766e-A1-1783657374118.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf1lh1j_b3x1zc-A1-1783694411872.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf1o5db_nlu37p-A1-1783694535711.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf1ompp_1dj489-A1-1783694558365.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf1ubka_8art51-A1-1783694823961.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf1vbfk_gcdk28-A1-1783694870407.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf1xemw_54oemk-A1-1783694968060.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf1zbw7_xr7dx0-A1-1783695058413.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf209tw_j79vtp-A1-1783695103172.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf20ess_sp5w6f-A1-1783695107974.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf2nk60_pnkp2s-A1-1783696189672.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrf38h3m_n9yvsi-A1-1783697164253.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrfv26ft_18eqj8-A1-1783743900041.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrfwfcv0_wu3hvs-A1-1783746194006.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrfx073b_dfxk72-A1-1783747167107.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrfxl3cr_2h40wq-A1-1783748141939.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrfyr2h0_uww0pg-A1-1783750100553.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrfzm5f1_d1ixo1-A1-1783751550987.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrg0rrrg_d2bx7f-A1-1783753492305.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrg1y8zn_fdyozz-A1-1783755474247.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrg3ovot_z1jros-A1-1783758396147.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrg5eizn_i4ycgl-A1-1783761272522.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrg7qxay_bilrmv-A1-1783765210190.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrg983g6_cdcbqf-A1-1783767690565.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrgayage_xrm4o1-A1-1783770592196.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrgc3roz_j7zq36-A1-1783772527834.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrgvo33c_8fl3rk-A1-1783805388849.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjdpoas_k3zdo5-A1-1783956627748.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrje14gk_gb7lbr-A1-1783957161197.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrje63kc_dulyys-A1-1783957395479.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrje7hw2_mpf170-A1-1783957458741.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjfnrd3_levdh4-A1-1783959897261.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjfsak3_ufm7ns-A1-1783960108961.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjfve7m_74o6z0-A1-1783960254504.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjfx3ly_se1syh-A1-1783960333792.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjfxvvz_qn4dig-A1-1783960369487.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjidz3v_w0ys7j-A1-1783964480591.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjj8tly_qycglz-A1-1783965919348.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjjascp_m8bqb5-A1-1783966010540.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjjaxui_puomwl-A1-1783966017287.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjkceab_9tu39s-A1-1783967766079.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjl0cha_b92y96-A1-1783968882672.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjm57my_8yjljy-A1-1783970789804.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjoq577_ev5yps-A1-1783975125800.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjpr59m_04c3ix-A1-1783976852290.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjr3o6m_vxblw8-A1-1783979116392.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjrx2u7_5gpz31-A1-1783980488057.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrju4wya_u530zr-A1-1783984212686.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjviis8_83hksz-A1-1783986527101.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrjy74bz_up7wua-A1-1783991034241.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrk0id1y_pha8bb-A1-1783994917946.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrk73ijn_dyw1ab-A1-1784005982612.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrk74l90_hg3ysw-A1-1784006032059.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrk76a2q_dfszko-A1-1784006110698.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrk790h0_el674l-A1-1784006238391.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrk8grrf_ohn35r-A1-1784008281103.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl50izs_pn6y8b-A1-1784062950385.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7ixa6_gepdjm-A1-1784067166814.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7ki0j_u713p8-A1-1784067241298.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7leb7_xeduqu-A1-1784067282820.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7n4vb_n53nho-A1-1784067363587.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7u4hg_e8y6lo-A1-1784067691267.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7v3vi_0xfpaf-A1-1784067736165.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7wb5m_bam4pw-A1-1784067792870.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7x3i6_uybyr1-A1-1784067828145.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7xlk6_8f0jdm-A1-1784067851711.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl7zu6b_uiojwf-A1-1784067956530.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl80ck9_y9voux-A1-1784067979633.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl8upyi_2gaclh-A1-1784069396859.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl8w7cz_5efll1-A1-1784069466597.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrl8wsug_5o44od-A1-1784069494097.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrli0vmj_q02cwf-A1-1784084801372.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlkan3y_zz4ve7-A1-1784088616121.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrllh8ex_00wpky-A1-1784090602571.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrllk0ll_39lfjn-A1-1784090732552.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlll1su_9wqh10-A1-1784090780818.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrllnwe4_q84us9-A1-1784090914063.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrllooa4_ymgftf-A1-1784090949824.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrllp47e_zpbm1v-A1-1784090970383.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrllq7r7_l1jub7-A1-1784091021694.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrllzbl2_jphkgw-A1-1784091447233.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrln1ihd_rsfir9-A1-1784093228952.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrln1wbx_lrmhd5-A1-1784093246719.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlner1y_kvedw0-A1-1784093846665.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlng14i_e2nypv-A1-1784093906288.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlngu3o_0wclu1-A1-1784093943422.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnhbxs_bt10dg-A1-1784093966473.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnjest_voepfu-A1-1784094064109.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnl1e3_napbsr-A1-1784094139876.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnlmzj_jw01g9-A1-1784094167720.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnmml9_68or25-A1-1784094213570.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnn6rv_kx0td2-A1-1784094240120.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnnx3k_c3typ6-A1-1784094274151.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnohyo_0nr568-A1-1784094300993.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrlnp07i_f173hz-A1-1784094324944.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmeb963_92qn4z-A1-1784139033663.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmeefp1_rfa4o0-A1-1784139181020.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmefr6l_fmui8d-A1-1784139242765.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmeh3cb_ymss22-A1-1784139304977.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmehpiq_prdwdp-A1-1784139334203.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmehwjz_q707x7-A1-1784139342903.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmenaax_sc4yj8-A1-1784139594335.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmeotgs_c5y2qk-A1-1784139665833.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmept1u_rahg4e-A1-1784139712106.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmeq67s_lbnz48-A1-1784139729046.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrmerdzi_3uvmkm-A1-1784139785359.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrnrcg3g_6y6058-A1-1784221390489.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrnre6w6_9l71z4-A1-1784221470888.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrnrg2tp_ume6c7-A1-1784221558880.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrnrilj7_nrqze5-A1-1784221676963.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrnrjxo0_04714d-A1-1784221739013.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrnrkcw6_tfy67u-A1-1784221758918.pdf
+ delete mode 100644 storage/quotations/F-zziso_mrnrlk73_2863mh-A1-1784221814759.pdf
+ delete mode 100644 storage/quotations/MEX-093203-1777090508518.pdf
+ delete mode 100644 storage/quotations/MEX-093203-1777090547583.pdf
+ delete mode 100644 storage/quotations/MEX-244808-1777087371758.pdf
+ delete mode 100644 storage/quotations/MEX-244808-1777087403513.pdf
+ delete mode 100644 storage/quotations/MEX-244808-1777088515150.pdf
+ delete mode 100644 storage/quotations/MEX-453722-1781818469001.pdf
+ delete mode 100644 storage/quotations/MEX-599833-1781654717253.pdf
+ delete mode 100644 storage/quotations/MEX-634102-1781584661785.pdf
+ delete mode 100644 storage/quotations/MEX-634383-1781818635175.pdf
+ delete mode 100644 storage/quotations/MEX-649692-1775779665086.pdf
+ delete mode 100644 storage/quotations/MEX-649692-1775779795400.pdf
+ delete mode 100644 storage/quotations/MEX-764276-1778005677934.pdf
+ delete mode 100644 storage/quotations/MEX-820585-1781635740214.pdf
+
+=========================================
+  NEXXO - Despliegue Seguro VPS
+=========================================
+
+  Base de datos: OK (postgresql://joper_user:tu_password_segura@...)
+
+[1/6] Creando backup de seguridad...
+[21:47:23] Iniciando backup...
+[21:47:24] Backup guardado: /var/backups/nexxo/nexxo_20260825_214723.sql.gz (4.4M)
+[21:47:24] Backup completado exitosamente.
+
+[2/6] Descargando cambios del repositorio...
+From https://github.com/checosdovalina/joperprocess
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+  Corrigiendo URLs internas de Replit en package-lock.json...
+[3/6] Instalando dependencias (incluye herramientas de compilación)...
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: vite@8.1.3
+npm warn Found: @types/node@20.16.11
+npm warn node_modules/@types/node
+npm warn   dev @types/node@"20.16.11" from the root project
+npm warn   11 more (@types/body-parser, @types/connect, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peerOptional @types/node@"^20.19.0 || >=22.12.0" from vite@8.1.3
+npm warn node_modules/vitest/node_modules/vite
+npm warn   vite@"^6.0.0 || ^7.0.0 || ^8.0.0" from vitest@4.1.10
+npm warn   node_modules/vitest
+npm warn   1 more (@vitest/mocker)
+npm warn
+npm warn Conflicting peer dependency: @types/node@26.3.0
+npm warn node_modules/@types/node
+npm warn   peerOptional @types/node@"^20.19.0 || >=22.12.0" from vite@8.1.3
+npm warn   node_modules/vitest/node_modules/vite
+npm warn     vite@"^6.0.0 || ^7.0.0 || ^8.0.0" from vitest@4.1.10
+npm warn     node_modules/vitest
+npm warn     1 more (@vitest/mocker)
+
+up to date, audited 675 packages in 4s
+
+106 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (4 low, 12 moderate, 16 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[4/6] Compilando...
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+vite v5.4.20 building for production...
+transforming (3) src/main.tsxBrowserslist: browsers data (caniuse-lite) is 10 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+transforming (4) src/App.tsx
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+✓ 2943 modules transformed.
+../dist/public/index.html                                       0.99 kB │ gzip:   0.52 kB
+../dist/public/assets/nexxo_tech_company_logo-PtiaNbSL.png    762.60 kB
+../dist/public/assets/index-CFHri8BT.css                      163.50 kB │ gzip:  26.04 kB
+../dist/public/assets/index-B5MJ3Jhf.js                     1,796.77 kB │ gzip: 461.75 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 8.83s
+
+  dist/index.js  753.7kb
+
+⚡ Done in 34ms
+[5/6] Aplicando cambios de schema...
+psql:/var/www/joper/scripts/vps-schema-changes.sql:16: NOTICE:  column "skip_statement_email" of relation "customers" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:22: NOTICE:  column "timezone" of relation "tenants" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:28: NOTICE:  column "cxc_database" of relation "microsip_configs" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:34: NOTICE:  column "locale" of relation "tenants" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:40: NOTICE:  column "shipping_approval_token" of relation "quotations" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:56: NOTICE:  relation "account_statement_schedules" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:63: NOTICE:  column "release_status" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:65: NOTICE:  column "release_notes" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:67: NOTICE:  column "released_by_id" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:69: NOTICE:  column "released_at" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:84: NOTICE:  relation "system_logs" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:86: NOTICE:  relation "idx_system_logs_tenant_created" already exists, skipping
+CREATE INDEX
+psql:/var/www/joper/scripts/vps-schema-changes.sql:105: NOTICE:  relation "documents" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:106: NOTICE:  relation "idx_documents_tenant" already exists, skipping
+CREATE INDEX
+psql:/var/www/joper/scripts/vps-schema-changes.sql:127: NOTICE:  relation "empresas" already exists, skipping
+CREATE TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:128: NOTICE:  relation "idx_empresas_tenant" already exists, skipping
+CREATE INDEX
+psql:/var/www/joper/scripts/vps-schema-changes.sql:131: NOTICE:  column "empresa_id" of relation "users" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:132: NOTICE:  column "empresa_id" of relation "quotations" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:133: NOTICE:  column "empresa_id" of relation "orders" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:134: NOTICE:  column "empresa_id" of relation "shipments" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:140: NOTICE:  column "parent_id" of relation "tenants" already exists, skipping
+ALTER TABLE
+psql:/var/www/joper/scripts/vps-schema-changes.sql:141: NOTICE:  relation "idx_tenants_parent" already exists, skipping
+CREATE INDEX
+  Schema actualizado correctamente.
+[6/6] Reiniciando servidor (joper-app)...
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [joper-app](ids: [ 0 ])
+[PM2] [joper-app](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ joper-app          │ fork     │ 229  │ online    │ 0%       │ 16.6mb   │
+│ 9  │ microsip-api       │ fork     │ 63   │ errored   │ 0%       │ 0b       │
+│ 16 │ nexxobi-api        │ fork     │ 6    │ online    │ 0%       │ 119.5mb  │
+│ 6  │ ots-energy         │ fork     │ 68   │ online    │ 0%       │ 64.1mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+
+=========================================
+  Despliegue completado exitosamente
+=========================================
+
+[root@localhost joper]# 
