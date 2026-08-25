@@ -140,6 +140,14 @@ ALTER TABLE shipments ADD COLUMN IF NOT EXISTS empresa_id varchar REFERENCES emp
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS parent_id varchar REFERENCES tenants(id);
 CREATE INDEX IF NOT EXISTS idx_tenants_parent ON tenants (parent_id);
 
+-- ----------------------------------------------------------------
+-- [2026-08-25] Columna: quotations.tax_rate
+-- La tasa de impuesto se usa en cotizaciones USA y en relaciones de
+-- cotización cargadas desde pedidos.
+-- ----------------------------------------------------------------
+ALTER TABLE quotations
+  ADD COLUMN IF NOT EXISTS tax_rate numeric(8,2) DEFAULT 16;
+
 -- ================================================================
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
