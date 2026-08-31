@@ -33,8 +33,7 @@ function workerScriptPath(): string {
   return existsSync(compiled) ? compiled : source;
 }
 
-const LEGACY_AUTH =
-  (Firebird as { AUTH_PLUGIN_LEGACY?: string }).AUTH_PLUGIN_LEGACY || 'Legacy_Auth';
+const SRP_AUTH = (Firebird as { AUTH_PLUGIN_SRP?: string }).AUTH_PLUGIN_SRP || 'Srp';
 
 function serializableFirebirdOptions(options: Firebird.Options): Firebird.Options {
   const extra = options as Firebird.Options & { plugin?: string; pluginName?: string; WireCrypt?: string };
@@ -48,8 +47,8 @@ function serializableFirebirdOptions(options: Firebird.Options): Firebird.Option
     role: options.role,
     pageSize: options.pageSize,
     WireCrypt: extra.WireCrypt,
-    pluginName: extra.pluginName || LEGACY_AUTH,
-    plugin: extra.plugin || LEGACY_AUTH,
+    pluginName: extra.pluginName || SRP_AUTH,
+    plugin: extra.plugin || SRP_AUTH,
   } as Firebird.Options;
 }
 
@@ -342,11 +341,10 @@ class MicrosipSyncService {
       role: undefined,
       pageSize: 4096,
       WireCrypt: 'Disabled',
-      // This Firebird answers Legacy_Auth then sends op_cont_auth/Srp. If the
-      // client advertised Srp512, that packet is unhandled and the attach hangs
-      // 15–20s (new companies fail; an already-open tenant can still look fine).
-      pluginName: LEGACY_AUTH,
-      plugin: LEGACY_AUTH,
+      // This Firebird only accepts Srp. Advertising Srp512 left plugin unset,
+      // so op_cont_auth/Srp was unhandled and the attach hung until timeout.
+      pluginName: SRP_AUTH,
+      plugin: SRP_AUTH,
     } as Firebird.Options;
   }
 
