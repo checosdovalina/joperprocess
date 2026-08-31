@@ -484,7 +484,7 @@ class MicrosipSyncService {
       };
     } finally {
       if (fbDb) {
-        fbDb.detach();
+        await detachAsync(fbDb);
       }
     }
   }
@@ -620,7 +620,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        fbDb.detach();
+        await detachAsync(fbDb);
       }
     }
 
@@ -715,7 +715,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        fbDb.detach();
+        await detachAsync(fbDb);
       }
     }
 
@@ -891,7 +891,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        fbDb.detach();
+        await detachAsync(fbDb);
       }
     }
 
@@ -1124,7 +1124,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        fbDb.detach();
+        await detachAsync(fbDb);
       }
     }
 
@@ -1275,7 +1275,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        fbDb.detach();
+        await detachAsync(fbDb);
       }
     }
 
@@ -1427,7 +1427,7 @@ class MicrosipSyncService {
       console.log(`[Microsip] queryLiveAccountStatements: ${rows.length} customers with balance`);
       return rows;
     } finally {
-      if (fbDb) fbDb.detach();
+      await detachAsync(fbDb);
     }
   }
 
@@ -1541,7 +1541,7 @@ class MicrosipSyncService {
 
       return { invoices, payments };
     } finally {
-      if (fbDb) fbDb.detach();
+      await detachAsync(fbDb);
     }
   }
 
@@ -1651,7 +1651,7 @@ class MicrosipSyncService {
         balanceCheck: balanceCheck[0] ?? {},
       };
     } finally {
-      if (fbDb) fbDb.detach();
+      await detachAsync(fbDb);
     }
   }
 
@@ -1792,7 +1792,7 @@ class MicrosipSyncService {
         })),
       };
     } finally {
-      if (fbDb) fbDb.detach();
+      await detachAsync(fbDb);
     }
   }
 
@@ -1889,7 +1889,7 @@ class MicrosipSyncService {
       };
     } finally {
       if (fbDb) {
-        fbDb.detach();
+        await detachAsync(fbDb);
       }
     }
   }
@@ -1907,7 +1907,16 @@ export async function runScheduledSync(): Promise<void> {
     .from(microsipConfigs)
     .where(eq(microsipConfigs.enabled, true));
 
+  const seenFdb = new Set<string>();
+
   for (const config of enabledConfigs) {
+    const fdbKey = `${config.host}:${config.port}:${(config.database || '').toLowerCase()}`;
+    if (seenFdb.has(fdbKey)) {
+      console.log(`[Microsip] Skipping tenant ${config.tenantId}: another tenant already syncs ${config.database}`);
+      continue;
+    }
+    seenFdb.add(fdbKey);
+
     try {
       const service = await createMicrosipSyncService(config.tenantId);
       
