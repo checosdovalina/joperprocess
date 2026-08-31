@@ -34,9 +34,18 @@ function workerScriptPath(): string {
 }
 
 const SRP_AUTH = (Firebird as { AUTH_PLUGIN_SRP?: string }).AUTH_PLUGIN_SRP || 'Srp';
+const WIRE_CRYPT_ENABLE =
+  (Firebird as { WIRE_CRYPT_ENABLED?: string | number; WIRE_CRYPT_ENABLE?: string | number }).WIRE_CRYPT_ENABLED
+  ?? (Firebird as { WIRE_CRYPT_ENABLE?: string | number }).WIRE_CRYPT_ENABLE
+  ?? 'Enabled';
 
 function serializableFirebirdOptions(options: Firebird.Options): Firebird.Options {
-  const extra = options as Firebird.Options & { plugin?: string; pluginName?: string; WireCrypt?: string };
+  const extra = options as Firebird.Options & {
+    plugin?: string;
+    pluginName?: string;
+    WireCrypt?: string | number;
+    wireCrypt?: string | number;
+  };
   return {
     host: options.host,
     port: options.port,
@@ -47,6 +56,7 @@ function serializableFirebirdOptions(options: Firebird.Options): Firebird.Option
     role: options.role,
     pageSize: options.pageSize,
     WireCrypt: extra.WireCrypt,
+    wireCrypt: extra.wireCrypt,
     pluginName: extra.pluginName || SRP_AUTH,
     plugin: extra.plugin || SRP_AUTH,
   } as Firebird.Options;
@@ -340,9 +350,8 @@ class MicrosipSyncService {
       lowercase_keys: false,
       role: undefined,
       pageSize: 4096,
-      WireCrypt: 'Disabled',
-      // This Firebird only accepts Srp. Advertising Srp512 left plugin unset,
-      // so op_cont_auth/Srp was unhandled and the attach hung until timeout.
+      WireCrypt: WIRE_CRYPT_ENABLE,
+      wireCrypt: WIRE_CRYPT_ENABLE,
       pluginName: SRP_AUTH,
       plugin: SRP_AUTH,
     } as Firebird.Options;
@@ -1861,17 +1870,21 @@ class MicrosipSyncService {
 
       // Wire encryption mismatch: node-firebird always requests WireCrypt=Disabled
       // but this Firebird server has WireCrypt=Required in firebird.conf
-      if (msg.toLowerCase().includes('wire encryption') || msg.toLowerCase().includes('incompatible wire')) {
+      if (
+        msg.toLowerCase().includes('wire encryption') ||
+        msg.toLowerCase().includes('incompatible wire') ||
+        msg.toLowerCase().includes('was lost')
+      ) {
         return {
           success: false,
           errorCode: 'WIRE_CRYPT',
-          message: `Error de cifrado de red: el servidor Firebird tiene WireCrypt=Required pero el cliente no soporta cifrado.\n\nSolución: en el servidor donde está instalado Microsip, abre el archivo firebird.conf (generalmente en C:\\Program Files\\Firebird\\Firebird_X_X\\) y cambia la línea:\n  WireCrypt = Required\npor:\n  WireCrypt = Enabled\n\nLuego reinicia el servicio de Firebird.`,
+          message: `Firebird cerró la conexión durante el cifrado SRP (WireCrypt). En el servidor de Microsip, en firebird.conf use:\n  AuthServer = Srp, Legacy_Auth\n  WireCrypt = Enabled\nLuego reinicie el servicio Firebird y vuelva a probar.`,
         };
       }
 
       const reachable = await probeTcp(host, port, 5000);
       const hint = reachable
-        ? `El puerto ${host}:${port} SÍ responde. Suele ser una conexión Firebird colgada por una prueba anterior en otra compañía. Espere un minuto o reinicie Nexxo (pm2 restart) y vuelva a probar.`
+        ? `El puerto ${host}:${port} responde, pero el handshake Firebird falló (${msg}).`
         : `El puerto ${host}:${port} no responde por TCP (firewall/NAT o Firebird apagado).`;
 
       return { 
