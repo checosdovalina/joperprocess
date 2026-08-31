@@ -1,8 +1,3 @@
-import net from 'net';
-import path from 'path';
-import { existsSync } from 'fs';
-import { fork, type ChildProcess } from 'child_process';
-import { fileURLToPath } from 'url';
 import Firebird from 'node-firebird';
 import { db } from './db';
 import { 
@@ -22,238 +17,77 @@ interface FirebirdConnection {
   detach: (callback?: (err: Error | null) => void) => void;
 }
 
+// node-firebird corrupts its wire-handshake state when two attach() calls
+// overlap, producing spurious "Your user name and password are not defined"
+// errors. Serialize all attaches process-wide so handshakes never interleave,
+// regardless of which service instance or trigger (manual sync, scheduler,
+// account-statement pre-send refresh) opens the connection.
 let attachChain: Promise<unknown> = Promise.resolve();
-const liveWorkers = new Set<ChildProcess>();
 
-const ATTACH_TIMEOUT_MS = 20000;
-
-function killLiveWorkers() {
-  for (const child of liveWorkers) {
-    try {
-      child.kill('SIGKILL');
-    } catch {
-      /* ignore */
-    }
-  }
-  liveWorkers.clear();
-  attachChain = Promise.resolve();
-}
-
-function workerScriptPath(): string {
-  const dir = path.dirname(fileURLToPath(import.meta.url));
-  const compiled = path.join(dir, 'microsip-attach-worker.js');
-  const source = path.join(dir, 'microsip-attach-worker.ts');
-  return existsSync(compiled) ? compiled : source;
-}
-
-const SRP_AUTH = (Firebird as { AUTH_PLUGIN_SRP?: string }).AUTH_PLUGIN_SRP || 'Srp';
-const WIRE_CRYPT_DISABLE =
-  (Firebird as { WIRE_CRYPT_DISABLED?: string | number; WIRE_CRYPT_DISABLE?: string | number }).WIRE_CRYPT_DISABLED
-  ?? (Firebird as { WIRE_CRYPT_DISABLE?: string | number }).WIRE_CRYPT_DISABLE
-  ?? 'Disabled';
-
-function serializableFirebirdOptions(options: Firebird.Options): Firebird.Options {
-  const extra = options as Firebird.Options & {
-    plugin?: string;
-    pluginName?: string;
-    WireCrypt?: string | number;
-    wireCrypt?: string | number;
-  };
-  return {
-    host: options.host,
-    port: options.port,
-    database: options.database,
-    user: options.user,
-    password: options.password,
-    lowercase_keys: options.lowercase_keys,
-    role: options.role,
-    pageSize: options.pageSize,
-    WireCrypt: extra.WireCrypt,
-    wireCrypt: extra.wireCrypt,
-    pluginName: extra.pluginName || SRP_AUTH,
-    plugin: extra.plugin || SRP_AUTH,
-  } as Firebird.Options;
-}
-
-function wrapWorker(child: ChildProcess): FirebirdConnection {
-  let seq = 0;
-  const pending = new Map<number, (err: Error | null, result: any[]) => void>();
-
-  child.on('message', (msg: { event?: string; id?: number; error?: string | null; result?: any[] }) => {
-    if (msg.event !== 'query' || msg.id == null) return;
-    const cb = pending.get(msg.id);
-    if (!cb) return;
-    pending.delete(msg.id);
-    cb(msg.error ? new Error(msg.error) : null, msg.result || []);
-  });
-
-  child.on('exit', () => {
-    for (const [, cb] of pending) {
-      cb(new Error('La conexión Firebird se cerró'), []);
-    }
-    pending.clear();
-  });
-
-  return {
-    query(sql, params, callback) {
-      const id = ++seq;
-      pending.set(id, callback);
-      if (!child.connected) {
-        pending.delete(id);
-        callback(new Error('La conexión Firebird se cerró'), []);
-        return;
-      }
-      child.send({ op: 'query', id, sql, params });
-    },
-    detach(callback) {
-      if (!child.connected) {
-        callback?.(null);
-        return;
-      }
-      child.send({ op: 'detach' });
-      const killTimer = setTimeout(() => {
-        child.kill('SIGKILL');
-      }, 3000);
-      child.once('exit', () => {
-        clearTimeout(killTimer);
-        callback?.(null);
-      });
-    },
-  };
-}
-
-function detachAsync(conn: FirebirdConnection | null): Promise<void> {
-  if (!conn) return Promise.resolve();
-  return new Promise((resolve) => {
-    try {
-      conn.detach(() => resolve());
-    } catch {
-      resolve();
-    }
-  });
-}
+const ATTACH_TIMEOUT_MS = 15000; // caller-facing timeout
+const ATTACH_LOCK_CAP_MS = 25000; // hard cap so a hung handshake can't deadlock the lock
 
 function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection> {
-  // This Firebird server hangs a second attach to the same .fdb (Dovax works,
-  // Maquierent times out). Hold the lock until the worker *exits*, not merely
-  // until attach() returns, so only one live connection exists at a time.
-  let resolveConn!: (conn: FirebirdConnection) => void;
-  let rejectConn!: (err: Error) => void;
-  const connPromise = new Promise<FirebirdConnection>((resolve, reject) => {
-    resolveConn = resolve;
-    rejectConn = reject;
-  });
-
-  attachChain = attachChain.then(
+  // Wait for any in-flight handshake to finish before starting this one.
+  // The inner promise never rejects — it always resolves with {db, err} once
+  // the real node-firebird callback fires — so the global lock advances only
+  // when the underlying handshake actually completes (not merely when the
+  // caller-facing timeout expires), which is what prevents overlap.
+  const settledHandshake = attachChain.then(
     () =>
-      new Promise<void>((releaseLock) => {
-        let released = false;
-        const release = () => {
-          if (released) return;
-          released = true;
-          releaseLock();
-        };
-
-        const script = workerScriptPath();
-        const child = fork(script, [], {
-          execArgv: script.endsWith('.ts') ? ['--import', 'tsx'] : [],
-          serialization: 'advanced',
-          stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+      new Promise<{ db: FirebirdConnection | null; err: Error | null }>((resolveInner) => {
+        Firebird.attach(options, (err: Error | null, db: FirebirdConnection) => {
+          resolveInner({ db: db ?? null, err: err ?? null });
         });
-        liveWorkers.add(child);
-
-        let settled = false;
-        const timeout = setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          child.kill('SIGKILL');
-          rejectConn(
-            new Error(
-              `Timeout: Firebird no respondió al abrir ${options.database} en ${options.host}:${options.port} en ${ATTACH_TIMEOUT_MS / 1000} segundos.`,
-            ),
-          );
-        }, ATTACH_TIMEOUT_MS);
-
-        child.stderr?.on('data', (buf) => {
-          const text = String(buf).trim();
-          if (text) console.error('[Microsip worker]', text);
-        });
-
-        child.on('message', (msg: { event?: string; error?: string; ok?: boolean }) => {
-          if (msg.event !== 'attach' || settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          if (msg.error) {
-            console.error('[Microsip] Connection error:', msg.error);
-            rejectConn(new Error(msg.error));
-            child.kill('SIGKILL');
-          } else {
-            console.log('[Microsip] Connected to Firebird database');
-            resolveConn(wrapWorker(child));
-          }
-        });
-
-        child.on('error', (err) => {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timeout);
-            rejectConn(err);
-          }
-          child.kill('SIGKILL');
-        });
-
-        child.on('exit', () => {
-          liveWorkers.delete(child);
-          clearTimeout(timeout);
-          if (!settled) {
-            settled = true;
-            rejectConn(new Error('El proceso Firebird terminó inesperadamente'));
-          }
-          release();
-        });
-
-        try {
-          child.send({ op: 'attach', options: serializableFirebirdOptions(options) });
-        } catch (err) {
-          settled = true;
-          clearTimeout(timeout);
-          rejectConn(err as Error);
-          child.kill('SIGKILL');
-        }
       }),
-  ).then(
+  );
+
+  // Advance the lock when the handshake settles, but never wait longer than a
+  // hard cap so a pathological never-returning attach cannot deadlock the queue.
+  attachChain = Promise.race([
+    settledHandshake,
+    new Promise((r) => setTimeout(r, ATTACH_LOCK_CAP_MS)),
+  ]).then(
     () => undefined,
     () => undefined,
   );
 
-  return connPromise;
-}
+  return new Promise<FirebirdConnection>((resolve, reject) => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(
+        new Error(
+          `Timeout: No se pudo conectar a ${options.host}:${options.port} en 15 segundos. Verifique que el servidor sea accesible desde Internet.`,
+        ),
+      );
+    }, ATTACH_TIMEOUT_MS);
 
-function probeTcp(host: string, port: number, timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.connect({ host, port }, () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.setTimeout(timeoutMs);
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.on('error', () => {
-      socket.destroy();
-      resolve(false);
+    settledHandshake.then(({ db, err }) => {
+      if (settled) {
+        // Caller already gave up (timeout). Don't leak a live handle that
+        // arrived late.
+        if (db) {
+          try {
+            db.detach();
+          } catch {
+            /* ignore */
+          }
+        }
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      if (err) {
+        console.error('[Microsip] Connection error:', err.message);
+        reject(err);
+      } else {
+        console.log('[Microsip] Connected to Firebird database');
+        resolve(db as FirebirdConnection);
+      }
     });
   });
-}
-
-export interface MicrosipTestOverrides {
-  host?: string;
-  port?: number;
-  database?: string;
-  cxcDatabase?: string;
-  username?: string;
-  password?: string;
 }
 
 interface MicrosipCustomer {
@@ -365,29 +199,13 @@ class MicrosipSyncService {
       lowercase_keys: false,
       role: undefined,
       pageSize: 4096,
-      WireCrypt: WIRE_CRYPT_DISABLE,
-      wireCrypt: WIRE_CRYPT_DISABLE,
-      pluginName: SRP_AUTH,
-      plugin: SRP_AUTH,
-    } as Firebird.Options;
+      WireCrypt: 'Disabled',
+    };
   }
 
-  private async connect(useCxc: boolean = false): Promise<FirebirdConnection> {
+  private connect(useCxc: boolean = false): Promise<FirebirdConnection> {
     const options = this.getFirebirdOptions(useCxc);
-    let lastErr: Error | null = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        return await attachSerialized(options);
-      } catch (err) {
-        lastErr = err as Error;
-        const msg = (lastErr.message || '').toLowerCase();
-        const retryable = msg.includes('timeout') || msg.includes('was lost') || msg.includes('colgada');
-        if (!retryable || attempt === 3) throw lastErr;
-        console.log(`[Microsip] Attach attempt ${attempt} failed; retrying in 1.5s (${lastErr.message})`);
-        await new Promise((r) => setTimeout(r, 1500));
-      }
-    }
-    throw lastErr;
+    return attachSerialized(options);
   }
 
   private query<T>(db: FirebirdConnection, sql: string, params: any[] = []): Promise<T[]> {
@@ -512,7 +330,7 @@ class MicrosipSyncService {
       };
     } finally {
       if (fbDb) {
-        await detachAsync(fbDb);
+        fbDb.detach();
       }
     }
   }
@@ -648,7 +466,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        await detachAsync(fbDb);
+        fbDb.detach();
       }
     }
 
@@ -743,7 +561,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        await detachAsync(fbDb);
+        fbDb.detach();
       }
     }
 
@@ -919,7 +737,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        await detachAsync(fbDb);
+        fbDb.detach();
       }
     }
 
@@ -1152,7 +970,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        await detachAsync(fbDb);
+        fbDb.detach();
       }
     }
 
@@ -1303,7 +1121,7 @@ class MicrosipSyncService {
       throw err;
     } finally {
       if (fbDb) {
-        await detachAsync(fbDb);
+        fbDb.detach();
       }
     }
 
@@ -1455,7 +1273,7 @@ class MicrosipSyncService {
       console.log(`[Microsip] queryLiveAccountStatements: ${rows.length} customers with balance`);
       return rows;
     } finally {
-      await detachAsync(fbDb);
+      if (fbDb) fbDb.detach();
     }
   }
 
@@ -1569,7 +1387,7 @@ class MicrosipSyncService {
 
       return { invoices, payments };
     } finally {
-      await detachAsync(fbDb);
+      if (fbDb) fbDb.detach();
     }
   }
 
@@ -1679,7 +1497,7 @@ class MicrosipSyncService {
         balanceCheck: balanceCheck[0] ?? {},
       };
     } finally {
-      await detachAsync(fbDb);
+      if (fbDb) fbDb.detach();
     }
   }
 
@@ -1820,42 +1638,14 @@ class MicrosipSyncService {
         })),
       };
     } finally {
-      await detachAsync(fbDb);
+      if (fbDb) fbDb.detach();
     }
   }
 
-  async testConnection(overrides?: MicrosipTestOverrides): Promise<{ success: boolean; message: string; errorCode?: string }> {
-    const hasSaved = await this.loadConfig(false);
-    const saved = this.config;
-    const masked = !overrides?.password || overrides.password === '********';
-    const host = (overrides?.host || saved?.host || '').trim();
-    const port = Number(overrides?.port || saved?.port || 3050);
-    const database = (overrides?.database || saved?.database || '').trim();
-    const username = (overrides?.username || saved?.username || '').trim();
-    const password = masked ? saved?.password : overrides?.password;
-    const cxcDatabase = overrides?.cxcDatabase !== undefined ? overrides.cxcDatabase : saved?.cxcDatabase;
-
-    if (!host || !database || !username || !password) {
-      return {
-        success: false,
-        message: hasSaved
-          ? 'Configuración incompleta. Verifique host, base de datos, usuario y contraseña.'
-          : 'Configuración no encontrada. Complete los datos y pruebe de nuevo (no es necesario guardar antes).',
-      };
+  async testConnection(): Promise<{ success: boolean; message: string; errorCode?: string }> {
+    if (!await this.loadConfig(false)) {
+      return { success: false, message: 'Configuración no encontrada' };
     }
-
-    this.config = {
-      ...(saved ?? {}),
-      tenantId: this.tenantId,
-      host,
-      port,
-      database,
-      cxcDatabase: cxcDatabase || null,
-      username,
-      password,
-    } as typeof microsipConfigs.$inferSelect;
-
-    killLiveWorkers();
 
     let fbDb: FirebirdConnection | null = null;
     
@@ -1864,8 +1654,8 @@ class MicrosipSyncService {
       
       // First try a simple query to verify connection
       try {
-        const result = await this.query<{ CNT: number; COUNT: number }>(fbDb, 'SELECT COUNT(*) AS CNT FROM CLIENTES');
-        const count = Number(result[0]?.CNT ?? result[0]?.COUNT ?? 0);
+        const result = await this.query<{ COUNT: number }>(fbDb, 'SELECT COUNT(*) AS COUNT FROM CLIENTES');
+        const count = result[0]?.COUNT || 0;
         
         return { 
           success: true, 
@@ -1904,22 +1694,17 @@ class MicrosipSyncService {
         return {
           success: false,
           errorCode: 'WIRE_CRYPT',
-          message: `Error de cifrado de red: el servidor Firebird tiene WireCrypt=Required pero el cliente de Nexxo no cifra. En firebird.conf de Microsip deje WireCrypt = Enabled (no Required) y reinicie el servicio Firebird.`,
+          message: `Error de cifrado de red: el servidor Firebird tiene WireCrypt=Required pero el cliente no soporta cifrado.\n\nSolución: en el servidor donde está instalado Microsip, abre el archivo firebird.conf (generalmente en C:\\Program Files\\Firebird\\Firebird_X_X\\) y cambia la línea:\n  WireCrypt = Required\npor:\n  WireCrypt = Enabled\n\nLuego reinicia el servicio de Firebird.`,
         };
       }
 
-      const reachable = await probeTcp(host, port, 5000);
-      const hint = reachable
-        ? `El puerto ${host}:${port} responde, pero el handshake Firebird falló (${msg}).`
-        : `El puerto ${host}:${port} no responde por TCP (firewall/NAT o Firebird apagado).`;
-
       return { 
         success: false, 
-        message: `Error de conexión: ${msg} ${hint}` 
+        message: `Error de conexión: ${msg}` 
       };
     } finally {
       if (fbDb) {
-        await detachAsync(fbDb);
+        fbDb.detach();
       }
     }
   }
@@ -1937,16 +1722,7 @@ export async function runScheduledSync(): Promise<void> {
     .from(microsipConfigs)
     .where(eq(microsipConfigs.enabled, true));
 
-  const seenFdb = new Set<string>();
-
   for (const config of enabledConfigs) {
-    const fdbKey = `${config.host}:${config.port}:${(config.database || '').toLowerCase()}`;
-    if (seenFdb.has(fdbKey)) {
-      console.log(`[Microsip] Skipping tenant ${config.tenantId}: another tenant already syncs ${config.database}`);
-      continue;
-    }
-    seenFdb.add(fdbKey);
-
     try {
       const service = await createMicrosipSyncService(config.tenantId);
       
