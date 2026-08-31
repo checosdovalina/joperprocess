@@ -34,10 +34,10 @@ function workerScriptPath(): string {
 }
 
 const SRP_AUTH = (Firebird as { AUTH_PLUGIN_SRP?: string }).AUTH_PLUGIN_SRP || 'Srp';
-const WIRE_CRYPT_ENABLE =
-  (Firebird as { WIRE_CRYPT_ENABLED?: string | number; WIRE_CRYPT_ENABLE?: string | number }).WIRE_CRYPT_ENABLED
-  ?? (Firebird as { WIRE_CRYPT_ENABLE?: string | number }).WIRE_CRYPT_ENABLE
-  ?? 'Enabled';
+const WIRE_CRYPT_DISABLE =
+  (Firebird as { WIRE_CRYPT_DISABLED?: string | number; WIRE_CRYPT_DISABLE?: string | number }).WIRE_CRYPT_DISABLED
+  ?? (Firebird as { WIRE_CRYPT_DISABLE?: string | number }).WIRE_CRYPT_DISABLE
+  ?? 'Disabled';
 
 function serializableFirebirdOptions(options: Firebird.Options): Firebird.Options {
   const extra = options as Firebird.Options & {
@@ -350,8 +350,8 @@ class MicrosipSyncService {
       lowercase_keys: false,
       role: undefined,
       pageSize: 4096,
-      WireCrypt: WIRE_CRYPT_ENABLE,
-      wireCrypt: WIRE_CRYPT_ENABLE,
+      WireCrypt: WIRE_CRYPT_DISABLE,
+      wireCrypt: WIRE_CRYPT_DISABLE,
       pluginName: SRP_AUTH,
       plugin: SRP_AUTH,
     } as Firebird.Options;
@@ -1870,15 +1870,11 @@ class MicrosipSyncService {
 
       // Wire encryption mismatch: node-firebird always requests WireCrypt=Disabled
       // but this Firebird server has WireCrypt=Required in firebird.conf
-      if (
-        msg.toLowerCase().includes('wire encryption') ||
-        msg.toLowerCase().includes('incompatible wire') ||
-        msg.toLowerCase().includes('was lost')
-      ) {
+      if (msg.toLowerCase().includes('wire encryption') || msg.toLowerCase().includes('incompatible wire')) {
         return {
           success: false,
           errorCode: 'WIRE_CRYPT',
-          message: `Firebird cerró la conexión durante el cifrado SRP (WireCrypt). En el servidor de Microsip, en firebird.conf use:\n  AuthServer = Srp, Legacy_Auth\n  WireCrypt = Enabled\nLuego reinicie el servicio Firebird y vuelva a probar.`,
+          message: `Error de cifrado de red: el servidor Firebird tiene WireCrypt=Required pero el cliente de Nexxo no cifra. En firebird.conf de Microsip deje WireCrypt = Enabled (no Required) y reinicie el servicio Firebird.`,
         };
       }
 
