@@ -1,4 +1,8 @@
 import net from 'net';
+import path from 'path';
+import { existsSync } from 'fs';
+import { fork, type ChildProcess } from 'child_process';
+import { fileURLToPath } from 'url';
 import Firebird from 'node-firebird';
 import { db } from './db';
 import { 
@@ -18,98 +22,147 @@ interface FirebirdConnection {
   detach: (callback?: (err: Error | null) => void) => void;
 }
 
-// node-firebird corrupts its wire-handshake state when two attach() calls
-// overlap, producing spurious "Your user name and password are not defined"
-// errors. Serialize all attaches process-wide so handshakes never interleave,
-// regardless of which service instance or trigger (manual sync, scheduler,
-// account-statement pre-send refresh) opens the connection.
 let attachChain: Promise<unknown> = Promise.resolve();
 
-const ATTACH_TIMEOUT_MS = 20000; // starts when Firebird.attach is actually called
-const QUEUE_WAIT_MS = 40000; // max wait for a previous handshake before giving up (no overlap)
+const ATTACH_TIMEOUT_MS = 20000;
 
-function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection> {
-  // node-firebird corrupts its wire state if two attach() calls overlap.
-  // The lock MUST advance only when the previous attach callback fires — never
-  // after an arbitrary cap — or a hung test (new company / bad path) poisons
-  // the next tenant's attach to a database that otherwise works.
-  return new Promise<FirebirdConnection>((resolve, reject) => {
-    let settled = false;
+function workerScriptPath(): string {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const compiled = path.join(dir, 'microsip-attach-worker.js');
+  const source = path.join(dir, 'microsip-attach-worker.ts');
+  return existsSync(compiled) ? compiled : source;
+}
 
-    const finishOk = (conn: FirebirdConnection) => {
-      if (settled) {
-        try {
-          conn.detach();
-        } catch {
-          /* ignore */
-        }
+function serializableFirebirdOptions(options: Firebird.Options): Firebird.Options {
+  return {
+    host: options.host,
+    port: options.port,
+    database: options.database,
+    user: options.user,
+    password: options.password,
+    lowercase_keys: options.lowercase_keys,
+    role: options.role,
+    pageSize: options.pageSize,
+    WireCrypt: (options as { WireCrypt?: string }).WireCrypt,
+  };
+}
+
+function wrapWorker(child: ChildProcess): FirebirdConnection {
+  let seq = 0;
+  const pending = new Map<number, (err: Error | null, result: any[]) => void>();
+
+  child.on('message', (msg: { event?: string; id?: number; error?: string | null; result?: any[] }) => {
+    if (msg.event !== 'query' || msg.id == null) return;
+    const cb = pending.get(msg.id);
+    if (!cb) return;
+    pending.delete(msg.id);
+    cb(msg.error ? new Error(msg.error) : null, msg.result || []);
+  });
+
+  child.on('exit', () => {
+    for (const [, cb] of pending) {
+      cb(new Error('La conexión Firebird se cerró'), []);
+    }
+    pending.clear();
+  });
+
+  return {
+    query(sql, params, callback) {
+      const id = ++seq;
+      pending.set(id, callback);
+      if (!child.connected) {
+        pending.delete(id);
+        callback(new Error('La conexión Firebird se cerró'), []);
         return;
       }
-      settled = true;
-      resolve(conn);
-    };
-
-    const finishErr = (err: Error) => {
-      if (settled) return;
-      settled = true;
-      reject(err);
-    };
-
-    const queueTimer = setTimeout(() => {
-      finishErr(
-        new Error(
-          'Otra conexión a Microsip sigue en curso o quedó colgada. Espere un minuto y vuelva a probar. Si el error continúa, reinicie el proceso de Nexxo (pm2 restart).',
-        ),
-      );
-    }, QUEUE_WAIT_MS);
-
-    const settledHandshake = attachChain.then(
-      () =>
-        new Promise<{ db: FirebirdConnection | null; err: Error | null }>((resolveInner) => {
-          if (settled) {
-            // Caller already gave up waiting for the lock. Do NOT start another
-            // attach — that is what corrupts node-firebird.
-            resolveInner({ db: null, err: new Error('attach skipped') });
-            return;
-          }
-          clearTimeout(queueTimer);
-
-          const timeout = setTimeout(() => {
-            finishErr(
-              new Error(
-                `Timeout: Firebird no respondió al abrir ${options.database} en ${options.host}:${options.port} en ${ATTACH_TIMEOUT_MS / 1000} segundos.`,
-              ),
-            );
-          }, ATTACH_TIMEOUT_MS);
-
-          console.log(`[Microsip] Attaching to ${options.host}:${options.port} db=${options.database}`);
-          Firebird.attach(options, (err: Error | null, conn: FirebirdConnection) => {
-            clearTimeout(timeout);
-            resolveInner({ db: conn ?? null, err: err ?? null });
-          });
-        }),
-    );
-
-    // Only the real attach callback (or skip) releases the lock.
-    attachChain = settledHandshake.then(
-      () => undefined,
-      () => undefined,
-    );
-
-    settledHandshake.then(({ db: conn, err }) => {
-      if (err) {
-        if (err.message !== 'attach skipped') {
-          console.error('[Microsip] Connection error:', err.message);
-        }
-        finishErr(err);
-      } else if (conn) {
-        console.log('[Microsip] Connected to Firebird database');
-        finishOk(conn);
-      } else {
-        finishErr(new Error('Firebird attach no devolvió conexión'));
+      child.send({ op: 'query', id, sql, params });
+    },
+    detach(callback) {
+      if (!child.connected) {
+        callback?.(null);
+        return;
       }
-    }).catch(finishErr);
-  });
+      child.send({ op: 'detach' });
+      const killTimer = setTimeout(() => {
+        child.kill('SIGKILL');
+      }, 3000);
+      child.once('exit', () => {
+        clearTimeout(killTimer);
+        callback?.(null);
+      });
+    },
+  };
+}
+
+function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection> {
+  // Attach in a child process so a hung handshake can be SIGKILL'd without
+  // poisoning node-firebird in the main process (that is what made existing
+  // companies start failing after a bad test on a new company).
+  const started = attachChain.then(
+    () =>
+      new Promise<FirebirdConnection>((resolve, reject) => {
+        const script = workerScriptPath();
+        const child = fork(script, [], {
+          execArgv: script.endsWith('.ts') ? ['--import', 'tsx'] : [],
+          serialization: 'advanced',
+          stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        });
+
+        let settled = false;
+        const timeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          child.kill('SIGKILL');
+          reject(
+            new Error(
+              `Timeout: Firebird no respondió al abrir ${options.database} en ${options.host}:${options.port} en ${ATTACH_TIMEOUT_MS / 1000} segundos.`,
+            ),
+          );
+        }, ATTACH_TIMEOUT_MS);
+
+        child.stderr?.on('data', (buf) => {
+          const text = String(buf).trim();
+          if (text) console.error('[Microsip worker]', text);
+        });
+
+        child.on('message', (msg: { event?: string; error?: string; ok?: boolean }) => {
+          if (msg.event !== 'attach' || settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          if (msg.error) {
+            child.kill('SIGKILL');
+            console.error('[Microsip] Connection error:', msg.error);
+            reject(new Error(msg.error));
+          } else {
+            console.log('[Microsip] Connected to Firebird database');
+            resolve(wrapWorker(child));
+          }
+        });
+
+        child.on('error', (err) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        child.on('exit', (code, signal) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          reject(new Error(`El proceso Firebird terminó (${signal || code})`));
+        });
+
+        child.send({ op: 'attach', options: serializableFirebirdOptions(options) });
+      }),
+  );
+
+  attachChain = started.then(
+    () => undefined,
+    () => undefined,
+  );
+
+  return started;
 }
 
 function probeTcp(host: string, port: number, timeoutMs: number): Promise<boolean> {
