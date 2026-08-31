@@ -33,7 +33,11 @@ function workerScriptPath(): string {
   return existsSync(compiled) ? compiled : source;
 }
 
+const LEGACY_AUTH =
+  (Firebird as { AUTH_PLUGIN_LEGACY?: string }).AUTH_PLUGIN_LEGACY || 'Legacy_Auth';
+
 function serializableFirebirdOptions(options: Firebird.Options): Firebird.Options {
+  const extra = options as Firebird.Options & { plugin?: string; pluginName?: string; WireCrypt?: string };
   return {
     host: options.host,
     port: options.port,
@@ -43,8 +47,10 @@ function serializableFirebirdOptions(options: Firebird.Options): Firebird.Option
     lowercase_keys: options.lowercase_keys,
     role: options.role,
     pageSize: options.pageSize,
-    WireCrypt: (options as { WireCrypt?: string }).WireCrypt,
-  };
+    WireCrypt: extra.WireCrypt,
+    pluginName: extra.pluginName || LEGACY_AUTH,
+    plugin: extra.plugin || LEGACY_AUTH,
+  } as Firebird.Options;
 }
 
 function wrapWorker(child: ChildProcess): FirebirdConnection {
@@ -94,13 +100,38 @@ function wrapWorker(child: ChildProcess): FirebirdConnection {
   };
 }
 
+function detachAsync(conn: FirebirdConnection | null): Promise<void> {
+  if (!conn) return Promise.resolve();
+  return new Promise((resolve) => {
+    try {
+      conn.detach(() => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
 function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection> {
-  // Attach in a child process so a hung handshake can be SIGKILL'd without
-  // poisoning node-firebird in the main process (that is what made existing
-  // companies start failing after a bad test on a new company).
-  const started = attachChain.then(
+  // This Firebird server hangs a second attach to the same .fdb (Dovax works,
+  // Maquierent times out). Hold the lock until the worker *exits*, not merely
+  // until attach() returns, so only one live connection exists at a time.
+  let resolveConn!: (conn: FirebirdConnection) => void;
+  let rejectConn!: (err: Error) => void;
+  const connPromise = new Promise<FirebirdConnection>((resolve, reject) => {
+    resolveConn = resolve;
+    rejectConn = reject;
+  });
+
+  attachChain = attachChain.then(
     () =>
-      new Promise<FirebirdConnection>((resolve, reject) => {
+      new Promise<void>((releaseLock) => {
+        let released = false;
+        const release = () => {
+          if (released) return;
+          released = true;
+          releaseLock();
+        };
+
         const script = workerScriptPath();
         const child = fork(script, [], {
           execArgv: script.endsWith('.ts') ? ['--import', 'tsx'] : [],
@@ -113,7 +144,7 @@ function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection
           if (settled) return;
           settled = true;
           child.kill('SIGKILL');
-          reject(
+          rejectConn(
             new Error(
               `Timeout: Firebird no respondió al abrir ${options.database} en ${options.host}:${options.port} en ${ATTACH_TIMEOUT_MS / 1000} segundos.`,
             ),
@@ -130,39 +161,48 @@ function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection
           settled = true;
           clearTimeout(timeout);
           if (msg.error) {
-            child.kill('SIGKILL');
             console.error('[Microsip] Connection error:', msg.error);
-            reject(new Error(msg.error));
+            rejectConn(new Error(msg.error));
+            child.kill('SIGKILL');
           } else {
             console.log('[Microsip] Connected to Firebird database');
-            resolve(wrapWorker(child));
+            resolveConn(wrapWorker(child));
           }
         });
 
         child.on('error', (err) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          reject(err);
+          if (!settled) {
+            settled = true;
+            clearTimeout(timeout);
+            rejectConn(err);
+          }
+          child.kill('SIGKILL');
         });
 
-        child.on('exit', (code, signal) => {
-          if (settled) return;
-          settled = true;
+        child.on('exit', () => {
           clearTimeout(timeout);
-          reject(new Error(`El proceso Firebird terminó (${signal || code})`));
+          if (!settled) {
+            settled = true;
+            rejectConn(new Error('El proceso Firebird terminó inesperadamente'));
+          }
+          release();
         });
 
-        child.send({ op: 'attach', options: serializableFirebirdOptions(options) });
+        try {
+          child.send({ op: 'attach', options: serializableFirebirdOptions(options) });
+        } catch (err) {
+          settled = true;
+          clearTimeout(timeout);
+          rejectConn(err as Error);
+          child.kill('SIGKILL');
+        }
       }),
-  );
-
-  attachChain = started.then(
+  ).then(
     () => undefined,
     () => undefined,
   );
 
-  return started;
+  return connPromise;
 }
 
 function probeTcp(host: string, port: number, timeoutMs: number): Promise<boolean> {
@@ -302,7 +342,12 @@ class MicrosipSyncService {
       role: undefined,
       pageSize: 4096,
       WireCrypt: 'Disabled',
-    };
+      // This Firebird answers Legacy_Auth then sends op_cont_auth/Srp. If the
+      // client advertised Srp512, that packet is unhandled and the attach hangs
+      // 15–20s (new companies fail; an already-open tenant can still look fine).
+      pluginName: LEGACY_AUTH,
+      plugin: LEGACY_AUTH,
+    } as Firebird.Options;
   }
 
   private connect(useCxc: boolean = false): Promise<FirebirdConnection> {
@@ -1782,8 +1827,8 @@ class MicrosipSyncService {
       
       // First try a simple query to verify connection
       try {
-        const result = await this.query<{ COUNT: number }>(fbDb, 'SELECT COUNT(*) AS COUNT FROM CLIENTES');
-        const count = result[0]?.COUNT || 0;
+        const result = await this.query<{ CNT: number; COUNT: number }>(fbDb, 'SELECT COUNT(*) AS CNT FROM CLIENTES');
+        const count = Number(result[0]?.CNT ?? result[0]?.COUNT ?? 0);
         
         return { 
           success: true, 
