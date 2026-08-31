@@ -26,19 +26,13 @@ interface FirebirdConnection {
 let attachChain: Promise<unknown> = Promise.resolve();
 
 const ATTACH_TIMEOUT_MS = 20000; // starts when Firebird.attach is actually called
-const ATTACH_LOCK_CAP_MS = 25000; // hard cap so a hung handshake can't deadlock the lock
+const QUEUE_WAIT_MS = 40000; // max wait for a previous handshake before giving up (no overlap)
 
 function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection> {
-  // Wait for any in-flight handshake to finish before starting this one.
-  // The inner promise never rejects — it always resolves with {db, err} once
-  // the real node-firebird callback fires — so the global lock advances only
-  // when the underlying handshake actually completes (not merely when the
-  // caller-facing timeout expires), which is what prevents overlap.
-  //
-  // The caller-facing timeout MUST start only after we acquire the lock and
-  // call Firebird.attach. Otherwise a second tenant (new company) burns its
-  // 15s waiting behind the first tenant's handshake and reports a false
-  // "cannot reach host:port" error.
+  // node-firebird corrupts its wire state if two attach() calls overlap.
+  // The lock MUST advance only when the previous attach callback fires — never
+  // after an arbitrary cap — or a hung test (new company / bad path) poisons
+  // the next tenant's attach to a database that otherwise works.
   return new Promise<FirebirdConnection>((resolve, reject) => {
     let settled = false;
 
@@ -61,13 +55,29 @@ function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection
       reject(err);
     };
 
+    const queueTimer = setTimeout(() => {
+      finishErr(
+        new Error(
+          'Otra conexión a Microsip sigue en curso o quedó colgada. Espere un minuto y vuelva a probar. Si el error continúa, reinicie el proceso de Nexxo (pm2 restart).',
+        ),
+      );
+    }, QUEUE_WAIT_MS);
+
     const settledHandshake = attachChain.then(
       () =>
         new Promise<{ db: FirebirdConnection | null; err: Error | null }>((resolveInner) => {
+          if (settled) {
+            // Caller already gave up waiting for the lock. Do NOT start another
+            // attach — that is what corrupts node-firebird.
+            resolveInner({ db: null, err: new Error('attach skipped') });
+            return;
+          }
+          clearTimeout(queueTimer);
+
           const timeout = setTimeout(() => {
             finishErr(
               new Error(
-                `Timeout: Firebird no respondió al abrir ${options.database} en ${options.host}:${options.port} en ${ATTACH_TIMEOUT_MS / 1000} segundos. Si el puerto es accesible, verifique la ruta del archivo .fdb y que el servicio no esté saturado.`,
+                `Timeout: Firebird no respondió al abrir ${options.database} en ${options.host}:${options.port} en ${ATTACH_TIMEOUT_MS / 1000} segundos.`,
               ),
             );
           }, ATTACH_TIMEOUT_MS);
@@ -80,17 +90,17 @@ function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection
         }),
     );
 
-    attachChain = Promise.race([
-      settledHandshake,
-      new Promise((r) => setTimeout(r, ATTACH_LOCK_CAP_MS)),
-    ]).then(
+    // Only the real attach callback (or skip) releases the lock.
+    attachChain = settledHandshake.then(
       () => undefined,
       () => undefined,
     );
 
     settledHandshake.then(({ db: conn, err }) => {
       if (err) {
-        console.error('[Microsip] Connection error:', err.message);
+        if (err.message !== 'attach skipped') {
+          console.error('[Microsip] Connection error:', err.message);
+        }
         finishErr(err);
       } else if (conn) {
         console.log('[Microsip] Connected to Firebird database');
@@ -1712,14 +1722,6 @@ class MicrosipSyncService {
       password,
     } as typeof microsipConfigs.$inferSelect;
 
-    const reachable = await probeTcp(host, port, 5000);
-    if (!reachable) {
-      return {
-        success: false,
-        message: `Error de conexión: Timeout TCP a ${host}:${port}. El servidor Firebird no es accesible desde este entorno (firewall, NAT o el servicio no está escuchando). Si otra compañía sí conecta, pruebe de nuevo: una sincronización en curso puede haber saturado el puerto.`,
-      };
-    }
-
     let fbDb: FirebirdConnection | null = null;
     
     try {
@@ -1771,9 +1773,14 @@ class MicrosipSyncService {
         };
       }
 
+      const reachable = await probeTcp(host, port, 5000);
+      const hint = reachable
+        ? `El puerto ${host}:${port} SÍ responde. Suele ser una conexión Firebird colgada por una prueba anterior en otra compañía. Espere un minuto o reinicie Nexxo (pm2 restart) y vuelva a probar.`
+        : `El puerto ${host}:${port} no responde por TCP (firewall/NAT o Firebird apagado).`;
+
       return { 
         success: false, 
-        message: `Error de conexión: ${msg}` 
+        message: `Error de conexión: ${msg} ${hint}` 
       };
     } finally {
       if (fbDb) {
