@@ -23,8 +23,21 @@ interface FirebirdConnection {
 }
 
 let attachChain: Promise<unknown> = Promise.resolve();
+const liveWorkers = new Set<ChildProcess>();
 
 const ATTACH_TIMEOUT_MS = 20000;
+
+function killLiveWorkers() {
+  for (const child of liveWorkers) {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      /* ignore */
+    }
+  }
+  liveWorkers.clear();
+  attachChain = Promise.resolve();
+}
 
 function workerScriptPath(): string {
   const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -147,6 +160,7 @@ function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection
           serialization: 'advanced',
           stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         });
+        liveWorkers.add(child);
 
         let settled = false;
         const timeout = setTimeout(() => {
@@ -189,6 +203,7 @@ function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection
         });
 
         child.on('exit', () => {
+          liveWorkers.delete(child);
           clearTimeout(timeout);
           if (!settled) {
             settled = true;
@@ -357,9 +372,22 @@ class MicrosipSyncService {
     } as Firebird.Options;
   }
 
-  private connect(useCxc: boolean = false): Promise<FirebirdConnection> {
+  private async connect(useCxc: boolean = false): Promise<FirebirdConnection> {
     const options = this.getFirebirdOptions(useCxc);
-    return attachSerialized(options);
+    let lastErr: Error | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        return await attachSerialized(options);
+      } catch (err) {
+        lastErr = err as Error;
+        const msg = (lastErr.message || '').toLowerCase();
+        const retryable = msg.includes('timeout') || msg.includes('was lost') || msg.includes('colgada');
+        if (!retryable || attempt === 3) throw lastErr;
+        console.log(`[Microsip] Attach attempt ${attempt} failed; retrying in 1.5s (${lastErr.message})`);
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    throw lastErr;
   }
 
   private query<T>(db: FirebirdConnection, sql: string, params: any[] = []): Promise<T[]> {
@@ -1826,6 +1854,8 @@ class MicrosipSyncService {
       username,
       password,
     } as typeof microsipConfigs.$inferSelect;
+
+    killLiveWorkers();
 
     let fbDb: FirebirdConnection | null = null;
     
