@@ -588,6 +588,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const [newTenant] = await db.insert(tenants).values({ ...validationResult.data, parentId }).returning();
+
+      // Child companies often share the parent's Microsip server. Copy connection
+      // settings (sync left disabled) so "Probar conexión" works without retyping
+      // and without kicking off a second full sync automatically.
+      if (parentId) {
+        const [parentCfg] = await db
+          .select()
+          .from(microsipConfigs)
+          .where(eq(microsipConfigs.tenantId, parentId));
+        if (parentCfg) {
+          await db.insert(microsipConfigs).values({
+            tenantId: newTenant.id,
+            host: parentCfg.host,
+            port: parentCfg.port,
+            database: parentCfg.database,
+            cxcDatabase: parentCfg.cxcDatabase,
+            username: parentCfg.username,
+            password: parentCfg.password,
+            enabled: false,
+            syncCustomers: parentCfg.syncCustomers,
+            syncProducts: parentCfg.syncProducts,
+            syncCategories: parentCfg.syncCategories,
+            syncInvoices: parentCfg.syncInvoices,
+            syncPayments: parentCfg.syncPayments,
+            masterDataInterval: parentCfg.masterDataInterval,
+            transactionalInterval: parentCfg.transactionalInterval,
+          });
+        }
+      }
+
       res.status(201).json(newTenant);
     } catch (error: any) {
       if (error.code === '23505') {
@@ -9363,13 +9393,21 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
-  // Test Microsip connection
+  // Test Microsip connection (accepts form fields so a new company can test
+  // before/without relying only on the saved row).
   app.post("/api/microsip/test-connection", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const tenantId = requireTenantId(req);
       
       const service = await createMicrosipSyncService(tenantId);
-      const result = await service.testConnection();
+      const result = await service.testConnection({
+        host: typeof req.body?.host === "string" ? req.body.host : undefined,
+        port: req.body?.port != null ? Number(req.body.port) : undefined,
+        database: typeof req.body?.database === "string" ? req.body.database : undefined,
+        cxcDatabase: typeof req.body?.cxcDatabase === "string" ? req.body.cxcDatabase : undefined,
+        username: typeof req.body?.username === "string" ? req.body.username : undefined,
+        password: typeof req.body?.password === "string" ? req.body.password : undefined,
+      });
       
       res.json(result);
     } catch (error) {

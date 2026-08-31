@@ -117,7 +117,14 @@ export default function MicrosipSettingsPage() {
 
   const testConnectionMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/microsip/test-connection", {});
+      const response = await apiRequest("POST", "/api/microsip/test-connection", {
+        host: formData.host,
+        port: formData.port,
+        database: formData.database,
+        cxcDatabase: formData.cxcDatabase,
+        username: formData.username,
+        password: formData.password,
+      });
       return response.json();
     },
     onSuccess: (data) => {
