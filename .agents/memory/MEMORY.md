@@ -11,3 +11,4 @@
 - [Empresa + tenant isolation](empresa-tenant-isolation.md) — by-id raw lookups must check BOTH empresa (getRestrictedEmpresaId) and tenant (getEffectiveTenantId); empresa scoping alone leaves the pre-existing cross-tenant IDOR open.
 - [Drizzle db instance typing](drizzle-db-typing.md) — db must be NodePgDatabase<typeof schema> or db.query.* resolves to {} and inserts lose tenantId typing.
 - [Tenant PDF localization](tenant-pdf-localization.md) — all generated PDFs follow tenants.locale: en uses en-US; unknown/missing locales fall back to es-MX.
+- [Firebird chained auth and product sync](firebird-chained-auth-product-sync.md) — legacy Microsip databases may require SRP followed by Legacy_Auth; product sync must avoid per-row DB round trips.
