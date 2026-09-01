@@ -1,0 +1,215 @@
+[TAILING] Tailing last 100 lines for [joper-app] process (change the value with --lines option)
+/root/.pm2/logs/joper-app-error.log last 100 lines:
+0|joper-ap | [Microsip] Skipping product 218254: code "BOMB KUB" already exists
+0|joper-ap | [Microsip] Skipping product 219651: code "TSA/NI22450-52H25" already exists
+0|joper-ap | [Microsip] Skipping product 224014: code "AF-55021" already exists
+0|joper-ap | [Microsip] Skipping product 240646: code "PTL51040MP" already exists
+0|joper-ap | [Microsip] Skipping product 240989: code "84318729" already exists
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=4344 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [Microsip] Duplicate folio IL detected: existing microsipDoctoId=2434325 vs incoming=2434364. Skipping to avoid duplicate.
+0|joper-ap | [Microsip] Duplicate folio IL detected: existing microsipDoctoId=1505832 vs incoming=2435422. Skipping to avoid duplicate.
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=18824 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=30408 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=17832 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=20728 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=20728 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=24576 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=15432 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=17832 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=15432 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=4344 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=4344 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=22176 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=20728 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=13984 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=17832 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=19280 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=17832 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=22176 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=24576 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=19280 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+
+/root/.pm2/logs/joper-app-out.log last 100 lines:
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 490ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 497ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 566ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 491ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 497ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 496ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 352ms :: [{"id":"e9c80609-ed2a-488b-8710-fedf1cca6bdc"…
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 344ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 347ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 350ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 353ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 295ms :: []
+0|joper-ap | 7:56:32 PM [express] GET /api/products 200 in 290ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 489ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 496ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 497ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 493ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 498ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 344ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 490ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 484ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 495ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 490ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 488ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 493ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 200ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 427ms :: []
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 433ms :: [{"id":"57d77d52-c08e-4cc9-8560-2f670d968f4c"…
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 436ms :: [{"id":"57d77d52-c08e-4cc9-8560-2f670d968f4c"…
+0|joper-ap | 7:56:33 PM [express] GET /api/products 200 in 433ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 280ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 396ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 831ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 401ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 401ms :: [{"id":"57d77d52-c08e-4cc9-8560-2f670d968f4c"…
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 405ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 371ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 370ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 770ms :: [{"id":"98b6c00f-4a22-4a2d-a698-78b13f6a3f8f"…
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 372ms :: []
+0|joper-ap | 7:56:34 PM [express] GET /api/products 200 in 374ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 318ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 318ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 440ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 443ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 823ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 446ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 258ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 528ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 523ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 527ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 525ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 536ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 534ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 273ms :: []
+0|joper-ap | 7:56:35 PM [express] GET /api/products 200 in 274ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 440ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 304 in 436ms :: [{"id":"6c42a2cf-22ee-4dcc-8677-e1e8fc2e973b"…
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 440ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 439ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 229ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 240ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 616ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 624ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 619ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 621ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 624ms :: []
+0|joper-ap | 7:56:36 PM [express] GET /api/products 304 in 633ms :: [{"id":"6c42a2cf-22ee-4dcc-8677-e1e8fc2e973b"…
+0|joper-ap | 7:56:36 PM [express] GET /api/products 200 in 625ms :: []
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 309ms :: [{"id":"3b9b59ce-6d48-4d16-aae4-2c9a48ba796b"…
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 311ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 477ms :: []
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 473ms :: []
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 478ms :: []
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 301ms :: []
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 300ms :: []
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 299ms :: []
+0|joper-ap | 7:56:37 PM [express] GET /api/products 200 in 303ms :: [{"id":"57d77d52-c08e-4cc9-8560-2f670d968f4c"…
+0|joper-ap | 7:56:37 PM [express] GET /api/quotations/7b379be2-cdfb-4983-98bb-2ef43e110f21/pdf 200 in 2510ms
+0|joper-ap | 7:56:38 PM [express] GET /api/products 200 in 208ms :: []
+0|joper-ap | 7:56:38 PM [express] GET /api/products 200 in 209ms :: []
+0|joper-ap | 7:56:38 PM [express] GET /api/products 200 in 208ms :: []
+0|joper-ap | 7:56:38 PM [express] GET /api/products 200 in 273ms :: [{"id":"c9672a2f-6651-439f-bce6-d52a3c01ab83"…
+0|joper-ap | 7:56:38 PM [express] GET /api/products 200 in 297ms :: [{"id":"98b6c00f-4a22-4a2d-a698-78b13f6a3f8f"…
+0|joper-ap | 7:56:38 PM [express] GET /api/products 200 in 298ms :: []
+0|joper-ap | 7:56:41 PM [express] GET /api/tenant-config 304 in 3ms :: {"id":"b5ca7691-3de0-47c1-808f-3b6baf19fb2…
+0|joper-ap | 7:56:41 PM [express] GET /api/user 200 in 4ms :: {"id":"ce0675e2-5c7a-481a-be4f-bb74a83fe763","tenan…
+0|joper-ap | 7:56:41 PM [express] GET /api/product-categories 304 in 8ms :: [{"id":"83134de1-25d3-4584-b46a-fbe4b…
+0|joper-ap | 7:56:41 PM [express] GET /api/users 403 in 13ms
+0|joper-ap | 7:56:41 PM [express] GET /api/empresas 304 in 14ms :: []
+0|joper-ap | 7:56:42 PM [express] GET /api/products 200 in 141ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-ap | 7:56:42 PM [express] GET /api/quotations 200 in 31ms :: [{"id":"d54973e3-7804-4e30-b318-899fb1cc38f6…
+0|joper-ap | 7:56:42 PM [express] GET /api/customers 304 in 66ms :: [{"id":"45aa8fe7-f796-4815-b783-8f9b418e3e12"…
+0|joper-ap | 7:56:48 PM [express] GET /api/quotations 304 in 19ms :: [{"id":"d54973e3-7804-4e30-b318-899fb1cc38f6…
+0|joper-ap | 7:56:53 PM [express] GET /api/products 304 in 142ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-ap | 7:56:53 PM [express] GET /api/products 304 in 97ms :: [{"id":"4820c18c-43ce-4cc2-a717-fd366de771a2",…
+0|joper-ap | 7:56:54 PM [express] GET /api/products 304 in 94ms :: [{"id":"e9c80609-ed2a-488b-8710-fedf1cca6bdc",…
+0|joper-ap | 7:56:54 PM [express] GET /api/products 304 in 94ms :: [{"id":"e9c80609-ed2a-488b-8710-fedf1cca6bdc",…
+0|joper-ap | 7:56:54 PM [express] GET /api/products 304 in 97ms :: [{"id":"e9c80609-ed2a-488b-8710-fedf1cca6bdc",…
+0|joper-ap | 7:57:03 PM [express] GET /api/quotations 304 in 37ms :: [{"id":"d54973e3-7804-4e30-b318-899fb1cc38f6…
+
+0|joper-app  | 7:57:06 PM [express] Microsip scheduler started (poll every 5 min)
+0|joper-app  | 7:57:06 PM [express] Account statement scheduler started (poll every 60 min)
+0|joper-app  | 7:57:06 PM [express] Scheduled visit reminder scheduler started (poll every 1 min)
+0|joper-app  | 7:57:06 PM [express] serving on port 5000
+0|joper-app  | 7:57:08 PM [express] GET /api/quotations 304 in 57ms :: [{"id":"d54973e3-7804-4e30-b318-899fb1cc38f6…
+0|joper-app  | 7:57:14 PM [express] GET /api/products 304 in 137ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-app  | 7:57:14 PM [express] GET /api/products 304 in 93ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c",…
+0|joper-app  | 7:57:14 PM [express] GET /api/products 304 in 99ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c",…
+0|joper-app  | 7:57:15 PM [express] GET /api/products 304 in 110ms :: [{"id":"7cef302f-1eea-44cb-9f8d-5028fb1e3b0c"…
+0|joper-app  | 7:57:15 PM [express] GET /api/products 304 in 90ms :: [{"id":"e64f5c25-3fe3-4d94-97f8-339454a4922e",
