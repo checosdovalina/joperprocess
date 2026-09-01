@@ -27,6 +27,10 @@ interface MicrosipConnectionInput {
   password?: string;
 }
 
+const LEGACY_AUTH =
+  (Firebird as typeof Firebird & { AUTH_PLUGIN_LEGACY?: string }).AUTH_PLUGIN_LEGACY
+  || 'Legacy_Auth';
+
 // node-firebird corrupts its wire-handshake state when two attach() calls
 // overlap, producing spurious "Your user name and password are not defined"
 // errors. Serialize all attaches process-wide so handshakes never interleave,
@@ -240,6 +244,7 @@ class MicrosipSyncService {
       role: undefined,
       pageSize: 4096,
       wireCrypt: Firebird.WIRE_CRYPT_DISABLE,
+      pluginName: LEGACY_AUTH,
     };
   }
 
@@ -1728,6 +1733,7 @@ class MicrosipSyncService {
         role: undefined,
         pageSize: 4096,
         wireCrypt: Firebird.WIRE_CRYPT_DISABLE,
+        pluginName: LEGACY_AUTH,
       });
       
       // First try a simple query to verify connection
