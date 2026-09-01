@@ -17,6 +17,15 @@ interface FirebirdConnection {
   detach: (callback?: (err: Error | null) => void) => void;
 }
 
+interface MicrosipConnectionInput {
+  host?: string;
+  port?: number;
+  database?: string;
+  cxcDatabase?: string;
+  username?: string;
+  password?: string;
+}
+
 // node-firebird corrupts its wire-handshake state when two attach() calls
 // overlap, producing spurious "Your user name and password are not defined"
 // errors. Serialize all attaches process-wide so handshakes never interleave,
@@ -199,7 +208,7 @@ class MicrosipSyncService {
       lowercase_keys: false,
       role: undefined,
       pageSize: 4096,
-      WireCrypt: 'Disabled',
+      wireCrypt: Firebird.WIRE_CRYPT_DISABLE,
     };
   }
 
@@ -1642,15 +1651,45 @@ class MicrosipSyncService {
     }
   }
 
-  async testConnection(): Promise<{ success: boolean; message: string; errorCode?: string }> {
-    if (!await this.loadConfig(false)) {
+  async testConnection(input?: MicrosipConnectionInput): Promise<{ success: boolean; message: string; errorCode?: string }> {
+    const hasFormInput = !!input && Object.values(input).some((value) => value !== undefined && value !== "");
+    const hasSavedConfig = await this.loadConfig(false);
+    if (!hasSavedConfig && !hasFormInput) {
       return { success: false, message: 'Configuración no encontrada' };
+    }
+
+    const savedConfig = this.config;
+    const password = input?.password && input.password !== "********"
+      ? input.password
+      : savedConfig?.password;
+    const connection = {
+      host: input?.host || savedConfig?.host || "",
+      port: input?.port || savedConfig?.port || 3050,
+      database: input?.database || savedConfig?.database || "",
+      cxcDatabase: input?.cxcDatabase || savedConfig?.cxcDatabase || null,
+      username: input?.username || savedConfig?.username || "",
+      password: password || "",
+    };
+
+    if (!connection.host || !connection.database || !connection.username || !connection.password) {
+      return { success: false, message: "Completa servidor, base de datos, usuario y contraseña" };
     }
 
     let fbDb: FirebirdConnection | null = null;
     
     try {
-      fbDb = await this.connect();
+      const database = connection.database;
+      fbDb = await attachSerialized({
+        host: connection.host,
+        port: connection.port,
+        database,
+        user: connection.username,
+        password: connection.password,
+        lowercase_keys: false,
+        role: undefined,
+        pageSize: 4096,
+        wireCrypt: Firebird.WIRE_CRYPT_DISABLE,
+      });
       
       // First try a simple query to verify connection
       try {
