@@ -656,6 +656,28 @@ class MicrosipSyncService {
         console.log(`[Microsip] First product all data:`, JSON.stringify(microsipProducts[0]));
       }
 
+      // Load the tenant's products once. The previous implementation queried
+      // PostgreSQL once per Microsip product and updated each row sequentially,
+      // which made large catalogs appear stuck for a long time.
+      const allTenantProducts = await db
+        .select({
+          id: products.id,
+          code: products.code,
+          active: products.active,
+          microsipArticuloId: products.microsipArticuloId,
+        })
+        .from(products)
+        .where(eq(products.tenantId, this.tenantId));
+
+      const existingByMicrosipId = new Map<number, { id: string; code: string; active: boolean }>();
+      const existingCodes = new Set<string>();
+      for (const product of allTenantProducts) {
+        existingCodes.add(product.code);
+        if (product.microsipArticuloId != null && !existingByMicrosipId.has(product.microsipArticuloId)) {
+          existingByMicrosipId.set(product.microsipArticuloId, product);
+        }
+      }
+
       const categoryMap = new Map<number, { id: string; active: boolean }>();
       const categories = await db
         .select()
@@ -668,18 +690,19 @@ class MicrosipSyncService {
         }
       }
 
+      type ProductUpdate = {
+        id: string;
+        microsipArticuloId: number;
+        data: Omit<typeof products.$inferInsert, 'tenantId'>;
+      };
+      const toInsert: (typeof products.$inferInsert)[] = [];
+      const toUpdate: ProductUpdate[] = [];
+      const syncTimestamp = new Date();
+
       for (const msProduct of microsipProducts) {
         stats.processed++;
         
         try {
-          const [existing] = await db
-            .select()
-            .from(products)
-            .where(and(
-              eq(products.tenantId, this.tenantId),
-              eq(products.microsipArticuloId, msProduct.ARTICULO_ID)
-            ));
-
           const categoryEntry = msProduct.LINEA_ARTICULO_ID 
             ? categoryMap.get(msProduct.LINEA_ARTICULO_ID) || null
             : null;
@@ -712,21 +735,31 @@ class MicrosipSyncService {
             active: productActive,
             currency,
             microsipArticuloId: msProduct.ARTICULO_ID,
-            microsipSyncedAt: new Date(),
-            updatedAt: new Date(),
+            microsipSyncedAt: syncTimestamp,
+            updatedAt: syncTimestamp,
           };
 
+          const existing = existingByMicrosipId.get(msProduct.ARTICULO_ID);
           if (existing) {
-            await db.update(products)
-              .set(productData)
-              .where(eq(products.id, existing.id));
-            stats.updated++;
+            toUpdate.push({
+              id: existing.id,
+              microsipArticuloId: msProduct.ARTICULO_ID,
+              data: productData,
+            });
           } else {
-            await db.insert(products).values({
+            // Preserve the old per-row behavior for code collisions: a
+            // manually-created product must not be overwritten by Microsip.
+            if (existingCodes.has(productData.code)) {
+              console.warn(`[Microsip] Skipping product ${msProduct.ARTICULO_ID}: code "${productData.code}" already exists`);
+              stats.skipped++;
+              continue;
+            }
+
+            existingCodes.add(productData.code);
+            toInsert.push({
               ...productData,
               tenantId: this.tenantId,
             });
-            stats.created++;
           }
         } catch (err) {
           console.error(`[Microsip] Error syncing product ${msProduct.ARTICULO_ID}:`, err);
@@ -734,24 +767,71 @@ class MicrosipSyncService {
         }
       }
 
-      // Deactivate products that are NOT in the list 42 (keep for historical FK references)
-      const syncedMicrosipIds = microsipProducts.map(p => p.ARTICULO_ID);
-      if (syncedMicrosipIds.length > 0) {
-        // Get all products for this tenant that have a microsipArticuloId
-        const allTenantProducts = await db
-          .select({ id: products.id, microsipArticuloId: products.microsipArticuloId })
-          .from(products)
-          .where(eq(products.tenantId, this.tenantId));
-        
-        // Deactivate products not in the synced list
-        for (const product of allTenantProducts) {
-          if (product.microsipArticuloId && !syncedMicrosipIds.includes(product.microsipArticuloId)) {
-            await db.update(products)
-              .set({ active: false, updatedAt: new Date() })
-              .where(eq(products.id, product.id));
+      console.log(`[Microsip] Product database changes: ${toInsert.length} inserts, ${toUpdate.length} updates`);
+
+      // Insert in batches so a large catalog uses a small number of round trips.
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE);
+        try {
+          await db.insert(products).values(batch);
+          stats.created += batch.length;
+        } catch (batchErr) {
+          // Keep individual error isolation if one unexpected constraint
+          // violation prevents the whole batch from being inserted.
+          console.warn(`[Microsip] Product insert batch failed; retrying ${batch.length} rows individually: ${(batchErr as Error).message}`);
+          for (const product of batch) {
+            try {
+              await db.insert(products).values(product);
+              stats.created++;
+            } catch (err) {
+              console.error(`[Microsip] Error inserting product ${product.microsipArticuloId}:`, err);
+              stats.skipped++;
+            }
           }
         }
-        console.log(`[Microsip] Deactivated products no longer active in Microsip`);
+      }
+
+      // Updates are independent, so execute a bounded number concurrently
+      // instead of waiting for every network round trip in sequence.
+      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+        const batch = toUpdate.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async ({ id, microsipArticuloId, data }) => {
+          try {
+            await db.update(products)
+              .set(data)
+              .where(eq(products.id, id));
+            stats.updated++;
+          } catch (err) {
+            console.error(`[Microsip] Error updating product ${microsipArticuloId}:`, err);
+            stats.skipped++;
+          }
+        }));
+      }
+
+      // Deactivate products that are NOT in the active Microsip catalog
+      // (keep them for historical FK references). Use a Set and only write
+      // rows that actually need changing.
+      const syncedMicrosipIds = new Set(microsipProducts.map(p => p.ARTICULO_ID));
+      const toDeactivate = allTenantProducts.filter(product =>
+        product.active &&
+        product.microsipArticuloId != null &&
+        !syncedMicrosipIds.has(product.microsipArticuloId)
+      );
+      if (toDeactivate.length > 0) {
+        for (let i = 0; i < toDeactivate.length; i += BATCH_SIZE) {
+          const batch = toDeactivate.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(async (product) => {
+            try {
+              await db.update(products)
+                .set({ active: false, updatedAt: syncTimestamp })
+                .where(eq(products.id, product.id));
+            } catch (err) {
+              console.error(`[Microsip] Error deactivating product ${product.id}:`, err);
+            }
+          }));
+        }
+        console.log(`[Microsip] Deactivated ${toDeactivate.length} products no longer active in Microsip`);
       }
 
       await db.update(microsipConfigs)
