@@ -38,7 +38,7 @@ async function getTenantEmailUsers(tenantId: string, roles?: string[]) {
     conditions.push(inArray(users.role, roles));
   }
 
-  return db
+  const rows = await db
     .select({
       id: users.id,
       email: users.email,
@@ -48,6 +48,17 @@ async function getTenantEmailUsers(tenantId: string, roles?: string[]) {
     })
     .from(users)
     .where(and(...conditions));
+
+  // A user can be represented more than once with the same mailbox
+  // (for example, a legacy duplicate account). Never send the same automatic
+  // notification twice to one normalized address.
+  const seenEmails = new Set<string>();
+  return rows.filter((user) => {
+    const normalizedEmail = user.email.trim().toLowerCase();
+    if (!normalizedEmail || seenEmails.has(normalizedEmail)) return false;
+    seenEmails.add(normalizedEmail);
+    return true;
+  });
 }
 
 import { ObjectPermission, setObjectAclPolicy, getObjectAclPolicy } from "./objectAcl";

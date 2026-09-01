@@ -69,7 +69,10 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
   });
   const ccEmails = adminUsers.filter((u) => u.role === "admin" || u.role === "credito_cobranza")
     .flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim()))
-    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+    .filter((email, index, emails) =>
+      emails.findIndex((candidate) => candidate.toLowerCase() === email.toLowerCase()) === index
+    );
 
   // Try to create Microsip service for live CXC data (one connection per tenant run).
   // Track whether Microsip IS configured but unavailable: in that case linked customers
