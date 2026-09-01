@@ -1,0 +1,161 @@
+oot@localhost joper]# pm2 logs joper-app --lines 300 --nostream | grep -i -E "microsip|firebird|timeout|attach|test-connection"
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Error syncing product 57409: error: duplicate key value violates unique constraint "products_tenant_code_unique"
+0|joper-ap |     at async MicrosipSyncService.syncProducts (file:///var/www/joper/dist/index.js:8391:13)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Found 4000 products to sync
+0|joper-ap | [Microsip] Products with prices (PRECIO or PRECIO_1): 0
+0|joper-ap | [Microsip] First product columns: [
+0|joper-ap | [Microsip] First product all data: {"ARTICULO_ID":2143,"NOMBRE":"HYDRAULIC MORTAR MIXER 12 CUBIC FOOT MODEL HM12 ","LINEA_ARTICULO_ID":13107,"ESTATUS":"","PRECIO_1":null,"MONEDA_ID":null,"CLAVE_ARTICULO":"HM12"}
+0|joper-ap | [Microsip] Deactivated products no longer active in Microsip
+0|joper-ap | [Microsip] Product sync complete: 0 created, 4000 updated, 0 skipped
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | 1:25:39 AM [express] Migration applied: 002b_add_microsip_inherited_from_tenant
+0|joper-ap | 1:25:39 AM [express] Microsip scheduler started (poll every 5 min)
+0|joper-ap | 1:26:02 AM [express] POST /api/microsip/test-connection 200 in 15029ms :: {"success":false,"message"…
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | 1:30:58 AM [express] Microsip scheduler started (poll every 5 min)
+0|joper-ap | [Microsip] Cleaned up 1 orphaned sync log(s) from previous run
+0|joper-ap | 1:31:26 AM [express] POST /api/microsip/test-connection 200 in 15041ms :: {"success":false,"message"…
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | 1:31:45 AM [express] POST /api/microsip/test-connection 200 in 1333ms :: {"success":true,"message":"…
+0|joper-ap | 1:32:44 AM [express] GET /api/microsip/config 200 in 6ms :: {"configured":true,"id":"0efe41eb-885a-4…
+0|joper-ap | 1:32:44 AM [express] GET /api/microsip/logs 200 in 13ms :: [{"id":"b136dbc7-f37d-44d2-979b-1d7b2481b…
+0|joper-ap | 1:33:03 AM [express] POST /api/microsip/test-connection 200 in 15012ms :: {"success":false,"message"…
+[root@localhost joper]# pm2 logs joper-app --lines 300 --nostream | grep -i -E "microsip|firebird|timeout|attach|test-connection"
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Invoice sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Error syncing product 57409: error: duplicate key value violates unique constraint "products_tenant_code_unique"
+0|joper-ap |     at async MicrosipSyncService.syncProducts (file:///var/www/joper/dist/index.js:8391:13)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap | [Microsip] First product all data: {"ARTICULO_ID":2143,"NOMBRE":"HYDRAULIC MORTAR MIXER 12 CUBIC FOOT MODEL HM12 ","LINEA_ARTICULO_ID":13107,"ESTATUS":"","PRECIO_1":null,"MONEDA_ID":null,"CLAVE_ARTICULO":"HM12"}
+0|joper-ap | [Microsip] Deactivated products no longer active in Microsip
+0|joper-ap | [Microsip] Product sync complete: 0 created, 4000 updated, 0 skipped
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Scheduled sync complete
+0|joper-ap | 1:25:39 AM [express] Migration applied: 002b_add_microsip_inherited_from_tenant
+0|joper-ap | 1:25:39 AM [express] Microsip scheduler started (poll every 5 min)
+0|joper-ap | 1:26:02 AM [express] POST /api/microsip/test-connection 200 in 15029ms :: {"success":false,"message"…
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | 1:30:58 AM [express] Microsip scheduler started (poll every 5 min)
+0|joper-ap | [Microsip] Cleaned up 1 orphaned sync log(s) from previous run
+0|joper-ap | 1:31:26 AM [express] POST /api/microsip/test-connection 200 in 15041ms :: {"success":false,"message"…
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | 1:31:45 AM [express] POST /api/microsip/test-connection 200 in 1333ms :: {"success":true,"message":"…
+0|joper-ap | 1:32:44 AM [express] GET /api/microsip/config 200 in 6ms :: {"configured":true,"id":"0efe41eb-885a-4…
+0|joper-ap | 1:32:44 AM [express] GET /api/microsip/logs 200 in 13ms :: [{"id":"b136dbc7-f37d-44d2-979b-1d7b2481b…
+0|joper-ap | 1:33:03 AM [express] POST /api/microsip/test-connection 200 in 15012ms :: {"success":false,"message"…
+0|joper-ap | [Microsip] Running scheduled sync for all enabled tenants...
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | 1:36:15 AM [express] POST /api/microsip/test-connection 200 in 15017ms :: {"success":false,"message"…
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | 1:36:26 AM [express] POST /api/microsip/test-connection 200 in 6693ms :: {"success":true,"message":"…
+[root@localhost joper]# 
