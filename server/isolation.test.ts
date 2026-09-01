@@ -36,6 +36,7 @@ import {
   shipments,
   shipmentProductInstances,
   invoices,
+  checkins,
   scheduledVisits,
   creditAuthorizations,
   microsipConfigs,
@@ -277,6 +278,7 @@ async function cleanup() {
   const qs = await db.select({ id: quotations.id }).from(quotations).where(inArray(quotations.tenantId, tIds));
   const qIds = qs.map((q) => q.id);
   if (qIds.length) await db.delete(creditAuthorizations).where(inArray(creditAuthorizations.quotationId, qIds));
+  await db.delete(checkins).where(inArray(checkins.tenantId, tIds));
   await db.delete(scheduledVisits).where(inArray(scheduledVisits.tenantId, tIds));
   await db.delete(invoices).where(inArray(invoices.tenantId, tIds));
   const shs = await db.select({ id: shipments.id }).from(shipments).where(inArray(shipments.tenantId, tIds));
@@ -769,6 +771,70 @@ describe("Scheduled visit email reminders", () => {
       reminderMinutes: 15,
     });
     expect(response.status).toBe(400);
+  });
+
+  it("does not send or retry a reminder when the assigned user opted out", async () => {
+    sendScheduledVisitReminderEmailMock.mockClear();
+    await db.update(users)
+      .set({ receiveEmailNotifications: false })
+      .where(eq(users.id, ctx.vendedorA1.id));
+
+    const response = await asVendedorA1("POST", "/api/scheduled-visits", {
+      customerId: ctx.customerA,
+      meetingType: "visita",
+      scheduledDate: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      reminderMinutes: 60,
+    });
+    expect(response.status).toBe(201);
+    const visit = await response.json();
+
+    try {
+      await runScheduledVisitReminderScheduler();
+      await runScheduledVisitReminderScheduler();
+
+      expect(sendScheduledVisitReminderEmailMock).not.toHaveBeenCalled();
+      const [storedVisit] = await db
+        .select({ reminderSentAt: scheduledVisits.reminderSentAt })
+        .from(scheduledVisits)
+        .where(eq(scheduledVisits.id, visit.id));
+      expect(storedVisit.reminderSentAt).toBeInstanceOf(Date);
+    } finally {
+      await db.update(users)
+        .set({ receiveEmailNotifications: true })
+        .where(eq(users.id, ctx.vendedorA1.id));
+    }
+  });
+});
+
+describe("GET /api/checkins/:id/email-recipients", () => {
+  it("includes only opted-in admins from the check-in tenant", async () => {
+    const checkinId = await insertReturningId(checkins, {
+      tenantId: ctx.tenantA,
+      userId: ctx.vendedorA1.id,
+      customerId: ctx.customerA,
+    });
+
+    const initial = await asVendedorA1("GET", `/api/checkins/${checkinId}/email-recipients`);
+    expect(initial.status).toBe(200);
+    const initialEmails = (await initial.json()).recipients.map((recipient: any) => recipient.email);
+    expect(initialEmails).toContain(ctx.adminA.email);
+    expect(initialEmails).not.toContain(ctx.adminB.email);
+
+    await db.update(users)
+      .set({ receiveEmailNotifications: false })
+      .where(eq(users.id, ctx.adminA.id));
+
+    try {
+      const optedOut = await asVendedorA1("GET", `/api/checkins/${checkinId}/email-recipients`);
+      expect(optedOut.status).toBe(200);
+      const optedOutEmails = (await optedOut.json()).recipients.map((recipient: any) => recipient.email);
+      expect(optedOutEmails).not.toContain(ctx.adminA.email);
+      expect(optedOutEmails).not.toContain(ctx.adminB.email);
+    } finally {
+      await db.update(users)
+        .set({ receiveEmailNotifications: true })
+        .where(eq(users.id, ctx.adminA.id));
+    }
   });
 });
 

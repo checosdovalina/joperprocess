@@ -135,6 +135,7 @@ export function setupAuth(app: Express) {
           UserRole.FACTURACION,
         ]),
         active: z.boolean().optional(),
+        receiveEmailNotifications: z.boolean().optional(),
         empresaId: z.string().nullable().optional(),
       });
 
@@ -183,6 +184,7 @@ export function setupAuth(app: Express) {
         email: userData.email,
         role: userData.role,
         active: userData.active ?? true,
+        receiveEmailNotifications: userData.receiveEmailNotifications ?? true,
         tenantId: tenantId,
         empresaId: userData.empresaId ?? null,
       });

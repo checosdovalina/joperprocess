@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function UsersPage() {
@@ -41,6 +42,7 @@ export default function UsersPage() {
     role: "",
     newPassword: "",
     empresaId: "none",
+    receiveEmailNotifications: true,
   });
   const [newUser, setNewUser] = useState({
     username: "",
@@ -49,6 +51,7 @@ export default function UsersPage() {
     email: "",
     role: UserRole.VENDEDOR as string,
     empresaId: "none",
+    receiveEmailNotifications: true,
   });
 
   const { data: users, isLoading } = useQuery<User[]>({
@@ -65,6 +68,7 @@ export default function UsersPage() {
       const res = await apiRequest("POST", "/api/register", {
         ...rest,
         active: true,
+        receiveEmailNotifications: newUser.receiveEmailNotifications,
         empresaId: empresaId === "none" ? null : empresaId,
       });
       return await res.json();
@@ -83,6 +87,7 @@ export default function UsersPage() {
         email: "",
         role: UserRole.VENDEDOR,
         empresaId: "none",
+        receiveEmailNotifications: true,
       });
     },
     onError: (error: Error) => {
@@ -117,11 +122,12 @@ export default function UsersPage() {
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data }: { userId: string; data: typeof editData }) => {
-      const payload: Record<string, string | null> = {
+      const payload: Record<string, string | boolean | null> = {
         fullName: data.fullName,
         email: data.email,
         role: data.role,
         empresaId: data.empresaId === "none" ? null : data.empresaId,
+        receiveEmailNotifications: data.receiveEmailNotifications,
       };
       if (data.newPassword.trim()) {
         payload.password = data.newPassword.trim();
@@ -137,7 +143,14 @@ export default function UsersPage() {
       });
       setIsEditDialogOpen(false);
       setEditingUser(null);
-      setEditData({ fullName: "", email: "", role: "", newPassword: "", empresaId: "none" });
+      setEditData({
+        fullName: "",
+        email: "",
+        role: "",
+        newPassword: "",
+        empresaId: "none",
+        receiveEmailNotifications: true,
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -156,6 +169,7 @@ export default function UsersPage() {
       role: user.role,
       newPassword: "",
       empresaId: user.empresaId ?? "none",
+      receiveEmailNotifications: user.receiveEmailNotifications !== false,
     });
     setIsEditDialogOpen(true);
   };
@@ -305,6 +319,19 @@ export default function UsersPage() {
                   </p>
                 </div>
               )}
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="new-receive-email-notifications"
+                  checked={newUser.receiveEmailNotifications}
+                  onCheckedChange={(checked) =>
+                    setNewUser({ ...newUser, receiveEmailNotifications: checked === true })
+                  }
+                  data-testid="checkbox-new-receive-email-notifications"
+                />
+                <Label htmlFor="new-receive-email-notifications" className="text-sm leading-snug cursor-pointer">
+                  Recibir notificaciones automáticas por correo
+                </Label>
+              </div>
               <div className="flex gap-2 justify-end">
                 <Button
                   type="button"
@@ -539,6 +566,19 @@ export default function UsersPage() {
                 </p>
               </div>
             )}
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="edit-receive-email-notifications"
+                checked={editData.receiveEmailNotifications}
+                onCheckedChange={(checked) =>
+                  setEditData({ ...editData, receiveEmailNotifications: checked === true })
+                }
+                data-testid="checkbox-edit-receive-email-notifications"
+              />
+              <Label htmlFor="edit-receive-email-notifications" className="text-sm leading-snug cursor-pointer">
+                Recibir notificaciones automáticas por correo
+              </Label>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="edit-newPassword">{t("users.form.new-password")} <span className="text-muted-foreground text-xs">{t("users.form.password-hint")}</span></Label>
               <Input

@@ -39,15 +39,22 @@ export async function runScheduledVisitReminderScheduler(): Promise<void> {
       .where(and(eq(scheduledVisits.id, visit.id), isNull(scheduledVisits.reminderSentAt)))
       .returning({ id: scheduledVisits.id });
 
-    if (!claimed || !isValidEmail(visit.user.email)) {
-      if (claimed) {
-        await db.update(scheduledVisits)
-          .set({ reminderSentAt: null })
-          .where(eq(scheduledVisits.id, visit.id));
-      }
-      if (!isValidEmail(visit.user.email)) {
-        console.warn(`[VisitReminder] Skipping visit ${visit.id}: seller has no valid email`);
-      }
+    if (!claimed) {
+      continue;
+    }
+
+    // A disabled preference is a deliberate skip, not a provider failure.
+    // Keep the claim so the same visit is not retried every scheduler tick.
+    if (visit.user.receiveEmailNotifications === false) {
+      console.log(`[VisitReminder] Skipping visit ${visit.id}: seller opted out of email notifications`);
+      continue;
+    }
+
+    if (!isValidEmail(visit.user.email)) {
+      await db.update(scheduledVisits)
+        .set({ reminderSentAt: null })
+        .where(eq(scheduledVisits.id, visit.id));
+      console.warn(`[VisitReminder] Skipping visit ${visit.id}: seller has no valid email`);
       continue;
     }
 

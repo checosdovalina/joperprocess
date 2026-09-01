@@ -90,6 +90,10 @@ const MIGRATIONS: { id: string; sql: string }[] = [
         ON scheduled_visits (status, reminder_minutes, reminder_sent_at, scheduled_date);
     `,
   },
+  {
+    id: "009_add_user_email_notification_preference",
+    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS receive_email_notifications boolean NOT NULL DEFAULT true`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

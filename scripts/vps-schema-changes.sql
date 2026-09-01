@@ -158,6 +158,14 @@ CREATE INDEX IF NOT EXISTS scheduled_visits_reminder_idx
   ON scheduled_visits (status, reminder_minutes, reminder_sent_at, scheduled_date);
 
 -- ----------------------------------------------------------------
+-- [2026-09-01] Preferencia de notificaciones por correo de usuarios
+-- Permite que un administrador tenga acceso al sistema sin recibir
+-- los avisos automáticos dirigidos a usuarios internos.
+-- ----------------------------------------------------------------
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS receive_email_notifications boolean NOT NULL DEFAULT true;
+
+-- ----------------------------------------------------------------
 -- [2026-08-25] Columna: quotations.tax_rate
 -- La tasa de impuesto se usa en cotizaciones USA y en relaciones de
 -- cotización cargadas desde pedidos.

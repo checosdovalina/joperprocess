@@ -242,6 +242,7 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   role: text("role").notNull(),
   active: boolean("active").notNull().default(true),
+  receiveEmailNotifications: boolean("receive_email_notifications").notNull().default(true),
   isSuperAdmin: boolean("is_super_admin").notNull().default(false), // For platform-level admins
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

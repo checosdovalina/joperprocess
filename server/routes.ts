@@ -24,6 +24,32 @@ function useLocalStorage(): boolean {
          process.env.NODE_ENV !== "production" ||
          (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
 }
+
+// Internal notifications are tenant-scoped and can be disabled per user.
+// The preference defaults to true for existing behavior, while allowing an
+// admin account to keep access without receiving automatic emails.
+async function getTenantEmailUsers(tenantId: string, roles?: string[]) {
+  const conditions = [
+    eq(users.tenantId, tenantId),
+    eq(users.active, true),
+    eq(users.receiveEmailNotifications, true),
+  ];
+  if (roles?.length) {
+    conditions.push(inArray(users.role, roles));
+  }
+
+  return db
+    .select({
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      username: users.username,
+      role: users.role,
+    })
+    .from(users)
+    .where(and(...conditions));
+}
+
 import { ObjectPermission, setObjectAclPolicy, getObjectAclPolicy } from "./objectAcl";
 import { sendCheckoutEmail } from "./email-service";
 import { format } from "date-fns";
@@ -1336,6 +1362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: z.string().email().optional(),
         password: z.string().min(6).optional(),
         empresaId: z.string().nullable().optional(),
+        receiveEmailNotifications: z.boolean().optional(),
       });
       
       const validated = updateSchema.parse(req.body);
@@ -2439,12 +2466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[ShippingEmail] Quotation ${quotation.folio} requires shipping approval — looking for admins in tenant ${quotation.tenantId}`);
 
             // Find all admin users for this tenant
-            const adminUsers = await db.query.users.findMany({
-              where: and(
-                eq(users.tenantId, quotation.tenantId),
-                eq(users.role, UserRole.ADMIN)
-              ),
-            });
+            const adminUsers = await getTenantEmailUsers(quotation.tenantId, [UserRole.ADMIN]);
             console.log(`[ShippingEmail] Found ${adminUsers.length} admin user(s):`, adminUsers.map(u => u.email));
 
             const adminEmails = adminUsers
@@ -2708,12 +2730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (async () => {
           try {
             console.log(`[ShippingEmail] PATCH: quotation ${finalQuotation!.folio} requires shipping approval — notifying admins`);
-            const adminUsers = await db.query.users.findMany({
-              where: and(
-                eq(users.tenantId, finalQuotation!.tenantId!),
-                eq(users.role, UserRole.ADMIN)
-              ),
-            });
+            const adminUsers = await getTenantEmailUsers(finalQuotation!.tenantId!, [UserRole.ADMIN]);
             console.log(`[ShippingEmail] Found ${adminUsers.length} admin(s):`, adminUsers.map(u => u.email));
             const adminEmails = adminUsers
               .filter((u) => u.email && u.email.includes("@"))
@@ -3232,7 +3249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Notify the seller (fire-and-forget)
       (async () => {
         try {
-          if (quotation.user?.email) {
+           if (quotation.user?.email && quotation.user.receiveEmailNotifications !== false) {
             const tenant = quotation.tenantId
               ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
               : null;
@@ -3421,7 +3438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send notification email to seller via MailerSend
       try {
-        if (quotation.user?.email) {
+         if (quotation.user?.email && quotation.user.receiveEmailNotifications !== false) {
           // Get tenant name for the email
           const tenantRecord = quotation.tenantId
             ? await db.query.tenants.findFirst({ where: eq(tenants.id, quotation.tenantId) })
@@ -3515,16 +3532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const tenantRecord = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
           const tenantName = tenantRecord?.name || "Nexxo Sistema Comercial";
 
-          const creditoUsers = await db
-            .select({ email: users.email, fullName: users.fullName })
-            .from(users)
-            .where(
-              and(
-                eq(users.tenantId, tenantId),
-                eq(users.role, UserRole.CREDITO_COBRANZA),
-                eq(users.active, true)
-              )
-            );
+           const creditoUsers = await getTenantEmailUsers(tenantId, [UserRole.CREDITO_COBRANZA]);
 
           if (creditoUsers.length === 0 || !quotForAuth) return;
 
@@ -3623,15 +3631,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : null;
             const tenantName = tenantRecord?.name || "Nexxo Sistema Comercial";
 
-            const adminUsers = quotForRelease.tenantId
-              ? await db.select({ email: users.email, fullName: users.fullName })
-                  .from(users)
-                  .where(and(
-                    eq(users.tenantId, quotForRelease.tenantId),
-                    sql`${users.role} IN (${UserRole.ADMIN}, ${UserRole.VENTAS_LOGISTICA})`,
-                    eq(users.active, true)
-                  ))
-              : [];
+             const adminUsers = quotForRelease.tenantId
+               ? await getTenantEmailUsers(quotForRelease.tenantId, [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA])
+               : [];
 
             const rawCurrency = quotForRelease.currency;
             const safeCurrency = rawCurrency && /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "MXN";
@@ -3678,32 +3680,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const tenantName = tenantRecord?.name || "Nexxo Sistema Comercial";
 
           // Fetch admin users for this tenant with email
-          const adminUsers = tenantId
-            ? await db
-                .select({ email: users.email, fullName: users.fullName })
-                .from(users)
-                .where(
-                  and(
-                    eq(users.tenantId, tenantId),
-                    eq(users.role, UserRole.ADMIN),
-                    eq(users.active, true)
-                  )
-                )
-            : [];
+           const adminUsers = tenantId
+             ? await getTenantEmailUsers(tenantId, [UserRole.ADMIN])
+             : [];
 
           // Fetch CREDITO_COBRANZA users for this tenant
-          const creditoUsers = tenantId
-            ? await db
-                .select({ email: users.email, fullName: users.fullName })
-                .from(users)
-                .where(
-                  and(
-                    eq(users.tenantId, tenantId),
-                    eq(users.role, UserRole.CREDITO_COBRANZA),
-                    eq(users.active, true)
-                  )
-                )
-            : [];
+           const creditoUsers = tenantId
+             ? await getTenantEmailUsers(tenantId, [UserRole.CREDITO_COBRANZA])
+             : [];
 
           // Build recipient list (deduplicated by email)
           const emailMap = new Map<string, string>();
@@ -4426,12 +4410,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         const host = req.get("host") || "localhost:5000";
         (async () => {
           try {
-            const adminUsers = await db.query.users.findMany({
-              where: and(
-                eq(users.tenantId, existing.tenantId),
-                eq(users.role, UserRole.ADMIN)
-              ),
-            });
+            const adminUsers = await getTenantEmailUsers(existing.tenantId, [UserRole.ADMIN]);
             const adminEmails = adminUsers
               .filter((u) => u.email && u.email.includes("@"))
               .map((u) => ({ email: u.email!, name: u.fullName || u.username }));
@@ -4887,9 +4866,11 @@ Proporciona tu análisis en el siguiente formato JSON:
             const releasedByName = req.user!.fullName;
 
             // Collect recipients: vendedor + C&C + admins (not the customer)
-            const allUsers = await db.query.users.findMany({
-              where: resolvedTenantId ? eq(users.tenantId, resolvedTenantId) : undefined,
-            });
+            const allUsers = resolvedTenantId
+              ? await getTenantEmailUsers(resolvedTenantId)
+              : await db.query.users.findMany({
+                  where: and(eq(users.active, true), eq(users.receiveEmailNotifications, true)),
+                });
             const recipients = allUsers
               .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
               .filter(u => u.email)
@@ -4898,7 +4879,9 @@ Proporciona tu análisis en el siguiente formato JSON:
             // Add vendedor if not already included
             const vendedorEmail = quotation?.user?.email;
             const vendedorName = quotation?.user?.fullName;
-            if (vendedorEmail && !recipients.find(r => r.email === vendedorEmail)) {
+           if (vendedorEmail &&
+               quotation?.user?.receiveEmailNotifications !== false &&
+               !recipients.find(r => r.email === vendedorEmail)) {
               recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
             }
 
@@ -4967,9 +4950,11 @@ Proporciona tu análisis en el siguiente formato JSON:
           const tenantName = req.tenant?.name || "Sistema Comercial";
           const releasedByName = req.user!.fullName;
 
-          const allUsers = await db.query.users.findMany({
-            where: resolvedTenantId ? eq(users.tenantId, resolvedTenantId) : undefined,
-          });
+           const allUsers = resolvedTenantId
+             ? await getTenantEmailUsers(resolvedTenantId)
+             : await db.query.users.findMany({
+                 where: and(eq(users.active, true), eq(users.receiveEmailNotifications, true)),
+               });
           const recipients = allUsers
             .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
             .filter(u => u.email)
@@ -4977,7 +4962,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
           const vendedorEmail = quotation?.user?.email;
           const vendedorName = quotation?.user?.fullName;
-          if (vendedorEmail && !recipients.find(r => r.email === vendedorEmail)) {
+           if (vendedorEmail &&
+               quotation?.user?.receiveEmailNotifications !== false &&
+               !recipients.find(r => r.email === vendedorEmail)) {
             recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
           }
 
@@ -7364,7 +7351,9 @@ Proporciona tu análisis en el siguiente formato JSON:
         recipients.push({ email, label: `Cliente — ${customer!.name}` });
       }
 
-      const admins = await db.query.users.findMany({ where: eq(users.role, UserRole.ADMIN) });
+       const admins = checkin.tenantId
+         ? await getTenantEmailUsers(checkin.tenantId, [UserRole.ADMIN])
+         : [];
       for (const admin of admins) {
         if (admin.email && !recipients.find(r => r.email === admin.email)) {
           recipients.push({ email: admin.email, label: `Admin — ${admin.fullName}` });
@@ -7490,10 +7479,9 @@ Proporciona tu análisis en el siguiente formato JSON:
           for (const email of parseEmailList(effectiveCustomer.email)) {
             if (!recipients.includes(email)) recipients.push(email);
           }
-          const adminWhere = checkin.tenantId
-            ? and(eq(users.role, UserRole.ADMIN), eq(users.tenantId, checkin.tenantId))
-            : eq(users.role, UserRole.ADMIN);
-          const admins = await db.query.users.findMany({ where: adminWhere });
+           const admins = checkin.tenantId
+             ? await getTenantEmailUsers(checkin.tenantId, [UserRole.ADMIN])
+             : [];
           admins.forEach(admin => {
             if (admin.email && !recipients.includes(admin.email)) recipients.push(admin.email);
           });
@@ -7869,16 +7857,10 @@ Proporciona tu análisis en el siguiente formato JSON:
   // Get email addresses of active admin users for a tenant
   async function getTenantAdminEmails(tenantId: string): Promise<string[]> {
     try {
-      const admins = await db.query.users.findMany({
-        where: and(
-          eq(users.tenantId, tenantId),
-          eq(users.role, UserRole.ADMIN),
-          eq(users.active, true),
-        ),
-      });
-      return admins
-        .map((a) => a.email)
-        .filter((e): e is string => !!e && e.includes("@"));
+       const admins = await getTenantEmailUsers(tenantId, [UserRole.ADMIN]);
+       return admins
+         .map((a) => a.email)
+         .filter((e): e is string => !!e && e.includes("@"));
     } catch (error) {
       console.error("Error fetching admin emails:", error);
       return [];
@@ -8174,9 +8156,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!apiKey) return res.status(503).json({ error: "MAILERSEND_API_KEY no configurado en el servidor" });
 
       const tenantId = quotation.tenantId;
-      const adminUsers = await db.query.users.findMany({
-        where: and(eq(users.tenantId, tenantId), eq(users.role, UserRole.ADMIN)),
-      });
+       const adminUsers = await getTenantEmailUsers(tenantId, [UserRole.ADMIN]);
       console.log(`[ResendShippingEmail] Admins found (${adminUsers.length}):`, adminUsers.map(u => `${u.fullName} <${u.email}>`));
 
       const adminEmails = adminUsers
@@ -8882,9 +8862,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       // Find admin CC emails
       let ccEmails: { email: string; name: string }[] = [];
       if (ccAdmins && tenantId) {
-        const admins = await db.query.users.findMany({
-          where: and(eq(users.tenantId, tenantId), eq(users.role, UserRole.ADMIN)),
-        });
+         const admins = await getTenantEmailUsers(tenantId, [UserRole.ADMIN]);
         ccEmails = admins
           .filter(u => u.email && u.email.includes("@") && u.email !== toEmail)
           .map(u => ({ email: u.email!, name: u.fullName || u.username }));

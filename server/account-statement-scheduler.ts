@@ -61,7 +61,11 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
 
   // Admin + cobranza users for this tenant → will receive CC copy of each statement
   const adminUsers = await db.query.users.findMany({
-    where: and(eq(users.tenantId, tenantId)),
+    where: and(
+      eq(users.tenantId, tenantId),
+      eq(users.active, true),
+      eq(users.receiveEmailNotifications, true),
+    ),
   });
   const ccEmails = adminUsers.filter((u) => u.role === "admin" || u.role === "credito_cobranza")
     .flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim()))
