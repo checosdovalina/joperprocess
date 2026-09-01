@@ -6,6 +6,7 @@ import { tenantMiddleware } from "./tenant";
 import { runMigrations } from "./migrate";
 import { runScheduledSync, cleanupOrphanedSyncLogs } from "./microsip-sync";
 import { runAccountStatementScheduler } from "./account-statement-scheduler";
+import { runScheduledVisitReminderScheduler } from "./scheduled-visit-reminder-scheduler";
 
 const app = express();
 
@@ -122,4 +123,19 @@ app.use(tenantMiddleware);
     );
   }, 30_000);
   log(`Account statement scheduler started (poll every 60 min)`);
+
+  // Scheduled visit reminders: check frequently enough to honor the
+  // one-hour option without requiring users to keep the app open.
+  const VISIT_REMINDER_POLL_MS = 60 * 1000;
+  setInterval(() => {
+    runScheduledVisitReminderScheduler().catch((err) =>
+      console.error("[VisitReminder] Scheduler error:", err)
+    );
+  }, VISIT_REMINDER_POLL_MS);
+  setTimeout(() => {
+    runScheduledVisitReminderScheduler().catch((err) =>
+      console.error("[VisitReminder] Startup check error:", err)
+    );
+  }, 15_000);
+  log(`Scheduled visit reminder scheduler started (poll every 1 min)`);
 })();

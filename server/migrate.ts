@@ -11,6 +11,10 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     sql: `ALTER TABLE microsip_configs ADD COLUMN IF NOT EXISTS cxc_database text`,
   },
   {
+    id: "002b_add_microsip_inherited_from_tenant",
+    sql: `ALTER TABLE microsip_configs ADD COLUMN IF NOT EXISTS inherited_from_tenant_id varchar`,
+  },
+  {
     id: "003b_add_locale_to_tenants",
     sql: `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locale text DEFAULT 'es'`,
   },
@@ -75,6 +79,15 @@ const MIGRATIONS: { id: string; sql: string }[] = [
         created_at timestamp NOT NULL DEFAULT now()
       );
       CREATE INDEX IF NOT EXISTS idx_documents_tenant ON documents (tenant_id);
+    `,
+  },
+  {
+    id: "008_add_scheduled_visit_reminders",
+    sql: `
+      ALTER TABLE scheduled_visits ADD COLUMN IF NOT EXISTS reminder_minutes integer NOT NULL DEFAULT 0;
+      ALTER TABLE scheduled_visits ADD COLUMN IF NOT EXISTS reminder_sent_at timestamptz;
+      CREATE INDEX IF NOT EXISTS scheduled_visits_reminder_idx
+        ON scheduled_visits (status, reminder_minutes, reminder_sent_at, scheduled_date);
     `,
   },
 ];

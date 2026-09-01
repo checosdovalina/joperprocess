@@ -141,6 +141,23 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS parent_id varchar REFERENCES tenant
 CREATE INDEX IF NOT EXISTS idx_tenants_parent ON tenants (parent_id);
 
 -- ----------------------------------------------------------------
+-- [2026-08-25] Configuración Microsip heredada por compañías hijas
+-- La hija recibe una copia independiente de la configuración del padre.
+-- ----------------------------------------------------------------
+ALTER TABLE microsip_configs
+  ADD COLUMN IF NOT EXISTS inherited_from_tenant_id varchar;
+
+-- ----------------------------------------------------------------
+-- [2026-08-31] Recordatorios configurables para visitas programadas
+-- ----------------------------------------------------------------
+ALTER TABLE scheduled_visits
+  ADD COLUMN IF NOT EXISTS reminder_minutes integer NOT NULL DEFAULT 0;
+ALTER TABLE scheduled_visits
+  ADD COLUMN IF NOT EXISTS reminder_sent_at timestamptz;
+CREATE INDEX IF NOT EXISTS scheduled_visits_reminder_idx
+  ON scheduled_visits (status, reminder_minutes, reminder_sent_at, scheduled_date);
+
+-- ----------------------------------------------------------------
 -- [2026-08-25] Columna: quotations.tax_rate
 -- La tasa de impuesto se usa en cotizaciones USA y en relaciones de
 -- cotización cargadas desde pedidos.

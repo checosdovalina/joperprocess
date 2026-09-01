@@ -50,6 +50,7 @@ export default function TenantsPage() {
     plan: "basic",
     maxUsers: 10,
     locale: "es" as Locale,
+    inheritMicrosip: false,
   });
 
   const { data: tenantsList = [], isLoading } = useQuery<Tenant[]>({
@@ -62,9 +63,12 @@ export default function TenantsPage() {
       const response = await apiRequest("POST", "/api/tenants", data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tenants"] });
-      toast({ title: t("tenants.created-ok") });
+      toast({
+        title: t("tenants.created-ok"),
+        description: data.microsipConfigInherited ? t("tenants.microsip-inherited") : undefined,
+      });
       setIsDialogOpen(false);
       resetForm();
     },
@@ -117,6 +121,7 @@ export default function TenantsPage() {
       plan: "basic",
       maxUsers: 10,
       locale: "es" as Locale,
+      inheritMicrosip: false,
     });
   };
 
@@ -134,6 +139,7 @@ export default function TenantsPage() {
       plan: tenant.plan || "basic",
       maxUsers: tenant.maxUsers || 10,
       locale: (tenant.locale as Locale) || "es",
+      inheritMicrosip: false,
     });
     setIsDialogOpen(true);
   };
@@ -235,7 +241,11 @@ export default function TenantsPage() {
                 <select
                   id="parentId"
                   value={formData.parentId}
-                  onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
+                   onChange={(e) => setFormData({
+                     ...formData,
+                     parentId: e.target.value,
+                     inheritMicrosip: e.target.value ? formData.inheritMicrosip : false,
+                   })}
                   className="w-full h-10 px-3 rounded-md border bg-background"
                   data-testid="select-parent-company"
                 >
@@ -248,6 +258,25 @@ export default function TenantsPage() {
                 </select>
                 <p className="text-xs text-muted-foreground">{t("tenants.parent.help")}</p>
               </div>
+
+              {!editingTenant && formData.parentId && (
+                <div className="flex items-start gap-3 rounded-md border p-3">
+                  <Switch
+                    id="inheritMicrosip"
+                    checked={formData.inheritMicrosip}
+                    onCheckedChange={(checked) => setFormData({ ...formData, inheritMicrosip: checked })}
+                    data-testid="switch-inherit-microsip"
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="inheritMicrosip" className="cursor-pointer">
+                      {t("tenants.inherit-microsip")}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t("tenants.inherit-microsip-help")}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

@@ -580,46 +580,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parentId = typeof req.body?.parentId === "string" && req.body.parentId.trim()
         ? req.body.parentId.trim()
         : null;
-      if (parentId) {
-        const parent = await getTenantById(parentId);
-        if (!parent) {
-          return res.status(400).json({ error: "La compañía padre seleccionada no existe" });
+      const inheritMicrosip = req.body?.inheritMicrosip === true;
+
+      const result = await db.transaction(async (tx) => {
+        if (parentId) {
+          const [parent] = await tx
+            .select({ id: tenants.id })
+            .from(tenants)
+            .where(eq(tenants.id, parentId));
+          if (!parent) {
+            throw Object.assign(new Error("La compañía padre seleccionada no existe"), { code: "PARENT_NOT_FOUND" });
+          }
         }
-      }
 
-      const [newTenant] = await db.insert(tenants).values({ ...validationResult.data, parentId }).returning();
+        const [newTenant] = await tx
+          .insert(tenants)
+          .values({ ...validationResult.data, parentId })
+          .returning();
 
-      // Child companies often share the parent's Microsip server. Copy connection
-      // settings (sync left disabled) so "Probar conexión" works without retyping
-      // and without kicking off a second full sync automatically.
-      if (parentId) {
-        const [parentCfg] = await db
-          .select()
-          .from(microsipConfigs)
-          .where(eq(microsipConfigs.tenantId, parentId));
-        if (parentCfg) {
-          await db.insert(microsipConfigs).values({
-            tenantId: newTenant.id,
-            host: parentCfg.host,
-            port: parentCfg.port,
-            database: parentCfg.database,
-            cxcDatabase: parentCfg.cxcDatabase,
-            username: parentCfg.username,
-            password: parentCfg.password,
-            enabled: false,
-            syncCustomers: parentCfg.syncCustomers,
-            syncProducts: parentCfg.syncProducts,
-            syncCategories: parentCfg.syncCategories,
-            syncInvoices: parentCfg.syncInvoices,
-            syncPayments: parentCfg.syncPayments,
-            masterDataInterval: parentCfg.masterDataInterval,
-            transactionalInterval: parentCfg.transactionalInterval,
-          });
+        let microsipConfigInherited = false;
+        if (inheritMicrosip && parentId) {
+          const [parentConfig] = await tx
+            .select()
+            .from(microsipConfigs)
+            .where(eq(microsipConfigs.tenantId, parentId));
+
+          if (parentConfig) {
+            // Copy connection/settings, but start disabled so the child admin
+            // can test its independent connection before any background sync.
+            await tx.insert(microsipConfigs).values({
+              tenantId: newTenant.id,
+              inheritedFromTenantId: parentId,
+              host: parentConfig.host,
+              port: parentConfig.port,
+              database: parentConfig.database,
+              cxcDatabase: parentConfig.cxcDatabase,
+              username: parentConfig.username,
+              password: parentConfig.password,
+              enabled: false,
+              syncCustomers: parentConfig.syncCustomers,
+              syncProducts: parentConfig.syncProducts,
+              syncCategories: parentConfig.syncCategories,
+              syncInvoices: parentConfig.syncInvoices,
+              syncPayments: parentConfig.syncPayments,
+              masterDataInterval: parentConfig.masterDataInterval,
+              transactionalInterval: parentConfig.transactionalInterval,
+            });
+            microsipConfigInherited = true;
+          }
         }
-      }
 
-      res.status(201).json(newTenant);
+        return { newTenant, microsipConfigInherited };
+      });
+
+      res.status(201).json({
+        ...result.newTenant,
+        microsipConfigInherited: result.microsipConfigInherited,
+      });
     } catch (error: any) {
+      if (error.code === "PARENT_NOT_FOUND") {
+        return res.status(400).json({ error: error.message });
+      }
       if (error.code === '23505') {
         return res.status(400).json({ error: "Subdomain already exists" });
       }
@@ -1898,6 +1919,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      if (validated.reminderMinutes > 0) {
+        const seller = await db.query.users.findFirst({
+          where: eq(users.id, req.user!.id),
+          columns: { email: true },
+        });
+        if (!seller?.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(seller.email)) {
+          return res.status(400).json({ error: "Agrega un correo válido a tu usuario para activar recordatorios" });
+        }
+      }
+
       // Insert with tenantId added separately
       const [visit] = await db.insert(scheduledVisits).values({
         ...validated,
@@ -1931,9 +1962,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const validated = updateScheduledVisitSchema.parse(req.body);
+      if (validated.reminderMinutes && validated.reminderMinutes > 0) {
+        const seller = await db.query.users.findFirst({
+          where: eq(users.id, visit.userId),
+          columns: { email: true },
+        });
+        if (!seller?.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(seller.email)) {
+          return res.status(400).json({ error: "El vendedor asignado no tiene un correo válido para recibir recordatorios" });
+        }
+      }
+      const reminderChanged =
+        Object.prototype.hasOwnProperty.call(req.body, "scheduledDate") ||
+        Object.prototype.hasOwnProperty.call(req.body, "reminderMinutes");
       const [updatedVisit] = await db
         .update(scheduledVisits)
-        .set({ ...validated, updatedAt: new Date() })
+        .set({
+          ...validated,
+          ...(reminderChanged ? { reminderSentAt: null } : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(scheduledVisits.id, id))
         .returning();
 
@@ -9335,7 +9382,18 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       // Don't expose password in response
       const { password, ...safeConfig } = config;
-      res.json({ configured: true, ...safeConfig, password: password ? "********" : null });
+      const [inheritedFromTenant] = config.inheritedFromTenantId
+        ? await db
+            .select({ id: tenants.id, name: tenants.name, subdomain: tenants.subdomain })
+            .from(tenants)
+            .where(eq(tenants.id, config.inheritedFromTenantId))
+        : [];
+      res.json({
+        configured: true,
+        ...safeConfig,
+        inheritedFromTenant: inheritedFromTenant ?? null,
+        password: password ? "********" : null,
+      });
     } catch (error) {
       console.error("Error getting Microsip config:", error);
       res.status(500).json({ error: "Error al obtener configuración de Microsip" });

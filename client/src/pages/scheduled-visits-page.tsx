@@ -51,8 +51,10 @@ export default function ScheduledVisitsPage() {
     scheduledDate: new Date(),
     topics: [],
     notes: "",
+    reminderMinutes: 0,
   });
   const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedTime, setSelectedTime] = useState("09:00");
   const [topicsInput, setTopicsInput] = useState("");
   const [searchText, setSearchText] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -142,8 +144,10 @@ export default function ScheduledVisitsPage() {
       scheduledDate: new Date(),
       topics: [],
       notes: "",
+      reminderMinutes: 0,
     });
     setSelectedDate(undefined);
+    setSelectedTime("09:00");
     setTopicsInput("");
     setEditingVisit(null);
   };
@@ -163,12 +167,17 @@ export default function ScheduledVisitsPage() {
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
+    const scheduledDate = new Date(selectedDate);
+    const [hours, minutes] = selectedTime.split(":").map(Number);
+    scheduledDate.setHours(hours || 0, minutes || 0, 0, 0);
+
     const data = {
       customerId: formData.customerId,
       meetingType: formData.meetingType || MeetingType.VISITA,
-      scheduledDate: selectedDate,
+      scheduledDate,
       topics: topics,
       notes: formData.notes ?? "",
+      reminderMinutes: formData.reminderMinutes ?? 0,
     };
 
     if (editingVisit) {
@@ -186,8 +195,10 @@ export default function ScheduledVisitsPage() {
       scheduledDate: new Date(visit.scheduledDate),
       topics: visit.topics,
       notes: visit.notes || "",
+      reminderMinutes: visit.reminderMinutes || 0,
     });
     setSelectedDate(new Date(visit.scheduledDate));
+    setSelectedTime(format(new Date(visit.scheduledDate), "HH:mm"));
     setTopicsInput(visit.topics.join(", "));
     setIsDialogOpen(true);
   };
@@ -324,6 +335,35 @@ export default function ScheduledVisitsPage() {
                     />
                   </PopoverContent>
                 </Popover>
+              </div>
+
+              <div>
+                <Label htmlFor="visit-time" data-testid="label-time">{t("visits.scheduled-time")}</Label>
+                <Input
+                  id="visit-time"
+                  type="time"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                  data-testid="input-visit-time"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="visit-reminder" data-testid="label-reminder">{t("visits.reminder-label")}</Label>
+                <Select
+                  value={String(formData.reminderMinutes ?? 0)}
+                  onValueChange={(value) => setFormData({ ...formData, reminderMinutes: Number(value) })}
+                >
+                  <SelectTrigger data-testid="select-visit-reminder">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{t("visits.reminder-none")}</SelectItem>
+                    <SelectItem value="60">{t("visits.reminder-one-hour")}</SelectItem>
+                    <SelectItem value="1440">{t("visits.reminder-one-day")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">{t("visits.reminder-help")}</p>
               </div>
 
               <div>
@@ -473,6 +513,7 @@ export default function ScheduledVisitsPage() {
                 <TableRow>
                   <TableHead data-testid="header-customer">{t("label.client")}</TableHead>
                   <TableHead data-testid="header-date">{t("label.date")}</TableHead>
+                  <TableHead data-testid="header-reminder">{t("visits.reminder-label")}</TableHead>
                   <TableHead>{t("label.type")}</TableHead>
                   <TableHead data-testid="header-topics">{t("visits.topics")}</TableHead>
                   <TableHead data-testid="header-status">{t("label.status")}</TableHead>
@@ -484,7 +525,14 @@ export default function ScheduledVisitsPage() {
                   <TableRow key={visit.id} className="hover-elevate" data-testid={`row-visit-${visit.id}`}>
                     <TableCell data-testid={`cell-customer-${visit.id}`}>{visit.customer.name}</TableCell>
                     <TableCell data-testid={`cell-date-${visit.id}`}>
-                      {format(new Date(visit.scheduledDate), "PPP", { locale: es })}
+                      {format(new Date(visit.scheduledDate), "PPP p", { locale: es })}
+                    </TableCell>
+                    <TableCell data-testid={`cell-reminder-${visit.id}`}>
+                      {visit.reminderMinutes === 60
+                        ? t("visits.reminder-one-hour")
+                        : visit.reminderMinutes === 1440
+                          ? t("visits.reminder-one-day")
+                          : "—"}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{visit.meetingType || MeetingType.VISITA}</Badge>

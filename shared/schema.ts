@@ -335,6 +335,8 @@ export const scheduledVisits = pgTable("scheduled_visits", {
   topics: text("topics").array().notNull().default(sql`ARRAY[]::text[]`),
   notes: text("notes"),
   status: text("status").notNull().default(ScheduledVisitStatus.SCHEDULED),
+  reminderMinutes: integer("reminder_minutes").notNull().default(0), // 0, 60, or 1440
+  reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
   checkinId: varchar("checkin_id").unique().references(() => checkins.id), // Unique: one visit maps to at most one checkin
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1102,10 +1104,14 @@ export const updateCheckinSchema = createInsertSchema(checkins).omit({
 export const insertScheduledVisitSchema = createInsertSchema(scheduledVisits).omit({
   id: true,
   tenantId: true,
+  reminderSentAt: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
   userId: z.string().optional(), // Allow backend to set it
+  reminderMinutes: z.coerce.number().int().refine((value) => [0, 60, 1440].includes(value), {
+    message: "El recordatorio debe ser 1 hora, 1 día o estar desactivado",
+  }).default(0),
   scheduledDate: z.coerce.date().refine((date) => {
     // Allow scheduling for today or future dates
     const today = new Date();
@@ -1118,10 +1124,14 @@ export const insertScheduledVisitSchema = createInsertSchema(scheduledVisits).om
 
 export const updateScheduledVisitSchema = createInsertSchema(scheduledVisits).omit({
   id: true,
+  reminderSentAt: true,
   createdAt: true,
   updatedAt: true,
 }).partial().extend({
   userId: z.string().optional(), // Allow backend to preserve it
+  reminderMinutes: z.coerce.number().int().refine((value) => [0, 60, 1440].includes(value), {
+    message: "El recordatorio debe ser 1 hora, 1 día o estar desactivado",
+  }).optional(),
   scheduledDate: z.coerce.date().refine((date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1291,6 +1301,7 @@ export const insertIncidentActivitySchema = createInsertSchema(incidentActivitie
 export const microsipConfigs = pgTable("microsip_configs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id).unique(),
+  inheritedFromTenantId: varchar("inherited_from_tenant_id").references(() => tenants.id),
   // Firebird connection settings
   host: text("host").notNull(), // Firebird server IP or hostname
   port: integer("port").notNull().default(3050), // Default Firebird port

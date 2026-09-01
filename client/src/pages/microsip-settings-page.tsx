@@ -36,6 +36,11 @@ import type { MicrosipConfig, MicrosipSyncLog } from "@shared/schema";
 
 interface MicrosipConfigResponse extends Partial<MicrosipConfig> {
   configured: boolean;
+  inheritedFromTenant?: {
+    id: string;
+    name: string;
+    subdomain: string;
+  } | null;
 }
 
 export default function MicrosipSettingsPage() {
@@ -301,6 +306,14 @@ export default function MicrosipSettingsPage() {
           <p className="text-muted-foreground">
             {t("microsip.subtitle")}
           </p>
+          {config?.configured && config.inheritedFromTenant && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+              <p className="text-muted-foreground">
+                {t("microsip.inherited-copy").replace("{parent}", config.inheritedFromTenant.name)}
+              </p>
+            </div>
+          )}
         </div>
         {config?.configured && (
           <div className="flex items-center gap-2">

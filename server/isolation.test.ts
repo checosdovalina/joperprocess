@@ -23,6 +23,7 @@ import { registerRoutes } from "./routes";
 import { tenantMiddleware } from "./tenant";
 import { hashPassword } from "./auth";
 import { createTenantScopedStorage } from "./storage";
+import { runScheduledVisitReminderScheduler } from "./scheduled-visit-reminder-scheduler";
 import {
   tenants,
   empresas,
@@ -37,6 +38,7 @@ import {
   invoices,
   scheduledVisits,
   creditAuthorizations,
+  microsipConfigs,
   UserRole,
   QuotationStatus,
   ScheduledVisitStatus,
@@ -48,6 +50,11 @@ import {
 const sendQuotationEmailMock = vi.fn(async () => {});
 vi.mock("./quotation-email-service", () => ({
   sendQuotationEmail: (...args: any[]) => sendQuotationEmailMock(...args),
+}));
+
+const sendScheduledVisitReminderEmailMock = vi.fn(async () => {});
+vi.mock("./scheduled-visit-email-service", () => ({
+  sendScheduledVisitReminderEmail: (...args: any[]) => sendScheduledVisitReminderEmailMock(...args),
 }));
 
 // Unique run suffix so parallel/rerun test data never collides with real data.
@@ -91,6 +98,7 @@ type Ctx = {
   invB1: string;
   svA1: string;
   svB1: string;
+  createdTenantIds: string[];
 };
 
 const ctx = {} as Ctx;
@@ -102,12 +110,31 @@ async function insertReturningId(table: any, values: any): Promise<string> {
 
 async function seed() {
   const password = await hashPassword("Test-1234");
+  ctx.createdTenantIds = [];
 
   ctx.subA = `${RUN}a`;
   ctx.subB = `${RUN}b`;
 
   ctx.tenantA = await insertReturningId(tenants, { name: `TenantA ${RUN}`, subdomain: ctx.subA, locale: "en", active: true });
   ctx.tenantB = await insertReturningId(tenants, { name: `TenantB ${RUN}`, subdomain: ctx.subB, locale: "es", active: true });
+
+  await db.insert(microsipConfigs).values({
+    tenantId: ctx.tenantA,
+    host: `firebird-${RUN}`,
+    port: 3050,
+    database: `C:\\Microsip\\${RUN}.fdb`,
+    cxcDatabase: "",
+    username: "SYSDBA",
+    password: `secret-${RUN}`,
+    enabled: true,
+    syncCustomers: true,
+    syncProducts: false,
+    syncCategories: true,
+    syncInvoices: false,
+    syncPayments: true,
+    masterDataInterval: 180,
+    transactionalInterval: 90,
+  });
 
   ctx.empresaA1 = await insertReturningId(empresas, { tenantId: ctx.tenantA, name: `A1 ${RUN}`, clave: "A1" });
   ctx.empresaA2 = await insertReturningId(empresas, { tenantId: ctx.tenantA, name: `A2 ${RUN}`, clave: "A2" });
@@ -245,7 +272,7 @@ async function seed() {
 }
 
 async function cleanup() {
-  const tIds = [ctx.tenantA, ctx.tenantB].filter(Boolean);
+  const tIds = [ctx.tenantA, ctx.tenantB, ...(ctx.createdTenantIds || [])].filter(Boolean);
   if (tIds.length === 0) return;
   const qs = await db.select({ id: quotations.id }).from(quotations).where(inArray(quotations.tenantId, tIds));
   const qIds = qs.map((q) => q.id);
@@ -260,6 +287,7 @@ async function cleanup() {
   await db.delete(quotations).where(inArray(quotations.tenantId, tIds));
   await db.delete(products).where(inArray(products.tenantId, tIds));
   await db.delete(customers).where(inArray(customers.tenantId, tIds));
+  await db.delete(microsipConfigs).where(inArray(microsipConfigs.tenantId, tIds));
   await db.delete(users).where(inArray(users.tenantId, tIds));
   if (ctx.superadmin?.id) await db.delete(users).where(eq(users.id, ctx.superadmin.id));
   await db.delete(empresas).where(inArray(empresas.tenantId, tIds));
@@ -704,6 +732,46 @@ describe("GET /api/scheduled-visits/:id (tenant-scoped by-id)", () => {
   });
 });
 
+describe("Scheduled visit email reminders", () => {
+  it("lets the seller configure a one-hour reminder and sends it once when due", async () => {
+    sendScheduledVisitReminderEmailMock.mockClear();
+    const scheduledDate = new Date(Date.now() + 30 * 60 * 1000);
+    const response = await asVendedorA1("POST", "/api/scheduled-visits", {
+      customerId: ctx.customerA,
+      meetingType: "visita",
+      scheduledDate: scheduledDate.toISOString(),
+      topics: ["Seguimiento"],
+      notes: "Llevar cotización",
+      reminderMinutes: 60,
+    });
+    expect(response.status).toBe(201);
+    const visit = await response.json();
+    expect(visit.reminderMinutes).toBe(60);
+
+    await runScheduledVisitReminderScheduler();
+    await runScheduledVisitReminderScheduler();
+
+    expect(sendScheduledVisitReminderEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendScheduledVisitReminderEmailMock.mock.calls[0][0]).toBe(ctx.vendedorA1.email);
+    expect(sendScheduledVisitReminderEmailMock.mock.calls[0][1].customerName).toContain("CustA");
+
+    const [storedVisit] = await db
+      .select({ reminderSentAt: scheduledVisits.reminderSentAt })
+      .from(scheduledVisits)
+      .where(eq(scheduledVisits.id, visit.id));
+    expect(storedVisit.reminderSentAt).toBeInstanceOf(Date);
+  });
+
+  it("rejects unsupported reminder intervals", async () => {
+    const response = await asVendedorA1("POST", "/api/scheduled-visits", {
+      customerId: ctx.customerA,
+      scheduledDate: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      reminderMinutes: 15,
+    });
+    expect(response.status).toBe(400);
+  });
+});
+
 describe("GET /api/products/:id (tenant-scoped by-id)", () => {
   it("allowed inside tenant (200)", async () => {
     const r = await asVendedorA1("GET", `/api/products/${ctx.productA1}`);
@@ -823,6 +891,84 @@ describe("SuperAdmin on main domain keeps global cross-tenant access", () => {
     const qIds = data.quotations.map((q: any) => q.id);
     expect(qIds).toContain(ctx.qA1);
     expect(qIds).toContain(ctx.qB1);
+  });
+});
+
+describe("Microsip configuration for new child companies", () => {
+  it("copies the parent's connection and sync preferences as an independent disabled configuration", async () => {
+    const response = await asSuperadmin("POST", "/api/tenants", {
+      name: `Child Microsip ${RUN}`,
+      subdomain: `child-ms-${RUN}`,
+      parentId: ctx.tenantA,
+      inheritMicrosip: true,
+      active: true,
+    });
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    ctx.createdTenantIds.push(body.id);
+    expect(body.microsipConfigInherited).toBe(true);
+    expect(JSON.stringify(body)).not.toContain(`secret-${RUN}`);
+
+    const [parentConfig] = await db
+      .select()
+      .from(microsipConfigs)
+      .where(eq(microsipConfigs.tenantId, ctx.tenantA));
+    const [childConfig] = await db
+      .select()
+      .from(microsipConfigs)
+      .where(eq(microsipConfigs.tenantId, body.id));
+
+    expect(childConfig.id).not.toBe(parentConfig.id);
+    expect(childConfig.tenantId).toBe(body.id);
+    expect(childConfig.inheritedFromTenantId).toBe(ctx.tenantA);
+    expect(childConfig.host).toBe(parentConfig.host);
+    expect(childConfig.password).toBe(parentConfig.password);
+    expect(childConfig.syncProducts).toBe(parentConfig.syncProducts);
+    expect(childConfig.masterDataInterval).toBe(parentConfig.masterDataInterval);
+    expect(childConfig.enabled).toBe(false);
+    expect(childConfig.lastCustomerSync).toBeNull();
+    expect(childConfig.lastSyncStatus).toBeNull();
+    expect(childConfig.lastSyncError).toBeNull();
+
+    await db
+      .update(microsipConfigs)
+      .set({ host: `child-only-${RUN}` })
+      .where(eq(microsipConfigs.tenantId, body.id));
+    const [unchangedParent] = await db
+      .select({ host: microsipConfigs.host })
+      .from(microsipConfigs)
+      .where(eq(microsipConfigs.tenantId, ctx.tenantA));
+    expect(unchangedParent.host).toBe(parentConfig.host);
+  });
+
+  it("creates the child without Microsip configuration when the parent has none", async () => {
+    const response = await asSuperadmin("POST", "/api/tenants", {
+      name: `Child Manual Microsip ${RUN}`,
+      subdomain: `child-manual-ms-${RUN}`,
+      parentId: ctx.tenantB,
+      inheritMicrosip: true,
+      active: true,
+    });
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    ctx.createdTenantIds.push(body.id);
+    expect(body.microsipConfigInherited).toBe(false);
+
+    const childConfigs = await db
+      .select({ id: microsipConfigs.id })
+      .from(microsipConfigs)
+      .where(eq(microsipConfigs.tenantId, body.id));
+    expect(childConfigs).toHaveLength(0);
+  });
+
+  it("does not allow a regular tenant admin to create companies", async () => {
+    const response = await asAdminA("POST", "/api/tenants", {
+      name: `Forbidden Child ${RUN}`,
+      subdomain: `forbidden-child-${RUN}`,
+      parentId: ctx.tenantA,
+      inheritMicrosip: true,
+    });
+    expect(response.status).toBe(403);
   });
 });
 
