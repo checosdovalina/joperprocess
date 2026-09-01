@@ -268,17 +268,22 @@ export default function CheckinsPage() {
               {t("checkins.new")}
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col">
-            <DialogHeader className="shrink-0">
-              <DialogTitle>{t("checkins.new")}</DialogTitle>
-              <DialogDescription>
+          <DialogContent className="w-[calc(100%-1.5rem)] max-w-xl max-h-[min(760px,calc(100dvh-1.5rem))] gap-0 overflow-hidden rounded-xl p-0">
+            <DialogHeader className="shrink-0 border-b bg-muted/20 px-5 py-5 pr-12 text-left sm:px-6">
+              <DialogTitle className="flex items-center gap-2.5 text-xl">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <MapPin className="h-5 w-5" />
+                </span>
+                {t("checkins.new")}
+              </DialogTitle>
+              <DialogDescription className="pl-[3rem]">
                 {t("checkins.dialog-desc")}
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
                 <div className="space-y-2">
-                  <Label htmlFor="customer">{t("label.client")} *</Label>
+                  <Label htmlFor="customer" className="text-sm font-medium">{t("label.client")} *</Label>
                   <CustomerCombobox
                     customers={customers || []}
                     value={formData.customerId || ""}
@@ -288,61 +293,64 @@ export default function CheckinsPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="meetingType">{t("checkins.meeting-type")} *</Label>
-                  <Select
-                    value={formData.meetingType}
-                    onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
-                  >
-                    <SelectTrigger id="meetingType" data-testid="select-meeting-type">
-                      <SelectValue placeholder={t("checkins.select-type")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={MeetingType.VISITA}>{t("checkins.type.visit")}</SelectItem>
-                      <SelectItem value={MeetingType.LLAMADA}>{t("checkins.type.call")}</SelectItem>
-                      <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="meetingType" className="text-sm font-medium">{t("checkins.meeting-type")} *</Label>
+                    <Select
+                      value={formData.meetingType}
+                      onValueChange={(value) => setFormData({ ...formData, meetingType: value })}
+                    >
+                      <SelectTrigger id="meetingType" className="h-10" data-testid="select-meeting-type">
+                        <SelectValue placeholder={t("checkins.select-type")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={MeetingType.VISITA}>{t("checkins.type.visit")}</SelectItem>
+                        <SelectItem value={MeetingType.LLAMADA}>{t("checkins.type.call")}</SelectItem>
+                        <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>{t("label.gps")}</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={getLocation}
-                    disabled={gettingLocation}
-                    data-testid="button-get-location"
-                  >
-                    {gettingLocation ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {t("checkins.getting-location")}
-                      </>
-                    ) : location ? (
-                      <>
-                        <MapPin className="mr-2 h-4 w-4 text-green-600" />
-                        {t("checkins.location-captured")}
-                      </>
-                    ) : (
-                      <>
-                        <MapPin className="mr-2 h-4 w-4" />
-                        {t("checkins.capture-location")}
-                      </>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">{t("label.gps")}</Label>
+                    <Button
+                      type="button"
+                      variant={location ? "secondary" : "outline"}
+                      className="h-10 w-full justify-start"
+                      onClick={getLocation}
+                      disabled={gettingLocation}
+                      data-testid="button-get-location"
+                    >
+                      {gettingLocation ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {t("checkins.getting-location")}
+                        </>
+                      ) : location ? (
+                        <>
+                          <MapPin className="mr-2 h-4 w-4 text-green-600" />
+                          {t("checkins.location-captured")}
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="mr-2 h-4 w-4" />
+                          {t("checkins.capture-location")}
+                        </>
+                      )}
+                    </Button>
+                    {location && (
+                      <p className="text-xs text-muted-foreground">
+                        Lat: {location.lat.toFixed(6)}, Lng: {location.lng.toFixed(6)}
+                      </p>
                     )}
-                  </Button>
-                  {location && (
-                    <p className="text-xs text-muted-foreground">
-                      Lat: {location.lat.toFixed(6)}, Lng: {location.lng.toFixed(6)}
-                    </p>
-                  )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">{t("checkins.visit-notes")}</Label>
+                  <Label htmlFor="notes" className="text-sm font-medium">{t("checkins.visit-notes")}</Label>
                   <Textarea
                     id="notes"
+                    className="min-h-[120px] resize-y"
                     data-testid="textarea-checkin-notes"
                     value={formData.notes ?? ""}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
@@ -352,15 +360,16 @@ export default function CheckinsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 shrink-0 border-t mt-4">
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t bg-muted/10 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
                 <Button
                   type="button"
                   variant="outline"
+                  className="sm:min-w-24"
                   onClick={() => setIsDialogOpen(false)}
                 >
                   {t("btn.cancel")}
                 </Button>
-                <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-checkin">
+                <Button type="submit" className="sm:min-w-32" disabled={createMutation.isPending} data-testid="button-save-checkin">
                   {createMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
