@@ -1,3 +1,4 @@
+import net from 'net';
 import Firebird from 'node-firebird';
 import { db } from './db';
 import { 
@@ -33,7 +34,7 @@ interface MicrosipConnectionInput {
 // account-statement pre-send refresh) opens the connection.
 let attachChain: Promise<unknown> = Promise.resolve();
 
-const ATTACH_TIMEOUT_MS = 15000; // caller-facing timeout
+const ATTACH_TIMEOUT_MS = 20000; // timeout after Firebird.attach actually starts
 const ATTACH_LOCK_CAP_MS = 25000; // hard cap so a hung handshake can't deadlock the lock
 
 function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection> {
@@ -42,59 +43,89 @@ function attachSerialized(options: Firebird.Options): Promise<FirebirdConnection
   // the real node-firebird callback fires — so the global lock advances only
   // when the underlying handshake actually completes (not merely when the
   // caller-facing timeout expires), which is what prevents overlap.
-  const settledHandshake = attachChain.then(
-    () =>
-      new Promise<{ db: FirebirdConnection | null; err: Error | null }>((resolveInner) => {
-        Firebird.attach(options, (err: Error | null, db: FirebirdConnection) => {
-          resolveInner({ db: db ?? null, err: err ?? null });
-        });
-      }),
-  );
-
-  // Advance the lock when the handshake settles, but never wait longer than a
-  // hard cap so a pathological never-returning attach cannot deadlock the queue.
-  attachChain = Promise.race([
-    settledHandshake,
-    new Promise((r) => setTimeout(r, ATTACH_LOCK_CAP_MS)),
-  ]).then(
-    () => undefined,
-    () => undefined,
-  );
 
   return new Promise<FirebirdConnection>((resolve, reject) => {
     let settled = false;
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(
-        new Error(
-          `Timeout: No se pudo conectar a ${options.host}:${options.port} en 15 segundos. Verifique que el servidor sea accesible desde Internet.`,
-        ),
-      );
-    }, ATTACH_TIMEOUT_MS);
 
-    settledHandshake.then(({ db, err }) => {
+    const finishOk = (conn: FirebirdConnection) => {
       if (settled) {
-        // Caller already gave up (timeout). Don't leak a live handle that
-        // arrived late.
-        if (db) {
-          try {
-            db.detach();
-          } catch {
-            /* ignore */
-          }
+        try {
+          conn.detach();
+        } catch {
+          /* ignore */
         }
         return;
       }
       settled = true;
-      clearTimeout(timeout);
+      resolve(conn);
+    };
+
+    const finishErr = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+
+    // The caller-facing timeout must start only after the global handshake lock
+    // is acquired. Otherwise a new tenant burns its timeout waiting behind a
+    // connection for an existing tenant and reports a false network failure.
+    const settledHandshake = attachChain.then(
+      () =>
+        new Promise<{ db: FirebirdConnection | null; err: Error | null }>((resolveInner) => {
+          const timeout = setTimeout(() => {
+            finishErr(
+              new Error(
+                `Timeout: Firebird no respondió al abrir ${options.database} en ${options.host}:${options.port} en ${ATTACH_TIMEOUT_MS / 1000} segundos. Si el puerto es accesible, verifique la ruta del archivo .fdb y que el servicio no esté saturado.`,
+              ),
+            );
+          }, ATTACH_TIMEOUT_MS);
+
+          console.log(`[Microsip] Attaching to ${options.host}:${options.port} db=${options.database}`);
+          Firebird.attach(options, (err: Error | null, conn: FirebirdConnection) => {
+            clearTimeout(timeout);
+            resolveInner({ db: conn ?? null, err: err ?? null });
+          });
+        }),
+    );
+
+    // Advance the lock when the handshake settles, but never wait longer than a
+    // hard cap so a pathological never-returning attach cannot deadlock the lock.
+    attachChain = Promise.race([
+      settledHandshake,
+      new Promise((r) => setTimeout(r, ATTACH_LOCK_CAP_MS)),
+    ]).then(
+      () => undefined,
+      () => undefined,
+    );
+
+    settledHandshake.then(({ db: conn, err }) => {
       if (err) {
         console.error('[Microsip] Connection error:', err.message);
-        reject(err);
-      } else {
+        finishErr(err);
+      } else if (conn) {
         console.log('[Microsip] Connected to Firebird database');
-        resolve(db as FirebirdConnection);
+        finishOk(conn);
+      } else {
+        finishErr(new Error('Firebird attach no devolvió conexión'));
       }
+    }).catch(finishErr);
+  });
+}
+
+function probeTcp(host: string, port: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port }, () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.setTimeout(timeoutMs);
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on('error', () => {
+      socket.destroy();
+      resolve(false);
     });
   });
 }
@@ -1673,6 +1704,14 @@ class MicrosipSyncService {
 
     if (!connection.host || !connection.database || !connection.username || !connection.password) {
       return { success: false, message: "Completa servidor, base de datos, usuario y contraseña" };
+    }
+
+    const reachable = await probeTcp(connection.host, connection.port, 5000);
+    if (!reachable) {
+      return {
+        success: false,
+        message: `Error de conexión: Timeout TCP a ${connection.host}:${connection.port}. El servidor Firebird no es accesible desde este entorno (firewall, NAT o el servicio no está escuchando).`,
+      };
     }
 
     let fbDb: FirebirdConnection | null = null;
