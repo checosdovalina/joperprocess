@@ -1,0 +1,246 @@
+[TAILING] Tailing last 100 lines for [joper-app] process (change the value with --lines option)
+/root/.pm2/logs/joper-app-error.log last 100 lines:
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=17376 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=18824 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=27472 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=4344 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=26024 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=4344 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=13984 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=23624 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=26024 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=13984 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=13984 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=15432 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=26024 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=2896 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=7240 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=24576 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=23624 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=31816 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=24576 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=23624 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=9640 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=24576 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=20728 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=15432 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=16384 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=24576 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=12536 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=11088 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=15432 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=1448 queue=1
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=81ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap |     at process.processTimers (node:internal/timers:519:7)
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=2127ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap |     at process.processTimers (node:internal/timers:519:7)
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=808ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [Microsip] Category sync error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap | [Microsip] Error syncing tenant 710bc48d-9799-45a2-836b-4aa90a7e8ace: Error: Timeout: No se pudo conectar a 200.92.216.146:3050 en 15 segundos. Verifique que el servidor sea accesible desde Internet.
+0|joper-ap |     at Timeout._onTimeout (file:///var/www/joper/dist/index.js:7995:9)
+0|joper-ap |     at listOnTimeout (node:internal/timers:581:17)
+0|joper-ap |     at process.processTimers (node:internal/timers:519:7)
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=1002ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=87ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=91ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=70ms
+0|joper-ap | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=5792 queue=1
+0|joper-ap | [fb-debug] unhandled protocol error: Packet is not complete pos=0 bytes=8192 queue=1
+
+/root/.pm2/logs/joper-app-out.log last 100 lines:
+0|joper-ap | [fb-debug] socket.write: length=20 bytes=0000001d0000000000000005030f120906000000 encrypt=false defer=false
+0|joper-ap | [fb-debug] srp.clientSeed: 4ms
+0|joper-ap | [fb-debug] auth: op_connect sent plugin=Srp512 t=5ms
+0|joper-ap | [fb-debug] socket.write: length=604 bytes=000000010000001300000003000000010000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000000a00000155090653595344424108065372703531320a245372703531322c5372703338342c5372703235362c5372702c4c65676163795f4175746807ff00333630333465363262393165613431633433343936303163656466653463383861376337633462336561626162386163613137616563616132343738363239363461646332353734373936633137333531633230623938373136366134386266663434376237346461363732623337386133306564666435393466356661353130616663383463356439636334363962333932623862646232313962376430366333353062393462323634616165336239646538636632656238656530656338666133353236343064626464633632623735636238656364336165333336663034643961316562333962393330343333306630646364373461376466623307030135620b04000000000104726f6f7404096c6f63616c686f737406000000000000000a000000010000000200000003000000010000800b000000010000000500000005000000020000800c000000010000000500000005000000030000800d000000010000000500000005000000040000800e000000010000000500000005000000050000800f00000001000000050000000500000006000080100000000100000005000000050000000700008011000000010000000500000005000000080000801200000001000000050000000500000009000080130000000100000005000000050000000a encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=44 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=94(op_accept_data) pos=4 buflen=44
+0|joper-ap | [fb-debug] auth: op_accept_data received plugin=Legacy_Auth proto=32787 t=38ms
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=44
+0|joper-ap | [fb-debug] socket.write: length=92 bytes=00000013000000000000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000002a013004555446384d001c065359534442414704312d10004a046e6f6465540b4f454b7965727064324a2e0000 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=24 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=92(op_cont_auth) pos=4 buflen=24
+0|joper-ap | [fb-debug] auth: op_cont_auth received plugin=Srp pendingAccept=none t=70ms
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [fb-debug] describeBytes: [
+0|joper-ap |   21,  4,  7,  9, 11, 12, 13,
+0|joper-ap |   14, 16, 17, 19,  8,  5,  7,
+0|joper-ap |    9, 11, 12, 13, 14,  8
+0|joper-ap | ]
+0|joper-ap | [fb-debug] socket.write: length=2036 bytes=0000003e0000000000000044000000010000ffff00000003000007b90a202020202020202053454c4543540a2020202020202020202044562e444f43544f5f56455f49442c0a2020202020202020202044562e464f4c494f2c0a2020202020202020202044562e434c49454e54455f49442c0a2020202020202020202044562e46454348412c0a2020202020202020202044562e4645434841202b20434f414c45534345285043502e444941535f504c415a4f2c2030292041532046454348415f56454e43452c0a2020202020202020202044562e494d504f5254455f4e45544f2c0a2020202020202020202044562e544f54414c5f494d50554553544f5320415320494d50554553544f2c0a2020202020202020202044562e494d504f5254455f434f42524f2c0a202020202020202020204358435f42414c2e53414c444f5f4358432041532053414c444f5f4358432c0a202020202020202020205043502e444941535f504c415a4f20415320444941535f505041470a202020202020202046524f4d20444f43544f535f56452044560a20202020202020204c454654204a4f494e20504c415a4f535f434f4e445f50414720504350204f4e205043502e434f4e445f5041474f5f4944203d2044562e434f4e445f5041474f5f49440a20202020202020204c454654204a4f494e20280a202020202020202020202f2a205265616c206f75747374616e64696e672062616c616e63652066726f6d20435843206d6f64756c65207065722073616c657320696e766f696365202a2f0a2020202020202020202053454c4543540a2020202020202020202020204445532e444f43544f5f4654455f494420415320444f43544f5f56455f49442c0a20202020202020202020202053554d28495f544f542e434152474f202d20434f414c455343452843522e4352454449544f5f41504c494341444f2c203029292041532053414c444f5f4358430a2020202020202020202046524f4d20444f43544f535f434320440a202020202020202020204a4f494e20444f43544f535f454e5452455f53495320444553204f4e204445532e444f43544f5f444553545f4944203d20442e444f43544f5f43435f49440a202020202020202020204a4f494e20280a20202020202020202020202053454c45435420444f43544f5f43435f49442c0a2020202020202020202020202020202020202053554d28494d504f525445202b20494d50554553544f0a20202020202020202020202020202020202020202020202d20434f414c45534345284956415f524554454e49444f2c2030290a20202020202020202020202020202020202020202020202d20434f414c45534345284953525f524554454e49444f2c2030292920415320434152474f0a20202020202020202020202046524f4d20494d504f525445535f444f43544f535f43430a2020202020202020202020205748455245205449504f5f494d505445203d202743270a20202020202020202020202047524f555020425920444f43544f5f43435f49440a202020202020202020202920495f544f54204f4e20495f544f542e444f43544f5f43435f4944203d20442e444f43544f5f43435f49440a202020202020202020204c454654204a4f494e20280a20202020202020202020202053454c4543542049432e444f43544f5f43435f4143525f49442c0a2020202020202020202020202020202020202053554d2849432e494d504f525445202b20434f414c455343452849432e494d50554553544f2c2030290a20202020202020202020202020202020202020202020202b20434f414c455343452849432e445343544f5f505041472c20302929204153204352454449544f5f41504c494341444f0a20202020202020202020202046524f4d20494d504f525445535f444f43544f535f43432049430a2020202020202020202020204a4f494e20444f43544f535f4343205043204f4e2049432e444f43544f5f43435f4944203d2050432e444f43544f5f43435f49440a20202020202020202020202057484552452049432e444f43544f5f43435f4143525f4944204953204e4f54204e554c4c0a2020202020202020202020202020414e442049432e5449504f5f494d505445203c3e202743270a2020202020202020202020202020414e442050432e43414e43454c41444f203c3e202753270a20202020202020202020202047524f55502042592049432e444f43544f5f43435f4143525f49440a2020202020202020202029204352204f4e2043522e444f43544f5f43435f4143525f4944203d20442e444f43544f5f43435f49440a20202020202020202020574845524520442e43414e43454c41444f203c3e202753270a202020202020202020202020414e4420442e4e41545552414c455a415f434f4e434550544f203d202743270a2020202020202020202047524f5550204259204445532e444f43544f5f4654455f49440a202020202020202029204358435f42414c204f4e204358435f42414c2e444f43544f5f56455f4944203d2044562e444f43544f5f56455f49440a202020202020202057484552452044562e5449504f5f444f43544f203d202746270a20202020202020202020414e442044562e45535441545553203c3e202743270a20202020202020202020414e442044562e45535441545553203c3e20274c270a20202020202020202020414e442044562e494d504f5254455f434f42524f203e20300a20202020202000000000000014150407090b0c0d0e101113080507090b0c0d0e080000ffff encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=796 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=796
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=796
+0|joper-ap | [fb-debug] socket.write: length=36 bytes=0000003f0000000200000001000000000000000000000000000000000000000000000000 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [fb-debug] socket.write: length=68 bytes=00000041000000020000002f050204001400080007000e09000700080007000c07000c070010fe070010fe070010fe070010fe070007000700ff4c0000000000000000c8 encrypt=false defer=false
+0|joper-ap | 1:36:15 AM [express] POST /api/microsip/test-connection 200 in 15017ms :: {"success":false,"message"…
+0|joper-ap | [fb-debug] srp.clientSeed: 6ms
+0|joper-ap | [fb-debug] auth: op_connect sent plugin=Srp512 t=7ms
+0|joper-ap | [fb-debug] socket.write: length=604 bytes=000000010000001300000003000000010000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000000a00000155090653595344424108065372703531320a245372703531322c5372703338342c5372703235362c5372702c4c65676163795f4175746807ff00393864326630663066613865653666613136626638316331623635623634636630666239393435313066353134633565633934343137346464643863353339383566363634643538303431633433353961353036353334383261616561333761386332656361633066393338373633613665366437633432316334333138303739613266326538346633333038366632656334356633316666313035343533626332353434643532633936383338326538396538333134653733373938303965323133323532383365363236643331663762633836653139383565623866616464386661623066626530313835623835323638396239306333363766313407030130320b04000000000104726f6f7404096c6f63616c686f737406000000000000000a000000010000000200000003000000010000800b000000010000000500000005000000020000800c000000010000000500000005000000030000800d000000010000000500000005000000040000800e000000010000000500000005000000050000800f00000001000000050000000500000006000080100000000100000005000000050000000700008011000000010000000500000005000000080000801200000001000000050000000500000009000080130000000100000005000000050000000a encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=44 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=94(op_accept_data) pos=4 buflen=44
+0|joper-ap | [fb-debug] auth: op_accept_data received plugin=Legacy_Auth proto=32787 t=39ms
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=44
+0|joper-ap | [fb-debug] socket.write: length=92 bytes=00000013000000000000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000002a013004555446384d001c065359534442414704312d10004a046e6f6465540b5150334c4d5a2f4d4a682e0000 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [Microsip] Connected to Firebird database
+0|joper-ap | [fb-debug] socket.write: length=20 bytes=0000001d0000000000000005030f120906000000 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [fb-debug] describeBytes: [
+0|joper-ap |   21,  4,  7,  9, 11, 12, 13,
+0|joper-ap |   14, 16, 17, 19,  8,  5,  7,
+0|joper-ap |    9, 11, 12, 13, 14,  8
+0|joper-ap | ]
+0|joper-ap | [fb-debug] socket.write: length=96 bytes=0000003e0000000000000044000000010000ffff000000030000002653454c45435420434f554e54282a2920415320434f554e542046524f4d20434c49454e544553000000000014150407090b0c0d0e101113080507090b0c0d0e080000ffff encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=128 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=128
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=128
+0|joper-ap | [fb-debug] socket.write: length=8 bytes=0000001f00000001 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [fb-debug] socket.write: length=20 bytes=0000001d0000000000000005030f120906000000 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [fb-debug] describeBytes: [
+0|joper-ap |   21,  4,  7,  9, 11, 12, 13,
+0|joper-ap |   14, 16, 17, 19,  8,  5,  7,
+0|joper-ap |    9, 11, 12, 13, 14,  8
+0|joper-ap | ]
+0|joper-ap | [fb-debug] socket.write: length=136 bytes=0000003e0000000000000044000000010000ffff000000030000004e53454c454354204649525354203130205244422452454c4154494f4e5f4e414d452046524f4d205244422452454c4154494f4e53205748455245205244422453595354454d5f464c4147203d2030000000000014150407090b0c0d0e101113080507090b0c0d0e080000ffff encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=180 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=180
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=180
+0|joper-ap | [fb-debug] socket.write: length=36 bytes=0000003f0000000300000001000000000000000000000000000000000000000000000000 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [fb-debug] socket.write: length=36 bytes=00000041000000030000000d0502040002000efc000700ff4c00000000000000000000c8 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=2692 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=66(op_fetch_response) pos=4 buflen=2692
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=2692
+0|joper-ap | [fb-debug] socket.write: length=12 bytes=000000430000000300000002 encrypt=false defer=true
+0|joper-ap | [fb-debug] socket.write: length=8 bytes=0000001e00000001 encrypt=false defer=false
+0|joper-ap | [fb-debug] data event: bytes=64 queue=2 pending=2 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=64
+0|joper-ap | [fb-debug] response dispatched: queue remaining=1 pending remaining=1 xdr.pos=32
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=36 buflen=64
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=64
+0|joper-ap | [fb-debug] socket.write: length=8 bytes=0000001500000000 encrypt=false defer=false
+0|joper-ap | 1:36:26 AM [express] POST /api/microsip/test-connection 200 in 6693ms :: {"success":true,"message":"…
+0|joper-ap | [fb-debug] data event: bytes=32 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=9(op_response) pos=4 buflen=32
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=32
+0|joper-ap | [fb-debug] data event: bytes=5792 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-ap | [fb-debug] decodeResponse: opcode=66(op_fetch_response) pos=4 buflen=5792
+0|joper-ap | [fb-debug] data event: bytes=8192 queue=1 pending=0 xdr.pos=0 savedBuf=true
+0|joper-ap | [fb-debug] decodeResponse: opcode=66(op_fetch_response) pos=4 buflen=8192
+0|joper-ap | [fb-debug] data event: bytes=15660 queue=1 pending=0 xdr.pos=0 savedBuf=true
+0|joper-ap | [fb-debug] decodeResponse: opcode=66(op_fetch_response) pos=4 buflen=15660
+0|joper-ap | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=15660
+0|joper-ap | [fb-debug] socket.write: length=68 bytes=00000041000000020000002f050204001400080007000e09000700080007000c07000c070010fe070010fe070010fe070010fe070007000700ff4c0000000000000000c8 encrypt=false defer=false
+
+0|joper-app  | 1:39:19 AM [express] Microsip scheduler started (poll every 5 min)
+0|joper-app  | 1:39:19 AM [express] Account statement scheduler started (poll every 60 min)
+0|joper-app  | 1:39:19 AM [express] Scheduled visit reminder scheduler started (poll every 1 min)
+0|joper-app  | 1:39:19 AM [express] serving on port 5000
+0|joper-app  | [Microsip] Cleaned up 1 orphaned sync log(s) from previous run
+0|joper-app  | [Microsip] Attaching to 200.92.216.146:3050 db=c:\Microsip datos\maq nor.fdb
+0|joper-app  | [fb-debug] srp.clientSeed: 5ms
+0|joper-app  | [fb-debug] auth: op_connect sent plugin=Srp512 t=6ms
+0|joper-app  | [fb-debug] socket.write: length=600 bytes=000000010000001300000003000000010000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000000a00000154090653595344424108065372703531320a245372703531322c5372703338342c5372703235362c5372702c4c65676163795f4175746807ff006565383932346534613736306535313834633862623562316335616133396139633062623765333234633863313836333934346134656362316363666531376337343861616639313833393661313530666539623335633164663563666666613131303535316563393161383531636239346330343164613733643636623062356430386433386463373233376564366163326539396465643634373636376332313463383163396261336162653134383033626261393265333131626566346261386433353861336636623864343930343231643438346261636563656231653437353462336130316233633665356538663132376432333439353334070201660b04000000000104726f6f7404096c6f63616c686f737406000000000a000000010000000200000003000000010000800b000000010000000500000005000000020000800c000000010000000500000005000000030000800d000000010000000500000005000000040000800e000000010000000500000005000000050000800f00000001000000050000000500000006000080100000000100000005000000050000000700008011000000010000000500000005000000080000801200000001000000050000000500000009000080130000000100000005000000050000000a encrypt=false defer=false
+0|joper-app  | [fb-debug] data event: bytes=44 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-app  | [fb-debug] decodeResponse: opcode=94(op_accept_data) pos=4 buflen=44
+0|joper-app  | [fb-debug] auth: op_accept_data received plugin=Legacy_Auth proto=32787 t=42ms
+0|joper-app  | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=44
+0|joper-app  | [fb-debug] socket.write: length=92 bytes=00000013000000000000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000002a013004555446384d001c065359534442414704822e10004a046e6f6465540b4f454b7965727064324a2e0000 encrypt=false defer=false
+0|joper-app  | [fb-debug] data event: bytes=24 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-app  | [fb-debug] decodeResponse: opcode=92(op_cont_auth) pos=4 buflen=24
+0|joper-app  | [fb-debug] auth: op_cont_auth received plugin=Srp pendingAccept=none t=87ms
+0|joper-app  | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=87ms
+0|joper-app  | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-app  | 1:39:48 AM [express] POST /api/microsip/test-connection 200 in 20068ms :: {"success":false,"message"…
+0|joper-app  | 1:39:57 AM [express] GET /api/user 304 in 6ms :: {"id":"90aedb83-2e52-4ea5-9eb9-9230b5e14d87","tenan…
+0|joper-app  | 1:39:58 AM [express] GET /api/tenant-config 304 in 15ms :: {"id":"710bc48d-9799-45a2-836b-4aa90a7e8a…
+0|joper-app  | 1:39:58 AM [express] GET /api/tenants 403 in 5ms :: {"error":"Tenant management only available on ma…
+0|joper-app  | 1:39:58 AM [express] GET /api/microsip/config 304 in 8ms :: {"configured":true,"id":"0efe41eb-885a-4…
+0|joper-app  | 1:39:58 AM [express] GET /api/microsip/logs 304 in 15ms :: [{"id":"b136dbc7-f37d-44d2-979b-1d7b2481b…
+0|joper-app  | [Microsip] Attaching to 200.92.216.146:3050 db=c:\Microsip datos\maq nor.fdb
+0|joper-app  | [fb-debug] srp.clientSeed: 5ms
+0|joper-app  | [fb-debug] auth: op_connect sent plugin=Srp512 t=6ms
+0|joper-app  | [fb-debug] socket.write: length=604 bytes=000000010000001300000003000000010000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000000a00000155090653595344424108065372703531320a245372703531322c5372703338342c5372703235362c5372702c4c65676163795f4175746807ff00366430633635343935383161643064366662623439393734613364633764636561356663356631626637333661346363303733653137336265656434316535353232623431343538343164383638393035616161326162353538663536613833346163346163343336653334336235626366393137323930303631313563613663306139356233393665343961636131636533613130633964383937333938383335663364303338346531333063393966363963323766666338313863323566626232656630303432663463616233323632643562663839353830313536363733636539383361366335633339356339313130306236333333663463366207030166360b04000000000104726f6f7404096c6f63616c686f737406000000000000000a000000010000000200000003000000010000800b000000010000000500000005000000020000800c000000010000000500000005000000030000800d000000010000000500000005000000040000800e000000010000000500000005000000050000800f00000001000000050000000500000006000080100000000100000005000000050000000700008011000000010000000500000005000000080000801200000001000000050000000500000009000080130000000100000005000000050000000a encrypt=false defer=false
+0|joper-app  | [fb-debug] data event: bytes=44 queue=1 pending=1 xdr.pos=0 savedBuf=false
+0|joper-app  | [fb-debug] decodeResponse: opcode=94(op_accept_data) pos=4 buflen=44
+0|joper-app  | [fb-debug] auth: op_accept_data received plugin=Legacy_Auth proto=32787 t=38ms
+0|joper-app  | [fb-debug] response dispatched: queue remaining=0 pending remaining=0 xdr.pos=44
+0|joper-app  | [fb-debug] socket.write: length=92 bytes=00000013000000000000001d633a5c4d6963726f736970206461746f735c6d6171206e6f722e6664620000000000002a013004555446384d001c065359534442414704822e10004a046e6f6465540b4f454b7965727064324a2e0000 encrypt=false defer=false
+0|joper-app  | [fb-debug] data event: bytes=24 queue=1 pending=0 xdr.pos=0 savedBuf=false
+0|joper-app  | [fb-debug] decodeResponse: opcode=92(op_cont_auth) pos=4 buflen=24
+0|joper-app  | [fb-debug] auth: op_cont_auth received plugin=Srp pendingAccept=none t=84ms
+0|joper-app  | [fb-debug] auth: op_cont_auth unhandled plugin=Srp pendingAccept=none options.plugin=none t=84ms
+0|joper-app  | [fb-debug] unhandled protocol error: Unhandled server op_cont_auth for plugin: Srp pos=0 bytes=24 queue=1
+0|joper-app  | 1:40:23 AM [express] POST /api/microsip/test-connection 200 in 20042ms :: {"success":false,"message"…
+
