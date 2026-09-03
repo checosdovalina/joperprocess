@@ -222,9 +222,17 @@ export default function ProductionPage() {
       toast({ title: t("label.error"), description: "Selecciona un producto y captura una cantidad mayor a cero.", variant: "destructive" });
       return;
     }
-    const productIds = editEquipment.map(item => item.productId);
-    if (new Set(productIds).size !== productIds.length) {
-      toast({ title: t("label.error"), description: "Un mismo producto no puede aparecer dos veces.", variant: "destructive" });
+    const existingProductIds = new Set(
+      editEquipment.filter(item => item.id).map(item => item.productId),
+    );
+    const newProductIds = editEquipment
+      .filter(item => !item.id)
+      .map(item => item.productId);
+    if (
+      new Set(newProductIds).size !== newProductIds.length
+      || newProductIds.some(productId => existingProductIds.has(productId))
+    ) {
+      toast({ title: t("label.error"), description: "Un producto nuevo no puede repetirse en el pedido.", variant: "destructive" });
       return;
     }
     updateEquipmentMutation.mutate(editEquipment);

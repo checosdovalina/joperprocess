@@ -4606,6 +4606,23 @@ Proporciona tu análisis en el siguiente formato JSON:
         }
       }
 
+      // Preserve duplicate product rows that already exist in legacy orders so
+      // admins can still edit their quantities. New rows may not duplicate an
+      // existing product, and may not duplicate each other.
+      const existingProductIds = new Set(
+        requestedItems
+          .filter(item => item.id)
+          .map(item => existingById.get(item.id!)?.productId)
+          .filter((productId): productId is string => Boolean(productId)),
+      );
+      const newProductIds = requestedItems.filter(item => !item.id).map(item => item.productId);
+      if (
+        new Set(newProductIds).size !== newProductIds.length
+        || newProductIds.some(productId => existingProductIds.has(productId))
+      ) {
+        return res.status(400).json({ error: "Un producto nuevo no puede repetirse en el pedido" });
+      }
+
       const productIds = [...new Set(requestedItems.map(item => item.productId))];
       const selectedProducts = await db.query.products.findMany({
         where: and(
