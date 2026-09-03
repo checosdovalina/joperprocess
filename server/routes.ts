@@ -1768,7 +1768,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const checkin = await scopedStorage.createCheckin(validated);
-      res.status(201).json(checkin);
+      const checkinWithCustomer = await db.query.checkins.findFirst({
+        where: eq(checkins.id, checkin.id),
+        with: { customer: true },
+      });
+      res.status(201).json(checkinWithCustomer || checkin);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("Error creating checkin:", error);
@@ -4538,6 +4542,189 @@ Proporciona tu análisis en el siguiente formato JSON:
     } catch (error) {
       console.error("Error fetching order details:", error);
       res.status(500).json({ error: "Error fetching order details" });
+    }
+  });
+
+  // Modify the equipment list of an order before any release exists.
+  // This is deliberately separate from the general quotation editor: once a
+  // quotation is an order, only an administrator may change its equipment.
+  app.put("/api/orders/:id/equipment", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const requestedItems = z.array(z.object({
+        id: z.string().min(1).optional(),
+        productId: z.string().min(1),
+        quantity: z.coerce.number().positive().max(999999),
+      })).min(1, "El pedido debe conservar al menos un equipo").parse(req.body?.items);
+
+      const scopedStorage = createTenantScopedStorage(req);
+      const order = await scopedStorage.getOrder(id);
+      if (!order) {
+        return res.status(404).json({ error: "Pedido no encontrado" });
+      }
+
+      const editableStatuses = [OrderStatus.PENDING, OrderStatus.IN_PRODUCTION, OrderStatus.READY];
+      if (!editableStatuses.includes(order.status as any)) {
+        return res.status(400).json({ error: "Los equipos solo se pueden modificar antes de liberar o embarcar el pedido" });
+      }
+
+      const releases = await scopedStorage.getOrderReleases(id);
+      if (releases.length > 0) {
+        return res.status(400).json({ error: "No se pueden modificar los equipos porque el pedido ya tiene liberaciones" });
+      }
+
+      const quotation = await db.query.quotations.findFirst({
+        where: eq(quotations.id, order.quotationId),
+      });
+      if (!quotation || quotation.tenantId !== order.tenantId || quotation.empresaId !== order.empresaId) {
+        return res.status(404).json({ error: "Cotización del pedido no encontrada" });
+      }
+
+      const existingItems = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, quotation.id),
+      });
+      const existingById = new Map(existingItems.map(item => [item.id, item]));
+      const requestedExistingIds = requestedItems.flatMap(item => item.id ? [item.id] : []);
+      if (new Set(requestedExistingIds).size !== requestedExistingIds.length) {
+        return res.status(400).json({ error: "La lista contiene equipos duplicados" });
+      }
+      for (const item of requestedItems) {
+        if (item.id) {
+          const existing = existingById.get(item.id);
+          if (!existing || existing.productId !== item.productId) {
+            return res.status(400).json({ error: "Uno de los equipos no pertenece a este pedido" });
+          }
+        }
+      }
+
+      const productIds = [...new Set(requestedItems.map(item => item.productId))];
+      const selectedProducts = await db.query.products.findMany({
+        where: and(
+          inArray(products.id, productIds),
+          eq(products.tenantId, order.tenantId),
+        ),
+      });
+      const productsById = new Map(selectedProducts.map(product => [product.id, product]));
+      if (selectedProducts.length !== productIds.length) {
+        return res.status(400).json({ error: "Uno de los productos no está disponible para esta compañía" });
+      }
+
+      const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, order.tenantId) });
+      const isEnglishTenant = tenant?.locale?.toLowerCase().startsWith("en") ?? false;
+      const quoteTaxRate = Number(quotation.taxRate || 0);
+
+      await db.transaction(async (tx) => {
+        const keepIds = new Set(requestedExistingIds);
+        const deleteIds = existingItems.filter(item => !keepIds.has(item.id)).map(item => item.id);
+        if (deleteIds.length > 0) {
+          await tx.delete(quotationItems).where(inArray(quotationItems.id, deleteIds));
+        }
+
+        for (const [position, requested] of requestedItems.entries()) {
+          const product = productsById.get(requested.productId)!;
+          const existing = requested.id ? existingById.get(requested.id) : undefined;
+          const unitPrice = Number(existing?.unitPrice ?? product.listPrice);
+          const listPrice = Number(existing?.listPrice ?? product.listPrice);
+          const taxRate = isEnglishTenant ? quoteTaxRate : Number(existing?.taxRate ?? product.taxRate);
+          const subtotal = requested.quantity * unitPrice;
+          const taxAmount = subtotal * taxRate / 100;
+          const values = {
+            quantity: requested.quantity.toFixed(2),
+            position,
+            subtotal: subtotal.toFixed(2),
+            taxRate: taxRate.toFixed(2),
+            taxAmount: taxAmount.toFixed(2),
+            total: (subtotal + taxAmount).toFixed(2),
+          };
+
+          if (existing) {
+            await tx.update(quotationItems).set(values).where(eq(quotationItems.id, existing.id));
+          } else {
+            await tx.insert(quotationItems).values({
+              quotationId: quotation.id,
+              productId: product.id,
+              productCode: product.code,
+              productName: product.name,
+              description: product.description,
+              unitOfMeasure: product.unitOfMeasure,
+              listPrice: listPrice.toFixed(2),
+              unitPrice: unitPrice.toFixed(2),
+              discountPercent: "0",
+              discountAmount: "0",
+              exceedsMaxDiscount: false,
+              currency: product.currency,
+              ...values,
+            });
+          }
+        }
+
+        let finalItems = await tx.query.quotationItems.findMany({
+          where: eq(quotationItems.quotationId, quotation.id),
+          orderBy: (items, { asc }) => [asc(items.position)],
+        });
+
+        if (isEnglishTenant) {
+          const allocation = allocateManualTaxToLines(
+            finalItems.map(item => Number(item.subtotal || 0)),
+            quoteTaxRate,
+            Number(quotation.globalDiscount || 0),
+          );
+          await Promise.all(finalItems.map((item, index) => tx.update(quotationItems).set({
+            taxRate: quoteTaxRate.toFixed(2),
+            taxAmount: allocation.lines[index].taxAmount.toFixed(2),
+            total: allocation.lines[index].total.toFixed(2),
+          }).where(eq(quotationItems.id, item.id))));
+          await tx.update(quotations).set({
+            subtotal: allocation.totals.subtotal.toFixed(2),
+            tax: allocation.totals.tax.toFixed(2),
+            total: (allocation.totals.total + Number(quotation.shippingCost || 0)).toFixed(2),
+          }).where(eq(quotations.id, quotation.id));
+        } else {
+          const exchangeRate = Math.max(Number(quotation.exchangeRate) || 18, 0.0001);
+          const quoteCurrency = quotation.currency || "AMBAS";
+          const toQuoteCurrency = (amount: number, itemCurrency: string) => {
+            if (quoteCurrency === "AMBAS") return itemCurrency === "USD" ? amount * exchangeRate : amount;
+            if (itemCurrency === quoteCurrency) return amount;
+            if (itemCurrency === "USD" && quoteCurrency === "MXN") return amount * exchangeRate;
+            if (itemCurrency === "MXN" && quoteCurrency === "USD") return amount / exchangeRate;
+            return amount;
+          };
+          const subtotal = finalItems.reduce((sum, item) =>
+            sum + toQuoteCurrency(Number(item.subtotal || 0), item.currency), 0);
+          const rawTax = finalItems.reduce((sum, item) =>
+            sum + toQuoteCurrency(Number(item.taxAmount || 0), item.currency), 0);
+          const totals = calculateQuotationTotals({
+            subtotal,
+            globalDiscount: Number(quotation.globalDiscount || 0),
+            automaticTaxRate: subtotal > 0 ? rawTax / subtotal * 100 : 0,
+            shippingCost: Number(quotation.shippingCost || 0),
+          });
+          const totalSavings = finalItems.reduce((sum, item) =>
+            sum + toQuoteCurrency(
+              Number(item.quantity || 0) * Number(item.discountAmount || 0),
+              item.currency,
+            ), 0) + totals.discount;
+          await tx.update(quotations).set({
+            subtotal: totals.subtotal.toFixed(2),
+            tax: totals.tax.toFixed(2),
+            total: totals.total.toFixed(2),
+            totalSavings: totalSavings.toFixed(2),
+          }).where(eq(quotations.id, quotation.id));
+        }
+      });
+
+      const updatedItems = await db.query.quotationItems.findMany({
+        where: eq(quotationItems.quotationId, quotation.id),
+        with: { product: true },
+        orderBy: (items, { asc }) => [asc(items.position)],
+      });
+      res.json({ items: updatedItems });
+    } catch (error) {
+      console.error("Error updating order equipment:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.issues[0]?.message || "Lista de equipos inválida" });
+      }
+      res.status(500).json({ error: "Error al modificar los equipos del pedido" });
     }
   });
 

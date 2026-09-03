@@ -140,8 +140,18 @@ export default function CheckinsPage() {
       const res = await apiRequest("POST", "/api/checkins", data);
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+    onSuccess: async (createdCheckin: Checkin & { customer?: Customer }) => {
+      // Add the new row immediately. The query uses an infinite stale time,
+      // so relying only on invalidation can leave the visible list unchanged
+      // until the user refreshes the page.
+      queryClient.setQueryData<(Checkin & { customer: Customer })[]>(
+        ["/api/checkins"],
+        (current) => {
+          const next = current ? current.filter(item => item.id !== createdCheckin.id) : [];
+          return [{ ...createdCheckin, customer: createdCheckin.customer as Customer }, ...next];
+        },
+      );
+      await queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
       setIsDialogOpen(false);
       setFormData({
         customerId: "",

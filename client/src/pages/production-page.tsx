@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Factory, Eye, EyeOff, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package, Truck, Search } from "lucide-react";
+import { Factory, Eye, EyeOff, Calendar, Clock, AlertCircle, Save, X, CheckCircle2, Package, Truck, Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchCombobox } from "@/components/search-combobox";
 
 interface OrderRelease {
   id: string;
@@ -64,6 +65,7 @@ interface OrderDetails extends Order {
 }
 
 type OrderWithQuotation = Order & { quotation: Quotation & { customer: Customer } };
+type EditableEquipment = { id?: string; productId: string; quantity: string };
 
 export default function ProductionPage() {
   const { t } = useI18n();
@@ -73,11 +75,14 @@ export default function ProductionPage() {
   const [editFactoryNotes, setEditFactoryNotes] = useState("");
   const [editProgress, setEditProgress] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingEquipment, setIsEditingEquipment] = useState(false);
+  const [editEquipment, setEditEquipment] = useState<EditableEquipment[]>([]);
   const [hideDelivered, setHideDelivered] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEmpresa, setFilterEmpresa] = useState("all");
   const { user } = useAuth();
   const { toast } = useToast();
+  const isAdmin = user?.role === "admin";
 
   const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -86,6 +91,10 @@ export default function ProductionPage() {
   });
 
   const { data: empresas } = useQuery<Empresa[]>({ queryKey: ["/api/empresas"] });
+  const { data: products } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+    enabled: isAdmin && detailsDialogOpen,
+  });
   const empresaName = (id: string | null | undefined) =>
     (id && empresas?.find(e => e.id === id)?.name) || "";
 
@@ -117,6 +126,29 @@ export default function ProductionPage() {
     },
     onError: () => {
       toast({ title: t("label.error"), description: t("production.error-update"), variant: "destructive" });
+    },
+  });
+
+  const updateEquipmentMutation = useMutation({
+    mutationFn: async (items: EditableEquipment[]) => {
+      const res = await apiRequest("PUT", `/api/orders/${selectedOrderId}/equipment`, {
+        items: items.map(item => ({
+          ...(item.id ? { id: item.id } : {}),
+          productId: item.productId,
+          quantity: Number(item.quantity),
+        })),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Equipos actualizados", description: "La lista de equipos del MEX se actualizó correctamente." });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedOrderId, "details"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
+      setIsEditingEquipment(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: t("label.error"), description: error.message || "No fue posible actualizar los equipos.", variant: "destructive" });
     },
   });
 
@@ -169,6 +201,33 @@ export default function ProductionPage() {
       factoryNotes: editFactoryNotes,
       productionProgress: editProgress,
     });
+  };
+
+  const startEditingEquipment = () => {
+    if (!orderDetails) return;
+    setEditEquipment(orderDetails.quotation.items.map(item => ({
+      id: item.id,
+      productId: item.productId || "",
+      quantity: String(Number(item.quantity)),
+    })));
+    setIsEditingEquipment(true);
+  };
+
+  const saveEquipment = () => {
+    if (editEquipment.length === 0) {
+      toast({ title: t("label.error"), description: "El pedido debe conservar al menos un equipo.", variant: "destructive" });
+      return;
+    }
+    if (editEquipment.some(item => !item.productId || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0)) {
+      toast({ title: t("label.error"), description: "Selecciona un producto y captura una cantidad mayor a cero.", variant: "destructive" });
+      return;
+    }
+    const productIds = editEquipment.map(item => item.productId);
+    if (new Set(productIds).size !== productIds.length) {
+      toast({ title: t("label.error"), description: "Un mismo producto no puede aparecer dos veces.", variant: "destructive" });
+      return;
+    }
+    updateEquipmentMutation.mutate(editEquipment);
   };
 
   const handleNoDeliveryTime = () => {
@@ -643,7 +702,85 @@ export default function ProductionPage() {
               <Separator />
 
               <div>
-                <h3 className="font-semibold mb-3">{t("production.products")}</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h3 className="font-semibold">{t("production.products")}</h3>
+                  {isAdmin && !isEditingEquipment && [OrderStatus.PENDING, OrderStatus.IN_PRODUCTION, OrderStatus.READY].includes(orderDetails.status as any) && (
+                    <Button variant="outline" size="sm" onClick={startEditingEquipment} data-testid="button-edit-equipment">
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Modificar equipos
+                    </Button>
+                  )}
+                </div>
+                {isEditingEquipment ? (
+                  <div className="space-y-3 rounded-md border p-3">
+                    <div className="space-y-2">
+                      {editEquipment.map((item, index) => (
+                        <div key={item.id || `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_100px_40px] gap-2 items-center">
+                          <SearchCombobox
+                            options={(products || []).filter(product =>
+                              product.active || product.id === item.productId
+                            ).map(product => ({
+                              value: product.id,
+                              label: product.name,
+                              sublabel: product.code,
+                            }))}
+                            value={item.productId}
+                            onValueChange={(productId) => setEditEquipment(current =>
+                              current.map((row, rowIndex) => rowIndex === index ? { ...row, productId } : row)
+                            )}
+                            placeholder="Seleccionar equipo"
+                            searchPlaceholder="Buscar por nombre o código..."
+                            data-testid={`select-equipment-${index}`}
+                            disabled={Boolean(item.id)}
+                          />
+                          <Input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={item.quantity}
+                            onChange={(event) => setEditEquipment(current =>
+                              current.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row)
+                            )}
+                            aria-label="Cantidad"
+                            data-testid={`input-equipment-quantity-${index}`}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditEquipment(current => current.filter((_, rowIndex) => rowIndex !== index))}
+                            aria-label="Quitar equipo"
+                            data-testid={`button-remove-equipment-${index}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditEquipment(current => [...current, { productId: "", quantity: "1" }])}
+                        data-testid="button-add-equipment"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Agregar equipo
+                      </Button>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditingEquipment(false)}>
+                          <X className="h-4 w-4 mr-2" />
+                          Cancelar
+                        </Button>
+                        <Button type="button" size="sm" onClick={saveEquipment} disabled={updateEquipmentMutation.isPending} data-testid="button-save-equipment">
+                          <Save className="h-4 w-4 mr-2" />
+                          {updateEquipmentMutation.isPending ? "Guardando..." : "Guardar equipos"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -657,8 +794,8 @@ export default function ProductionPage() {
                     <TableBody>
                       {orderDetails.quotation.items.map((item) => (
                         <TableRow key={item.id}>
-                          <TableCell className="font-mono text-sm">{item.product.code}</TableCell>
-                          <TableCell className="font-medium">{item.product.name}</TableCell>
+                          <TableCell className="font-mono text-sm">{item.product?.code || item.productCode}</TableCell>
+                          <TableCell className="font-medium">{item.product?.name || item.productName}</TableCell>
                           <TableCell className="text-right font-mono">{item.quantity}</TableCell>
                           <TableCell className="text-right">{item.unitOfMeasure}</TableCell>
                         </TableRow>
@@ -666,6 +803,7 @@ export default function ProductionPage() {
                     </TableBody>
                   </Table>
                 </div>
+                )}
               </div>
 
               <Separator />
