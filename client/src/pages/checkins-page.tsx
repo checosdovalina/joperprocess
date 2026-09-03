@@ -77,8 +77,22 @@ export default function CheckinsPage() {
     queryKey: ["/api/customers"],
   });
 
+  const localDayStart = new Date();
+  localDayStart.setHours(0, 0, 0, 0);
+  const localDayEnd = new Date(localDayStart);
+  localDayEnd.setDate(localDayEnd.getDate() + 1);
+  const todayStartIso = localDayStart.toISOString();
+  const todayEndIso = localDayEnd.toISOString();
+
   const { data: todayVisits } = useQuery<(ScheduledVisit & { customer: Customer })[]>({
-    queryKey: ["/api/scheduled-visits/today"],
+    queryKey: ["/api/scheduled-visits/today", todayStartIso, todayEndIso],
+    queryFn: async () => {
+      const params = new URLSearchParams({ start: todayStartIso, end: todayEndIso });
+      const res = await apiRequest("GET", `/api/scheduled-visits/today?${params}`);
+      return res.json();
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const convertVisitMutation = useMutation({

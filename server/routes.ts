@@ -1887,9 +1887,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/scheduled-visits/today", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
+      // Prefer the browser's local-day boundaries. The server may run in UTC,
+      // which otherwise moves Monterrey evening visits into the following day.
+      const range = z.object({
+        start: z.coerce.date().optional(),
+        end: z.coerce.date().optional(),
+      }).parse(req.query);
       const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      const startOfDay = range.start ?? new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = range.end ?? new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      if (endOfDay <= startOfDay) {
+        return res.status(400).json({ error: "Rango de fecha inválido" });
+      }
 
       const todayVisits = await db.query.scheduledVisits.findMany({
         where: and(
