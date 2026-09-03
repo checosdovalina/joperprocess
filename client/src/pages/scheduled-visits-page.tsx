@@ -77,7 +77,7 @@ export default function ScheduledVisitsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits/today"] });
+      queryClient.resetQueries({ queryKey: ["/api/scheduled-visits/today"] });
       setIsDialogOpen(false);
       resetForm();
       toast({
@@ -101,7 +101,7 @@ export default function ScheduledVisitsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits/today"] });
+      queryClient.resetQueries({ queryKey: ["/api/scheduled-visits/today"] });
       setIsDialogOpen(false);
       resetForm();
       toast({
@@ -125,7 +125,7 @@ export default function ScheduledVisitsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits/today"] });
+      queryClient.resetQueries({ queryKey: ["/api/scheduled-visits/today"] });
       toast({
         title: t("visits.toast-cancelled"),
         description: t("visits.toast-cancelled-desc"),
