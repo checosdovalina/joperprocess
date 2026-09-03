@@ -232,7 +232,13 @@ export default function ScheduledVisitsPage() {
 
   const hasActiveFilters = searchText !== "" || filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "";
 
-  const filteredVisits = (visits ?? []).filter(v => {
+  // Cancelled visits remain available through the explicit status filter for
+  // history, but stay out of the default list so they do not clutter the agenda.
+  const visibleVisits = (visits ?? []).filter(v =>
+    filterStatus === "cancelled" || v.status !== "cancelled"
+  );
+
+  const filteredVisits = visibleVisits.filter(v => {
     if (filterStatus !== "all" && v.status !== filterStatus) return false;
     if (filterType !== "all" && v.meetingType !== filterType) return false;
     if (searchText) {
@@ -439,7 +445,7 @@ export default function ScheduledVisitsPage() {
             <div>
               <CardTitle data-testid="card-title-visits">{t("visits.all")}</CardTitle>
               <CardDescription data-testid="card-description-visits">
-                {filteredVisits.length} {t("visits.of")} {visits?.length || 0} {t("visits.count-suffix")}
+                {filteredVisits.length} {t("visits.of")} {visibleVisits.length} {t("visits.count-suffix")}
               </CardDescription>
             </div>
           </div>
@@ -576,7 +582,7 @@ export default function ScheduledVisitsPage() {
                 ))}
               </TableBody>
             </Table>
-          ) : visits && visits.length > 0 ? (
+          ) : visibleVisits.length > 0 ? (
             <div className="text-center py-8 text-muted-foreground" data-testid="text-no-results">
               {t("visits.no-match")}
             </div>
