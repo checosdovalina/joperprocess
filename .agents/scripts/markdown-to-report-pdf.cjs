@@ -42,41 +42,13 @@ function setFont(kind = "regular", size = 9.6, color = colors.ink) {
   doc.font(font).fontSize(size).fillColor(color);
 }
 
-function addHeaderFooter() {
-  const pageWidth = doc.page.width;
-  doc.save();
-  doc.strokeColor(colors.line).lineWidth(0.5)
-    .moveTo(doc.page.margins.left, 37)
-    .lineTo(pageWidth - doc.page.margins.right, 37)
-    .stroke();
-  setFont("bold", 7.5, colors.navy);
-  doc.text("JOPER / NEXXO", doc.page.margins.left, 24, { lineBreak: false });
-  setFont("regular", 7.5, colors.muted);
-  doc.text("Reporte de cambios · 23 jul — 4 sep 2026", pageWidth - doc.page.margins.right - 180, 24, {
-    width: 180,
-    align: "right",
-    lineBreak: false,
-  });
-  const footerY = doc.page.height - 33;
-  doc.strokeColor(colors.line).lineWidth(0.5)
-    .moveTo(doc.page.margins.left, footerY - 7)
-    .lineTo(pageWidth - doc.page.margins.right, footerY - 7)
-    .stroke();
-  setFont("regular", 7.5, colors.muted);
-  doc.text(`Página ${doc.page.number}`, doc.page.margins.left, footerY, { lineBreak: false });
-  doc.text("Documento generado a partir del historial de Git", pageWidth - doc.page.margins.right - 230, footerY, {
-    width: 230,
-    align: "right",
-    lineBreak: false,
-  });
-  doc.restore();
+function newPage() {
+  doc.addPage();
 }
-
-doc.on("pageAdded", addHeaderFooter);
 
 function ensureSpace(height = 24) {
   const bottom = doc.page.height - doc.page.margins.bottom - 12;
-  if (doc.y + height > bottom) doc.addPage();
+  if (doc.y + height > bottom) newPage();
 }
 
 function drawCover() {
@@ -127,7 +99,7 @@ function drawCover() {
     "Migraciones, despliegue, pruebas y recomendaciones.",
   ], { bulletRadius: 1.5, textIndent: 14, bulletIndent: 0, lineGap: 3 });
 
-  doc.addPage();
+  newPage();
 }
 
 function cleanInline(text) {
@@ -145,8 +117,17 @@ function drawWrapped(text, options = {}) {
   const size = options.size || 9.6;
   const kind = options.kind || "regular";
   const color = options.color || colors.ink;
+  const cleanedText = cleanInline(text);
+  const font = kind === "bold" ? boldFont : kind === "mono" ? monoFont : regularFont;
+  const height = doc.heightOfString(cleanedText, {
+    width: width - indent,
+    font,
+    fontSize: size,
+    lineGap,
+  });
+  ensureSpace(height + 2);
   setFont(kind, size, color);
-  doc.text(cleanInline(text), doc.page.margins.left + indent, doc.y, {
+  doc.text(cleanedText, doc.page.margins.left + indent, doc.y, {
     width: width - indent,
     lineGap,
     continued: false,
@@ -225,20 +206,46 @@ function renderMarkdown(source) {
 
     const bullet = line.match(/^(\s*)[-*]\s+(.+)$/);
     if (bullet) {
-      ensureSpace(20);
+      const bulletText = cleanInline(bullet[2]);
+      const bulletWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right - 14;
+      const bulletHeight = doc.heightOfString(bulletText, {
+        width: bulletWidth,
+        font: regularFont,
+        fontSize: 9.4,
+        lineGap: 2,
+      });
+      ensureSpace(bulletHeight + 2);
       setFont("regular", 9.4, colors.blue);
       doc.text("•", doc.page.margins.left + 2, doc.y, { lineBreak: false });
-      drawWrapped(bullet[2], { indent: 14, size: 9.4, color: colors.ink, lineGap: 2 });
+      setFont("regular", 9.4, colors.ink);
+      doc.text(bulletText, doc.page.margins.left + 14, doc.y, {
+        width: bulletWidth,
+        lineGap: 2,
+        continued: false,
+      });
       doc.moveDown(0.12);
       continue;
     }
 
     const numbered = line.match(/^\s*(\d+)\.\s+(.+)$/);
     if (numbered) {
-      ensureSpace(20);
+      const numberedText = cleanInline(numbered[2]);
+      const numberedWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right - 19;
+      const numberedHeight = doc.heightOfString(numberedText, {
+        width: numberedWidth,
+        font: regularFont,
+        fontSize: 9.4,
+        lineGap: 2,
+      });
+      ensureSpace(numberedHeight + 2);
       setFont("bold", 9.4, colors.blue);
       doc.text(`${numbered[1]}.`, doc.page.margins.left, doc.y, { width: 16, lineBreak: false });
-      drawWrapped(numbered[2], { indent: 19, size: 9.4, color: colors.ink, lineGap: 2 });
+      setFont("regular", 9.4, colors.ink);
+      doc.text(numberedText, doc.page.margins.left + 19, doc.y, {
+        width: numberedWidth,
+        lineGap: 2,
+        continued: false,
+      });
       doc.moveDown(0.12);
       continue;
     }
@@ -258,6 +265,5 @@ function renderMarkdown(source) {
 }
 
 drawCover();
-addHeaderFooter();
 renderMarkdown(markdown);
 doc.end();
