@@ -6,21 +6,39 @@ id = "OunX3TiIpF84ktHwomnvO"
 uri = "file://MANUAL_NEXXO.md"
 type = "text"
 title = "Manual Completo Nexxo — Por Módulo y Por Rol"
+logical_id = "10f06de6-3ac3-443d-91db-e6f9c43b22b3"
 
 [[outputs]]
 id = "Jgft_sKFeLA_V6ZadfiVB"
 uri = "file://MANUAL_NEXXO.docx"
 type = "word_document"
 title = "Manual Completo Nexxo — Word (.docx)"
+logical_id = "23dc8ba6-5206-4f69-9dc8-df4d637f8643"
 
 [[outputs]]
 id = "aF6Ul7jYohTeNIXChnsVS"
 uri = "file://nexxo-mejoras-mayo-junio-2026.pdf"
 type = "pdf"
 title = "Nexxo - Mejoras (total 89 horas)"
+logical_id = "2dcab6ed-577f-4b16-87bd-4127a91e01db"
 
 [[outputs]]
 id = "UDEdEhqgza91VfZBxkYHD"
 uri = "file://nexxo-opciones-ligero-movil.pdf"
 type = "pdf"
 title = "Opciones Ligero y Móvil — Propuesta técnica"
+logical_id = "2d63b156-3492-44d7-943f-79b1e954ae23"
+
+[[outputs]]
+id = "WyvEpN6wfVMmb687mjzgW"
+uri = "file://reports/reporte-cambios-2026-07-23-a-2026-09-04.md"
+type = "text"
+title = "Reporte de cambios Joper — 23 jul al 4 sep 2026"
+description = "Reporte cronológico y funcional basado en 69 commits, con riesgos y recomendaciones."
+logical_id = "be54fbf6-5051-4272-b346-dae7f9aaa4d0"
+content_hash = "sha256:a8d051e2738fb8651c8fa6bfe4a95c9f154acdd2697034df88171da8f895b549"
+size = 18537
+mtime_ms = 1788557686674
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:b4943a74-0ec5-4000-9a4f-6370e63082f5/be54fbf6-5051-4272-b346-dae7f9aaa4d0/0c0112cf-3501-45a3-b082-6197230e096d"
+storage_version_token = "1788557823181801"
+content_type = "text/markdown"
