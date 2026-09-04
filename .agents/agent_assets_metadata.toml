@@ -42,3 +42,17 @@ mtime_ms = 1788557686674
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:b4943a74-0ec5-4000-9a4f-6370e63082f5/be54fbf6-5051-4272-b346-dae7f9aaa4d0/0c0112cf-3501-45a3-b082-6197230e096d"
 storage_version_token = "1788557823181801"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "CDkFMkk21biBc71juTHm6"
+uri = "file://reports/reporte-cambios-2026-07-23-a-2026-09-04.pdf"
+type = "pdf"
+title = "Reporte de cambios Joper — PDF"
+description = "Versión PDF del reporte cronológico y funcional de los cambios del 23 de julio al 4 de septiembre de 2026."
+logical_id = "6d74e4f0-7164-4d18-8dd8-e73dc53c1774"
+content_hash = "sha256:e174763b21754d84b532eac92721d9d6a0ae534bf670ec14bbd79d6967b4efb2"
+size = 50082
+mtime_ms = 1788558194155
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:b4943a74-0ec5-4000-9a4f-6370e63082f5/6d74e4f0-7164-4d18-8dd8-e73dc53c1774/f4141df5-c769-4300-a264-a23e14f28030"
+storage_version_token = "1788558255689564"
+content_type = "application/pdf"
