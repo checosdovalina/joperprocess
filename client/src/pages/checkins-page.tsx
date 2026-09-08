@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Checkin, Customer, InsertCheckin, ScheduledVisit, MeetingType } from "@shared/schema";
+import { Checkin, Customer, InsertCheckin, ScheduledVisit, MeetingType, User } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,13 +69,20 @@ export default function CheckinsPage() {
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
 
-  const { data: checkins, isLoading } = useQuery<(Checkin & { customer: Customer })[]>({
+  type CheckinWithRelations = Checkin & { customer: Customer; user?: User; salesPerson?: User | null };
+  type VisitWithRelations = ScheduledVisit & { customer: Customer; salesPerson?: User | null };
+  const { data: checkins, isLoading } = useQuery<CheckinWithRelations[]>({
     queryKey: ["/api/checkins"],
   });
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
   });
+  const { data: sellers = [] } = useQuery<Pick<User, "id" | "fullName" | "username" | "role">[]>({
+    queryKey: ["/api/sellers"],
+  });
+  const mayAssignOthers = user?.role === "admin" || user?.role === "credito_cobranza";
+  const assignableSellers = mayAssignOthers ? sellers : sellers.filter((seller) => seller.id === user?.id);
 
   const localDayStart = new Date();
   localDayStart.setHours(0, 0, 0, 0);
@@ -84,7 +91,7 @@ export default function CheckinsPage() {
   const todayStartIso = localDayStart.toISOString();
   const todayEndIso = localDayEnd.toISOString();
 
-  const { data: todayVisits } = useQuery<(ScheduledVisit & { customer: Customer })[]>({
+  const { data: todayVisits } = useQuery<VisitWithRelations[]>({
     queryKey: ["/api/scheduled-visits/today", todayStartIso, todayEndIso],
     queryFn: async () => {
       const params = new URLSearchParams({ start: todayStartIso, end: todayEndIso });
@@ -154,11 +161,11 @@ export default function CheckinsPage() {
       const res = await apiRequest("POST", "/api/checkins", data);
       return await res.json();
     },
-    onSuccess: async (createdCheckin: Checkin & { customer?: Customer }) => {
+    onSuccess: async (createdCheckin: CheckinWithRelations) => {
       // Add the new row immediately. The query uses an infinite stale time,
       // so relying only on invalidation can leave the visible list unchanged
       // until the user refreshes the page.
-      queryClient.setQueryData<(Checkin & { customer: Customer })[]>(
+      queryClient.setQueryData<CheckinWithRelations[]>(
         ["/api/checkins"],
         (current) => {
           const next = current ? current.filter(item => item.id !== createdCheckin.id) : [];
@@ -175,6 +182,7 @@ export default function CheckinsPage() {
         topics: [],
         notes: "",
         photos: [],
+        salesPersonId: user?.id,
       });
       setLocation(null);
       toast({
@@ -318,6 +326,24 @@ export default function CheckinsPage() {
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="checkin-sales-person" className="text-sm font-medium">Vendedor asignado</Label>
+                    <Select
+                      value={formData.salesPersonId || user?.id || ""}
+                      onValueChange={(value) => setFormData({ ...formData, salesPersonId: value })}
+                    >
+                      <SelectTrigger id="checkin-sales-person" data-testid="select-checkin-sales-person">
+                        <SelectValue placeholder="Selecciona un vendedor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assignableSellers.map((seller) => (
+                          <SelectItem key={seller.id} value={seller.id}>
+                            {seller.fullName || seller.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="meetingType" className="text-sm font-medium">{t("checkins.meeting-type")} *</Label>
                     <Select
@@ -556,6 +582,7 @@ export default function CheckinsPage() {
                   <TableRow>
                     <TableHead>{t("checkins.col.datetime")}</TableHead>
                     <TableHead>{t("label.client")}</TableHead>
+                    <TableHead>Vendedor</TableHead>
                     <TableHead>{t("label.type")}</TableHead>
                     <TableHead>{t("checkins.col.location")}</TableHead>
                     <TableHead>{t("label.status")}</TableHead>
@@ -579,6 +606,7 @@ export default function CheckinsPage() {
                         <div className="font-medium">{checkin.customer?.name || t("checkins.no-customer")}</div>
                         <div className="text-xs text-muted-foreground">{checkin.customer?.city || "-"}</div>
                       </TableCell>
+                      <TableCell>{checkin.salesPerson?.fullName || checkin.user?.fullName || "—"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{checkin.meetingType || MeetingType.VISITA}</Badge>
                       </TableCell>

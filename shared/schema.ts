@@ -282,6 +282,8 @@ export const customers = pgTable("customers", {
   creditDays: integer("credit_days").notNull().default(30),
   blocked: boolean("blocked").notNull().default(false),
   skipStatementEmail: boolean("skip_statement_email").notNull().default(false),
+  statementEmails: text("statement_emails").array().notNull().default(sql`ARRAY[]::text[]`),
+  statementEmailsConfigured: boolean("statement_emails_configured").notNull().default(false),
   contactName: text("contact_name"),
   // Microsip integration fields
   microsipId: integer("microsip_id"), // CLIENTE_ID from Microsip CLIENTES table
@@ -329,6 +331,7 @@ export const scheduledVisits = pgTable("scheduled_visits", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
+  salesPersonId: varchar("sales_person_id").references(() => users.id),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   customerLocationId: varchar("customer_location_id").references(() => customerLocations.id),
   meetingType: text("meeting_type").notNull().default(MeetingType.VISITA),
@@ -751,8 +754,10 @@ export const incidentActivities = pgTable("incident_activities", {
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
-  checkins: many(checkins),
-  scheduledVisits: many(scheduledVisits),
+  checkins: many(checkins, { relationName: "checkinCreator" }),
+  assignedCheckins: many(checkins, { relationName: "checkinSalesPerson" }),
+  scheduledVisits: many(scheduledVisits, { relationName: "scheduledVisitCreator" }),
+  assignedScheduledVisits: many(scheduledVisits, { relationName: "scheduledVisitSalesPerson" }),
   quotations: many(quotations),
   creditAuthorizations: many(creditAuthorizations),
   paymentsRegistered: many(payments),
@@ -780,6 +785,12 @@ export const checkinsRelations = relations(checkins, ({ one }) => ({
   user: one(users, {
     fields: [checkins.userId],
     references: [users.id],
+    relationName: "checkinCreator",
+  }),
+  salesPerson: one(users, {
+    fields: [checkins.salesPersonId],
+    references: [users.id],
+    relationName: "checkinSalesPerson",
   }),
   customer: one(customers, {
     fields: [checkins.customerId],
@@ -795,6 +806,12 @@ export const scheduledVisitsRelations = relations(scheduledVisits, ({ one }) => 
   user: one(users, {
     fields: [scheduledVisits.userId],
     references: [users.id],
+    relationName: "scheduledVisitCreator",
+  }),
+  salesPerson: one(users, {
+    fields: [scheduledVisits.salesPersonId],
+    references: [users.id],
+    relationName: "scheduledVisitSalesPerson",
   }),
   customer: one(customers, {
     fields: [scheduledVisits.customerId],
@@ -1076,11 +1093,17 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
   tenantId: true,
+  statementEmails: true,
+  statementEmailsConfigured: true,
   createdAt: true,
 });
 
 export const updateCustomerSchema = createInsertSchema(customers).omit({
   id: true,
+  tenantId: true,
+  statementEmails: true,
+  statementEmailsConfigured: true,
+  skipStatementEmail: true,
   createdAt: true,
 }).partial();
 
@@ -1125,6 +1148,8 @@ export const insertScheduledVisitSchema = createInsertSchema(scheduledVisits).om
 
 export const updateScheduledVisitSchema = createInsertSchema(scheduledVisits).omit({
   id: true,
+  tenantId: true,
+  userId: true,
   reminderSentAt: true,
   createdAt: true,
   updatedAt: true,

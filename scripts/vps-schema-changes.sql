@@ -166,6 +166,25 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS receive_email_notifications boolean NOT NULL DEFAULT true;
 
 -- ----------------------------------------------------------------
+-- [2026-09-08] Vendedor asignado y destinatarios de estados de cuenta
+-- Conserva user_id como creador y copia los correos actuales por compatibilidad.
+-- ----------------------------------------------------------------
+ALTER TABLE scheduled_visits
+  ADD COLUMN IF NOT EXISTS sales_person_id varchar REFERENCES users(id);
+UPDATE scheduled_visits SET sales_person_id = user_id WHERE sales_person_id IS NULL;
+CREATE INDEX IF NOT EXISTS scheduled_visits_sales_person_date_idx
+  ON scheduled_visits (sales_person_id, scheduled_date);
+ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS statement_emails text[] NOT NULL DEFAULT ARRAY[]::text[];
+ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS statement_emails_configured boolean NOT NULL DEFAULT false;
+ALTER TABLE checkins
+  ADD COLUMN IF NOT EXISTS sales_person_id varchar REFERENCES users(id);
+UPDATE checkins SET sales_person_id = user_id WHERE sales_person_id IS NULL;
+CREATE INDEX IF NOT EXISTS checkins_sales_person_date_idx
+  ON checkins (sales_person_id, checkin_at);
+
+-- ----------------------------------------------------------------
 -- [2026-08-25] Columna: quotations.tax_rate
 -- La tasa de impuesto se usa en cotizaciones USA y en relaciones de
 -- cotización cargadas desde pedidos.

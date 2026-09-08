@@ -140,10 +140,14 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
   const failedCustomers: string[] = [];
 
   for (const customer of allCustomers) {
-    const emails = (customer.email ?? "")
+    const registeredEmails = (customer.email ?? "")
       .split(/[;,]/)
       .map((e) => e.trim())
       .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    const selected = (customer.statementEmails ?? [])
+      .map((e) => e.trim())
+      .filter((e) => registeredEmails.some((registered) => registered.toLowerCase() === e.toLowerCase()));
+    const emails = customer.statementEmailsConfigured ? selected : registeredEmails;
 
     if (customer.skipStatementEmail) { skipped++; continue; }
     if (emails.length === 0) { skipped++; continue; }

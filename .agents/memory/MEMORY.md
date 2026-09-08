@@ -13,3 +13,4 @@
 - [Tenant PDF localization](tenant-pdf-localization.md) — all generated PDFs follow tenants.locale: en uses en-US; unknown/missing locales fall back to es-MX.
 - [Firebird chained auth and product sync](firebird-chained-auth-product-sync.md) — legacy Microsip databases may require SRP followed by Legacy_Auth; product sync must avoid per-row DB round trips.
 - [Internal email recipient isolation](internal-email-recipient-isolation.md) — automatic staff emails must require matching tenant, active user, and explicit email opt-in.
+- [Statement recipient selection](statement-recipient-selection.md) — configured customer recipients are authoritative; never fall back to all addresses when a saved selection becomes stale.

@@ -94,6 +94,28 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     id: "009_add_user_email_notification_preference",
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS receive_email_notifications boolean NOT NULL DEFAULT true`,
   },
+  {
+    id: "010_add_visit_seller_and_statement_recipients",
+    sql: `
+      ALTER TABLE scheduled_visits ADD COLUMN IF NOT EXISTS sales_person_id varchar REFERENCES users(id);
+      UPDATE scheduled_visits SET sales_person_id = user_id WHERE sales_person_id IS NULL;
+      CREATE INDEX IF NOT EXISTS scheduled_visits_sales_person_date_idx
+        ON scheduled_visits (sales_person_id, scheduled_date);
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS statement_emails text[] NOT NULL DEFAULT ARRAY[]::text[];
+    `,
+  },
+  {
+    id: "011_add_checkin_seller",
+    sql: `
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS sales_person_id varchar REFERENCES users(id);
+      UPDATE checkins SET sales_person_id = user_id WHERE sales_person_id IS NULL;
+      CREATE INDEX IF NOT EXISTS checkins_sales_person_date_idx ON checkins (sales_person_id, checkin_at);
+    `,
+  },
+  {
+    id: "012_add_statement_recipient_configured_flag",
+    sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS statement_emails_configured boolean NOT NULL DEFAULT false`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

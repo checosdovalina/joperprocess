@@ -27,6 +27,7 @@ export async function runScheduledVisitReminderScheduler(): Promise<void> {
     ),
     with: {
       user: true,
+      salesPerson: true,
       customer: true,
     },
   });
@@ -45,12 +46,13 @@ export async function runScheduledVisitReminderScheduler(): Promise<void> {
 
     // A disabled preference is a deliberate skip, not a provider failure.
     // Keep the claim so the same visit is not retried every scheduler tick.
-    if (visit.user.receiveEmailNotifications === false) {
+    const seller = visit.salesPerson ?? visit.user;
+    if (seller.receiveEmailNotifications === false) {
       console.log(`[VisitReminder] Skipping visit ${visit.id}: seller opted out of email notifications`);
       continue;
     }
 
-    if (!isValidEmail(visit.user.email)) {
+    if (!isValidEmail(seller.email)) {
       await db.update(scheduledVisits)
         .set({ reminderSentAt: null })
         .where(eq(scheduledVisits.id, visit.id));
@@ -64,9 +66,9 @@ export async function runScheduledVisitReminderScheduler(): Promise<void> {
         columns: { name: true },
       });
 
-      await sendScheduledVisitReminderEmail(visit.user.email, {
+      await sendScheduledVisitReminderEmail(seller.email, {
         customerName: visit.customer.name,
-        sellerName: visit.user.fullName || visit.user.username,
+        sellerName: seller.fullName || seller.username,
         scheduledDate: new Date(visit.scheduledDate).toLocaleString("es-MX", {
           dateStyle: "full",
           timeStyle: "short",
@@ -76,7 +78,7 @@ export async function runScheduledVisitReminderScheduler(): Promise<void> {
         notes: visit.notes,
         companyName: tenant?.name || "NEXXO",
       });
-      console.log(`[VisitReminder] Sent reminder for visit ${visit.id} to ${visit.user.email}`);
+      console.log(`[VisitReminder] Sent reminder for visit ${visit.id} to ${seller.email}`);
     } catch (error) {
       // Allow the next poll to retry if the provider is temporarily unavailable.
       await db.update(scheduledVisits)

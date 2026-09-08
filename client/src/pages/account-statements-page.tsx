@@ -58,14 +58,19 @@ import {
   X,
   FileText,
   Loader2,
+  Settings,
 } from "lucide-react";
 import { Customer } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 
 interface CustomerBalance {
   customer: {
     id: string;
     name: string;
     email: string | null;
+    statementEmails: string[];
+    statementEmailsConfigured: boolean;
+    skipStatementEmail: boolean;
     rfc: string | null;
     phone: string | null;
   };
@@ -95,6 +100,7 @@ function fmtDate(d: string | null) {
 export default function AccountStatementsPage() {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -112,6 +118,9 @@ export default function AccountStatementsPage() {
   const [anySearch, setAnySearch] = useState("");
   const [anySearchOpen, setAnySearchOpen] = useState(false);
   const [downloadingAnyId, setDownloadingAnyId] = useState<string | null>(null);
+  const [emailSettingsCustomer, setEmailSettingsCustomer] = useState<CustomerBalance | null>(null);
+  const [statementEmailSelection, setStatementEmailSelection] = useState<Set<string>>(new Set());
+  const [skipStatementEmail, setSkipStatementEmail] = useState(false);
 
   // Schedule dialog state
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -181,6 +190,36 @@ export default function AccountStatementsPage() {
     },
     onError: (err: any) => {
       toast({ title: t("label.error"), description: err.message ?? t("stmts.sched.save-error"), variant: "destructive" });
+    },
+  });
+
+  const emailPreferenceMutation = useMutation({
+    mutationFn: (receiveEmailNotifications: boolean) =>
+      apiRequest("PATCH", "/api/me/email-notifications", { receiveEmailNotifications }),
+    onSuccess: async (response) => {
+      const preference = await response.json();
+      queryClient.setQueryData(["/api/user"], (current: any) => current ? { ...current, ...preference } : current);
+      toast({ title: "Preferencia actualizada" });
+    },
+    onError: (err: any) => {
+      toast({ title: t("label.error"), description: err.message, variant: "destructive" });
+    },
+  });
+
+  const statementEmailSettingsMutation = useMutation({
+    mutationFn: ({ customerId, statementEmails, skip }: { customerId: string; statementEmails: string[]; skip: boolean }) =>
+      apiRequest("PATCH", `/api/customers/${customerId}/statement-email-settings`, {
+        statementEmails,
+        skipStatementEmail: skip,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/account-statements"] });
+      setEmailSettingsCustomer(null);
+      toast({ title: "Destinatarios actualizados", description: "El próximo envío automático usará únicamente los correos seleccionados." });
+    },
+    onError: (err: any) => {
+      toast({ title: t("label.error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -323,6 +362,20 @@ export default function AccountStatementsPage() {
     setSingleSendCustomer(s);
     setAdditionalEmail("");
     setSendDialogOpen(true);
+  }
+
+  function registeredEmails(raw: string | null | undefined) {
+    return Array.from(new Set((raw ?? "").split(/[;,]/).map((email) => email.trim().toLowerCase()).filter((email) => email.includes("@"))));
+  }
+
+  function openEmailSettings(customer: CustomerBalance) {
+    const registered = registeredEmails(customer.customer.email);
+    const selected = customer.customer.statementEmailsConfigured
+      ? customer.customer.statementEmails
+      : registered;
+    setStatementEmailSelection(new Set(selected.map((email) => email.toLowerCase())));
+    setSkipStatementEmail(customer.customer.skipStatementEmail ?? false);
+    setEmailSettingsCustomer(customer);
   }
 
   async function handleDownloadPDF(customerId: string, customerName: string) {
@@ -646,6 +699,9 @@ export default function AccountStatementsPage() {
                         <DropdownMenuItem onClick={() => openSingleSend(s)} className="gap-2">
                           <Mail className="w-4 h-4" /> {t("stmts.send-by-email")}
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEmailSettings(s)} className="gap-2">
+                          <Settings className="w-4 h-4" /> Configurar destinatarios
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)} className="gap-2">
                           <Download className="w-4 h-4" /> {t("invoices.download-pdf")}
@@ -748,6 +804,9 @@ export default function AccountStatementsPage() {
                               <DropdownMenuItem onClick={() => openSingleSend(s)} className="gap-2">
                                 <Mail className="w-4 h-4" /> {t("stmts.send-by-email")}
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEmailSettings(s)} className="gap-2">
+                                <Settings className="w-4 h-4" /> Configurar destinatarios
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)} className="gap-2">
                                 <Download className="w-4 h-4" /> {t("invoices.download-pdf")}
@@ -788,7 +847,10 @@ export default function AccountStatementsPage() {
                 <div className="flex items-start gap-2 bg-muted rounded-md px-3 py-2.5 min-w-0">
                   <Mail className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                   <span className="text-sm text-muted-foreground break-all min-w-0">
-                    {singleSendCustomer.customer.email}
+                    {(singleSendCustomer.customer.statementEmailsConfigured
+                      ? singleSendCustomer.customer.statementEmails
+                      : registeredEmails(singleSendCustomer.customer.email)
+                    ).join(", ") || "Sin destinatario seleccionado"}
                   </span>
                 </div>
               ) : (
@@ -853,6 +915,57 @@ export default function AccountStatementsPage() {
                 <Send className="w-4 h-4 mr-2" />
               )}
               {t("stmts.send-email-btn")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!emailSettingsCustomer} onOpenChange={(open) => !open && setEmailSettingsCustomer(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Destinatarios de estado de cuenta</DialogTitle>
+            <DialogDescription>{emailSettingsCustomer?.customer.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="text-sm font-medium">Envío automático</p>
+                <p className="text-xs text-muted-foreground">Desactívalo para excluir por completo a este cliente.</p>
+              </div>
+              <Switch checked={!skipStatementEmail} onCheckedChange={(enabled) => setSkipStatementEmail(!enabled)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Correos registrados que recibirán el estado de cuenta</Label>
+              {registeredEmails(emailSettingsCustomer?.customer.email).map((email) => (
+                <label key={email} className="flex items-center gap-3 rounded-md border p-3 cursor-pointer">
+                  <Checkbox
+                    checked={statementEmailSelection.has(email)}
+                    disabled={skipStatementEmail}
+                    onCheckedChange={(checked) => {
+                      const next = new Set(statementEmailSelection);
+                      checked ? next.add(email) : next.delete(email);
+                      setStatementEmailSelection(next);
+                    }}
+                  />
+                  <span className="text-sm break-all">{email}</span>
+                </label>
+              ))}
+              {registeredEmails(emailSettingsCustomer?.customer.email).length === 0 && (
+                <p className="text-sm text-destructive">Este cliente no tiene correos registrados.</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailSettingsCustomer(null)}>Cancelar</Button>
+            <Button
+              disabled={statementEmailSettingsMutation.isPending || (!skipStatementEmail && statementEmailSelection.size === 0)}
+              onClick={() => emailSettingsCustomer && statementEmailSettingsMutation.mutate({
+                customerId: emailSettingsCustomer.customer.id,
+                statementEmails: Array.from(statementEmailSelection),
+                skip: skipStatementEmail,
+              })}
+            >
+              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -963,6 +1076,21 @@ export default function AccountStatementsPage() {
                 data-testid="switch-schedule-enabled"
                 checked={schedEnabled}
                 onCheckedChange={setSchedEnabled}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Recibir copias automáticas</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Controla los correos internos enviados a tu propia cuenta.
+                </p>
+              </div>
+              <Switch
+                data-testid="switch-my-email-notifications"
+                checked={user?.receiveEmailNotifications !== false}
+                disabled={emailPreferenceMutation.isPending}
+                onCheckedChange={(enabled) => emailPreferenceMutation.mutate(enabled)}
               />
             </div>
 

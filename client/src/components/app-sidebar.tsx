@@ -48,7 +48,9 @@ import { useI18n } from "@/hooks/use-i18n";
 import { UserRole } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Switch } from "@/components/ui/switch";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Select,
   SelectContent,
@@ -75,6 +77,7 @@ type MenuItem = {
   url: string;
   icon: React.ElementType;
   roles: string[];
+  superAdminOnly?: boolean;
 };
 
 type MenuGroup = {
@@ -156,6 +159,14 @@ const getInitials = (name: string) =>
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
+  const emailPreferenceMutation = useMutation({
+    mutationFn: (receiveEmailNotifications: boolean) =>
+      apiRequest("PATCH", "/api/me/email-notifications", { receiveEmailNotifications }),
+    onSuccess: async (response) => {
+      const preference = await response.json();
+      queryClient.setQueryData(["/api/user"], (current: any) => current ? { ...current, ...preference } : current);
+    },
+  });
   const { tenant, selectedTenantId, setSelectedTenantId } = useTenant();
   const { isMobile, setOpenMobile } = useSidebar();
   const { t } = useI18n();
@@ -337,6 +348,16 @@ export function AppSidebar() {
               {getRoleLabel(user.role, t)}
             </p>
           </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 rounded-md px-2 py-2 mb-1">
+          <span className="text-xs text-muted-foreground">Correos automáticos</span>
+          <Switch
+            checked={user.receiveEmailNotifications !== false}
+            disabled={emailPreferenceMutation.isPending}
+            onCheckedChange={(enabled) => emailPreferenceMutation.mutate(enabled)}
+            aria-label="Recibir correos automáticos"
+            data-testid="switch-sidebar-email-notifications"
+          />
         </div>
         <Button
           variant="ghost"

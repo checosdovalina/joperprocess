@@ -1245,7 +1245,8 @@ export class TenantScopedStorage {
       return await db.query.scheduledVisits.findMany({
         with: {
           customer: true,
-          user: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
           customerLocation: true,
         },
         orderBy: (sv, { desc }) => [desc(sv.scheduledDate)],
@@ -1256,7 +1257,8 @@ export class TenantScopedStorage {
       where: eq(scheduledVisits.tenantId, this.ctx.tenantId),
       with: {
         customer: true,
-        user: true,
+        user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+        salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
         customerLocation: true,
       },
       orderBy: (sv, { desc }) => [desc(sv.scheduledDate)],

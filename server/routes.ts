@@ -17,6 +17,14 @@ function parseEmailList(raw: string | null | undefined): string[] {
     .filter((e) => e.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
 }
 
+function getStatementRecipientEmails(customer: { email?: string | null; statementEmails?: string[] | null; statementEmailsConfigured?: boolean }): string[] {
+  const registered = parseEmailList(customer.email).map((email) => email.toLowerCase());
+  const selected = (customer.statementEmails ?? [])
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => registered.includes(email));
+  return Array.from(new Set(customer.statementEmailsConfigured ? selected : registered));
+}
+
 // Helper to determine if we should use server-side direct upload (instead of GCS presigned URL).
 // In development, always use direct upload (GCS presigned URLs are blocked/CORS-restricted).
 function useLocalStorage(): boolean {
@@ -222,6 +230,21 @@ function assertTenantScope<T extends { tenantId?: string | null; empresaId?: str
   }
 
   return true;
+}
+
+async function getValidAssignedSeller(req: Request, sellerId: string | null | undefined) {
+  const effectiveSellerId = sellerId || req.user!.id;
+  const seller = await db.query.users.findFirst({ where: eq(users.id, effectiveSellerId) });
+  const tenantId = getEffectiveTenantId(req);
+  if (!seller || !seller.active || (tenantId && seller.tenantId !== tenantId)) return null;
+  if (![UserRole.VENDEDOR, UserRole.ADMIN, UserRole.CREDITO_COBRANZA].includes(seller.role as any)) return null;
+
+  const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+  if (restrictedEmpresaId && seller.empresaId && seller.empresaId !== restrictedEmpresaId) return null;
+
+  const mayAssignOthers = [UserRole.ADMIN, UserRole.CREDITO_COBRANZA].includes(req.user!.role as any);
+  if (!mayAssignOthers && seller.id !== req.user!.id) return null;
+  return seller;
 }
 
 // Company hierarchy (Opción B): a company ADMIN may "switch into" a descendant company
@@ -1413,6 +1436,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/sellers", isAuthenticated, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.json([]);
+      const conditions = [
+        eq(users.tenantId, tenantId),
+        eq(users.active, true),
+        inArray(users.role, [UserRole.VENDEDOR, UserRole.ADMIN, UserRole.CREDITO_COBRANZA]),
+      ];
+      const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
+      if (restrictedEmpresaId) {
+        conditions.push(or(eq(users.empresaId, restrictedEmpresaId), isNull(users.empresaId))!);
+      }
+      const sellers = await db.select({
+        id: users.id,
+        fullName: users.fullName,
+        username: users.username,
+        email: users.email,
+        role: users.role,
+        empresaId: users.empresaId,
+      }).from(users).where(and(...conditions)).orderBy(users.fullName);
+      res.json(sellers);
+    } catch (error) {
+      console.error("Error fetching sellers:", error);
+      res.status(500).json({ error: "Error fetching sellers" });
+    }
+  });
+
+  app.patch("/api/me/email-notifications", isAuthenticated, async (req, res) => {
+    try {
+      const input = z.object({ receiveEmailNotifications: z.boolean() }).parse(req.body);
+      const [updated] = await db.update(users)
+        .set({ receiveEmailNotifications: input.receiveEmailNotifications })
+        .where(eq(users.id, req.user!.id))
+        .returning({ receiveEmailNotifications: users.receiveEmailNotifications });
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: "Preferencia inválida" });
+    }
+  });
+
   // Customers endpoints
   app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
@@ -1502,6 +1566,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching customer:", error);
       res.status(500).json({ error: "Error fetching customer" });
+    }
+  });
+
+  app.patch("/api/customers/:id/statement-email-settings", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const customer = await scopedStorage.getCustomer(req.params.id);
+      if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
+
+      const input = z.object({
+        statementEmails: z.array(z.string().email()).default([]),
+        skipStatementEmail: z.boolean(),
+      }).parse(req.body);
+      const registered = parseEmailList(customer.email).map((email) => email.toLowerCase());
+      const selected = Array.from(new Set(input.statementEmails.map((email) => email.toLowerCase())));
+      if (selected.some((email) => !registered.includes(email))) {
+        return res.status(400).json({ error: "Solo se pueden seleccionar correos registrados en el cliente" });
+      }
+      if (!input.skipStatementEmail && registered.length > 0 && selected.length === 0) {
+        return res.status(400).json({ error: "Selecciona al menos un correo o desactiva el envío automático" });
+      }
+
+      const [updated] = await db.update(customers).set({
+        statementEmails: selected,
+        statementEmailsConfigured: true,
+        skipStatementEmail: input.skipStatementEmail,
+      }).where(and(eq(customers.id, customer.id), eq(customers.tenantId, customer.tenantId))).returning();
+      accountStatementsCache.delete(customer.tenantId);
+      res.json(updated);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Configuración inválida";
+      res.status(400).json({ error: message });
     }
   });
 
@@ -1700,17 +1796,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Check-ins endpoints
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
-      const tenant = req.tenant;
-      const user = req.user!;
-      // Determine tenant filter: subdomain tenant > superadmin selected tenant > user tenant
-      const selectedTenantId = req.headers['x-selected-tenant-id'] as string | undefined;
-      const tenantId = tenant?.id || selectedTenantId || (user.isSuperAdmin ? null : user.tenantId);
+      const tenantId = getEffectiveTenantId(req);
 
       const allCheckins = await db.query.checkins.findMany({
         where: tenantId ? eq(checkins.tenantId, tenantId) : undefined,
         orderBy: [desc(checkins.checkinAt)],
         with: {
           customer: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
         },
       });
       res.json(allCheckins);
@@ -1727,13 +1821,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(checkins.id, id),
         with: {
           customer: true,
-          user: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
         },
       });
 
-      if (!checkin) {
-        return res.status(404).json({ error: "Check-in not found" });
-      }
+      if (!assertTenantScope(req, res, checkin, { notFoundMessage: "Check-in not found" })) return;
 
       res.json(checkin);
     } catch (error) {
@@ -1750,11 +1843,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = {
         ...req.body,
         userId: req.user!.id,
+        salesPersonId: req.body.salesPersonId || req.user!.id,
         latitude:  req.body.latitude  === "" ? undefined : req.body.latitude,
         longitude: req.body.longitude === "" ? undefined : req.body.longitude,
       };
 
       const validated = insertCheckinSchema.parse(body);
+      const customer = await scopedStorage.getCustomer(validated.customerId);
+      if (!customer) return res.status(400).json({ error: "Cliente inválido para este tenant" });
+      const seller = await getValidAssignedSeller(req, validated.salesPersonId);
+      if (!seller) return res.status(400).json({ error: "Vendedor asignado inválido" });
+      validated.salesPersonId = seller.id;
 
       // Validate that customerLocationId belongs to the specified customerId
       if (validated.customerLocationId) {
@@ -1770,7 +1869,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const checkin = await scopedStorage.createCheckin(validated);
       const checkinWithCustomer = await db.query.checkins.findFirst({
         where: eq(checkins.id, checkin.id),
-        with: { customer: true },
+        with: {
+          customer: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+        },
       });
       res.status(201).json(checkinWithCustomer || checkin);
     } catch (error) {
@@ -1791,7 +1894,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         meetingType: z.enum([MeetingType.LLAMADA, MeetingType.VISITA, MeetingType.VIDEOLLAMADA]).optional(),
         checkoutNotes: z.string().optional(),
         internalNotes: z.string().optional(),
-      }).refine(d => d.meetingType !== undefined || d.checkoutNotes !== undefined || d.internalNotes !== undefined, {
+        salesPersonId: z.string().optional(),
+      }).refine(d => d.meetingType !== undefined || d.checkoutNotes !== undefined || d.internalNotes !== undefined || d.salesPersonId !== undefined, {
         message: "Se requiere al menos un campo para actualizar",
       });
 
@@ -1800,16 +1904,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Datos inválidos", details: validationResult.error.flatten() });
       }
 
-      const { meetingType, checkoutNotes, internalNotes } = validationResult.data;
+      const { meetingType, checkoutNotes, internalNotes, salesPersonId } = validationResult.data;
 
       // Fetch the existing check-in
       const existingCheckin = await db.query.checkins.findFirst({
         where: eq(checkins.id, id),
       });
 
-      if (!existingCheckin) {
-        return res.status(404).json({ error: "Check-in no encontrado" });
-      }
+      if (!assertTenantScope(req, res, existingCheckin, { notFoundMessage: "Check-in no encontrado" })) return;
 
       // Check ownership or admin role
       const isOwner = existingCheckin.userId === user.id;
@@ -1828,6 +1930,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (meetingType !== undefined) updatePayload.meetingType = meetingType;
       if (checkoutNotes !== undefined) updatePayload.checkoutNotes = checkoutNotes;
       if (internalNotes !== undefined) updatePayload.internalNotes = internalNotes;
+      if (salesPersonId !== undefined) {
+        const seller = await getValidAssignedSeller(req, salesPersonId);
+        if (!seller) return res.status(400).json({ error: "Vendedor asignado inválido" });
+        updatePayload.salesPersonId = seller.id;
+      }
 
       // Update the check-in
       const [updated] = await db
@@ -1902,7 +2009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const todayVisits = await db.query.scheduledVisits.findMany({
         where: and(
-          eq(scheduledVisits.userId, userId),
+          or(eq(scheduledVisits.salesPersonId, userId), and(isNull(scheduledVisits.salesPersonId), eq(scheduledVisits.userId, userId)))!,
           eq(scheduledVisits.status, ScheduledVisitStatus.SCHEDULED),
           gte(scheduledVisits.scheduledDate, startOfDay),
           lt(scheduledVisits.scheduledDate, endOfDay)
@@ -1910,6 +2017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         with: {
           customer: true,
           customerLocation: true,
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
         },
         orderBy: (scheduledVisits, { asc }) => [asc(scheduledVisits.scheduledDate)],
       });
@@ -1927,7 +2035,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: eq(scheduledVisits.id, id),
         with: {
           customer: true,
-          user: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
           customerLocation: true,
         },
       });
@@ -1957,7 +2066,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validated = insertScheduledVisitSchema.parse({
         ...req.body,
         userId: req.user!.id, // Set userId from authenticated user
+        salesPersonId: req.body.salesPersonId || req.user!.id,
       });
+      const customer = await scopedStorage.getCustomer(validated.customerId);
+      if (!customer) return res.status(400).json({ error: "Cliente inválido para este tenant" });
+      const seller = await getValidAssignedSeller(req, validated.salesPersonId);
+      if (!seller) return res.status(400).json({ error: "Vendedor asignado inválido" });
+      validated.salesPersonId = seller.id;
 
       // customerLocationId is optional - only validate if provided
       if (validated.customerLocationId) {
@@ -1971,11 +2086,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (validated.reminderMinutes > 0) {
-        const seller = await db.query.users.findFirst({
-          where: eq(users.id, req.user!.id),
+        const reminderSeller = await db.query.users.findFirst({
+          where: eq(users.id, seller.id),
           columns: { email: true },
         });
-        if (!seller?.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(seller.email)) {
+        if (!reminderSeller?.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reminderSeller.email)) {
           return res.status(400).json({ error: "Agrega un correo válido a tu usuario para activar recordatorios" });
         }
       }
@@ -2013,9 +2128,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const validated = updateScheduledVisitSchema.parse(req.body);
+      if (validated.salesPersonId !== undefined) {
+        const seller = await getValidAssignedSeller(req, validated.salesPersonId);
+        if (!seller) return res.status(400).json({ error: "Vendedor asignado inválido" });
+        validated.salesPersonId = seller.id;
+      }
       if (validated.reminderMinutes && validated.reminderMinutes > 0) {
         const seller = await db.query.users.findFirst({
-          where: eq(users.id, visit.userId),
+          where: eq(users.id, validated.salesPersonId || visit.salesPersonId || visit.userId),
           columns: { email: true },
         });
         if (!seller?.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(seller.email)) {
@@ -2024,7 +2144,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const reminderChanged =
         Object.prototype.hasOwnProperty.call(req.body, "scheduledDate") ||
-        Object.prototype.hasOwnProperty.call(req.body, "reminderMinutes");
+        Object.prototype.hasOwnProperty.call(req.body, "reminderMinutes") ||
+        Object.prototype.hasOwnProperty.call(req.body, "salesPersonId");
       const [updatedVisit] = await db
         .update(scheduledVisits)
         .set({
@@ -2097,7 +2218,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Only owner can convert
       if (visit.userId !== userId) {
+        if (visit.salesPersonId !== userId) {
         return res.status(403).json({ error: "Not authorized to convert this visit" });
+        }
       }
 
       if (visit.status !== ScheduledVisitStatus.SCHEDULED) {
@@ -2107,6 +2230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create checkin from scheduled visit with GPS coordinates
       const checkinData: InsertCheckin = {
         userId: visit.userId,
+        salesPersonId: visit.salesPersonId || visit.userId,
         customerId: visit.customerId,
         customerLocationId: visit.customerLocationId,
         latitude: req.body.latitude,
@@ -6216,6 +6340,9 @@ Proporciona tu análisis en el siguiente formato JSON:
                   id: customer.id,
                   name: customer.name,
                   email: customer.email,
+                  statementEmails: customer.statementEmails,
+                  statementEmailsConfigured: customer.statementEmailsConfigured,
+                  skipStatementEmail: customer.skipStatementEmail,
                   rfc: customer.rfc,
                   phone: customer.phone,
                 },
@@ -6297,12 +6424,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       const customer = await scopedStorage.getCustomer(id);
       if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
 
-      const recipientEmails: string[] = [];
-      if (customer.email) {
-        for (const e of customer.email.split(/[;,]/).map((s: string) => s.trim()).filter(Boolean)) {
-          if (e.includes("@")) recipientEmails.push(e.toLowerCase());
-        }
-      }
+      const recipientEmails: string[] = getStatementRecipientEmails(customer);
       for (const e of additionalEmails) {
         if (e && typeof e === "string" && e.includes("@") && !recipientEmails.includes(e.toLowerCase())) {
           recipientEmails.push(e.toLowerCase());
@@ -6411,9 +6533,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           const customer = await scopedStorage.getCustomer(custId);
           if (!customer) { results.push({ customerId: custId, name: "?", success: false, error: "No encontrado" }); continue; }
 
-          const recipientEmails: string[] = (customer.email ?? "")
-            .split(/[;,]/).map((s: string) => s.trim()).filter((e: string) => e.includes("@"))
-            .map((e: string) => e.toLowerCase());
+          const recipientEmails = getStatementRecipientEmails(customer);
 
           if (recipientEmails.length === 0) {
             results.push({ customerId: custId, name: customer.name, success: false, error: "Sin correo" });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ScheduledVisit, Customer, InsertScheduledVisit, MeetingType } from "@shared/schema";
+import { ScheduledVisit, Customer, InsertScheduledVisit, MeetingType, User } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,10 +39,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+
+type VisitWithRelations = ScheduledVisit & { customer: Customer; user?: User; salesPerson?: User | null };
 
 export default function ScheduledVisitsPage() {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingVisit, setEditingVisit] = useState<ScheduledVisit | null>(null);
   const [formData, setFormData] = useState<Partial<InsertScheduledVisit>>({
@@ -62,13 +66,18 @@ export default function ScheduledVisitsPage() {
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
 
-  const { data: visits, isLoading } = useQuery<(ScheduledVisit & { customer: Customer })[]>({
+  const { data: visits, isLoading } = useQuery<VisitWithRelations[]>({
     queryKey: ["/api/scheduled-visits"],
   });
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
   });
+  const { data: sellers = [] } = useQuery<Pick<User, "id" | "fullName" | "username" | "role" | "email">[]>({
+    queryKey: ["/api/sellers"],
+  });
+  const mayAssignOthers = user?.role === "admin" || user?.role === "credito_cobranza";
+  const assignableSellers = mayAssignOthers ? sellers : sellers.filter((seller) => seller.id === user?.id);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertScheduledVisit) => {
@@ -148,6 +157,7 @@ export default function ScheduledVisitsPage() {
       topics: [],
       notes: "",
       reminderMinutes: 0,
+      salesPersonId: user?.id,
     });
     setSelectedDate(undefined);
     setSelectedTime("09:00");
@@ -181,6 +191,7 @@ export default function ScheduledVisitsPage() {
       topics: topics,
       notes: formData.notes ?? "",
       reminderMinutes: formData.reminderMinutes ?? 0,
+      salesPersonId: formData.salesPersonId || user?.id,
     };
 
     if (editingVisit) {
@@ -190,7 +201,7 @@ export default function ScheduledVisitsPage() {
     }
   };
 
-  const handleEdit = (visit: ScheduledVisit & { customer: Customer }) => {
+  const handleEdit = (visit: VisitWithRelations) => {
     setEditingVisit(visit);
     setFormData({
       customerId: visit.customerId,
@@ -199,6 +210,7 @@ export default function ScheduledVisitsPage() {
       topics: visit.topics,
       notes: visit.notes || "",
       reminderMinutes: visit.reminderMinutes || 0,
+      salesPersonId: visit.salesPersonId || visit.userId,
     });
     setSelectedDate(new Date(visit.scheduledDate));
     setSelectedTime(format(new Date(visit.scheduledDate), "HH:mm"));
@@ -298,6 +310,25 @@ export default function ScheduledVisitsPage() {
                   placeholder={t("visits.search-customer")}
                   data-testid="select-customer"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="sales-person">Vendedor asignado</Label>
+                <Select
+                  value={formData.salesPersonId || user?.id || ""}
+                  onValueChange={(value) => setFormData({ ...formData, salesPersonId: value })}
+                >
+                  <SelectTrigger id="sales-person" data-testid="select-sales-person">
+                    <SelectValue placeholder="Selecciona un vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignableSellers.map((seller) => (
+                      <SelectItem key={seller.id} value={seller.id}>
+                        {seller.fullName || seller.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -522,6 +553,7 @@ export default function ScheduledVisitsPage() {
                 <TableRow>
                   <TableHead data-testid="header-customer">{t("label.client")}</TableHead>
                   <TableHead data-testid="header-date">{t("label.date")}</TableHead>
+                  <TableHead>Vendedor</TableHead>
                   <TableHead data-testid="header-reminder">{t("visits.reminder-label")}</TableHead>
                   <TableHead>{t("label.type")}</TableHead>
                   <TableHead data-testid="header-topics">{t("visits.topics")}</TableHead>
@@ -535,6 +567,9 @@ export default function ScheduledVisitsPage() {
                     <TableCell data-testid={`cell-customer-${visit.id}`}>{visit.customer.name}</TableCell>
                     <TableCell data-testid={`cell-date-${visit.id}`}>
                       {format(new Date(visit.scheduledDate), "PPP p", { locale: es })}
+                    </TableCell>
+                    <TableCell data-testid={`cell-seller-${visit.id}`}>
+                      {visit.salesPerson?.fullName || visit.user?.fullName || "—"}
                     </TableCell>
                     <TableCell data-testid={`cell-reminder-${visit.id}`}>
                       {visit.reminderMinutes === 60
