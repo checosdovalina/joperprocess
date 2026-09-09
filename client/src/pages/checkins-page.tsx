@@ -300,7 +300,7 @@ export default function CheckinsPage() {
               {t("checkins.new")}
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[calc(100%-1.5rem)] max-w-xl max-h-[min(760px,calc(100dvh-1.5rem))] gap-0 overflow-hidden rounded-xl p-0">
+          <DialogContent className="flex h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-xl p-0 sm:h-auto sm:max-h-[min(760px,calc(100dvh-1.5rem))] sm:w-[calc(100%-1.5rem)]">
             <DialogHeader className="shrink-0 border-b bg-muted/20 px-5 py-5 pr-12 text-left sm:px-6">
               <DialogTitle className="flex items-center gap-2.5 text-xl">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -410,7 +410,7 @@ export default function CheckinsPage() {
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-col-reverse gap-2 border-t bg-muted/10 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t bg-background px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)] sm:flex-row sm:justify-end sm:px-6 sm:py-4">
                 <Button
                   type="button"
                   variant="outline"
