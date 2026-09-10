@@ -64,6 +64,7 @@ export default function CheckinsPage() {
     photos: [],
   });
   const [searchText, setSearchText] = useState("");
+  const [filterSeller, setFilterSeller] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -255,9 +256,11 @@ export default function CheckinsPage() {
     createMutation.mutate(formData as InsertCheckin);
   };
 
-  const hasActiveFilters = searchText !== "" || filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "";
+  const hasActiveFilters = searchText !== "" || filterSeller !== "all" || filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "";
 
   const filteredCheckins = (checkins ?? []).filter(c => {
+    const assignedSellerId = c.salesPersonId || c.userId;
+    if (isAdmin && filterSeller !== "all" && assignedSellerId !== filterSeller) return false;
     if (filterStatus === "active" && c.checkoutAt) return false;
     if (filterStatus === "done" && !c.checkoutAt) return false;
     if (filterType !== "all" && c.meetingType !== filterType) return false;
@@ -278,6 +281,7 @@ export default function CheckinsPage() {
 
   const resetFilters = () => {
     setSearchText("");
+    setFilterSeller("all");
     setFilterStatus("all");
     setFilterType("all");
     setFilterDateFrom("");
@@ -520,6 +524,21 @@ export default function CheckinsPage() {
                 data-testid="input-search-checkin"
               />
             </div>
+            {isAdmin && (
+              <Select value={filterSeller} onValueChange={setFilterSeller}>
+                <SelectTrigger className="w-[190px]" data-testid="select-filter-seller">
+                  <SelectValue placeholder="Vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los vendedores</SelectItem>
+                  {sellers.map((seller) => (
+                    <SelectItem key={seller.id} value={seller.id}>
+                      {seller.fullName || seller.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[150px]" data-testid="select-filter-status">
                 <SelectValue placeholder={t("label.status")} />
