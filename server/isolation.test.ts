@@ -734,6 +734,56 @@ describe("GET /api/scheduled-visits/:id (tenant-scoped by-id)", () => {
   });
 });
 
+describe("Vendedor visibility is limited to assigned records", () => {
+  it("hides another seller's check-ins from lists and direct access while admin can see them", async () => {
+    const otherCheckinId = await insertReturningId(checkins, {
+      tenantId: ctx.tenantA,
+      userId: ctx.vendedorA1.id,
+      salesPersonId: ctx.adminA.id,
+      customerId: ctx.customerA,
+    });
+
+    const sellerList = await asVendedorA1("GET", "/api/checkins");
+    expect(sellerList.status).toBe(200);
+    expect((await sellerList.json()).some((row: any) => row.id === otherCheckinId)).toBe(false);
+    expect((await asVendedorA1("GET", `/api/checkins/${otherCheckinId}`)).status).toBe(404);
+    expect((await asVendedorA1("GET", `/api/checkins/${otherCheckinId}/email-recipients`)).status).toBe(404);
+
+    const customerSummary = await asVendedorA1("GET", `/api/customers/${ctx.customerA}/summary`);
+    expect(customerSummary.status).toBe(200);
+    expect((await customerSummary.json()).recentCheckins.some((row: any) => row.id === otherCheckinId)).toBe(false);
+
+    const adminList = await asAdminA("GET", "/api/checkins");
+    expect(adminList.status).toBe(200);
+    expect((await adminList.json()).some((row: any) => row.id === otherCheckinId)).toBe(true);
+    expect((await asAdminA("GET", `/api/checkins/${otherCheckinId}`)).status).toBe(200);
+  });
+
+  it("hides another seller's scheduled visits and limits the seller selector to self", async () => {
+    const otherVisitId = await insertReturningId(scheduledVisits, {
+      tenantId: ctx.tenantA,
+      userId: ctx.vendedorA1.id,
+      salesPersonId: ctx.adminA.id,
+      customerId: ctx.customerA,
+      scheduledDate: new Date(Date.now() + 60 * 60 * 1000),
+    });
+
+    const sellerList = await asVendedorA1("GET", "/api/scheduled-visits");
+    expect(sellerList.status).toBe(200);
+    expect((await sellerList.json()).some((row: any) => row.id === otherVisitId)).toBe(false);
+    expect((await asVendedorA1("GET", `/api/scheduled-visits/${otherVisitId}`)).status).toBe(404);
+
+    const adminList = await asAdminA("GET", "/api/scheduled-visits");
+    expect(adminList.status).toBe(200);
+    expect((await adminList.json()).some((row: any) => row.id === otherVisitId)).toBe(true);
+
+    const sellersResponse = await asVendedorA1("GET", "/api/sellers");
+    expect(sellersResponse.status).toBe(200);
+    const sellerIds = (await sellersResponse.json()).map((seller: any) => seller.id);
+    expect(sellerIds).toEqual([ctx.vendedorA1.id]);
+  });
+});
+
 describe("Scheduled visit email reminders", () => {
   it("lets the seller configure a one-hour reminder and sends it once when due", async () => {
     sendScheduledVisitReminderEmailMock.mockClear();

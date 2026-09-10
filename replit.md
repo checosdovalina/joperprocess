@@ -42,6 +42,8 @@ Drizzle ORM provides type-safe SQL querying with PostgreSQL (via Neon serverless
 
 The system implements subdomain-based multi-tenancy, allowing each company (tenant) to have its own isolated environment:
 
+**Required isolation rule:** Every tenant has its own ID and independent sellers. Never expose or accept customers, sellers, visits, check-ins, or assignments from another tenant. Within a tenant, users with the vendedor role may only see records assigned to themselves; administrators may see all records in that tenant.
+
 **Key Components:**
 - **Tenants Table**: Stores company configuration including subdomain, logo URL, primary/secondary colors, timezone, plan, and max users.
 - **Tenant Detection Middleware** (`server/tenant.ts`): Resolves tenant from request hostname (e.g., `joper.nexxo.com.mx` → "joper" subdomain). In development, uses `?tenant=` query param or `X-Tenant-Subdomain` header.

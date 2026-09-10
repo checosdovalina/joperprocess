@@ -215,6 +215,10 @@ function assertTenantScope<T extends { tenantId?: string | null; empresaId?: str
   // Tenant axis: 404 (never reveal existence of another tenant's record). The guard only
   // fires when effectiveTenantId is non-null, so superadmin-global access still works.
   const effectiveTenantId = getEffectiveTenantId(req);
+  if (!effectiveTenantId && !req.user?.isSuperAdmin) {
+    res.status(404).json({ [key]: notFoundMessage });
+    return false;
+  }
   if (effectiveTenantId && record.tenantId !== effectiveTenantId) {
     res.status(404).json({ [key]: notFoundMessage });
     return false;
@@ -247,6 +251,23 @@ async function getValidAssignedSeller(req: Request, sellerId: string | null | un
   return seller;
 }
 
+function sellerOwnsAssignedRecord(
+  req: Request,
+  record: { userId: string; salesPersonId?: string | null },
+): boolean {
+  return record.salesPersonId === req.user!.id ||
+    (record.salesPersonId == null && record.userId === req.user!.id);
+}
+
+function canAccessAssignedRecord(
+  req: Request,
+  record: { userId: string; salesPersonId?: string | null },
+): boolean {
+  if (req.user!.role === UserRole.ADMIN || req.user!.isSuperAdmin) return true;
+  if (req.user!.role === UserRole.VENDEDOR) return sellerOwnsAssignedRecord(req, record);
+  return record.userId === req.user!.id;
+}
+
 // Company hierarchy (Opción B): a company ADMIN may "switch into" a descendant company
 // via the X-Selected-Tenant-Id header. This middleware validates the selected company is a
 // descendant of the admin's own company and, if so, OVERWRITES req.tenant with that child's
@@ -257,21 +278,33 @@ async function getValidAssignedSeller(req: Request, sellerId: string | null | un
 async function companyHierarchyMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
     const user = req.user;
-    // Skip for unauthenticated, superadmins (handled separately), and non-admins.
-    if (!user || user.isSuperAdmin || user.role !== UserRole.ADMIN) {
-      return next();
-    }
-    const selectedTenantId = req.headers["x-selected-tenant-id"] as string | undefined;
-    // The admin's permanent home company. Never trust the header for this.
+    if (!user || user.isSuperAdmin) return next();
+
     const homeTenantId = user.tenantId;
-    if (!selectedTenantId || !homeTenantId || selectedTenantId === homeTenantId) {
-      return next();
+    if (!homeTenantId) {
+      return res.status(403).json({ error: "Tenant context required" });
     }
-    // Validate: the selected company must be the admin's company or a descendant of it.
-    const accessible = await getAccessibleTenantIds(homeTenantId);
+
+    let accessible = [homeTenantId];
+    if (user.role === UserRole.ADMIN) {
+      accessible = await getAccessibleTenantIds(homeTenantId);
+    }
+
+    // A hostname/subdomain may resolve a tenant before authentication. Bind that
+    // context to the authenticated user's company (or an allowed child company).
+    if (req.tenant?.id && !accessible.includes(req.tenant.id)) {
+      return res.status(403).json({ error: "Compañía no accesible" });
+    }
+
+    const selectedTenantId = req.headers["x-selected-tenant-id"] as string | undefined;
+    if (!selectedTenantId || selectedTenantId === homeTenantId) return next();
+
+    // Only administrators may switch into an explicitly allowed child tenant.
+    if (user.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: "Compañía no accesible" });
+    }
     if (!accessible.includes(selectedTenantId)) {
-      // Not authorized to switch here — ignore the header, stay on home company.
-      return next();
+      return res.status(403).json({ error: "Compañía no accesible" });
     }
     const childTenant = await getTenantById(selectedTenantId);
     if (childTenant && childTenant.active) {
@@ -280,7 +313,7 @@ async function companyHierarchyMiddleware(req: Request, res: Response, next: Nex
     return next();
   } catch (error) {
     console.error("companyHierarchyMiddleware error:", error);
-    return next();
+    return res.status(500).json({ error: "Error validating company access" });
   }
 }
 
@@ -1253,7 +1286,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(
           and(
             eq(checkins.tenantId, tenantId),
-            eq(checkins.salesPersonId, user.id),
+            or(
+              eq(checkins.salesPersonId, user.id),
+              and(isNull(checkins.salesPersonId), eq(checkins.userId, user.id)),
+            )!,
             sql`${checkins.checkinAt} >= NOW() - INTERVAL '30 days'`
           )
         )
@@ -1293,7 +1329,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(
           and(
             tenantId ? eq(checkins.tenantId, tenantId) : sql`1=1`,
-            eq(checkins.salesPersonId, userId),
+            or(
+              eq(checkins.salesPersonId, userId),
+              and(isNull(checkins.salesPersonId), eq(checkins.userId, userId)),
+            )!,
             sql`DATE(${checkins.checkinAt}) = CURRENT_DATE`
           )
         );
@@ -1445,6 +1484,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eq(users.active, true),
         inArray(users.role, [UserRole.VENDEDOR, UserRole.ADMIN, UserRole.CREDITO_COBRANZA]),
       ];
+      if (req.user!.role === UserRole.VENDEDOR) {
+        conditions.push(eq(users.id, req.user!.id));
+      }
       const restrictedEmpresaId = createTenantScopedStorage(req).getRestrictedEmpresaId();
       if (restrictedEmpresaId) {
         conditions.push(or(eq(users.empresaId, restrictedEmpresaId), isNull(users.empresaId))!);
@@ -1726,9 +1768,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get recent check-ins
       const recentCheckins = await db.query.checkins.findMany({
-        where: eq(checkins.customerId, id),
+        where: and(
+          eq(checkins.customerId, id),
+          eq(checkins.tenantId, customer.tenantId),
+          ...(req.user!.role === UserRole.VENDEDOR
+            ? [or(
+                eq(checkins.salesPersonId, req.user!.id),
+                and(isNull(checkins.salesPersonId), eq(checkins.userId, req.user!.id)),
+              )!]
+            : []),
+        ),
         with: {
-          user: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
         },
         orderBy: (checkins, { desc }) => [desc(checkins.checkinAt)],
         limit: 5,
@@ -1797,9 +1848,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
+      if (!tenantId && !req.user!.isSuperAdmin) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+      const conditions = [];
+      if (tenantId) conditions.push(eq(checkins.tenantId, tenantId));
+      if (req.user!.role === UserRole.VENDEDOR) {
+        conditions.push(or(
+          eq(checkins.salesPersonId, req.user!.id),
+          and(isNull(checkins.salesPersonId), eq(checkins.userId, req.user!.id)),
+        )!);
+      }
 
       const allCheckins = await db.query.checkins.findMany({
-        where: tenantId ? eq(checkins.tenantId, tenantId) : undefined,
+        where: conditions.length ? and(...conditions) : undefined,
         orderBy: [desc(checkins.checkinAt)],
         with: {
           customer: true,
@@ -1827,6 +1889,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!assertTenantScope(req, res, checkin, { notFoundMessage: "Check-in not found" })) return;
+      if (!canAccessAssignedRecord(req, checkin)) {
+        return res.status(404).json({ error: "Check-in not found" });
+      }
 
       res.json(checkin);
     } catch (error) {
@@ -1914,9 +1979,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!assertTenantScope(req, res, existingCheckin, { notFoundMessage: "Check-in no encontrado" })) return;
 
       // Check ownership or admin role
-      const isOwner = existingCheckin.userId === user.id;
       const isAdmin = user.role === UserRole.ADMIN;
-      if (!isOwner && !isAdmin) {
+      if (!isAdmin && !canAccessAssignedRecord(req, existingCheckin)) {
         return res.status(403).json({ error: "No tienes permiso para editar este check-in" });
       }
 
@@ -1982,8 +2046,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Scheduled visits endpoints
   app.get("/api/scheduled-visits", isAuthenticated, async (req, res) => {
     try {
-      const scopedStorage = createTenantScopedStorage(req);
-      const allVisits = await scopedStorage.getAllScheduledVisits();
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId && !req.user!.isSuperAdmin) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+      const conditions = [];
+      if (tenantId) conditions.push(eq(scheduledVisits.tenantId, tenantId));
+      if (req.user!.role === UserRole.VENDEDOR) {
+        conditions.push(or(
+          eq(scheduledVisits.salesPersonId, req.user!.id),
+          and(isNull(scheduledVisits.salesPersonId), eq(scheduledVisits.userId, req.user!.id)),
+        )!);
+      }
+      const allVisits = await db.query.scheduledVisits.findMany({
+        where: conditions.length ? and(...conditions) : undefined,
+        with: {
+          customer: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          customerLocation: true,
+        },
+        orderBy: (visit, { desc }) => [desc(visit.scheduledDate)],
+      });
       res.json(allVisits);
     } catch (error) {
       console.error("Error fetching scheduled visits:", error);
@@ -1994,6 +2078,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/scheduled-visits/today", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId && !req.user!.isSuperAdmin) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
       // Prefer the browser's local-day boundaries. The server may run in UTC,
       // which otherwise moves Monterrey evening visits into the following day.
       const range = z.object({
@@ -2007,13 +2095,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Rango de fecha inválido" });
       }
 
-      const todayVisits = await db.query.scheduledVisits.findMany({
-        where: and(
-          or(eq(scheduledVisits.salesPersonId, userId), and(isNull(scheduledVisits.salesPersonId), eq(scheduledVisits.userId, userId)))!,
+      const conditions = [
           eq(scheduledVisits.status, ScheduledVisitStatus.SCHEDULED),
           gte(scheduledVisits.scheduledDate, startOfDay),
-          lt(scheduledVisits.scheduledDate, endOfDay)
-        ),
+          lt(scheduledVisits.scheduledDate, endOfDay),
+      ];
+      if (tenantId) conditions.push(eq(scheduledVisits.tenantId, tenantId));
+      if (req.user!.role === UserRole.VENDEDOR) {
+        conditions.push(or(
+          eq(scheduledVisits.salesPersonId, userId),
+          and(isNull(scheduledVisits.salesPersonId), eq(scheduledVisits.userId, userId)),
+        )!);
+      }
+
+      const todayVisits = await db.query.scheduledVisits.findMany({
+        where: and(...conditions),
         with: {
           customer: true,
           customerLocation: true,
@@ -2044,6 +2140,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Tenant isolation: never expose a visit from another tenant, even by direct ID.
       if (!assertTenantScope(req, res, visit, { notFoundMessage: "Scheduled visit not found" })) {
         return;
+      }
+      if (!canAccessAssignedRecord(req, visit)) {
+        return res.status(404).json({ error: "Scheduled visit not found" });
       }
 
       res.json(visit);
@@ -2123,7 +2222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Only owner or admin can update
-      if (visit.userId !== userId && req.user!.role !== UserRole.ADMIN) {
+      if (!canAccessAssignedRecord(req, visit)) {
         return res.status(403).json({ error: "Not authorized to update this visit" });
       }
 
@@ -2179,7 +2278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Only owner or admin can delete
-      if (visit.userId !== userId && req.user!.role !== UserRole.ADMIN) {
+      if (!canAccessAssignedRecord(req, visit)) {
         return res.status(403).json({ error: "Not authorized to delete this visit" });
       }
 
@@ -2216,11 +2315,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      // Only owner can convert
-      if (visit.userId !== userId) {
-        if (visit.salesPersonId !== userId) {
+      // Only the assigned seller (or an administrator) can convert.
+      if (!canAccessAssignedRecord(req, visit)) {
         return res.status(403).json({ error: "Not authorized to convert this visit" });
-        }
       }
 
       if (visit.status !== ScheduledVisitStatus.SCHEDULED) {
@@ -7138,7 +7235,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!checkin) {
         return res.status(404).json({ error: "Check-in not found" });
       }
-      if (checkin.userId !== userId) {
+      if (!canAccessAssignedRecord(req, checkin)) {
         return res.status(403).json({ error: "Not authorized" });
       }
 
@@ -7248,6 +7345,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       const { checkinId, entityId } = schema.parse(req.body);
       const userId = req.user!.id;
+      const effectiveTenantId = getEffectiveTenantId(req);
 
       // Pre-verify issuance (outside transaction) to prevent oracle exposure
       const pendingUpload = await db.query.pendingUploads.findFirst({
@@ -7284,7 +7382,14 @@ Proporciona tu análisis en el siguiente formato JSON:
             throw new Error("CHECKIN_NOT_FOUND");
           }
 
-          if (locked.userId !== userId) {
+          if (
+            (effectiveTenantId && locked.tenantId !== effectiveTenantId) ||
+            (!effectiveTenantId && !req.user!.isSuperAdmin)
+          ) {
+            throw new Error("CHECKIN_NOT_FOUND");
+          }
+
+          if (!canAccessAssignedRecord(req, locked)) {
             throw new Error("NOT_AUTHORIZED");
           }
 
@@ -7633,7 +7738,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       const scopedStorage = createTenantScopedStorage(req);
       const checkin = await scopedStorage.getCheckin(checkinId);
       if (!checkin) return res.status(404).json({ error: "Check-in not found" });
-      if (checkin.userId !== userId && !isAdmin) {
+      if (!isAdmin && !canAccessAssignedRecord(req, checkin)) {
         return res.status(403).json({ error: "Not authorized" });
       }
 
@@ -7684,13 +7789,16 @@ Proporciona tu análisis en el siguiente formato JSON:
       const scopedStorage = createTenantScopedStorage(req);
       const checkin = await scopedStorage.getCheckin(checkinId);
       if (!checkin) return res.status(404).json({ error: "Check-in not found" });
+      if (!canAccessAssignedRecord(req, checkin)) {
+        return res.status(404).json({ error: "Check-in not found" });
+      }
 
       const customer = await scopedStorage.getCustomer(checkin.customerId);
-      const user = await storage.getUser(checkin.userId);
+      const seller = await storage.getUser(checkin.salesPersonId || checkin.userId);
 
       const recipients: { email: string; label: string }[] = [];
 
-      if (user?.email) recipients.push({ email: user.email, label: `Vendedor — ${user.fullName}` });
+      if (seller?.email) recipients.push({ email: seller.email, label: `Vendedor — ${seller.fullName}` });
       for (const email of parseEmailList(customer?.email)) {
         recipients.push({ email, label: `Cliente — ${customer!.name}` });
       }
@@ -7738,7 +7846,7 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       // Verify authorization: user must own the check-in, or be ADMIN / VENTAS_LOGISTICA
       const canCheckout =
-        checkin.userId === userId ||
+        canAccessAssignedRecord(req, checkin) ||
         req.user!.role === UserRole.ADMIN ||
         req.user!.role === UserRole.VENTAS_LOGISTICA;
       if (!canCheckout) {
@@ -7763,8 +7871,8 @@ Proporciona tu análisis en el siguiente formato JSON:
         salesRepId: null,
       } as any;
 
-      const user = await storage.getUser(checkin.userId);
-      if (!user) {
+      const seller = await storage.getUser(checkin.salesPersonId || checkin.userId);
+      if (!seller) {
         return res.status(404).json({ error: "User not found" });
       }
 
@@ -7778,7 +7886,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       const pdfStream = await generateMinutePDFStream({ 
         checkin, 
         customer: effectiveCustomer, 
-        user, 
+        user: seller,
         checkoutNotes,
         tenant,
       });
@@ -7819,7 +7927,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         } else {
           // Auto-build the recipient list: salesperson + customer + admins
           recipients = [];
-          if (user.email) recipients.push(user.email);
+          if (seller.email) recipients.push(seller.email);
           for (const email of parseEmailList(effectiveCustomer.email)) {
             if (!recipients.includes(email)) recipients.push(email);
           }
@@ -7836,7 +7944,7 @@ Proporciona tu análisis en el siguiente formato JSON:
             to: recipients,
             checkinData: {
               customerName: customer!.name,
-              vendedorName: user.fullName,
+              vendedorName: seller.fullName,
               checkoutDate: format(new Date(), "PPP 'a las' p", { locale: es }),
               notes: checkoutNotes,
             },
@@ -7874,7 +7982,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       // Verify authorization: user must own the check-in or be an admin
-      if (checkin.userId !== userId && req.user!.role !== UserRole.ADMIN) {
+      if (!canAccessAssignedRecord(req, checkin)) {
         return res.status(403).json({ error: "Not authorized to access this PDF" });
       }
 
