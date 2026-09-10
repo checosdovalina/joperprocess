@@ -1,0 +1,63 @@
+[root@localhost ~]# certbot certificates
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Found the following certs:
+  Certificate Name: apineoskin.nexxo.com.mx
+    Serial Number: 5284010e91e45fa38eee4469a25ef63fb7a
+    Key Type: ECDSA
+    Domains: apineoskin.nexxo.com.mx
+    Expiry Date: 2026-12-08 22:07:05+00:00 (VALID: 89 days)
+    Certificate Path: /etc/letsencrypt/live/apineoskin.nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/apineoskin.nexxo.com.mx/privkey.pem
+  Certificate Name: events-ots.com
+    Serial Number: 58920b4afaf90fe5275ec6f6edc2bc4ad86
+    Key Type: ECDSA
+    Domains: events-ots.com www.events-ots.com
+    Expiry Date: 2026-10-14 15:35:36+00:00 (VALID: 34 days)
+    Certificate Path: /etc/letsencrypt/live/events-ots.com/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/events-ots.com/privkey.pem
+  Certificate Name: joper.nexxo.com.mx
+    Serial Number: 6a54851efa1f71d21af26b640499a91ce99
+    Key Type: ECDSA
+    Domains: joper.nexxo.com.mx
+    Expiry Date: 2026-12-08 23:05:12+00:00 (VALID: 89 days)
+    Certificate Path: /etc/letsencrypt/live/joper.nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/joper.nexxo.com.mx/privkey.pem
+  Certificate Name: microsipdashboard.events-ots.com
+    Serial Number: 53f94e2f73aec36d60602cf06064421d03f
+    Key Type: ECDSA
+    Domains: microsipdashboard.events-ots.com
+    Expiry Date: 2026-10-14 14:51:25+00:00 (VALID: 34 days)
+    Certificate Path: /etc/letsencrypt/live/microsipdashboard.events-ots.com/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/microsipdashboard.events-ots.com/privkey.pem
+  Certificate Name: microsipdashboard.nexxo.com.mx
+    Serial Number: 56a9264030bf322935aff173bb33e0f6db8
+    Key Type: ECDSA
+    Domains: microsipdashboard.nexxo.com.mx
+    Expiry Date: 2026-10-14 14:29:49+00:00 (VALID: 34 days)
+    Certificate Path: /etc/letsencrypt/live/microsipdashboard.nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/microsipdashboard.nexxo.com.mx/privkey.pem
+  Certificate Name: nexxo.com.mx-0001
+    Serial Number: 5213e094c789617245269d18392d120ee16
+    Key Type: ECDSA
+    Domains: nexxo.com.mx *.nexxo.com.mx
+    Expiry Date: 2026-10-14 15:46:40+00:00 (VALID: 34 days)
+    Certificate Path: /etc/letsencrypt/live/nexxo.com.mx-0001/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxo.com.mx-0001/privkey.pem
+  Certificate Name: nexxo.com.mx
+    Serial Number: 58d8713bdff8639aa4b5480c924244acdd0
+    Key Type: ECDSA
+    Domains: nexxo.com.mx www.nexxo.com.mx
+    Expiry Date: 2026-10-14 15:35:45+00:00 (VALID: 34 days)
+    Certificate Path: /etc/letsencrypt/live/nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxo.com.mx/privkey.pem
+  Certificate Name: nexxobi.com.mx
+    Serial Number: 60c234d20aee3f1dc91df379120c1f0a4cd
+    Key Type: ECDSA
+    Domains: nexxobi.com.mx
+    Expiry Date: 2026-11-10 19:50:51+00:00 (VALID: 61 days)
+    Certificate Path: /etc/letsencrypt/live/nexxobi.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxobi.com.mx/privkey.pem
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+[root@localhost ~]# 
