@@ -39,7 +39,7 @@ import { Plus, MapPin, Loader2, FileText, Calendar, CheckCircle2, RotateCcw, Tra
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { Link } from "wouter";
 import { CustomerCombobox } from "@/components/customer-combobox";
@@ -63,18 +63,41 @@ export default function CheckinsPage() {
     notes: "",
     photos: [],
   });
-  const [searchText, setSearchText] = useState("");
-  const [filterSeller, setFilterSeller] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterCustomerId, setFilterCustomerId] = useState("all");
+  const [filterSellerId, setFilterSellerId] = useState("all");
 
   type CheckinWithRelations = Checkin & { customer: Customer; user?: User; salesPerson?: User | null };
   type VisitWithRelations = ScheduledVisit & { customer: Customer; salesPerson?: User | null };
-  const { data: checkins, isLoading } = useQuery<CheckinWithRelations[]>({
-    queryKey: ["/api/checkins"],
+  type ActivityResponse = {
+    items: CheckinWithRelations[];
+    dailySummary: { date: string; count: number }[];
+    total: number;
+  };
+  const activityParams = new URLSearchParams();
+  if (filterDateFrom) activityParams.set("from", new Date(`${filterDateFrom}T00:00:00`).toISOString());
+  if (filterDateTo) {
+    const exclusiveEnd = new Date(`${filterDateTo}T00:00:00`);
+    exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+    activityParams.set("to", exclusiveEnd.toISOString());
+  }
+  if (filterCustomerId !== "all") activityParams.set("customerId", filterCustomerId);
+  if (filterType !== "all") activityParams.set("meetingType", filterType);
+  if (filterStatus !== "all") activityParams.set("status", filterStatus);
+  if (isAdmin && filterSellerId !== "all") activityParams.set("sellerId", filterSellerId);
+  activityParams.set("timezoneOffsetMinutes", String(new Date().getTimezoneOffset()));
+  const activityQuery = activityParams.toString();
+  const { data: activity, isLoading } = useQuery<ActivityResponse>({
+    queryKey: ["/api/checkins/activity", activityQuery],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/checkins/activity${activityQuery ? `?${activityQuery}` : ""}`);
+      return res.json();
+    },
   });
+  const checkins = activity?.items;
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -113,6 +136,7 @@ export default function CheckinsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins/activity"] });
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-visits"] });
       toast({
@@ -174,6 +198,7 @@ export default function CheckinsPage() {
         },
       );
       await queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/checkins/activity"] });
       setIsDialogOpen(false);
       setFormData({
         customerId: "",
@@ -206,6 +231,7 @@ export default function CheckinsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins/activity"] });
       setCheckinToDelete(null);
       toast({ title: t("checkins.toast-deleted") });
     },
@@ -256,36 +282,19 @@ export default function CheckinsPage() {
     createMutation.mutate(formData as InsertCheckin);
   };
 
-  const hasActiveFilters = searchText !== "" || filterSeller !== "all" || filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "";
+  const hasActiveFilters = filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "" || filterCustomerId !== "all" || filterSellerId !== "all";
 
   const filteredCheckins = (checkins ?? []).filter(c => {
-    const assignedSellerId = c.salesPersonId || c.userId;
-    if (isAdmin && filterSeller !== "all" && assignedSellerId !== filterSeller) return false;
-    if (filterStatus === "active" && c.checkoutAt) return false;
-    if (filterStatus === "done" && !c.checkoutAt) return false;
-    if (filterType !== "all" && c.meetingType !== filterType) return false;
-    if (searchText) {
-      const s = searchText.toLowerCase();
-      if (!c.customer?.name?.toLowerCase().includes(s)) return false;
-    }
-    if (filterDateFrom) {
-      const from = startOfDay(parseISO(filterDateFrom));
-      if (new Date(c.checkinAt) < from) return false;
-    }
-    if (filterDateTo) {
-      const to = endOfDay(parseISO(filterDateTo));
-      if (new Date(c.checkinAt) > to) return false;
-    }
     return true;
   });
 
   const resetFilters = () => {
-    setSearchText("");
-    setFilterSeller("all");
     setFilterStatus("all");
     setFilterType("all");
     setFilterDateFrom("");
     setFilterDateTo("");
+    setFilterCustomerId("all");
+    setFilterSellerId("all");
   };
 
   return (
@@ -516,29 +525,6 @@ export default function CheckinsPage() {
 
           {/* Filter bar */}
           <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
-            <div className="flex-1 min-w-[180px]">
-              <Input
-                placeholder={t("checkins.search-customer")}
-                value={searchText}
-                onChange={e => setSearchText(e.target.value)}
-                data-testid="input-search-checkin"
-              />
-            </div>
-            {isAdmin && (
-              <Select value={filterSeller} onValueChange={setFilterSeller}>
-                <SelectTrigger className="w-[190px]" data-testid="select-filter-seller">
-                  <SelectValue placeholder="Vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los vendedores</SelectItem>
-                  {sellers.map((seller) => (
-                    <SelectItem key={seller.id} value={seller.id}>
-                      {seller.fullName || seller.username}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[150px]" data-testid="select-filter-status">
                 <SelectValue placeholder={t("label.status")} />
@@ -560,6 +546,30 @@ export default function CheckinsPage() {
                 <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filterCustomerId} onValueChange={setFilterCustomerId}>
+              <SelectTrigger className="w-[190px]" data-testid="select-filter-customer">
+                <SelectValue placeholder={t("label.client")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("label.all")}</SelectItem>
+                {(customers ?? []).map((customer) => (
+                  <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isAdmin && (
+              <Select value={filterSellerId} onValueChange={setFilterSellerId}>
+                <SelectTrigger className="w-[190px]" data-testid="select-filter-seller">
+                  <SelectValue placeholder="Vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los vendedores</SelectItem>
+                  {sellers.map((seller) => (
+                    <SelectItem key={seller.id} value={seller.id}>{seller.fullName || seller.username}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="flex items-center gap-1">
               <Input
                 type="date"
@@ -588,6 +598,21 @@ export default function CheckinsPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {!isLoading && activity && activity.dailySummary.length > 0 && (
+            <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="daily-activity-summary">
+              {activity.dailySummary.map((day) => (
+                <div key={day.date} className="rounded-lg border bg-muted/20 p-3">
+                  <div className="text-sm text-muted-foreground">
+                    {format(parseISO(day.date), "PPP", { locale: es })}
+                  </div>
+                  <div className="mt-1 text-2xl font-bold">{day.count}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {day.count === 1 ? "actividad" : "actividades"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3, 4, 5].map((i) => (

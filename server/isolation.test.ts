@@ -784,6 +784,52 @@ describe("Vendedor visibility is limited to assigned records", () => {
   });
 });
 
+describe("GET /api/checkins/activity", () => {
+  it("applies activity filters on the server and groups matching records by day", async () => {
+    const matchingId = await insertReturningId(checkins, {
+      tenantId: ctx.tenantA,
+      userId: ctx.vendedorA1.id,
+      salesPersonId: ctx.vendedorA1.id,
+      customerId: ctx.customerA,
+      meetingType: "llamada",
+      checkinAt: new Date("2026-09-08T15:00:00.000Z"),
+    });
+    await insertReturningId(checkins, {
+      tenantId: ctx.tenantA,
+      userId: ctx.vendedorA1.id,
+      salesPersonId: ctx.vendedorA1.id,
+      customerId: ctx.customerA,
+      meetingType: "visita",
+      checkinAt: new Date("2026-09-08T16:00:00.000Z"),
+    });
+
+    const response = await asVendedorA1(
+      "GET",
+      `/api/checkins/activity?from=2026-09-08T00%3A00%3A00.000Z&to=2026-09-09T00%3A00%3A00.000Z&customerId=${ctx.customerA}&meetingType=llamada&status=active&timezoneOffsetMinutes=0`,
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items.map((row: any) => row.id)).toEqual([matchingId]);
+    expect(body.dailySummary).toEqual([{ date: "2026-09-08", count: 1 }]);
+    expect(body.total).toBe(1);
+  });
+
+  it("prevents a seller from selecting another user and lets an admin select a same-tenant seller", async () => {
+    const ownId = await insertReturningId(checkins, {
+      tenantId: ctx.tenantA,
+      userId: ctx.adminA.id,
+      salesPersonId: ctx.vendedorA1.id,
+      customerId: ctx.customerA,
+    });
+
+    expect((await asVendedorA1("GET", `/api/checkins/activity?sellerId=${ctx.adminA.id}`)).status).toBe(403);
+    const adminResponse = await asAdminA("GET", `/api/checkins/activity?sellerId=${ctx.vendedorA1.id}`);
+    expect(adminResponse.status).toBe(200);
+    expect((await adminResponse.json()).items.some((row: any) => row.id === ownId)).toBe(true);
+    expect((await asAdminA("GET", `/api/checkins/activity?sellerId=${ctx.adminB.id}`)).status).toBe(400);
+  });
+});
+
 describe("Scheduled visit email reminders", () => {
   it("lets the seller configure a one-hour reminder and sends it once when due", async () => {
     sendScheduledVisitReminderEmailMock.mockClear();

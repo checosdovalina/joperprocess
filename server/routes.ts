@@ -1845,6 +1845,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Check-ins endpoints
+  app.get("/api/checkins/activity", isAuthenticated, async (req, res) => {
+    try {
+      const querySchema = z.object({
+        from: z.string().datetime().optional(),
+        to: z.string().datetime().optional(),
+        customerId: z.string().uuid().optional(),
+        meetingType: z.enum([MeetingType.LLAMADA, MeetingType.VISITA, MeetingType.VIDEOLLAMADA]).optional(),
+        sellerId: z.string().uuid().optional(),
+        status: z.enum(["active", "done"]).optional(),
+        timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840).default(0),
+      }).refine(({ from, to }) => !from || !to || new Date(from) <= new Date(to), {
+        message: "El rango de fechas no es válido",
+      });
+      const parsed = querySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Filtros inválidos", details: parsed.error.flatten() });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId && !req.user!.isSuperAdmin) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { from, to, customerId, meetingType, sellerId, status, timezoneOffsetMinutes } = parsed.data;
+      const conditions = [];
+      if (tenantId) conditions.push(eq(checkins.tenantId, tenantId));
+      if (from) conditions.push(gte(checkins.checkinAt, new Date(from)));
+      if (to) conditions.push(lt(checkins.checkinAt, new Date(to)));
+      if (customerId) conditions.push(eq(checkins.customerId, customerId));
+      if (meetingType) conditions.push(eq(checkins.meetingType, meetingType));
+      if (status === "active") conditions.push(isNull(checkins.checkoutAt));
+      if (status === "done") conditions.push(isNotNull(checkins.checkoutAt));
+
+      if (req.user!.role === UserRole.VENDEDOR) {
+        if (sellerId && sellerId !== req.user!.id) {
+          return res.status(403).json({ error: "No puedes consultar la actividad de otro vendedor" });
+        }
+        conditions.push(or(
+          eq(checkins.salesPersonId, req.user!.id),
+          and(isNull(checkins.salesPersonId), eq(checkins.userId, req.user!.id)),
+        )!);
+      } else if (sellerId) {
+        if (tenantId) {
+          const seller = await db.query.users.findFirst({
+            where: and(eq(users.id, sellerId), eq(users.tenantId, tenantId), eq(users.active, true)),
+            columns: { id: true },
+          });
+          if (!seller) return res.status(400).json({ error: "Vendedor inválido para este tenant" });
+        }
+        conditions.push(or(
+          eq(checkins.salesPersonId, sellerId),
+          and(isNull(checkins.salesPersonId), eq(checkins.userId, sellerId)),
+        )!);
+      }
+
+      const items = await db.query.checkins.findMany({
+        where: conditions.length ? and(...conditions) : undefined,
+        orderBy: [desc(checkins.checkinAt)],
+        with: {
+          customer: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+        },
+      });
+      const counts = new Map<string, number>();
+      for (const item of items) {
+        const localTime = new Date(item.checkinAt.getTime() - timezoneOffsetMinutes * 60_000);
+        const day = localTime.toISOString().slice(0, 10);
+        counts.set(day, (counts.get(day) ?? 0) + 1);
+      }
+      const dailySummary = Array.from(counts, ([date, count]) => ({ date, count }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      res.json({ items, dailySummary, total: items.length });
+    } catch (error) {
+      console.error("Error fetching check-in activity:", error);
+      res.status(500).json({ error: "Error fetching check-in activity" });
+    }
+  });
+
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
