@@ -1,4 +1,13 @@
 -- ================================================================
+
+-- ----------------------------------------------------------------
+-- [2026-09-11] Columna: customers.is_prospect
+-- Permite identificar contactos creados como prospectos desde check-ins
+-- ----------------------------------------------------------------
+ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS is_prospect boolean NOT NULL DEFAULT false;
+ALTER TABLE checkins
+  ADD COLUMN IF NOT EXISTS was_prospect boolean NOT NULL DEFAULT false;
 -- NEXXO - Cambios de Schema para VPS (SEGURO - no borra datos)
 -- ================================================================
 -- Ejecutar con: psql "$DATABASE_URL" -f scripts/vps-schema-changes.sql

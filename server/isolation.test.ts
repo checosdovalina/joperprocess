@@ -785,6 +785,31 @@ describe("Vendedor visibility is limited to assigned records", () => {
 });
 
 describe("GET /api/checkins/activity", () => {
+  it("creates a prospect and its check-in atomically and counts it as a prospect visit", async () => {
+    const response = await asVendedorA1("POST", "/api/checkins/prospect", {
+      prospect: {
+        name: `Prospecto ${Date.now()}`,
+        address: "Calle de prueba 123",
+        phone: "5551234567",
+      },
+      checkin: {
+        meetingType: "visita",
+        salesPersonId: ctx.vendedorA1.id,
+      },
+    });
+    expect(response.status).toBe(201);
+    const created = await response.json();
+    expect(created.customer.isProspect).toBe(true);
+    expect(created.wasProspect).toBe(true);
+    expect(created.salesPerson.id).toBe(ctx.vendedorA1.id);
+
+    const activityResponse = await asVendedorA1("GET", "/api/checkins/activity");
+    expect(activityResponse.status).toBe(200);
+    const activity = await activityResponse.json();
+    expect(activity.items.some((row: any) => row.id === created.id)).toBe(true);
+    expect(activity.prospectVisits).toBeGreaterThanOrEqual(1);
+  });
+
   it("applies activity filters on the server and groups matching records by day", async () => {
     const matchingId = await insertReturningId(checkins, {
       tenantId: ctx.tenantA,
@@ -810,8 +835,9 @@ describe("GET /api/checkins/activity", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.items.map((row: any) => row.id)).toEqual([matchingId]);
-    expect(body.dailySummary).toEqual([{ date: "2026-09-08", count: 1 }]);
+    expect(body.dailySummary).toEqual([{ date: "2026-09-08", count: 1, prospectCount: 0 }]);
     expect(body.total).toBe(1);
+    expect(body.prospectVisits).toBe(0);
   });
 
   it("prevents a seller from selecting another user and lets an admin select a same-tenant seller", async () => {

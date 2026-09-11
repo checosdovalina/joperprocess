@@ -1780,6 +1780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ),
         with: {
           user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
         },
         orderBy: (checkins, { desc }) => [desc(checkins.checkinAt)],
         limit: 5,
@@ -1909,16 +1910,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
         },
       });
-      const counts = new Map<string, number>();
+      const counts = new Map<string, { count: number; prospectCount: number }>();
       for (const item of items) {
         const localTime = new Date(item.checkinAt.getTime() - timezoneOffsetMinutes * 60_000);
         const day = localTime.toISOString().slice(0, 10);
-        counts.set(day, (counts.get(day) ?? 0) + 1);
+        const current = counts.get(day) ?? { count: 0, prospectCount: 0 };
+        current.count += 1;
+        if (item.wasProspect) current.prospectCount += 1;
+        counts.set(day, current);
       }
-      const dailySummary = Array.from(counts, ([date, count]) => ({ date, count }))
+      const dailySummary = Array.from(counts, ([date, totals]) => ({ date, ...totals }))
         .sort((a, b) => b.date.localeCompare(a.date));
 
-      res.json({ items, dailySummary, total: items.length });
+      res.json({
+        items,
+        dailySummary,
+        total: items.length,
+        prospectVisits: items.filter(item => item.wasProspect).length,
+      });
     } catch (error) {
       console.error("Error fetching check-in activity:", error);
       res.status(500).json({ error: "Error fetching check-in activity" });
@@ -1996,6 +2005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validated = insertCheckinSchema.parse(body);
       const customer = await scopedStorage.getCustomer(validated.customerId);
       if (!customer) return res.status(400).json({ error: "Cliente inválido para este tenant" });
+      validated.wasProspect = customer.isProspect;
       const seller = await getValidAssignedSeller(req, validated.salesPersonId);
       if (!seller) return res.status(400).json({ error: "Vendedor asignado inválido" });
       validated.salesPersonId = seller.id;
@@ -2025,6 +2035,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const message = error instanceof Error ? error.message : String(error);
       console.error("Error creating checkin:", error);
       res.status(400).json({ error: "Error creating checkin", detail: message });
+    }
+  });
+
+  app.post("/api/checkins/prospect", isAuthenticated, async (req, res) => {
+    try {
+      const inputSchema = z.object({
+        prospect: z.object({
+          name: z.string().trim().min(1, "El nombre es obligatorio"),
+          address: z.string().trim().optional(),
+          phone: z.string().trim().optional(),
+        }),
+        checkin: insertCheckinSchema.omit({ customerId: true, wasProspect: true, customerLocationId: true }),
+      });
+      const input = inputSchema.parse(req.body);
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Seleccione una empresa." });
+      const seller = await getValidAssignedSeller(req, input.checkin.salesPersonId || req.user!.id);
+      if (!seller) return res.status(400).json({ error: "Vendedor asignado inválido" });
+
+      const checkinId = await db.transaction(async (tx) => {
+        const [prospect] = await tx.insert(customers).values({
+          tenantId,
+          name: input.prospect.name,
+          address: input.prospect.address || null,
+          phone: input.prospect.phone || null,
+          isProspect: true,
+        }).returning({ id: customers.id });
+        const [created] = await tx.insert(checkins).values({
+          ...input.checkin,
+          tenantId,
+          userId: req.user!.id,
+          customerId: prospect.id,
+          salesPersonId: seller.id,
+          wasProspect: true,
+          latitude: input.checkin.latitude === "" ? null : input.checkin.latitude,
+          longitude: input.checkin.longitude === "" ? null : input.checkin.longitude,
+        }).returning({ id: checkins.id });
+        return created.id;
+      });
+
+      const result = await db.query.checkins.findFirst({
+        where: eq(checkins.id, checkinId),
+        with: {
+          customer: true,
+          user: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+          salesPerson: { columns: { id: true, fullName: true, username: true, email: true, role: true } },
+        },
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error creating prospect check-in:", error);
+      res.status(400).json({
+        error: error instanceof z.ZodError
+          ? error.issues[0]?.message
+          : "Error al registrar prospecto y check-in",
+      });
     }
   });
 
@@ -2410,6 +2476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         salesPersonId: visit.salesPersonId || visit.userId,
         customerId: visit.customerId,
         customerLocationId: visit.customerLocationId,
+        wasProspect: (await createTenantScopedStorage(req).getCustomer(visit.customerId))?.isProspect ?? false,
         latitude: req.body.latitude,
         longitude: req.body.longitude,
         topics: visit.topics || [],
@@ -7917,6 +7984,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       const overrideRecipients = parsed.recipients
         ? parsed.recipients.flatMap((r) => parseEmailList(r)).filter((e, i, arr) => arr.indexOf(e) === i)
         : undefined;
+      const recipientsWereProvided = parsed.recipients !== undefined;
 
       const scopedStorage = createTenantScopedStorage(req);
       const checkin = await scopedStorage.getCheckin(checkinId);
@@ -7996,14 +8064,19 @@ Proporciona tu análisis en el siguiente formato JSON:
         minutePdfPath: pdfPath,
       });
 
+      let emailDelivery: Awaited<ReturnType<typeof sendCheckoutEmail>> = {
+        status: "skipped",
+        sent: [],
+        failed: [],
+      };
       // Send email notifications with PDF attachment
       try {
         console.log(`Sending email notifications...`);
         let recipients: string[];
 
-        if (overrideRecipients && overrideRecipients.length > 0) {
+        if (recipientsWereProvided) {
           // Use the list provided by the user (full override — they confirmed who gets it)
-          recipients = overrideRecipients;
+          recipients = overrideRecipients ?? [];
         } else {
           // Auto-build the recipient list: salesperson + customer + admins
           recipients = [];
@@ -8020,7 +8093,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         }
         
         if (recipients.length > 0) {
-          await sendCheckoutEmail({
+          emailDelivery = await sendCheckoutEmail({
             to: recipients,
             checkinData: {
               customerName: customer!.name,
@@ -8030,18 +8103,24 @@ Proporciona tu análisis en el siguiente formato JSON:
             },
             pdfPath,
           });
-          console.log(`✅ Emails sent to: ${recipients.join(', ')}`);
+          console.log(`Email delivery result: ${emailDelivery.status}`);
         } else {
           console.warn('⚠️ No recipients found for email notification');
         }
       } catch (emailError) {
         // Log the error but don't fail the checkout
         console.error('❌ Error sending emails:', emailError);
+        emailDelivery = {
+          status: "failed",
+          sent: [],
+          failed: [{ email: "", error: emailError instanceof Error ? emailError.message : "Error preparando destinatarios" }],
+        };
       }
 
       res.status(200).json({
         checkin: updatedCheckin,
         pdfPath: pdfPath,
+        email: emailDelivery,
       });
     } catch (error) {
       console.error(`Error during checkout for check-in ${checkinId}:`, error);

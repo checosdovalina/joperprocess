@@ -116,6 +116,14 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     id: "012_add_statement_recipient_configured_flag",
     sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS statement_emails_configured boolean NOT NULL DEFAULT false`,
   },
+  {
+    id: "013_add_customer_prospect_flag",
+    sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS is_prospect boolean NOT NULL DEFAULT false`,
+  },
+  {
+    id: "014_add_checkin_prospect_snapshot",
+    sql: `ALTER TABLE checkins ADD COLUMN IF NOT EXISTS was_prospect boolean NOT NULL DEFAULT false`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

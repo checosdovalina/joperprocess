@@ -24,15 +24,26 @@ interface SendCheckoutEmailParams {
   pdfPath: string;
 }
 
+export interface CheckoutEmailResult {
+  status: "sent" | "partial" | "failed" | "skipped";
+  sent: string[];
+  failed: Array<{ email: string; error: string }>;
+}
+
 export async function sendCheckoutEmail({
   to,
   checkinData,
   pdfPath,
-}: SendCheckoutEmailParams): Promise<void> {
+}: SendCheckoutEmailParams): Promise<CheckoutEmailResult> {
   try {
-    // Validate recipients
-    if (!to || to.length === 0) {
-      throw new Error('No recipients provided for email');
+    const recipients = [...new Set((to || []).map(email => email.trim().toLowerCase()).filter(Boolean))];
+    if (recipients.length === 0) return { status: "skipped", sent: [], failed: [] };
+    if (!process.env.MAILERSEND_API_KEY) {
+      return {
+        status: "failed",
+        sent: [],
+        failed: recipients.map(email => ({ email, error: "MailerSend no está configurado" })),
+      };
     }
 
     // Download PDF from storage
@@ -192,7 +203,8 @@ export async function sendCheckoutEmail({
     );
     
     // Send individual emails to each recipient (to avoid MailerSend trial limits)
-    for (const email of to) {
+    const result: CheckoutEmailResult = { status: "sent", sent: [], failed: [] };
+    for (const email of recipients) {
       try {
         const emailParams = new EmailParams()
           .setFrom(sentFrom)
@@ -202,14 +214,25 @@ export async function sendCheckoutEmail({
           .setAttachments([attachment]);
         
         await mailerSend.email.send(emailParams);
+        result.sent.push(email);
         console.log(`✅ Email sent successfully to: ${email}`);
       } catch (individualError) {
         console.error(`❌ Failed to send email to ${email}:`, individualError);
+        result.failed.push({
+          email,
+          error: individualError instanceof Error ? individualError.message : "Error del proveedor",
+        });
       }
     }
+    result.status = result.failed.length === 0 ? "sent" : result.sent.length > 0 ? "partial" : "failed";
+    return result;
   } catch (error) {
     console.error('❌ Error sending email:', error);
-    throw new Error('Failed to send email');
+    return {
+      status: "failed",
+      sent: [],
+      failed: (to || []).map(email => ({ email, error: error instanceof Error ? error.message : "Error de envío" })),
+    };
   }
 }
 

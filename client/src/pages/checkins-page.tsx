@@ -54,6 +54,9 @@ export default function CheckinsPage() {
   const [checkinToDelete, setCheckinToDelete] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [isProspectMode, setIsProspectMode] = useState(false);
+  const [creatingProspect, setCreatingProspect] = useState(false);
+  const [prospectData, setProspectData] = useState({ name: "", address: "", phone: "" });
   const [formData, setFormData] = useState<Partial<InsertCheckin>>({
     customerId: "",
     meetingType: MeetingType.VISITA,
@@ -74,8 +77,9 @@ export default function CheckinsPage() {
   type VisitWithRelations = ScheduledVisit & { customer: Customer; salesPerson?: User | null };
   type ActivityResponse = {
     items: CheckinWithRelations[];
-    dailySummary: { date: string; count: number }[];
+    dailySummary: { date: string; count: number; prospectCount: number }[];
     total: number;
+    prospectVisits: number;
   };
   const activityParams = new URLSearchParams();
   if (filterDateFrom) activityParams.set("from", new Date(`${filterDateFrom}T00:00:00`).toISOString());
@@ -211,6 +215,8 @@ export default function CheckinsPage() {
         salesPersonId: user?.id,
       });
       setLocation(null);
+      setIsProspectMode(false);
+      setProspectData({ name: "", address: "", phone: "" });
       toast({
         title: t("checkins.toast-registered"),
         description: t("checkins.toast-registered-desc"),
@@ -277,9 +283,54 @@ export default function CheckinsPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(formData as InsertCheckin);
+    if (!isProspectMode) {
+      createMutation.mutate(formData as InsertCheckin);
+      return;
+    }
+    if (!prospectData.name.trim()) {
+      toast({ title: "Nombre requerido", description: "Captura el nombre del prospecto.", variant: "destructive" });
+      return;
+    }
+    try {
+      setCreatingProspect(true);
+      const response = await apiRequest("POST", "/api/checkins/prospect", {
+        prospect: prospectData,
+        checkin: formData,
+      });
+      const createdCheckin = await response.json() as CheckinWithRelations;
+      await queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      createMutation.reset();
+      queryClient.setQueryData<CheckinWithRelations[]>(
+        ["/api/checkins"],
+        (current) => [createdCheckin, ...(current ?? []).filter(item => item.id !== createdCheckin.id)],
+      );
+      await queryClient.invalidateQueries({ queryKey: ["/api/checkins/activity"] });
+      setIsDialogOpen(false);
+      setFormData({
+        customerId: "",
+        meetingType: MeetingType.VISITA,
+        latitude: "",
+        longitude: "",
+        topics: [],
+        notes: "",
+        photos: [],
+        salesPersonId: user?.id,
+      });
+      setLocation(null);
+      setIsProspectMode(false);
+      setProspectData({ name: "", address: "", phone: "" });
+      toast({ title: "Prospecto y check-in registrados" });
+    } catch (error) {
+      toast({
+        title: "No se pudo registrar el prospecto",
+        description: error instanceof Error ? error.message : "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingProspect(false);
+    }
   };
 
   const hasActiveFilters = filterStatus !== "all" || filterType !== "all" || filterDateFrom !== "" || filterDateTo !== "" || filterCustomerId !== "all" || filterSellerId !== "all";
@@ -328,14 +379,52 @@ export default function CheckinsPage() {
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
                 <div className="space-y-2">
-                  <Label htmlFor="customer" className="text-sm font-medium">{t("label.client")} *</Label>
-                  <CustomerCombobox
-                    customers={customers || []}
-                    value={formData.customerId || ""}
-                    onValueChange={(value) => setFormData({ ...formData, customerId: value })}
-                    placeholder={t("checkins.search-customer")}
-                    data-testid="select-checkin-customer"
-                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="customer" className="text-sm font-medium">
+                      {isProspectMode ? "Prospecto" : t("label.client")} *
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto border-0 p-0 text-primary hover:bg-transparent hover:underline"
+                      onClick={() => setIsProspectMode(current => !current)}
+                      data-testid="button-toggle-prospect"
+                    >
+                      {isProspectMode ? "Seleccionar cliente existente" : "Registrar prospecto"}
+                    </Button>
+                  </div>
+                  {isProspectMode ? (
+                    <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
+                      <Input
+                        value={prospectData.name}
+                        onChange={(e) => setProspectData({ ...prospectData, name: e.target.value })}
+                        placeholder="Nombre del prospecto *"
+                        data-testid="input-prospect-name"
+                      />
+                      <Input
+                        value={prospectData.address}
+                        onChange={(e) => setProspectData({ ...prospectData, address: e.target.value })}
+                        placeholder="Dirección"
+                        data-testid="input-prospect-address"
+                      />
+                      <Input
+                        type="tel"
+                        value={prospectData.phone}
+                        onChange={(e) => setProspectData({ ...prospectData, phone: e.target.value })}
+                        placeholder="Teléfono"
+                        data-testid="input-prospect-phone"
+                      />
+                    </div>
+                  ) : (
+                    <CustomerCombobox
+                      customers={customers || []}
+                      value={formData.customerId || ""}
+                      onValueChange={(value) => setFormData({ ...formData, customerId: value })}
+                      placeholder={t("checkins.search-customer")}
+                      data-testid="select-checkin-customer"
+                    />
+                  )}
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">
@@ -432,8 +521,8 @@ export default function CheckinsPage() {
                 >
                   {t("btn.cancel")}
                 </Button>
-                <Button type="submit" className="sm:min-w-32" disabled={createMutation.isPending} data-testid="button-save-checkin">
-                  {createMutation.isPending ? (
+                <Button type="submit" className="sm:min-w-32" disabled={createMutation.isPending || creatingProspect} data-testid="button-save-checkin">
+                  {createMutation.isPending || creatingProspect ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       {t("btn.saving")}
@@ -599,18 +688,38 @@ export default function CheckinsPage() {
         </CardHeader>
         <CardContent>
           {!isLoading && activity && activity.dailySummary.length > 0 && (
-            <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="daily-activity-summary">
-              {activity.dailySummary.map((day) => (
-                <div key={day.date} className="rounded-lg border bg-muted/20 p-3">
-                  <div className="text-sm text-muted-foreground">
-                    {format(parseISO(day.date), "PPP", { locale: es })}
-                  </div>
-                  <div className="mt-1 text-2xl font-bold">{day.count}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {day.count === 1 ? "actividad" : "actividades"}
+            <div className="mb-5 space-y-3" data-testid="daily-activity-summary">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <div className="text-sm text-muted-foreground">Contactos registrados</div>
+                  <div className="text-3xl font-bold">{activity.total}</div>
+                </div>
+                <div className="rounded-lg border bg-amber-50/50 p-4 dark:bg-amber-950/20">
+                  <div className="text-sm text-muted-foreground">Visitas a nuevos prospectos</div>
+                  <div className="text-3xl font-bold text-amber-700 dark:text-amber-400">{activity.prospectVisits}</div>
+                </div>
+              </div>
+              <div className="rounded-lg border p-4">
+                <div className="mb-3 text-sm font-semibold">Actividad por día</div>
+                <div className="space-y-3">
+                  {activity.dailySummary.map((day) => (
+                    <div key={day.date} className="grid gap-1 sm:grid-cols-[180px_1fr_55px] sm:items-center">
+                      <div className="text-xs text-muted-foreground">
+                        {format(parseISO(day.date), "PPP", { locale: es })}
+                      </div>
+                      <div className="h-5 overflow-hidden rounded bg-muted">
+                        <div
+                          className="flex h-full items-center bg-primary px-2 text-[10px] text-primary-foreground"
+                          style={{ width: `${Math.max(10, (day.count / Math.max(...activity.dailySummary.map(item => item.count))) * 100)}%` }}
+                        >
+                          {day.prospectCount > 0 ? `${day.prospectCount} prospecto${day.prospectCount === 1 ? "" : "s"}` : ""}
+                        </div>
+                      </div>
+                      <div className="text-right text-sm font-semibold">{day.count}</div>
+                    </div>
+                  ))}
                   </div>
                 </div>
-              ))}
             </div>
           )}
           {isLoading ? (

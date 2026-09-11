@@ -69,6 +69,8 @@ interface CustomerSummary {
     checkinAt: string;
     latitude: string | null;
     longitude: string | null;
+    user?: { id: string; fullName: string | null; username: string } | null;
+    salesPerson?: { id: string; fullName: string | null; username: string } | null;
   }>;
 }
 
@@ -158,21 +160,31 @@ export default function CheckinDetailPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", `/api/checkins/${id}/checkout`, {
+      const response = await apiRequest("POST", `/api/checkins/${id}/checkout`, {
         checkoutNotes: checkoutNotes || undefined,
         internalNotes: internalNotes || undefined,
-        recipients: emailList.length > 0 ? emailList : undefined,
+        recipients: emailList,
       });
+      return response.json() as Promise<{ email?: { status: "sent" | "partial" | "failed" | "skipped"; sent: string[]; failed: Array<{ email: string }> } }>;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
       setCheckoutDialogOpen(false);
       setEmailList([]);
       setEmailInput("");
       toast({
-        title: t("checkins.toast-visit-finished"),
-        description: t("checkins.toast-visit-finished-desc"),
+        title: result.email?.status === "failed" || result.email?.status === "partial" || result.email?.status === "skipped"
+          ? "Visita cerrada con aviso de correo"
+          : t("checkins.toast-visit-finished"),
+        description: result.email?.status === "failed"
+          ? "La visita se guardó, pero no se pudo enviar ningún correo."
+          : result.email?.status === "partial"
+            ? "La visita se guardó, pero algunos correos no pudieron enviarse."
+            : result.email?.status === "skipped"
+              ? "La visita se guardó, pero no había destinatarios para el correo."
+            : t("checkins.toast-visit-finished-desc"),
+        variant: result.email?.status === "failed" || result.email?.status === "partial" ? "destructive" : "default",
       });
     },
     onError: (error: Error) => {
@@ -463,6 +475,27 @@ export default function CheckinDetailPage() {
                           <span className="text-muted-foreground">{invoice.folio}</span>
                           <span className="font-medium text-red-600">
                             ${parseFloat(invoice.total).toLocaleString("es-MX")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {summary.recentCheckins && summary.recentCheckins.length > 0 && (
+                  <div className="pt-3 border-t">
+                    <div className="text-sm font-medium mb-2">Visitas recientes y vendedor</div>
+                    <div className="space-y-2">
+                      {summary.recentCheckins.map((recent) => (
+                        <div key={recent.id} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-muted-foreground">
+                            {format(new Date(recent.checkinAt), "PP", { locale: es })}
+                          </span>
+                          <span className="font-medium text-right">
+                            {recent.salesPerson?.fullName ||
+                              recent.user?.fullName ||
+                              recent.salesPerson?.username ||
+                              recent.user?.username ||
+                              "—"}
                           </span>
                         </div>
                       ))}
