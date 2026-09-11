@@ -56,3 +56,17 @@ mtime_ms = 1788558194155
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:b4943a74-0ec5-4000-9a4f-6370e63082f5/6d74e4f0-7164-4d18-8dd8-e73dc53c1774/f4141df5-c769-4300-a264-a23e14f28030"
 storage_version_token = "1788558255689564"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "bwPGzg1wPogl-jOc3n2_S"
+uri = "file://deliverables/nexxo-brochure-comercial.pdf"
+type = "pdf"
+title = "Brochure comercial de Nexxo"
+description = "PDF informativo de 9 páginas con propuesta de valor, capturas de módulos, beneficios y datos comerciales de INMOSA."
+logical_id = "19ed8c69-7552-4c85-9884-86f62a7fd1c9"
+content_hash = "sha256:771e0f411c59676c93eb86e3670505bbca07235d0a892d490c76aae9f095bcf7"
+size = 3551394
+mtime_ms = 1789165964762
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:b4943a74-0ec5-4000-9a4f-6370e63082f5/19ed8c69-7552-4c85-9884-86f62a7fd1c9/f40256b0-17d2-426b-bb14-b527c3cab14a"
+storage_version_token = "1789165975023829"
+content_type = "application/pdf"
