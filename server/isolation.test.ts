@@ -784,6 +784,42 @@ describe("Vendedor visibility is limited to assigned records", () => {
   });
 });
 
+describe("Check-in location capture is immutable", () => {
+  it("stores GPS metadata and rejects later coordinate changes", async () => {
+    const createResponse = await asVendedorA1("POST", "/api/checkins", {
+      customerId: ctx.customerA,
+      meetingType: "visita",
+      latitude: "25.5428440",
+      longitude: "-103.4067860",
+      locationAccuracyMeters: "12.50",
+    });
+    expect(createResponse.status).toBe(201);
+    const created = await createResponse.json();
+    expect(created.latitude).toBe("25.5428440");
+    expect(created.longitude).toBe("-103.4067860");
+    expect(created.locationAccuracyMeters).toBe("12.50");
+    expect(created.locationCapturedAt).toBeTruthy();
+
+    const sellerUpdate = await asVendedorA1("PATCH", `/api/checkins/${created.id}`, {
+      latitude: "25.0000000",
+      longitude: "-103.0000000",
+    });
+    expect(sellerUpdate.status).toBe(400);
+
+    const adminUpdate = await asAdminA("PATCH", `/api/checkins/${created.id}`, {
+      latitude: "25.0000000",
+      longitude: "-103.0000000",
+    });
+    expect(adminUpdate.status).toBe(400);
+
+    const readResponse = await asVendedorA1("GET", `/api/checkins/${created.id}`);
+    expect(readResponse.status).toBe(200);
+    const unchanged = await readResponse.json();
+    expect(unchanged.latitude).toBe("25.5428440");
+    expect(unchanged.longitude).toBe("-103.4067860");
+  });
+});
+
 describe("GET /api/checkins/activity", () => {
   it("creates a prospect and its check-in atomically and counts it as a prospect visit", async () => {
     const response = await asVendedorA1("POST", "/api/checkins/prospect", {

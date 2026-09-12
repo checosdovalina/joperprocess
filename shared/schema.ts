@@ -317,6 +317,8 @@ export const checkins = pgTable("checkins", {
   meetingType: text("meeting_type").notNull().default(MeetingType.VISITA),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  locationAccuracyMeters: decimal("location_accuracy_meters", { precision: 10, scale: 2 }),
+  locationCapturedAt: timestamp("location_captured_at"),
   checkinAt: timestamp("checkin_at").notNull().defaultNow(),
   checkoutAt: timestamp("checkout_at"),
   topics: text("topics").array(),

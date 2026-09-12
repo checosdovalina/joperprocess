@@ -124,6 +124,18 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     id: "014_add_checkin_prospect_snapshot",
     sql: `ALTER TABLE checkins ADD COLUMN IF NOT EXISTS was_prospect boolean NOT NULL DEFAULT false`,
   },
+  {
+    id: "015_add_checkin_location_metadata",
+    sql: `
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS location_accuracy_meters numeric(10,2);
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS location_captured_at timestamp;
+      UPDATE checkins
+      SET location_captured_at = checkin_at
+      WHERE latitude IS NOT NULL
+        AND longitude IS NOT NULL
+        AND location_captured_at IS NULL;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

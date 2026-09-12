@@ -8,6 +8,15 @@ ALTER TABLE customers
   ADD COLUMN IF NOT EXISTS is_prospect boolean NOT NULL DEFAULT false;
 ALTER TABLE checkins
   ADD COLUMN IF NOT EXISTS was_prospect boolean NOT NULL DEFAULT false;
+ALTER TABLE checkins
+  ADD COLUMN IF NOT EXISTS location_accuracy_meters numeric(10,2);
+ALTER TABLE checkins
+  ADD COLUMN IF NOT EXISTS location_captured_at timestamp;
+UPDATE checkins
+SET location_captured_at = checkin_at
+WHERE latitude IS NOT NULL
+  AND longitude IS NOT NULL
+  AND location_captured_at IS NULL;
 -- NEXXO - Cambios de Schema para VPS (SEGURO - no borra datos)
 -- ================================================================
 -- Ejecutar con: psql "$DATABASE_URL" -f scripts/vps-schema-changes.sql

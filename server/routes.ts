@@ -2000,9 +2000,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         salesPersonId: req.body.salesPersonId || req.user!.id,
         latitude:  req.body.latitude  === "" ? undefined : req.body.latitude,
         longitude: req.body.longitude === "" ? undefined : req.body.longitude,
+        locationAccuracyMeters: req.body.locationAccuracyMeters === "" ? undefined : req.body.locationAccuracyMeters,
       };
 
       const validated = insertCheckinSchema.parse(body);
+      const hasCoordinates = validated.latitude != null && validated.longitude != null;
       const customer = await scopedStorage.getCustomer(validated.customerId);
       if (!customer) return res.status(400).json({ error: "Cliente inválido para este tenant" });
       validated.wasProspect = customer.isProspect;
@@ -2021,7 +2023,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const checkin = await scopedStorage.createCheckin(validated);
+      const checkin = await scopedStorage.createCheckin({
+        ...validated,
+        locationCapturedAt: hasCoordinates ? new Date() : null,
+      });
       const checkinWithCustomer = await db.query.checkins.findFirst({
         where: eq(checkins.id, checkin.id),
         with: {
@@ -2071,6 +2076,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           wasProspect: true,
           latitude: input.checkin.latitude === "" ? null : input.checkin.latitude,
           longitude: input.checkin.longitude === "" ? null : input.checkin.longitude,
+          locationCapturedAt: input.checkin.latitude != null && input.checkin.longitude != null ? new Date() : null,
         }).returning({ id: checkins.id });
         return created.id;
       });
@@ -2479,6 +2485,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wasProspect: (await createTenantScopedStorage(req).getCustomer(visit.customerId))?.isProspect ?? false,
         latitude: req.body.latitude,
         longitude: req.body.longitude,
+        locationAccuracyMeters: req.body.locationAccuracyMeters == null ? null : String(req.body.locationAccuracyMeters),
+        locationCapturedAt: new Date(),
         topics: visit.topics || [],
         notes: visit.notes || "",
         photos: [],

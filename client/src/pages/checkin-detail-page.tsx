@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, Save, EyeOff } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, Save, EyeOff, ExternalLink } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType, type MeetingTypeType } from "@shared/schema";
 import { Link } from "wouter";
@@ -106,6 +106,16 @@ export default function CheckinDetailPage() {
     queryKey: [`/api/checkins/${id}`],
     enabled: !!id,
   });
+  const hasLocation = Boolean(checkin?.latitude && checkin?.longitude);
+  const latitude = hasLocation ? Number(checkin?.latitude) : null;
+  const longitude = hasLocation ? Number(checkin?.longitude) : null;
+  const mapDelta = 0.003;
+  const mapEmbedUrl = latitude != null && longitude != null
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - mapDelta}%2C${latitude - mapDelta}%2C${longitude + mapDelta}%2C${latitude + mapDelta}&layer=mapnik&marker=${latitude}%2C${longitude}`
+    : null;
+  const googleMapsUrl = latitude != null && longitude != null
+    ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+    : null;
 
   // Fetch planned email recipients (pre-populate when dialog opens)
   const { data: recipientsData } = useQuery<{ recipients: { email: string; label: string }[] }>({
@@ -389,13 +399,46 @@ export default function CheckinDetailPage() {
               </div>
             )}
 
-            {checkin.latitude && checkin.longitude && (
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">{t("label.gps")}</div>
-                <div className="mt-1 text-xs font-mono bg-muted p-2 rounded">
-                  Lat: {parseFloat(checkin.latitude).toFixed(6)}<br />
-                  Lng: {parseFloat(checkin.longitude).toFixed(6)}
+            {mapEmbedUrl && googleMapsUrl && latitude != null && longitude != null && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">Ubicación registrada</div>
+                    <div className="text-xs text-muted-foreground">
+                      Capturada automáticamente y bloqueada para edición
+                    </div>
+                  </div>
+                  <Badge variant="outline"><Lock className="mr-1 h-3 w-3" />Inmutable</Badge>
                 </div>
+                <div className="overflow-hidden rounded-lg border bg-muted">
+                  <iframe
+                    title="Ubicación registrada del vendedor"
+                    src={mapEmbedUrl}
+                    className="h-64 w-full"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="grid gap-2 text-xs sm:grid-cols-2">
+                  <div className="rounded-md bg-muted p-2 font-mono">
+                    Lat: {latitude.toFixed(6)}<br />
+                    Lng: {longitude.toFixed(6)}
+                  </div>
+                  <div className="rounded-md bg-muted p-2 text-muted-foreground">
+                    {checkin.locationCapturedAt && (
+                      <div>Capturada: {format(new Date(checkin.locationCapturedAt), "PPP 'a las' p", { locale: es })}</div>
+                    )}
+                    {checkin.locationAccuracyMeters && (
+                      <div>Precisión aproximada: ±{Math.round(Number(checkin.locationAccuracyMeters))} m</div>
+                    )}
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Abrir en Google Maps
+                  </a>
+                </Button>
               </div>
             )}
 

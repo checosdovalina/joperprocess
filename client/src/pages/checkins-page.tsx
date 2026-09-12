@@ -52,7 +52,7 @@ export default function CheckinsPage() {
   const isAdmin = user?.role === "admin";
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [checkinToDelete, setCheckinToDelete] = useState<string | null>(null);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [isProspectMode, setIsProspectMode] = useState(false);
   const [creatingProspect, setCreatingProspect] = useState(false);
@@ -131,10 +131,11 @@ export default function CheckinsPage() {
   });
 
   const convertVisitMutation = useMutation({
-    mutationFn: async ({ id, lat, lng }: { id: string; lat: number; lng: number }) => {
+    mutationFn: async ({ id, lat, lng, accuracy }: { id: string; lat: number; lng: number; accuracy: number }) => {
       const res = await apiRequest("POST", `/api/scheduled-visits/${id}/convert`, {
         latitude: lat.toString(),
         longitude: lng.toString(),
+        locationAccuracyMeters: accuracy.toFixed(2),
       });
       return await res.json();
     },
@@ -162,8 +163,8 @@ export default function CheckinsPage() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
-          convertVisitMutation.mutate({ id: visitId, lat: latitude, lng: longitude });
+          const { latitude, longitude, accuracy } = position.coords;
+          convertVisitMutation.mutate({ id: visitId, lat: latitude, lng: longitude, accuracy });
           setGettingLocation(false);
         },
         (error) => {
@@ -173,7 +174,8 @@ export default function CheckinsPage() {
             description: t("checkins.toast-location-error-desc"),
             variant: "destructive",
           });
-        }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
     } else {
       setGettingLocation(false);
@@ -251,12 +253,13 @@ export default function CheckinsPage() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
-          setLocation({ lat: latitude, lng: longitude });
+          const { latitude, longitude, accuracy } = position.coords;
+          setLocation({ lat: latitude, lng: longitude, accuracy });
           setFormData({
             ...formData,
             latitude: latitude.toString(),
             longitude: longitude.toString(),
+            locationAccuracyMeters: accuracy.toFixed(2),
           });
           setGettingLocation(false);
           toast({
@@ -271,7 +274,8 @@ export default function CheckinsPage() {
             description: t("checkins.toast-location-error-desc"),
             variant: "destructive",
           });
-        }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
     } else {
       setGettingLocation(false);
