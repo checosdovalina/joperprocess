@@ -82,6 +82,7 @@ import EmpresasPage from "@/pages/empresas-page";
 import CompaniesPage from "@/pages/companies-page";
 import ProductionPage from "@/pages/production-page";
 import ReportsPage from "@/pages/reports-page";
+import CommercialResultsPage from "@/pages/commercial-results-page";
 import OrderReleasePage from "@/pages/order-release-page";
 import ProductionBoardPage from "@/pages/production-board-page";
 import PipelinePage from "@/pages/pipeline-page";
@@ -112,6 +113,7 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
   "/account-statements": "nav.account-statements",
   "/payments": "nav.payments",
   "/reports": "nav.reports",
+  "/commercial-results": "nav.commercial-results",
   "/incidents": "nav.incidents",
   "/products": "nav.products",
   "/documents": "nav.documents",
@@ -191,6 +193,7 @@ function Router() {
       <ProtectedRoute path="/microsip" component={MicrosipSettingsPage} />
       <ProtectedRoute path="/pipeline" component={PipelinePage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA]} />
       <ProtectedRoute path="/reports" component={ReportsPage} allowedRoles={[UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA]} />
+      <ProtectedRoute path="/commercial-results" component={CommercialResultsPage} allowedRoles={[UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA]} />
       <ProtectedRoute path="/tenants" component={TenantsPage} />
       <ProtectedRoute path="/empresas" component={EmpresasPage} allowedRoles={[UserRole.ADMIN]} requireSuperAdmin />
       <ProtectedRoute path="/companies" component={CompaniesPage} allowedRoles={[UserRole.ADMIN]} />

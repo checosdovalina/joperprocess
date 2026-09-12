@@ -1934,6 +1934,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const commercialResultsQuerySchema = z.object({
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
+    customerId: z.string().uuid().optional(),
+    meetingType: z.enum([MeetingType.LLAMADA, MeetingType.VISITA, MeetingType.VIDEOLLAMADA]).optional(),
+    sellerId: z.string().uuid().optional(),
+    audience: z.enum(["all", "prospects", "customers"]).default("all"),
+    timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840).default(0),
+  }).refine(({ from, to }) => !from || !to || new Date(from) <= new Date(to), {
+    message: "El rango de fechas no es válido",
+  });
+
+  async function loadCommercialResults(req: Request) {
+    const parsed = commercialResultsQuerySchema.parse(req.query);
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId && !req.user!.isSuperAdmin) throw new Error("TENANT_REQUIRED");
+    const toDate = parsed.to ? new Date(parsed.to) : new Date();
+    const fromDate = parsed.from ? new Date(parsed.from) : new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    if (toDate.getTime() - fromDate.getTime() > 366 * 24 * 60 * 60 * 1000) {
+      throw new Error("RANGE_TOO_LARGE");
+    }
+    const conditions = [];
+    if (tenantId) conditions.push(eq(checkins.tenantId, tenantId));
+    conditions.push(gte(checkins.checkinAt, fromDate));
+    conditions.push(lt(checkins.checkinAt, toDate));
+    if (parsed.customerId) conditions.push(eq(checkins.customerId, parsed.customerId));
+    if (parsed.meetingType) conditions.push(eq(checkins.meetingType, parsed.meetingType));
+    if (parsed.audience === "prospects") conditions.push(eq(checkins.wasProspect, true));
+    if (parsed.audience === "customers") conditions.push(eq(checkins.wasProspect, false));
+
+    if (req.user!.role === UserRole.VENDEDOR) {
+      if (parsed.sellerId && parsed.sellerId !== req.user!.id) throw new Error("SELLER_FORBIDDEN");
+      conditions.push(or(
+        eq(checkins.salesPersonId, req.user!.id),
+        and(isNull(checkins.salesPersonId), eq(checkins.userId, req.user!.id)),
+      )!);
+    } else if (parsed.sellerId) {
+      const seller = tenantId
+        ? await db.query.users.findFirst({
+            where: and(eq(users.id, parsed.sellerId), eq(users.tenantId, tenantId), eq(users.active, true)),
+            columns: { id: true },
+          })
+        : await db.query.users.findFirst({ where: and(eq(users.id, parsed.sellerId), eq(users.active, true)), columns: { id: true } });
+      if (!seller) throw new Error("INVALID_SELLER");
+      conditions.push(or(
+        eq(checkins.salesPersonId, parsed.sellerId),
+        and(isNull(checkins.salesPersonId), eq(checkins.userId, parsed.sellerId)),
+      )!);
+    }
+
+    const rows = await db.query.checkins.findMany({
+      where: conditions.length ? and(...conditions) : undefined,
+      orderBy: [desc(checkins.checkinAt)],
+      limit: 20_001,
+      with: {
+        customer: { columns: { id: true, name: true } },
+        user: { columns: { id: true, fullName: true, username: true } },
+        salesPerson: { columns: { id: true, fullName: true, username: true } },
+      },
+    });
+    if (rows.length > 20_000) throw new Error("TOO_MANY_RESULTS");
+    const items = rows.map(row => ({
+      id: row.id,
+      checkinAt: row.checkinAt,
+      checkoutAt: row.checkoutAt,
+      meetingType: row.meetingType,
+      wasProspect: row.wasProspect,
+      customer: row.customer,
+      seller: {
+        id: row.salesPerson?.id ?? row.user.id,
+        name: row.salesPerson?.fullName || row.salesPerson?.username || row.user.fullName || row.user.username,
+      },
+    }));
+    const { summarizeCommercialActivity } = await import("./commercial-results");
+    return { results: summarizeCommercialActivity(items, parsed.timezoneOffsetMinutes), parsed, tenantId };
+  }
+
+  app.get("/api/commercial-results", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA), async (req, res) => {
+    try {
+      const { results } = await loadCommercialResults(req);
+      const { items: _items, ...dashboardResults } = results;
+      res.json(dashboardResults);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Filtros inválidos", details: error.flatten() });
+      if (error instanceof Error && error.message === "SELLER_FORBIDDEN") return res.status(403).json({ error: "No puedes consultar resultados de otro vendedor" });
+      if (error instanceof Error && error.message === "INVALID_SELLER") return res.status(400).json({ error: "Vendedor inválido para este tenant" });
+      if (error instanceof Error && error.message === "TENANT_REQUIRED") return res.status(403).json({ error: "Tenant context required" });
+      if (error instanceof Error && error.message === "RANGE_TOO_LARGE") return res.status(400).json({ error: "El periodo máximo permitido es de 366 días" });
+      if (error instanceof Error && error.message === "TOO_MANY_RESULTS") return res.status(413).json({ error: "El reporte contiene demasiados registros; selecciona un periodo menor" });
+      console.error("Error fetching commercial results:", error);
+      res.status(500).json({ error: "Error al consultar resultados comerciales" });
+    }
+  });
+
+  app.get("/api/commercial-results/export/:format", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA), async (req, res) => {
+    try {
+      if (req.params.format !== "pdf" && req.params.format !== "xlsx") return res.status(404).json({ error: "Formato no disponible" });
+      const { results, parsed, tenantId } = await loadCommercialResults(req);
+      const tenantBranding = tenantId ? await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }) : null;
+      const filters = [
+        parsed.from ? `Desde ${parsed.from.slice(0, 10)}` : null,
+        parsed.to ? `Hasta ${parsed.to.slice(0, 10)}` : null,
+        parsed.audience === "prospects" ? "Solo prospectos" : parsed.audience === "customers" ? "Solo clientes" : "Todos los contactos",
+      ].filter(Boolean).join(" · ");
+      const context = { companyName: tenantBranding?.name || "Nexxo", filtersLabel: filters };
+      const report = await import("./commercial-results");
+
+      if (req.params.format === "pdf") {
+        const stream = report.generateCommercialResultsPdf(results, context);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="resultados-comerciales-${Date.now()}.pdf"`);
+        return stream.pipe(res);
+      }
+      const buffer = await report.generateCommercialResultsExcel(results, context);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="resultados-comerciales-${Date.now()}.xlsx"`);
+      res.send(buffer);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Filtros inválidos", details: error.flatten() });
+      if (error instanceof Error && error.message === "SELLER_FORBIDDEN") return res.status(403).json({ error: "No puedes consultar resultados de otro vendedor" });
+      if (error instanceof Error && error.message === "INVALID_SELLER") return res.status(400).json({ error: "Vendedor inválido para este tenant" });
+      if (error instanceof Error && error.message === "RANGE_TOO_LARGE") return res.status(400).json({ error: "El periodo máximo permitido es de 366 días" });
+      if (error instanceof Error && error.message === "TOO_MANY_RESULTS") return res.status(413).json({ error: "El reporte contiene demasiados registros; selecciona un periodo menor" });
+      console.error("Error exporting commercial results:", error);
+      res.status(500).json({ error: "Error al generar el reporte" });
+    }
+  });
+
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);

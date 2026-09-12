@@ -820,6 +820,54 @@ describe("Check-in location capture is immutable", () => {
   });
 });
 
+describe("Commercial results analytics", () => {
+  it("limits sellers to their own activity while admins can query global results", async () => {
+    const ownCheckinId = await insertReturningId(checkins, {
+      tenantId: ctx.tenantA,
+      userId: ctx.vendedorA1.id,
+      salesPersonId: ctx.vendedorA1.id,
+      customerId: ctx.customerA,
+      meetingType: "visita",
+      wasProspect: true,
+    });
+    const otherCheckinId = await insertReturningId(checkins, {
+      tenantId: ctx.tenantA,
+      userId: ctx.adminA.id,
+      salesPersonId: ctx.adminA.id,
+      customerId: ctx.customerA,
+      meetingType: "llamada",
+      wasProspect: false,
+    });
+
+    const sellerResponse = await asVendedorA1("GET", "/api/commercial-results?audience=all&timezoneOffsetMinutes=0");
+    expect(sellerResponse.status).toBe(200);
+    const sellerResults = await sellerResponse.json();
+    expect(sellerResults.bySeller.some((row: any) => row.id === ctx.vendedorA1.id)).toBe(true);
+    expect(sellerResults.bySeller.some((row: any) => row.id === ctx.adminA.id)).toBe(false);
+    expect(sellerResults.items).toBeUndefined();
+
+    expect((await asVendedorA1("GET", `/api/commercial-results?sellerId=${ctx.adminA.id}`)).status).toBe(403);
+
+    const adminResponse = await asAdminA("GET", "/api/commercial-results?audience=all&timezoneOffsetMinutes=0");
+    expect(adminResponse.status).toBe(200);
+    const adminResults = await adminResponse.json();
+    expect(adminResults.bySeller.some((row: any) => row.id === ctx.vendedorA1.id)).toBe(true);
+    expect(adminResults.bySeller.some((row: any) => row.id === ctx.adminA.id)).toBe(true);
+  });
+
+  it("exports tenant-scoped results as PDF and Excel", async () => {
+    const pdf = await asAdminA("GET", "/api/commercial-results/export/pdf?audience=all&timezoneOffsetMinutes=0");
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers.get("content-type")).toContain("application/pdf");
+    expect((await pdf.arrayBuffer()).byteLength).toBeGreaterThan(500);
+
+    const xlsx = await asAdminA("GET", "/api/commercial-results/export/xlsx?audience=all&timezoneOffsetMinutes=0");
+    expect(xlsx.status).toBe(200);
+    expect(xlsx.headers.get("content-type")).toContain("spreadsheetml.sheet");
+    expect((await xlsx.arrayBuffer()).byteLength).toBeGreaterThan(1000);
+  });
+});
+
 describe("GET /api/checkins/activity", () => {
   it("creates a prospect and its check-in atomically and counts it as a prospect visit", async () => {
     const response = await asVendedorA1("POST", "/api/checkins/prospect", {
