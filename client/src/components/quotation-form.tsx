@@ -180,13 +180,22 @@ export function QuotationForm({
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([createEmptyLineItem(0, isUsaTenant)]);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("");
   const [initialized, setInitialized] = useState(false);
   const [sinVigencia, setSinVigencia] = useState(false);
   const saveAsDraftRef = useRef(false);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 180);
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery]);
+
   const { data: products, isLoading: productsLoading } = useEntityQuery<ProductWithCategory[]>(
-    searchQuery ? `/api/products?q=${encodeURIComponent(searchQuery)}` : "/api/products"
+    debouncedSearchQuery
+      ? `/api/products?q=${encodeURIComponent(debouncedSearchQuery)}&limit=150`
+      : "/api/products?limit=150",
+    { enabled: open },
   );
 
   const { data: categories } = useEntityQuery<ProductCategory[]>("/api/product-categories");

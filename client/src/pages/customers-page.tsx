@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { Customer, InsertCustomer } from "@shared/schema";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
@@ -55,6 +55,7 @@ export default function CustomersPage() {
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked">("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [downloadingStatementId, setDownloadingStatementId] = useState<string | null>(null);
@@ -79,8 +80,8 @@ export default function CustomersPage() {
     
     return customers.filter(customer => {
       // Search filter (name, RFC, email, phone, code, address)
-      if (searchQuery) {
-        const query = normalize(searchQuery);
+       if (deferredSearchQuery) {
+         const query = normalize(deferredSearchQuery);
         const matchesSearch = 
           normalize(customer.name || "").includes(query) ||
           normalize(customer.rfc || "").includes(query) ||
@@ -101,7 +102,7 @@ export default function CustomersPage() {
       
       return true;
     });
-  }, [customers, searchQuery, statusFilter, cityFilter]);
+  }, [customers, deferredSearchQuery, statusFilter, cityFilter]);
 
   const clearFilters = () => {
     setSearchQuery("");

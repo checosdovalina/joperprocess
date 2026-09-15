@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useDeferredValue } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTenant } from "@/hooks/use-tenant";
 import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User, type Empresa } from "@shared/schema";
@@ -100,13 +100,14 @@ export default function QuotationsPage() {
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [searchText, setSearchText] = useState("");
+  const deferredSearchText = useDeferredValue(searchText);
   const { user } = useAuth();
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
 
   const { data: quotations, isLoading, dataUpdatedAt } = useEntityQuery<QuotationWithDetails[]>(
     "/api/quotations",
-    { refetchInterval: 20000 }
+    { refetchInterval: createDialogOpen || editDialogOpen ? false : 20000 }
   );
 
   const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
@@ -529,8 +530,8 @@ export default function QuotationsPage() {
     if (filterStatus !== "all" && q.status !== filterStatus) return false;
     if (filterSeller !== "all" && q.userId !== filterSeller) return false;
     if (filterEmpresa !== "all" && q.empresaId !== filterEmpresa) return false;
-    if (searchText) {
-      const search = searchText.toLowerCase();
+    if (deferredSearchText) {
+      const search = deferredSearchText.toLowerCase();
       const matchFolio = q.folio?.toLowerCase().includes(search);
       const matchCustomer = q.customer?.name?.toLowerCase().includes(search);
       if (!matchFolio && !matchCustomer) return false;

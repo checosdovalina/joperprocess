@@ -121,7 +121,7 @@ import { createMicrosipSyncService } from "./microsip-sync";
 import { allocateManualTaxToLines, calculateQuotationTotals, ManualTaxRateValidationError, validateManualTaxRate } from "@shared/quotation-calculations";
 import { logSystemActivity } from "./system-log";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc, inArray } from "drizzle-orm";
+import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc, inArray, ilike } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 
 // Helper to get effective tenantId for data filtering
@@ -2725,19 +2725,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const tenantId = requireTenantId(req);
-      const { q } = req.query;
+      const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
+      const requestedLimit = Number(req.query.limit);
+      const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 500)
+        : undefined;
       
       // Show only active products (from list 42)
       // Order by: products with price first, then products without price
       let productsData = await db.query.products.findMany({
         where: and(
           eq(products.tenantId, tenantId),
-          eq(products.active, true)
+          eq(products.active, true),
+          q
+            ? or(
+                ilike(products.code, `%${q}%`),
+                ilike(products.name, `%${q}%`),
+                ilike(products.brand, `%${q}%`),
+              )
+            : undefined,
         ),
         with: {
           category: true,
         },
         orderBy: (products, { desc, asc }) => [desc(products.listPrice), asc(products.name)],
+        limit,
       });
       
       // Filter out products whose category is inactive.
@@ -2749,16 +2761,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return p.category.active === true;        // only show if category is explicitly active
       });
 
-      // Filter by search query if provided
-      if (q && typeof q === 'string') {
-        const searchLower = q.toLowerCase();
-        productsData = productsData.filter(p => 
-          p.code.toLowerCase().includes(searchLower) ||
-          p.name.toLowerCase().includes(searchLower) ||
-          (p.brand?.toLowerCase().includes(searchLower))
-        );
-      }
-      
       res.json(productsData);
     } catch (error) {
       console.error("Error fetching products:", error);
