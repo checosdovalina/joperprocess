@@ -10,6 +10,18 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ECOSYSTEM="$PROJECT_DIR/ecosystem.config.js"
+DEPLOY_STATE_DIR="/var/lib/nexxo"
+DEPLOY_MARKER="$DEPLOY_STATE_DIR/deployed-commit"
+DEPLOY_LOCK="/var/lock/nexxo-deploy.lock"
+
+# Evitar instalaciones y compilaciones simultáneas. Una segunda ejecución
+# termina de inmediato en vez de competir por CPU, memoria y el caché de npm.
+exec 9>"$DEPLOY_LOCK"
+if ! flock -n 9; then
+  echo "ERROR: Ya hay otro despliegue de NEXXO ejecutándose."
+  echo "Revisa el proceso con: ps -eo pid,stat,etime,cmd | grep '[v]ps-deploy'"
+  exit 1
+fi
 
 echo ""
 echo "========================================="
@@ -41,14 +53,37 @@ PM2_APP=$(grep "name:" "$ECOSYSTEM" 2>/dev/null | head -1 | \
   awk -F"'" '{print $2}' || echo "joper-app")
 [ -z "$PM2_APP" ] && PM2_APP="joper-app"
 
-# 1. Backup ANTES de todo (no falla el deploy si el backup falla)
-echo "[1/6] Creando backup de seguridad..."
+# 1. Obtener cambios antes de realizar trabajo costoso.
+echo "[1/6] Descargando cambios del repositorio..."
+PREVIOUS_DEPLOYED_COMMIT=""
+if [ -f "$DEPLOY_MARKER" ]; then
+  PREVIOUS_DEPLOYED_COMMIT=$(cat "$DEPLOY_MARKER")
+fi
+
+git -C "$PROJECT_DIR" pull origin main
+CURRENT_COMMIT=$(git -C "$PROJECT_DIR" rev-parse HEAD)
+
+if [ -n "$PREVIOUS_DEPLOYED_COMMIT" ] && [ "$PREVIOUS_DEPLOYED_COMMIT" = "$CURRENT_COMMIT" ]; then
+  echo ""
+  echo "La versión $CURRENT_COMMIT ya está desplegada. No hay trabajo pendiente."
+  exit 0
+fi
+
+# Determinar si cambió el árbol de dependencias desde el último deploy exitoso.
+INSTALL_DEPENDENCIES=true
+if [ -n "$PREVIOUS_DEPLOYED_COMMIT" ] && git -C "$PROJECT_DIR" cat-file -e "$PREVIOUS_DEPLOYED_COMMIT^{commit}" 2>/dev/null; then
+  if ! git -C "$PROJECT_DIR" diff --quiet "$PREVIOUS_DEPLOYED_COMMIT" "$CURRENT_COMMIT" -- package.json package-lock.json; then
+    INSTALL_DEPENDENCIES=true
+  else
+    INSTALL_DEPENDENCIES=false
+  fi
+fi
+
+# 2. Backup solo cuando existe una versión nueva por desplegar.
+echo ""
+echo "[2/6] Creando backup de seguridad..."
 bash "$SCRIPT_DIR/vps-backup.sh" || echo "  AVISO: Backup falló, continuando con el deploy..."
 echo ""
-
-# 2. Obtener cambios del repositorio
-echo "[2/6] Descargando cambios del repositorio..."
-git -C "$PROJECT_DIR" pull origin main
 
 # 3. Instalar dependencias (incluyendo devDependencies: vite, tailwind,
 #    postcss, esbuild, etc. son necesarias para compilar). Forzamos
@@ -56,15 +91,17 @@ git -C "$PROJECT_DIR" pull origin main
 #    aunque el servidor tenga NODE_ENV=production configurado globalmente.
 #
 #    IMPORTANTE: el package-lock.json generado dentro de Replit apunta a un
-#    proxy interno (package-firewall.replit.local) que NO existe fuera de
-#    Replit. Lo reemplazamos por el registro público de npm para que la
-#    instalación funcione en el VPS.
-if [ -f "$PROJECT_DIR/package-lock.json" ]; then
-  echo "  Corrigiendo URLs internas de Replit en package-lock.json..."
-  sed -i -E 's#https?://package-firewall\.replit\.local/npm/#https://registry.npmjs.org/#g' "$PROJECT_DIR/package-lock.json"
+#    proxy interno que no existe fuera de Replit. npm reemplaza esos hosts
+#    durante la instalación sin modificar el package-lock versionado.
+if [ "$INSTALL_DEPENDENCIES" = true ]; then
+  echo "[3/6] Instalando dependencias actualizadas..."
+  NODE_ENV=development \
+    npm_config_registry=https://registry.npmjs.org \
+    npm_config_replace_registry_host=always \
+    npm --prefix "$PROJECT_DIR" install --include=dev --prefer-offline --no-audit --no-fund
+else
+  echo "[3/6] Dependencias sin cambios; reutilizando node_modules."
 fi
-echo "[3/6] Instalando dependencias (incluye herramientas de compilación)..."
-NODE_ENV=development npm --prefix "$PROJECT_DIR" install --include=dev
 
 # 4. Compilar
 echo "[4/6] Compilando..."
@@ -82,6 +119,9 @@ if command -v pm2 &> /dev/null; then
 else
   echo "  AVISO: PM2 no encontrado. Reinicia el servidor manualmente."
 fi
+
+mkdir -p "$DEPLOY_STATE_DIR"
+printf '%s\n' "$CURRENT_COMMIT" > "$DEPLOY_MARKER"
 
 echo ""
 echo "========================================="
