@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Checkin, Customer, InsertCheckin, ScheduledVisit, MeetingType, User } from "@shared/schema";
@@ -72,6 +72,7 @@ export default function CheckinsPage() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterCustomerId, setFilterCustomerId] = useState("all");
   const [filterSellerId, setFilterSellerId] = useState("all");
+  const notesRef = useRef<HTMLTextAreaElement>(null);
 
   type CheckinWithRelations = Checkin & { customer: Customer; user?: User; salesPerson?: User | null };
   type VisitWithRelations = ScheduledVisit & { customer: Customer; salesPerson?: User | null };
@@ -289,8 +290,12 @@ export default function CheckinsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submissionData = {
+      ...formData,
+      notes: notesRef.current?.value ?? formData.notes ?? "",
+    };
     if (!isProspectMode) {
-      createMutation.mutate(formData as InsertCheckin);
+      createMutation.mutate(submissionData as InsertCheckin);
       return;
     }
     if (!prospectData.name.trim()) {
@@ -301,7 +306,7 @@ export default function CheckinsPage() {
       setCreatingProspect(true);
       const response = await apiRequest("POST", "/api/checkins/prospect", {
         prospect: prospectData,
-        checkin: formData,
+        checkin: submissionData,
       });
       const createdCheckin = await response.json() as CheckinWithRelations;
       await queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
@@ -505,11 +510,11 @@ export default function CheckinsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="notes" className="text-sm font-medium">{t("checkins.visit-notes")}</Label>
                   <Textarea
+                    ref={notesRef}
                     id="notes"
                     className="min-h-[120px] resize-y"
                     data-testid="textarea-checkin-notes"
-                    value={formData.notes ?? ""}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    defaultValue={formData.notes ?? ""}
                     placeholder={t("checkins.notes-placeholder")}
                     rows={4}
                   />
