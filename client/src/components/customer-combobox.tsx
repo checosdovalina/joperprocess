@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import { Check, ChevronsUpDown, Search, X, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ export function CustomerCombobox({
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const resolvedPlaceholder = placeholder ?? t("incidents.select-customer");
 
   const selectedCustomer = useMemo(
@@ -46,26 +47,31 @@ export function CustomerCombobox({
   const normalize = (str: string) =>
     str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-  const sortedCustomers = useMemo(
-    () => [...customers].sort((a, b) => (a.name || "").localeCompare(b.name || "", "es")),
-    [customers]
+  const searchableCustomers = useMemo(
+    () => [...customers]
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "es"))
+      .map(customer => ({
+        customer,
+        searchKey: normalize([
+          customer.name,
+          customer.rfc,
+          customer.phone,
+          customer.city,
+          customer.microsipCode,
+          customer.address,
+        ].filter(Boolean).join(" ")),
+      })),
+    [customers],
   );
 
   const filteredCustomers = useMemo(() => {
-    if (!search) return sortedCustomers.slice(0, 60);
-    const query = normalize(search);
-    return sortedCustomers
-      .filter(
-        (c) =>
-          normalize(c.name || "").includes(query) ||
-          normalize(c.rfc || "").includes(query) ||
-          normalize(c.phone || "").includes(query) ||
-          normalize(c.city || "").includes(query) ||
-          normalize(c.microsipCode || "").includes(query) ||
-          normalize(c.address || "").includes(query)
-      )
-      .slice(0, 60);
-  }, [sortedCustomers, search]);
+    if (!deferredSearch) return searchableCustomers.slice(0, 60).map(entry => entry.customer);
+    const query = normalize(deferredSearch);
+    return searchableCustomers
+      .filter(entry => entry.searchKey.includes(query))
+      .slice(0, 60)
+      .map(entry => entry.customer);
+  }, [searchableCustomers, deferredSearch]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -2726,39 +2726,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const tenantId = requireTenantId(req);
       const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
+      const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : "";
+      const requestedIds = typeof req.query.ids === "string"
+        ? req.query.ids.split(",").filter(id => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 200)
+        : [];
       const requestedLimit = Number(req.query.limit);
       const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
         ? Math.min(Math.floor(requestedLimit), 500)
         : undefined;
+      const activeCategoryIds = db
+        .select({ id: productCategories.id })
+        .from(productCategories)
+        .where(and(
+          eq(productCategories.tenantId, tenantId),
+          eq(productCategories.active, true),
+        ));
+      const productConditions = requestedIds.length
+        ? [
+            eq(products.tenantId, tenantId),
+            inArray(products.id, requestedIds),
+          ]
+        : [
+            eq(products.tenantId, tenantId),
+            eq(products.active, true),
+            categoryId
+              ? and(eq(products.categoryId, categoryId), inArray(products.categoryId, activeCategoryIds))
+              : or(isNull(products.categoryId), inArray(products.categoryId, activeCategoryIds)),
+            q
+              ? or(
+                  ilike(products.code, `%${q}%`),
+                  ilike(products.name, `%${q}%`),
+                  ilike(products.brand, `%${q}%`),
+                )
+              : undefined,
+          ];
       
       // Show only active products (from list 42)
       // Order by: products with price first, then products without price
       let productsData = await db.query.products.findMany({
-        where: and(
-          eq(products.tenantId, tenantId),
-          eq(products.active, true),
-          q
-            ? or(
-                ilike(products.code, `%${q}%`),
-                ilike(products.name, `%${q}%`),
-                ilike(products.brand, `%${q}%`),
-              )
-            : undefined,
-        ),
+        where: and(...productConditions),
         with: {
           category: true,
         },
         orderBy: (products, { desc, asc }) => [desc(products.listPrice), asc(products.name)],
-        limit,
-      });
-      
-      // Filter out products whose category is inactive.
-      // A product is shown if: it has no category, OR its category is explicitly active (true).
-      // If category is null/undefined (deleted), hide to be safe.
-      productsData = productsData.filter(p => {
-        if (!p.categoryId) return true;           // no category → show
-        if (!p.category) return false;            // category deleted → hide
-        return p.category.active === true;        // only show if category is explicitly active
+        limit: requestedIds.length ? undefined : limit,
       });
 
       res.json(productsData);

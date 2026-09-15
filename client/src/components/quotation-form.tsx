@@ -191,12 +191,32 @@ export function QuotationForm({
     return () => window.clearTimeout(timeout);
   }, [searchQuery]);
 
+  const initialProductIds = useMemo(
+    () => Array.from(new Set(
+      (initialData?.items ?? [])
+        .map((item: any) => item.productId)
+        .filter((id: unknown): id is string => typeof id === "string" && id.length > 0),
+    )),
+    [initialData],
+  );
+  const productQuery = new URLSearchParams();
+  if (debouncedSearchQuery) productQuery.set("q", debouncedSearchQuery);
+  if (productCategoryFilter) productQuery.set("categoryId", productCategoryFilter);
+  productQuery.set("limit", "150");
   const { data: products, isLoading: productsLoading } = useEntityQuery<ProductWithCategory[]>(
-    debouncedSearchQuery
-      ? `/api/products?q=${encodeURIComponent(debouncedSearchQuery)}&limit=150`
-      : "/api/products?limit=150",
+    `/api/products?${productQuery.toString()}`,
     { enabled: open },
   );
+  const { data: initialProducts } = useEntityQuery<ProductWithCategory[]>(
+    `/api/products?ids=${initialProductIds.join(",")}`,
+    { enabled: open && isEditing && initialProductIds.length > 0 },
+  );
+  const productsForEditing = useMemo(() => {
+    const merged = new Map<string, ProductWithCategory>();
+    for (const product of products ?? []) merged.set(product.id, product);
+    for (const product of initialProducts ?? []) merged.set(product.id, product);
+    return Array.from(merged.values());
+  }, [products, initialProducts]);
 
   const { data: categories } = useEntityQuery<ProductCategory[]>("/api/product-categories");
 
@@ -257,7 +277,14 @@ export function QuotationForm({
   }, [open, isEditing, initialized, isUsaTenant, form]);
 
   useEffect(() => {
-    if (isEditing && initialData && open && !initialized && products !== undefined) {
+    if (
+      isEditing &&
+      initialData &&
+      open &&
+      !initialized &&
+      products !== undefined &&
+      (initialProductIds.length === 0 || initialProducts !== undefined)
+    ) {
       form.reset({
         customerId: initialData.customerId || "",
         currency: initialData.currency || (isUsaTenant ? "USD" : "AMBAS"),
@@ -280,7 +307,7 @@ export function QuotationForm({
 
       if (initialData.items && initialData.items.length > 0) {
         const items: QuotationLineItem[] = initialData.items.map((item: any, index: number) => {
-          const productData = products?.find((p: any) => p.id === item.productId);
+          const productData = productsForEditing.find((p: any) => p.id === item.productId);
           const resolvedMaxDiscount = productData?.maxDiscount || "0";
           const discountPercent = parseFloat(item.discountPercent?.toString() || "0");
           const maxDisc = parseFloat(resolvedMaxDiscount);
@@ -309,7 +336,7 @@ export function QuotationForm({
       }
       setInitialized(true);
     }
-  }, [isEditing, initialData, open, form, initialized, products]);
+  }, [isEditing, initialData, open, form, initialized, products, productsForEditing, initialProductIds.length, initialProducts]);
 
   useEffect(() => {
     if (!open) {

@@ -1,7 +1,7 @@
-import { useState, useEffect, useDeferredValue } from "react";
+import { useState, useEffect, useDeferredValue, useMemo } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTenant } from "@/hooks/use-tenant";
-import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, Product, User, type Empresa } from "@shared/schema";
+import { Quotation, Customer, QuotationStatus, InsertQuotation, InsertQuotationItem, QuotationItem, User, type Empresa } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -111,7 +111,6 @@ export default function QuotationsPage() {
   );
 
   const { data: customers } = useEntityQuery<Customer[]>("/api/customers");
-  const { data: products } = useEntityQuery<Product[]>("/api/products");
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
   const { data: empresas } = useQuery<Empresa[]>({ queryKey: ["/api/empresas"] });
 
@@ -512,15 +511,20 @@ export default function QuotationsPage() {
     por_confirmar: t("quotations.delivery.tbc"),
   };
 
-  const convertedCount = quotations?.filter(q => q.status === QuotationStatus.CONVERTED).length ?? 0;
-
   const INACTIVE_STATUSES = [QuotationStatus.SENT, QuotationStatus.REJECTED, QuotationStatus.EXPIRED];
-
-  const inactiveCount = quotations?.filter(q => INACTIVE_STATUSES.includes(q.status as any)).length ?? 0;
+  const { convertedCount, inactiveCount } = useMemo(() => {
+    let converted = 0;
+    let inactive = 0;
+    for (const quotation of quotations ?? []) {
+      if (quotation.status === QuotationStatus.CONVERTED) converted++;
+      if (INACTIVE_STATUSES.includes(quotation.status as any)) inactive++;
+    }
+    return { convertedCount: converted, inactiveCount: inactive };
+  }, [quotations]);
 
   const hasActiveFilters = filterStatus !== "all" || filterSeller !== "all" || filterEmpresa !== "all" || filterDateFrom !== "" || filterDateTo !== "" || searchText !== "";
 
-  const filteredQuotations = (quotations ?? []).filter(q => {
+  const filteredQuotations = useMemo(() => (quotations ?? []).filter(q => {
     // Tab split
     const isInactive = INACTIVE_STATUSES.includes(q.status as any);
     if (activeTab === "active" && isInactive) return false;
@@ -545,7 +549,7 @@ export default function QuotationsPage() {
       if (new Date(q.createdAt) > to) return false;
     }
     return true;
-  });
+  }), [quotations, activeTab, hideConverted, filterStatus, filterSeller, filterEmpresa, filterDateFrom, filterDateTo, deferredSearchText]);
 
   const resetFilters = () => {
     setFilterStatus("all");

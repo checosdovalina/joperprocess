@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import { Check, ChevronsUpDown, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -50,28 +50,31 @@ export function SearchCombobox({
 }: SearchComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
 
   const selected = useMemo(
     () => options.find((o) => o.value === value),
     [options, value]
   );
 
-  const sorted = useMemo(
-    () => [...options].sort((a, b) => a.label.localeCompare(b.label, "es")),
-    [options]
+  const searchableOptions = useMemo(
+    () => [...options]
+      .sort((a, b) => a.label.localeCompare(b.label, "es"))
+      .map(option => ({
+        option,
+        searchKey: normalize(`${option.label} ${option.sublabel || ""}`),
+      })),
+    [options],
   );
 
   const filtered = useMemo(() => {
-    if (!search) return sorted.slice(0, limit);
-    const q = normalize(search);
-    return sorted
-      .filter(
-        (o) =>
-          normalize(o.label).includes(q) ||
-          normalize(o.sublabel || "").includes(q)
-      )
-      .slice(0, limit);
-  }, [sorted, search, limit]);
+    if (!deferredSearch) return searchableOptions.slice(0, limit).map(entry => entry.option);
+    const q = normalize(deferredSearch);
+    return searchableOptions
+      .filter(entry => entry.searchKey.includes(q))
+      .slice(0, limit)
+      .map(entry => entry.option);
+  }, [searchableOptions, deferredSearch, limit]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
