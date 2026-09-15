@@ -91,14 +91,34 @@ echo ""
 #    aunque el servidor tenga NODE_ENV=production configurado globalmente.
 #
 #    IMPORTANTE: el package-lock.json generado dentro de Replit apunta a un
-#    proxy interno que no existe fuera de Replit. npm reemplaza esos hosts
-#    durante la instalación sin modificar el package-lock versionado.
+#    proxy interno que no existe fuera de Replit. Preparamos temporalmente una
+#    copia compatible con npm público y restauramos el archivo versionado al
+#    terminar, incluso si la instalación falla o se interrumpe.
 if [ "$INSTALL_DEPENDENCIES" = true ]; then
   echo "[3/6] Instalando dependencias actualizadas..."
+  PACKAGE_LOCK="$PROJECT_DIR/package-lock.json"
+  PACKAGE_LOCK_BACKUP=""
+
+  restore_package_lock() {
+    if [ -n "$PACKAGE_LOCK_BACKUP" ] && [ -f "$PACKAGE_LOCK_BACKUP" ]; then
+      cp "$PACKAGE_LOCK_BACKUP" "$PACKAGE_LOCK"
+      rm -f "$PACKAGE_LOCK_BACKUP"
+    fi
+  }
+
+  if [ -f "$PACKAGE_LOCK" ] && grep -Eq 'package-firewall\.replit\.(local|internal)/npm/' "$PACKAGE_LOCK"; then
+    PACKAGE_LOCK_BACKUP=$(mktemp)
+    cp "$PACKAGE_LOCK" "$PACKAGE_LOCK_BACKUP"
+    trap restore_package_lock EXIT INT TERM
+    sed -i -E 's#https?://package-firewall\.replit\.(local|internal)/npm/#https://registry.npmjs.org/#g' "$PACKAGE_LOCK"
+  fi
+
   NODE_ENV=development \
     npm_config_registry=https://registry.npmjs.org \
-    npm_config_replace_registry_host=always \
     npm --prefix "$PROJECT_DIR" install --include=dev --prefer-offline --no-audit --no-fund
+
+  restore_package_lock
+  trap - EXIT INT TERM
 else
   echo "[3/6] Dependencias sin cambios; reutilizando node_modules."
 fi
