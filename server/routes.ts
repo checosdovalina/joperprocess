@@ -2031,18 +2031,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/commercial-results/export/:format", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA), async (req, res) => {
     try {
       if (req.params.format !== "pdf" && req.params.format !== "xlsx") return res.status(404).json({ error: "Formato no disponible" });
-      const { results, parsed, tenantId } = await loadCommercialResults(req);
+      let { results, parsed, tenantId } = await loadCommercialResults(req);
       const tenantBranding = tenantId ? await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }) : null;
-      const filters = [
-        parsed.from ? `Desde ${parsed.from.slice(0, 10)}` : null,
-        parsed.to ? `Hasta ${parsed.to.slice(0, 10)}` : null,
-        parsed.audience === "prospects" ? "Solo prospectos" : parsed.audience === "customers" ? "Solo clientes" : "Todos los contactos",
-      ].filter(Boolean).join(" · ");
-      const context = { companyName: tenantBranding?.name || "Nexxo", filtersLabel: filters };
       const report = await import("./commercial-results");
+      const reportTimezone = report.resolveCommercialTimezone(tenantBranding?.timezone, tenantBranding?.locale);
+      results = report.summarizeCommercialActivity(results.items, parsed.timezoneOffsetMinutes, reportTimezone);
+      if (req.params.format === "pdf" && results.items.length > 2_000) {
+        return res.status(413).json({ error: "El PDF contiene demasiados registros; selecciona un periodo menor o descarga Excel" });
+      }
+      const english = tenantBranding?.locale?.toLowerCase().startsWith("en") ?? false;
+      const meetingTypeLabel = parsed.meetingType === "visita"
+        ? (english ? "Visit" : "Visita")
+        : parsed.meetingType === "llamada"
+          ? (english ? "Call" : "Llamada")
+          : parsed.meetingType === "videollamada"
+            ? (english ? "Video call" : "Videollamada")
+            : null;
+      const selectedCustomer = parsed.customerId ? results.byCustomer.find(row => row.id === parsed.customerId)?.name : null;
+      const selectedSeller = parsed.sellerId ? results.bySeller.find(row => row.id === parsed.sellerId)?.name : null;
+      const filters = [
+        parsed.from ? `${english ? "From" : "Desde"} ${parsed.from.slice(0, 10)}` : null,
+        parsed.to ? `${english ? "To" : "Hasta"} ${parsed.to.slice(0, 10)}` : null,
+        parsed.audience === "prospects"
+          ? (english ? "Prospects only" : "Solo prospectos")
+          : parsed.audience === "customers"
+            ? (english ? "Customers only" : "Solo clientes")
+            : (english ? "All contacts" : "Todos los contactos"),
+        parsed.customerId ? `${english ? "Customer" : "Cliente"}: ${selectedCustomer || (english ? "Selected" : "Seleccionado")}` : null,
+        parsed.sellerId ? `${english ? "Seller" : "Vendedor"}: ${selectedSeller || (english ? "Selected" : "Seleccionado")}` : null,
+        meetingTypeLabel ? `${english ? "Type" : "Tipo"}: ${meetingTypeLabel}` : null,
+      ].filter(Boolean).join(" · ");
+      const context = {
+        companyName: tenantBranding?.name || "Nexxo",
+        filtersLabel: filters,
+        tenantBranding: tenantBranding ? { ...tenantBranding, timezone: reportTimezone } : tenantBranding,
+      };
 
       if (req.params.format === "pdf") {
-        const stream = report.generateCommercialResultsPdf(results, context);
+        const stream = await report.generateCommercialResultsPdf(results, context);
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="resultados-comerciales-${Date.now()}.pdf"`);
         return stream.pipe(res);
