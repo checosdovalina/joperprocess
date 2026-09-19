@@ -77,6 +77,7 @@ export default function ProductionPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingEquipment, setIsEditingEquipment] = useState(false);
   const [editEquipment, setEditEquipment] = useState<EditableEquipment[]>([]);
+  const [equipmentComment, setEquipmentComment] = useState("");
   const [hideDelivered, setHideDelivered] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEmpresa, setFilterEmpresa] = useState("all");
@@ -130,13 +131,14 @@ export default function ProductionPage() {
   });
 
   const updateEquipmentMutation = useMutation({
-    mutationFn: async (items: EditableEquipment[]) => {
+    mutationFn: async ({ items, comment }: { items: EditableEquipment[]; comment: string }) => {
       const res = await apiRequest("PUT", `/api/orders/${selectedOrderId}/equipment`, {
         items: items.map(item => ({
           ...(item.id ? { id: item.id } : {}),
           productId: item.productId,
           quantity: Number(item.quantity),
         })),
+        comment,
       });
       return res.json();
     },
@@ -146,6 +148,7 @@ export default function ProductionPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/orders", selectedOrderId, "details"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
       setIsEditingEquipment(false);
+      setEquipmentComment("");
     },
     onError: (error: Error) => {
       toast({ title: t("label.error"), description: error.message || "No fue posible actualizar los equipos.", variant: "destructive" });
@@ -210,6 +213,7 @@ export default function ProductionPage() {
       productId: item.productId || "",
       quantity: String(Number(item.quantity)),
     })));
+    setEquipmentComment("");
     setIsEditingEquipment(true);
   };
 
@@ -235,7 +239,7 @@ export default function ProductionPage() {
       toast({ title: t("label.error"), description: "Un producto nuevo no puede repetirse en el pedido.", variant: "destructive" });
       return;
     }
-    updateEquipmentMutation.mutate(editEquipment);
+    updateEquipmentMutation.mutate({ items: editEquipment, comment: equipmentComment.trim() });
   };
 
   const handleNoDeliveryTime = () => {
@@ -764,6 +768,21 @@ export default function ProductionPage() {
                           </Button>
                         </div>
                       ))}
+                      <div className="space-y-2">
+                        <Label htmlFor="equipment-comment">Comentario para el reporte</Label>
+                        <Textarea
+                          id="equipment-comment"
+                          value={equipmentComment}
+                          onChange={(event) => setEquipmentComment(event.target.value)}
+                          placeholder="Motivo o detalle del cambio realizado al pedido..."
+                          rows={3}
+                          maxLength={2000}
+                          data-testid="input-equipment-comment"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Este comentario se guardará en el MEX y aparecerá en el Reporte de Pedidos.
+                        </p>
+                      </div>
                     </div>
                     <div className="flex flex-wrap justify-between gap-2">
                       <Button

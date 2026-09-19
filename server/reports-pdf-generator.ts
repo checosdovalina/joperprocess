@@ -231,7 +231,11 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         const notesH = order.notes
           ? doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: notesTextW }) + 4
           : 0;
-        const orderH = 44 + itemsH + 14 + notesH;
+        const commentsLabelW = language === "en" ? 62 : 70;
+        const commentsH = order.comments
+          ? doc.fontSize(8.5).font("Helvetica").heightOfString(order.comments, { width: innerWEst - commentsLabelW }) + 4
+          : 0;
+        const orderH = 44 + itemsH + 14 + notesH + commentsH;
 
         // Page break
         if (currentY + orderH > PAGE_H - 50) {
@@ -294,6 +298,17 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
           doc.text(order.notes, innerX + 38, cardY, { width: innerW - 38 });
           const renderedNotesH = doc.fontSize(8.5).font("Helvetica").heightOfString(order.notes, { width: innerW - 38 });
           cardY += renderedNotesH + 4;
+        }
+
+        if (order.comments) {
+          const commentsLabel = text({ es: "Comentarios:", en: "Comments:" });
+          const commentsLabelW = language === "en" ? 62 : 70;
+          doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#333333");
+          doc.text(commentsLabel, innerX, cardY, { lineBreak: false });
+          doc.fontSize(8.5).font("Helvetica").fillColor("#111111");
+          doc.text(order.comments, innerX + commentsLabelW, cardY, { width: innerW - commentsLabelW });
+          const renderedCommentsH = doc.fontSize(8.5).font("Helvetica").heightOfString(order.comments, { width: innerW - commentsLabelW });
+          cardY += renderedCommentsH + 4;
         }
 
         // Items divider
