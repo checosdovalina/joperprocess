@@ -5103,11 +5103,15 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.put("/api/orders/:id/equipment", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const { id } = req.params;
-      const requestedItems = z.array(z.object({
-        id: z.string().min(1).optional(),
-        productId: z.string().min(1),
-        quantity: z.coerce.number().positive().max(999999),
-      })).min(1, "El pedido debe conservar al menos un equipo").parse(req.body?.items);
+      const payload = z.object({
+        items: z.array(z.object({
+          id: z.string().min(1).optional(),
+          productId: z.string().min(1),
+          quantity: z.coerce.number().positive().max(999999),
+        })).min(1, "El pedido debe conservar al menos un equipo"),
+        comment: z.string().trim().max(2000, "El comentario no puede exceder 2000 caracteres").optional().default(""),
+      }).parse(req.body);
+      const requestedItems = payload.items;
 
       const scopedStorage = createTenantScopedStorage(req);
       const order = await scopedStorage.getOrder(id);
@@ -5279,6 +5283,17 @@ Proporciona tu análisis en el siguiente formato JSON:
             total: totals.total.toFixed(2),
             totalSavings: totalSavings.toFixed(2),
           }).where(eq(quotations.id, quotation.id));
+        }
+
+        if (payload.comment) {
+          const factoryNotes = order.factoryNotes
+            ? `${order.factoryNotes}\n${payload.comment}`
+            : payload.comment;
+          await tx.update(orders).set({
+            factoryNotes,
+            lastUpdatedBy: req.user!.id,
+            updatedAt: new Date(),
+          }).where(eq(orders.id, order.id));
         }
       });
 
