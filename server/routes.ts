@@ -4160,29 +4160,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const scopedStorage = createTenantScopedStorage(req);
-      const updatedAuth = await scopedStorage.updateCreditAuthorization(id, updateData);
-      if (!updatedAuth) {
-        return res.status(404).json({ error: "Credit authorization not found" });
-      }
-
+      let updatedAuth: any;
       let order: any = undefined;
 
-      // If approved, create order and update quotation status to converted
-      if (updatedAuth.status === CreditAuthStatus.APPROVED) {
-        // Create order from quotation
-        order = await scopedStorage.createOrder({
-          quotationId: updatedAuth.quotationId,
-          status: OrderStatus.PENDING,
-        });
+      // If approved, create the order once. A reauthorization must reopen the
+      // existing order instead of creating a duplicate that splits one MEX
+      // across the pending and rejected queues.
+      if (status === CreditAuthStatus.APPROVED) {
+        const result = await db.transaction(async (tx) => {
+          const currentAuth = await tx.query.creditAuthorizations.findFirst({
+            where: eq(creditAuthorizations.id, id),
+            with: { quotation: true },
+          });
+          if (!currentAuth?.quotation) throw new Error("Credit authorization not found");
 
-        // Update quotation status to converted and link to order
-        await scopedStorage.updateQuotation(updatedAuth.quotationId, {
-          status: QuotationStatus.CONVERTED,
-          authorizedBy: req.user!.id,
-          authorizedAt: new Date(),
-          convertedToOrderId: order.id,
-        });
+          const effectiveTenantId = getEffectiveTenantId(req);
+          if (effectiveTenantId && currentAuth.quotation.tenantId !== effectiveTenantId) {
+            throw new Error("Credit authorization not found");
+          }
 
+          // Serialize the full authorization/order transition. This makes retries
+          // idempotent and prevents two simultaneous approvals from creating two
+          // orders for the same quotation.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${currentAuth.quotationId}))`);
+
+          const quotation = await tx.query.quotations.findFirst({
+            where: eq(quotations.id, currentAuth.quotationId),
+          });
+          if (!quotation) throw new Error("Quotation not found for approved authorization");
+
+          const existingOrders = await tx.query.orders.findMany({
+            where: and(
+              eq(orders.quotationId, currentAuth.quotationId),
+              eq(orders.tenantId, quotation.tenantId),
+            ),
+            orderBy: (orderRows, { desc }) => [desc(orderRows.createdAt)],
+          });
+          const linkedOrder = quotation.convertedToOrderId
+            ? existingOrders.find(existingOrder => existingOrder.id === quotation.convertedToOrderId)
+            : undefined;
+          let resolvedOrder = linkedOrder ?? existingOrders[0];
+
+          const finalOrderStatuses = [
+            OrderStatus.CLOSED,
+            OrderStatus.CANCELLED,
+            OrderStatus.SHIPPED,
+            OrderStatus.DELIVERED,
+          ];
+          if (resolvedOrder && (
+            resolvedOrder.releaseStatus === OrderReleaseStatus.CLOSED
+            || finalOrderStatuses.includes(resolvedOrder.status as any)
+          )) {
+            throw new Error("El pedido ya está cerrado o finalizado y no puede reabrirse automáticamente");
+          }
+
+          if (resolvedOrder?.releaseStatus === OrderReleaseStatus.REJECTED) {
+            const reopenableStatuses = [OrderStatus.PENDING, OrderStatus.IN_PRODUCTION, OrderStatus.READY];
+            if (!reopenableStatuses.includes(resolvedOrder.status as any)) {
+              throw new Error("El pedido rechazado ya avanzó y no puede reabrirse automáticamente");
+            }
+            const [reopenedOrder] = await tx.update(orders).set({
+              releaseStatus: OrderReleaseStatus.PENDING,
+              releaseNotes: null,
+              releasedById: null,
+              releasedAt: null,
+              updatedAt: new Date(),
+              lastUpdatedBy: req.user!.id,
+            }).where(eq(orders.id, resolvedOrder.id)).returning();
+            resolvedOrder = reopenedOrder;
+          } else if (!resolvedOrder) {
+            const [createdOrder] = await tx.insert(orders).values({
+              tenantId: quotation.tenantId,
+              empresaId: quotation.empresaId,
+              quotationId: currentAuth.quotationId,
+              status: OrderStatus.PENDING,
+            }).returning();
+            resolvedOrder = createdOrder;
+          }
+
+          const [approvedAuth] = await tx.update(creditAuthorizations).set(updateData)
+            .where(eq(creditAuthorizations.id, id))
+            .returning();
+          if (!approvedAuth) throw new Error("Credit authorization not found");
+
+          await tx.update(quotations).set({
+            status: QuotationStatus.CONVERTED,
+            authorizedBy: req.user!.id,
+            authorizedAt: new Date(),
+            convertedToOrderId: resolvedOrder.id,
+            updatedAt: new Date(),
+          }).where(and(
+            eq(quotations.id, currentAuth.quotationId),
+            eq(quotations.tenantId, quotation.tenantId),
+          ));
+
+          return { auth: approvedAuth, order: resolvedOrder };
+        });
+        updatedAuth = result.auth;
+        order = result.order;
+      } else {
+        updatedAuth = await scopedStorage.updateCreditAuthorization(id, updateData);
+        if (!updatedAuth) {
+          return res.status(404).json({ error: "Credit authorization not found" });
+        }
+      }
+
+      if (status === CreditAuthStatus.APPROVED) {
         // Notify admins that a new order is pending release (fire and forget)
         (async () => {
           try {
@@ -5108,6 +5191,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           id: z.string().min(1).optional(),
           productId: z.string().min(1),
           quantity: z.coerce.number().positive().max(999999),
+          unitPrice: z.coerce.number().finite().min(0).max(999999999),
         })).min(1, "El pedido debe conservar al menos un equipo"),
         comment: z.string().trim().max(2000, "El comentario no puede exceder 2000 caracteres").optional().default(""),
       }).parse(req.body);
@@ -5196,13 +5280,18 @@ Proporciona tu análisis en el siguiente formato JSON:
         for (const [position, requested] of requestedItems.entries()) {
           const product = productsById.get(requested.productId)!;
           const existing = requested.id ? existingById.get(requested.id) : undefined;
-          const unitPrice = Number(existing?.unitPrice ?? product.listPrice);
+          const unitPrice = requested.unitPrice;
           const listPrice = Number(existing?.listPrice ?? product.listPrice);
           const taxRate = isEnglishTenant ? quoteTaxRate : Number(existing?.taxRate ?? product.taxRate);
           const subtotal = requested.quantity * unitPrice;
           const taxAmount = subtotal * taxRate / 100;
+          const discountAmount = Math.max(listPrice - unitPrice, 0);
+          const discountPercent = listPrice > 0 ? discountAmount / listPrice * 100 : 0;
           const values = {
             quantity: requested.quantity.toFixed(2),
+            unitPrice: unitPrice.toFixed(2),
+            discountPercent: discountPercent.toFixed(2),
+            discountAmount: discountAmount.toFixed(2),
             position,
             subtotal: subtotal.toFixed(2),
             taxRate: taxRate.toFixed(2),
@@ -5221,9 +5310,6 @@ Proporciona tu análisis en el siguiente formato JSON:
               description: product.description,
               unitOfMeasure: product.unitOfMeasure,
               listPrice: listPrice.toFixed(2),
-              unitPrice: unitPrice.toFixed(2),
-              discountPercent: "0",
-              discountAmount: "0",
               exceedsMaxDiscount: false,
               currency: product.currency,
               ...values,
