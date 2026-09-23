@@ -16,3 +16,4 @@
 - [Statement recipient selection](statement-recipient-selection.md) — configured customer recipients are authoritative; never fall back to all addresses when a saved selection becomes stale.
 - [CRM completed-sale metric](crm-completed-sale-metric.md) — when implemented, count a sale when its quotation converts to an order; this metric is intentionally deferred.
 - [Credit reauthorization order reuse](credit-reauthorization-order-reuse.md) — reapproval must atomically reuse/reopen the existing order; never create another order for the same quotation.
+- [Partial MEX cancellation](partial-mex-cancellation.md) — cancel only unfulfilled quantities; preserve releases and financial documents, and never reactivate a cancelled order.

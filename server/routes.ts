@@ -121,7 +121,7 @@ import { createMicrosipSyncService } from "./microsip-sync";
 import { allocateManualTaxToLines, calculateQuotationTotals, ManualTaxRateValidationError, validateManualTaxRate } from "@shared/quotation-calculations";
 import { logSystemActivity } from "./system-log";
 import { randomBytes } from "crypto";
-import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc, inArray, ilike } from "drizzle-orm";
+import { eq, and, sql, gte, lt, gt, isNull, isNotNull, or, aliasedTable, desc, inArray, ilike, notInArray } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 
 // Helper to get effective tenantId for data filtering
@@ -4993,6 +4993,11 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
+      const currentOrder = await scopedStorage.getOrder(id);
+      if (!currentOrder) return res.status(404).json({ error: "Order not found" });
+      if ([OrderStatus.CANCELLED, OrderStatus.CLOSED].includes(currentOrder.status as any) && req.body?.status) {
+        return res.status(409).json({ error: "No se puede reactivar un pedido finalizado" });
+      }
       const updateData = { ...req.body };
       // empresaId is an immutable inherited invariant; never allow reassignment via update.
       delete updateData.empresaId;
@@ -5008,13 +5013,17 @@ Proporciona tu análisis en el siguiente formato JSON:
         updateData.estimatedDelivery = new Date(updateData.estimatedDelivery);
       }
       
-      const updatedOrder = await scopedStorage.updateOrder(id, {
+      const [updatedOrder] = await db.update(orders).set({
         ...updateData,
         lastUpdatedBy: req.user!.id,
         updatedAt: new Date(),
-      });
+      }).where(and(
+        eq(orders.id, id),
+        eq(orders.tenantId, currentOrder.tenantId),
+        ...(updateData.status ? [notInArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.CLOSED])] : []),
+      )).returning();
       if (!updatedOrder) {
-        return res.status(404).json({ error: "Order not found" });
+        return res.status(409).json({ error: "El pedido fue finalizado mientras se editaba" });
       }
       res.json(updatedOrder);
     } catch (error) {
@@ -5023,34 +5032,62 @@ Proporciona tu análisis en el siguiente formato JSON:
     }
   });
 
-  // Cancel an order (admin only) - used when a customer cancels even after release
+  // Cancel only the unfulfilled remainder; existing releases and financial documents stay intact.
   app.post("/api/orders/:id/cancel", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;
-      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+      const { reason } = z.object({ reason: z.string().trim().max(1000).default("") }).parse(req.body ?? {});
+      const stamp = format(new Date(), "dd/MM/yyyy");
 
       const existing = await scopedStorage.getOrder(id);
       if (!existing) {
         return res.status(404).json({ error: "Order not found" });
       }
-      if (existing.status === OrderStatus.CANCELLED) {
-        return res.status(400).json({ error: "El pedido ya está cancelado" });
+      if ([OrderStatus.CANCELLED, OrderStatus.CLOSED, OrderStatus.DELIVERED].includes(existing.status as any)) {
+        return res.status(409).json({ error: "El pedido ya está finalizado" });
       }
 
-      const stamp = format(new Date(), "dd/MM/yyyy");
-      const cancelNote = `[Cancelado ${stamp} por ${req.user!.fullName || req.user!.username}]${reason ? ` ${reason}` : ""}`;
-      const factoryNotes = existing.factoryNotes ? `${existing.factoryNotes}\n${cancelNote}` : cancelNote;
+      const updatedOrder = await db.transaction(async (tx) => {
+        const [locked] = await tx.select().from(orders)
+          .where(and(eq(orders.id, id), eq(orders.tenantId, existing.tenantId)))
+          .for("update");
+        if (!locked || [OrderStatus.CANCELLED, OrderStatus.CLOSED, OrderStatus.DELIVERED].includes(locked.status as any)) {
+          throw new Error("El pedido ya está finalizado");
+        }
+        const items = await tx.query.quotationItems.findMany({
+          where: eq(quotationItems.quotationId, locked.quotationId),
+        });
+        const releases = await tx.query.orderReleases.findMany({
+          where: eq(orderReleases.orderId, id),
+        });
+        const releasedByItem = new Map<string, number>();
+        for (const release of releases) {
+          releasedByItem.set(release.quotationItemId,
+            (releasedByItem.get(release.quotationItemId) ?? 0) + Number(release.quantityReleased));
+        }
+        const pendingItems = items.map(item => ({
+          item,
+          remaining: Math.max(0, Math.round((Number(item.quantity) - (releasedByItem.get(item.id) ?? 0)) * 100) / 100),
+        })).filter(({ remaining }) => remaining > 0);
+        if (!pendingItems.length) throw new Error("No hay equipos pendientes por cancelar");
 
-      const updatedOrder = await scopedStorage.updateOrder(id, {
-        status: OrderStatus.CANCELLED,
-        factoryNotes,
-        lastUpdatedBy: req.user!.id,
-        updatedAt: new Date(),
+        const cancelledLines = pendingItems.map(({ item, remaining }) =>
+          `${remaining} ${item.unitOfMeasure} ${item.productCode || item.productName} — ${(remaining * Number(item.unitPrice)).toFixed(2)} ${item.currency}`);
+        const cancelNote = [
+          `[Resto cancelado ${stamp} por ${req.user!.fullName || req.user!.username}]`,
+          ...(reason ? [`Motivo: ${reason}`] : []),
+          ...cancelledLines,
+          "Valores pendientes antes de impuestos. Las liberaciones, facturas y embarques existentes se conservan.",
+        ].join("\n");
+        const [updated] = await tx.update(orders).set({
+          status: OrderStatus.CANCELLED,
+          factoryNotes: locked.factoryNotes ? `${locked.factoryNotes}\n${cancelNote}` : cancelNote,
+          lastUpdatedBy: req.user!.id,
+          updatedAt: new Date(),
+        }).where(eq(orders.id, id)).returning();
+        return updated;
       });
-      if (!updatedOrder) {
-        return res.status(404).json({ error: "Order not found" });
-      }
       res.json(updatedOrder);
 
       // Notify admin users about the cancellation (fire-and-forget)
@@ -5099,6 +5136,11 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
     } catch (error) {
       console.error("Error cancelling order:", error);
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Motivo inválido" });
+      if (error instanceof Error && (
+        error.message === "No hay equipos pendientes por cancelar"
+        || error.message === "El pedido ya está finalizado"
+      )) return res.status(409).json({ error: error.message });
       res.status(500).json({ error: "Error cancelling order" });
     }
   });
@@ -5124,14 +5166,18 @@ Proporciona tu análisis en el siguiente formato JSON:
       const closeNote = `[Cerrado ${stamp} por ${req.user!.fullName || req.user!.username}]`;
       const factoryNotes = existing.factoryNotes ? `${existing.factoryNotes}\n${closeNote}` : closeNote;
 
-      const updatedOrder = await scopedStorage.updateOrder(id, {
+      const [updatedOrder] = await db.update(orders).set({
         status: OrderStatus.CLOSED,
         factoryNotes,
         lastUpdatedBy: req.user!.id,
         updatedAt: new Date(),
-      });
+      }).where(and(
+        eq(orders.id, id),
+        eq(orders.tenantId, existing.tenantId),
+        notInArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.CLOSED]),
+      )).returning();
       if (!updatedOrder) {
-        return res.status(404).json({ error: "Order not found" });
+        return res.status(409).json({ error: "El pedido ya está finalizado" });
       }
       res.json(updatedOrder);
     } catch (error) {
@@ -5445,6 +5491,14 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!order) {
         return res.status(404).json({ error: "Order not found" });
       }
+      if (!assertTenantScope(req, res, order, {
+        notFoundMessage: "Order not found",
+        forbiddenMessage: "No autorizado para acceder a este pedido",
+        checkEmpresa: true,
+      })) return;
+      if ([OrderStatus.CANCELLED, OrderStatus.CLOSED, OrderStatus.DELIVERED].includes(order.status as any)) {
+        return res.status(409).json({ error: "No se pueden liberar equipos de un pedido finalizado" });
+      }
 
       // VALIDATE FIRST before creating any records to prevent orphaned invoices/shipments
       const quotationItem = order.quotation.items.find(i => i.id === releaseData.quotationItemId);
@@ -5454,10 +5508,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       // Validate quantity
       const quantityToRelease = Number(releaseData.quantityReleased);
-      if (isNaN(quantityToRelease) || quantityToRelease <= 0) {
+      if (!Number.isFinite(quantityToRelease) || quantityToRelease <= 0) {
         return res.status(400).json({ error: "Cantidad inválida" });
       }
-
       // Pre-validate release data schema (without invoice/shipment IDs for now)
       insertOrderReleaseSchema.parse({
         quotationItemId: releaseData.quotationItemId,
@@ -5467,102 +5520,97 @@ Proporciona tu análisis en el siguiente formato JSON:
         notes: releaseData.notes,
       });
 
-      // Now safe to create invoice and shipment
-      const scopedStorage = createTenantScopedStorage(req);
-      let invoiceId: string | undefined;
-      let shipmentId: string | undefined;
-
-      // Create invoice if requested
-      if (createInvoice) {
-        const unitPrice = Number(quotationItem.unitPrice);
-        const subtotal = unitPrice * quantityToRelease;
-        const customerRfc = order.quotation.customer?.rfc ?? "";
-        const isEnglishTenant = (await db.query.tenants.findFirst({ where: eq(tenants.id, order.quotation.tenantId) }))?.locale?.toLowerCase().startsWith("en") ?? false;
-        const isForeignCustomer = customerRfc === "XEXX010101000";
-        const itemTaxRate = isEnglishTenant
-          ? Number(order.quotation.taxRate ?? 0) / 100
-          : (isForeignCustomer ? 0 : Number(quotationItem.taxRate ?? 16) / 100);
-        const tax = subtotal * itemTaxRate;
-        const total = subtotal + tax;
-
-        const invoice = await scopedStorage.createInvoice({
-          orderId: id,
-          customerId: order.quotation.customerId,
-          serie: "A",
-          folio: `INV-${Date.now()}`,
-          subtotal: subtotal.toFixed(2),
-          tax: tax.toFixed(2),
-          total: total.toFixed(2),
-          balanceDue: total.toFixed(2),
-          currency: order.quotation.currency || (isEnglishTenant ? "USD" : "MXN"),
-        });
-        invoiceId = invoice.id;
-      }
-
-      // Create shipment if requested. Reuse the order's existing pending
-      // shipment (if any) so releasing several products one by one doesn't
-      // create one shipment per product.
-      if (createShipment && shipmentData) {
-        const existingPending = await db.query.shipments.findFirst({
-          where: and(eq(shipments.orderId, id), eq(shipments.status, "pending")),
-          orderBy: (s, { asc }) => [asc(s.createdAt)],
-        });
-        if (existingPending) {
-          shipmentId = existingPending.id;
-        } else {
-          const shipment = await scopedStorage.createShipment({
-            orderId: id,
-            transporter: shipmentData.transporter || "Por definir",
-            transportType: shipmentData.transportType || "propio",
-            trackingNumber: shipmentData.trackingNumber,
-            driverName: shipmentData.driverName,
-            vehiclePlates: shipmentData.vehiclePlates,
-          });
-          shipmentId = shipment.id;
+      // Lock the same order row as cancellation. The balance check, documents,
+      // release and status change commit together, so neither action can pass
+      // validation against a stale order or leave orphan financial documents.
+      const created = await db.transaction(async (tx) => {
+        const [locked] = await tx.select().from(orders).where(eq(orders.id, id)).for("update");
+        if (!locked || [OrderStatus.CANCELLED, OrderStatus.CLOSED, OrderStatus.DELIVERED].includes(locked.status as any)) {
+          throw new Error("No se pueden liberar equipos de un pedido finalizado");
         }
-      }
+        const currentItems = await tx.query.quotationItems.findMany({
+          where: eq(quotationItems.quotationId, locked.quotationId),
+        });
+        const currentItem = currentItems.find(item => item.id === releaseData.quotationItemId);
+        if (!currentItem) throw new Error("Producto no encontrado en el pedido");
+        const previousReleases = await tx.query.orderReleases.findMany({
+          where: eq(orderReleases.orderId, id),
+        });
+        const releasedByItem = new Map<string, number>();
+        for (const previous of previousReleases) {
+          releasedByItem.set(previous.quotationItemId,
+            (releasedByItem.get(previous.quotationItemId) ?? 0) + Number(previous.quantityReleased));
+        }
+        if (quantityToRelease > Number(currentItem.quantity) - (releasedByItem.get(currentItem.id) ?? 0) + 0.00001) {
+          throw new Error("La cantidad supera el saldo pendiente de este equipo");
+        }
 
-      // Create the release with validated data
-      const release = await scopedStorage.createOrderRelease({
-        quotationItemId: releaseData.quotationItemId,
-        quantityReleased: String(releaseData.quantityReleased),
-        orderId: id,
-        releasedById: req.user!.id,
-        notes: releaseData.notes,
-        invoiceId,
-        shipmentId,
+        let invoiceId: string | undefined;
+        let shipmentId: string | undefined;
+        if (createInvoice) {
+          const subtotal = Number(currentItem.unitPrice) * quantityToRelease;
+          const customerRfc = order.quotation.customer?.rfc ?? "";
+          const tenant = await tx.query.tenants.findFirst({ where: eq(tenants.id, order.quotation.tenantId) });
+          const isEnglishTenant = tenant?.locale?.toLowerCase().startsWith("en") ?? false;
+          const itemTaxRate = isEnglishTenant
+            ? Number(order.quotation.taxRate ?? 0) / 100
+            : customerRfc === "XEXX010101000" ? 0 : Number(currentItem.taxRate ?? 16) / 100;
+          const tax = subtotal * itemTaxRate;
+          const [invoice] = await tx.insert(invoices).values({
+            tenantId: locked.tenantId,
+            orderId: id,
+            customerId: order.quotation.customerId,
+            serie: "A",
+            folio: `INV-${Date.now()}`,
+            subtotal: subtotal.toFixed(2),
+            tax: tax.toFixed(2),
+            total: (subtotal + tax).toFixed(2),
+            balanceDue: (subtotal + tax).toFixed(2),
+            currency: order.quotation.currency || (isEnglishTenant ? "USD" : "MXN"),
+          }).returning();
+          invoiceId = invoice.id;
+        }
+        if (createShipment && shipmentData) {
+          const existingPending = await tx.query.shipments.findFirst({
+            where: and(eq(shipments.orderId, id), eq(shipments.status, "pending")),
+            orderBy: (s, { asc }) => [asc(s.createdAt)],
+          });
+          if (existingPending) {
+            shipmentId = existingPending.id;
+          } else {
+            const [shipment] = await tx.insert(shipments).values({
+              tenantId: locked.tenantId,
+              empresaId: locked.empresaId,
+              orderId: id,
+              transporter: shipmentData.transporter || "Por definir",
+              transportType: shipmentData.transportType || "propio",
+              trackingNumber: shipmentData.trackingNumber,
+              driverName: shipmentData.driverName,
+              vehiclePlates: shipmentData.vehiclePlates,
+            }).returning();
+            shipmentId = shipment.id;
+          }
+        }
+        const [release] = await tx.insert(orderReleases).values({
+          quotationItemId: currentItem.id,
+          quantityReleased: String(releaseData.quantityReleased),
+          orderId: id,
+          releasedById: req.user!.id,
+          notes: releaseData.notes,
+          invoiceId,
+          shipmentId,
+        }).returning();
+        releasedByItem.set(currentItem.id, (releasedByItem.get(currentItem.id) ?? 0) + quantityToRelease);
+        const allFullyReleased = currentItems.every(item =>
+          (releasedByItem.get(item.id) ?? 0) >= Number(item.quantity) - 0.00001);
+        await tx.update(orders).set({
+          status: allFullyReleased ? OrderStatus.SHIPPED : OrderStatus.PARTIALLY_RELEASED,
+          updatedAt: new Date(),
+        }).where(eq(orders.id, id));
+        return { release, invoiceId, shipmentId };
       });
 
-      // Check if all items are fully released to update order status
-      const quotationItemsResult = order.quotation.items;
-
-      const allReleases = await scopedStorage.getOrderReleases(id);
-
-      // Calculate total released per item
-      const releasedByItem: Record<string, number> = {};
-      for (const rel of allReleases) {
-        releasedByItem[rel.quotationItemId] = (releasedByItem[rel.quotationItemId] || 0) + Number(rel.quantityReleased);
-      }
-
-      // Check if all items are fully released
-      let allFullyReleased = true;
-      let someReleased = false;
-
-      for (const item of quotationItemsResult) {
-        const released = releasedByItem[item.id] || 0;
-        const quantity = Number(item.quantity);
-        if (released > 0) someReleased = true;
-        if (released < quantity) allFullyReleased = false;
-      }
-
-      // Update order status based on release state
-      if (allFullyReleased) {
-        await scopedStorage.updateOrder(id, { status: OrderStatus.SHIPPED });
-      } else if (someReleased) {
-        await scopedStorage.updateOrder(id, { status: OrderStatus.PARTIALLY_RELEASED });
-      }
-
-      res.status(201).json({ release, invoiceId, shipmentId });
+      res.status(201).json(created);
     } catch (error: any) {
       console.error("Error creating order release:", error);
       res.status(400).json({ error: error.message || "Error creating order release" });
@@ -5702,6 +5750,9 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       if (!order) return res.status(404).json({ error: "Order not found" });
       if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
+      if ([OrderStatus.CANCELLED, OrderStatus.CLOSED].includes(order.status as any)) {
+        return res.status(409).json({ error: "El pedido ya está finalizado" });
+      }
 
       const { releaseNotes: approveNotes } = req.body;
       await db.update(orders).set({
@@ -5710,7 +5761,11 @@ Proporciona tu análisis en el siguiente formato JSON:
         releasedAt: new Date(),
         updatedAt: new Date(),
         ...(approveNotes?.trim() && { releaseNotes: approveNotes.trim() }),
-      }).where(eq(orders.id, id));
+      }).where(and(
+        eq(orders.id, id),
+        eq(orders.releaseStatus, OrderReleaseStatus.PENDING),
+        notInArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.CLOSED]),
+      ));
 
       // Skip email if the order is already past the initial stage (in production,
       // shipped, delivered, etc.) — avoids spam when approving backlog orders.
@@ -5882,14 +5937,20 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!order) return res.status(404).json({ error: "Order not found" });
       if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
 
-      await db.update(orders).set({
+      const [closed] = await db.update(orders).set({
         releaseStatus: OrderReleaseStatus.CLOSED,
         status: OrderStatus.CLOSED,
         releaseNotes: releaseNotes?.trim() || null,
         releasedById: req.user!.id,
         releasedAt: new Date(),
         updatedAt: new Date(),
-      }).where(eq(orders.id, id));
+      }).where(and(
+        eq(orders.id, id),
+        ...(resolvedTenantId ? [eq(orders.tenantId, resolvedTenantId)] : []),
+        eq(orders.releaseStatus, OrderReleaseStatus.PENDING),
+        notInArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.CLOSED]),
+      )).returning();
+      if (!closed) return res.status(409).json({ error: "El pedido ya no está pendiente o fue cancelado" });
 
       res.json({ success: true });
     } catch (error) {
@@ -6098,15 +6159,19 @@ Proporciona tu análisis en el siguiente formato JSON:
               return {
                 productCode: item.productCode || null,
                 productName: item.productName,
-                // For partially-released orders report only what's still owed
-                quantity: released > 0 ? String(pending) : item.quantity,
+                // Active orders show what is owed; cancelled orders show the
+                // original quantity with released/cancelled portions explicitly.
+                quantity: o.status === OrderStatus.CANCELLED
+                  ? item.quantity
+                  : released > 0 ? String(pending) : item.quantity,
                 totalQuantity: item.quantity,
                 releasedQuantity: String(released),
+                cancelledQuantity: o.status === OrderStatus.CANCELLED ? String(pending) : "0",
                 unitOfMeasure: item.unitOfMeasure,
                 unitPrice: item.unitPrice ?? null,
               };
             })
-            // Hide items already fully released/shipped
+            // Hide items already fully released/shipped on active orders only.
             .filter(it => parseFloat(it.quantity ?? "0") > 0),
         };
       });
@@ -6284,27 +6349,36 @@ Proporciona tu análisis en el siguiente formato JSON:
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const validated = insertShipmentSchema.parse(req.body);
+      if (!validated.orderId) return res.status(400).json({ error: "Se requiere un pedido" });
+      const order = await scopedStorage.getOrder(validated.orderId);
+      if (!order) return res.status(404).json({ error: "Order not found" });
 
-      // Prevent duplicate shipments for the same order
-      if (validated.orderId) {
-        const existing = await db.query.shipments.findFirst({
-          where: eq(shipments.orderId, validated.orderId),
-        });
-        if (existing) {
-          return res.status(409).json({ error: "Ya existe un embarque para este pedido" });
+      const shipment = await db.transaction(async (tx) => {
+        const [locked] = await tx.select().from(orders)
+          .where(and(eq(orders.id, order.id), eq(orders.tenantId, order.tenantId))).for("update");
+        if (!locked || [OrderStatus.CANCELLED, OrderStatus.CLOSED, OrderStatus.DELIVERED].includes(locked.status as any)) {
+          throw new Error("No se puede embarcar un pedido finalizado");
         }
-      }
-
-      const shipment = await scopedStorage.createShipment(validated);
-
-      // Mark order as SHIPPED so the button disappears from production
-      if (validated.orderId) {
-        await scopedStorage.updateOrder(validated.orderId, { status: OrderStatus.SHIPPED });
-      }
+        const existing = await tx.query.shipments.findFirst({
+          where: eq(shipments.orderId, locked.id),
+        });
+        if (existing) throw new Error("Ya existe un embarque para este pedido");
+        const [created] = await tx.insert(shipments).values({
+          ...validated,
+          tenantId: locked.tenantId,
+          empresaId: locked.empresaId,
+        }).returning();
+        await tx.update(orders).set({ status: OrderStatus.SHIPPED }).where(eq(orders.id, locked.id));
+        return created;
+      });
 
       res.status(201).json(shipment);
     } catch (error) {
       console.error("Error creating shipment:", error);
+      if (error instanceof Error && (
+        error.message === "No se puede embarcar un pedido finalizado"
+        || error.message === "Ya existe un embarque para este pedido"
+      )) return res.status(409).json({ error: error.message });
       res.status(400).json({ error: "Error creating shipment" });
     }
   });
