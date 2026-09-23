@@ -65,7 +65,7 @@ interface OrderDetails extends Order {
 }
 
 type OrderWithQuotation = Order & { quotation: Quotation & { customer: Customer } };
-type EditableEquipment = { id?: string; productId: string; quantity: string };
+type EditableEquipment = { id?: string; productId: string; quantity: string; unitPrice: string };
 
 export default function ProductionPage() {
   const { t } = useI18n();
@@ -137,6 +137,7 @@ export default function ProductionPage() {
           ...(item.id ? { id: item.id } : {}),
           productId: item.productId,
           quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
         })),
         comment,
       });
@@ -212,6 +213,7 @@ export default function ProductionPage() {
       id: item.id,
       productId: item.productId || "",
       quantity: String(Number(item.quantity)),
+      unitPrice: String(Number(item.unitPrice)),
     })));
     setEquipmentComment("");
     setIsEditingEquipment(true);
@@ -222,8 +224,14 @@ export default function ProductionPage() {
       toast({ title: t("label.error"), description: "El pedido debe conservar al menos un equipo.", variant: "destructive" });
       return;
     }
-    if (editEquipment.some(item => !item.productId || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0)) {
-      toast({ title: t("label.error"), description: "Selecciona un producto y captura una cantidad mayor a cero.", variant: "destructive" });
+    if (editEquipment.some(item =>
+      !item.productId
+      || !Number.isFinite(Number(item.quantity))
+      || Number(item.quantity) <= 0
+      || !Number.isFinite(Number(item.unitPrice))
+      || Number(item.unitPrice) < 0
+    )) {
+      toast({ title: t("label.error"), description: "Selecciona un producto y captura una cantidad y precio válidos.", variant: "destructive" });
       return;
     }
     const existingProductIds = new Set(
@@ -727,7 +735,7 @@ export default function ProductionPage() {
                   <div className="space-y-3 rounded-md border p-3">
                     <div className="space-y-2">
                       {editEquipment.map((item, index) => (
-                        <div key={item.id || `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_100px_40px] gap-2 items-center">
+                        <div key={item.id || `new-${index}`} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_100px_120px_40px] gap-2 items-center">
                           <SearchCombobox
                             options={(products || []).filter(product =>
                               product.active || product.id === item.productId
@@ -737,9 +745,14 @@ export default function ProductionPage() {
                               sublabel: product.code,
                             }))}
                             value={item.productId}
-                            onValueChange={(productId) => setEditEquipment(current =>
-                              current.map((row, rowIndex) => rowIndex === index ? { ...row, productId } : row)
-                            )}
+                            onValueChange={(productId) => {
+                              const product = products?.find(candidate => candidate.id === productId);
+                              setEditEquipment(current =>
+                                current.map((row, rowIndex) => rowIndex === index
+                                  ? { ...row, productId, unitPrice: product ? String(Number(product.listPrice)) : row.unitPrice }
+                                  : row)
+                              );
+                            }}
                             placeholder="Seleccionar equipo"
                             searchPlaceholder="Buscar por nombre o código..."
                             data-testid={`select-equipment-${index}`}
@@ -755,6 +768,18 @@ export default function ProductionPage() {
                             )}
                             aria-label="Cantidad"
                             data-testid={`input-equipment-quantity-${index}`}
+                          />
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.unitPrice}
+                            onChange={(event) => setEditEquipment(current =>
+                              current.map((row, rowIndex) => rowIndex === index ? { ...row, unitPrice: event.target.value } : row)
+                            )}
+                            aria-label="Precio unitario"
+                            placeholder="Precio"
+                            data-testid={`input-equipment-price-${index}`}
                           />
                           <Button
                             type="button"
@@ -789,7 +814,7 @@ export default function ProductionPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditEquipment(current => [...current, { productId: "", quantity: "1" }])}
+                        onClick={() => setEditEquipment(current => [...current, { productId: "", quantity: "1", unitPrice: "" }])}
                         data-testid="button-add-equipment"
                       >
                         <Plus className="h-4 w-4 mr-2" />
