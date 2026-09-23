@@ -47,6 +47,8 @@ export interface ReportOrderItem {
   quantity: string;
   unitOfMeasure: string;
   unitPrice?: string | null;
+  releasedQuantity?: string;
+  cancelledQuantity?: string;
 }
 
 export interface ReportOrder {
@@ -120,6 +122,8 @@ const STATUS_LABELS: Record<string, { es: string; en: string }> = {
   released: { es: "Surtido", en: "Released" },
   shipped: { es: "Embarcado", en: "Shipped" },
   delivered: { es: "Entregado", en: "Delivered" },
+  cancelled: { es: "Cancelado", en: "Cancelled" },
+  closed: { es: "Cerrado", en: "Closed" },
 };
 
 export async function generateOrdersReportPDF(data: ReportData): Promise<Readable> {
@@ -217,10 +221,14 @@ export async function generateOrdersReportPDF(data: ReportData): Promise<Readabl
         const productColW = innerWEst - 80; // same as innerW - 80 used during rendering
 
         // Estimate height — measure each product label exactly as it will be rendered
-        const buildLabel = (item: typeof order.items[number]) =>
-          (item.productCode ? `${item.productCode} — ${item.productName}` : item.productName)
+        const buildLabel = (item: typeof order.items[number]) => {
+          const label = (item.productCode ? `${item.productCode} — ${item.productName}` : item.productName)
             .replace(/\s+/g, " ")
             .trim();
+          return order.status === "cancelled"
+            ? `${label}\n${text({ es: "Liberado", en: "Released" })}: ${item.releasedQuantity ?? "0"} · ${text({ es: "Cancelado", en: "Cancelled" })}: ${item.cancelledQuantity ?? "0"}`
+            : label;
+        };
         const itemsH = order.items.length === 0
           ? 16 + 20
           : order.items.reduce((sum, item) => {

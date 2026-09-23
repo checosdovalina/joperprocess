@@ -392,7 +392,7 @@ export default function OrdersPage() {
               <CardTitle>{t("orders.list-title")}</CardTitle>
               <CardDescription>
                 {(() => {
-                  const terminal = [OrderStatus.SHIPPED, OrderStatus.DELIVERED];
+                  const terminal = [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CLOSED, OrderStatus.CANCELLED];
                   const closedCount = orders?.filter(o => terminal.includes(o.status as any)).length ?? 0;
                   const visible = hideDelivered ? (orders?.filter(o => !terminal.includes(o.status as any)).length ?? 0) : (orders?.length ?? 0);
                   return <>
@@ -426,9 +426,9 @@ export default function OrdersPage() {
                   </SelectContent>
                 </Select>
               )}
-              {(orders?.filter(o => o.status === OrderStatus.SHIPPED || o.status === OrderStatus.DELIVERED).length ?? 0) > 0 && (
+              {(orders?.filter(o => [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CLOSED, OrderStatus.CANCELLED].includes(o.status as any)).length ?? 0) > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setHideDelivered(v => !v)} data-testid="button-toggle-delivered">
-                  {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />{t("btn.show-shipped")}</> : <><EyeOff className="h-4 w-4 mr-2" />{t("btn.hide-shipped")}</>}
+                  {hideDelivered ? <><Eye className="h-4 w-4 mr-2" />Mostrar finalizados</> : <><EyeOff className="h-4 w-4 mr-2" />Ocultar finalizados</>}
                 </Button>
               )}
             </div>
@@ -581,7 +581,7 @@ export default function OrdersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {isLoadingDetails ? (
+        {isLoadingDetails ? (
             <div className="space-y-4">
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-40 w-full" />
@@ -615,6 +615,18 @@ export default function OrdersPage() {
                   </div>
                 </div>
               </div>
+              {orderDetails.status === OrderStatus.CANCELLED && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                  El MEX se conserva como cancelado. Las cantidades liberadas siguen registradas;
+                  las cantidades no liberadas se cancelaron y no pueden volver a liberarse.
+                </div>
+              )}
+              {orderDetails.factoryNotes && (
+                <div className="rounded-md border p-3">
+                  <Label>Notas y motivo de cancelación</Label>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{orderDetails.factoryNotes}</p>
+                </div>
+              )}
 
               <div>
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
@@ -628,7 +640,7 @@ export default function OrdersPage() {
                         <TableHead>Producto</TableHead>
                         <TableHead className="text-right">Cantidad</TableHead>
                         <TableHead className="text-right">Liberado</TableHead>
-                        <TableHead className="text-right">Pendiente</TableHead>
+                        <TableHead className="text-right">{orderDetails.status === OrderStatus.CANCELLED ? "Cancelado" : "Pendiente"}</TableHead>
                         <TableHead className="text-right">{t("label.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -668,7 +680,7 @@ export default function OrdersPage() {
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              {pending > 0 && (
+                              {pending > 0 && ![OrderStatus.CANCELLED, OrderStatus.CLOSED, OrderStatus.DELIVERED].includes(orderDetails.status as any) && (
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -883,7 +895,9 @@ export default function OrdersPage() {
               {t("orders.cancel-confirm")}
             </DialogTitle>
             <DialogDescription>
-              {t("orders.cancel-dialog-desc")}
+              Se cancelarán solo los equipos y cantidades que aún no se liberaron. El MEX
+              quedará registrado como cancelado; las liberaciones, facturas y embarques
+              existentes se conservarán. No se harán ajustes automáticos de cobranza.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

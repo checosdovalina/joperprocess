@@ -35,6 +35,8 @@ const STATUS_LABEL_KEYS: Record<string, string> = {
   released: "reports.status.fulfilled",
   shipped: "reports.status.shipped",
   delivered: "status.delivered",
+  cancelled: "status.cancelled",
+  closed: "status.closed",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -45,6 +47,8 @@ const STATUS_COLORS: Record<string, string> = {
   released: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   shipped: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   delivered: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+  cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  closed: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
 };
 
 interface ReportOrderItem {
@@ -53,6 +57,8 @@ interface ReportOrderItem {
   quantity: string;
   unitOfMeasure: string;
   unitPrice?: string | null;
+  releasedQuantity?: string;
+  cancelledQuantity?: string;
 }
 
 interface ReportOrder {
@@ -169,6 +175,12 @@ function OrderCard({ order }: { order: ReportOrder }) {
                   <span>{order.notes}</span>
                 </div>
               )}
+              {order.comments && (
+                <div className="col-span-2">
+                  <span className="text-muted-foreground font-medium">Comentarios de producción:</span>{" "}
+                  <span className="whitespace-pre-wrap">{order.comments}</span>
+                </div>
+              )}
             </div>
 
             {/* Items table */}
@@ -191,6 +203,12 @@ function OrderCard({ order }: { order: ReportOrder }) {
                       <tr key={i} className="bg-background">
                         <td className="px-3 py-2 font-medium">
                           {parseFloat(item.quantity).toLocaleString("es-MX", { maximumFractionDigits: 2 })} {item.unitOfMeasure}
+                          {order.status === "cancelled" && (
+                            <div className="text-xs font-normal text-muted-foreground">
+                              Liberado: {Number(item.releasedQuantity || 0).toLocaleString("es-MX")} ·
+                              Cancelado: {Number(item.cancelledQuantity || 0).toLocaleString("es-MX")}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2 font-mono text-xs">{item.productCode || "—"}</td>
                         <td className="px-3 py-2">{item.productName}</td>
