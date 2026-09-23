@@ -4160,30 +4160,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const scopedStorage = createTenantScopedStorage(req);
-      const updatedAuth = await scopedStorage.updateCreditAuthorization(id, updateData);
-      if (!updatedAuth) {
-        return res.status(404).json({ error: "Credit authorization not found" });
-      }
-
+      let updatedAuth: any;
       let order: any = undefined;
 
       // If approved, create the order once. A reauthorization must reopen the
       // existing order instead of creating a duplicate that splits one MEX
       // across the pending and rejected queues.
-      if (updatedAuth.status === CreditAuthStatus.APPROVED) {
-        order = await db.transaction(async (tx) => {
-          // Serialize approvals for the same quotation so retries or simultaneous
-          // clicks cannot both observe "no order" and insert duplicates.
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${updatedAuth.quotationId}))`);
+      if (status === CreditAuthStatus.APPROVED) {
+        const result = await db.transaction(async (tx) => {
+          const currentAuth = await tx.query.creditAuthorizations.findFirst({
+            where: eq(creditAuthorizations.id, id),
+            with: { quotation: true },
+          });
+          if (!currentAuth?.quotation) throw new Error("Credit authorization not found");
+
+          const effectiveTenantId = getEffectiveTenantId(req);
+          if (effectiveTenantId && currentAuth.quotation.tenantId !== effectiveTenantId) {
+            throw new Error("Credit authorization not found");
+          }
+
+          // Serialize the full authorization/order transition. This makes retries
+          // idempotent and prevents two simultaneous approvals from creating two
+          // orders for the same quotation.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${currentAuth.quotationId}))`);
 
           const quotation = await tx.query.quotations.findFirst({
-            where: eq(quotations.id, updatedAuth.quotationId),
+            where: eq(quotations.id, currentAuth.quotationId),
           });
           if (!quotation) throw new Error("Quotation not found for approved authorization");
 
           const existingOrders = await tx.query.orders.findMany({
             where: and(
-              eq(orders.quotationId, updatedAuth.quotationId),
+              eq(orders.quotationId, currentAuth.quotationId),
               eq(orders.tenantId, quotation.tenantId),
             ),
             orderBy: (orderRows, { desc }) => [desc(orderRows.createdAt)],
@@ -4192,6 +4200,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? existingOrders.find(existingOrder => existingOrder.id === quotation.convertedToOrderId)
             : undefined;
           let resolvedOrder = linkedOrder ?? existingOrders[0];
+
+          const finalOrderStatuses = [
+            OrderStatus.CLOSED,
+            OrderStatus.CANCELLED,
+            OrderStatus.SHIPPED,
+            OrderStatus.DELIVERED,
+          ];
+          if (resolvedOrder && (
+            resolvedOrder.releaseStatus === OrderReleaseStatus.CLOSED
+            || finalOrderStatuses.includes(resolvedOrder.status as any)
+          )) {
+            throw new Error("El pedido ya está cerrado o finalizado y no puede reabrirse automáticamente");
+          }
 
           if (resolvedOrder?.releaseStatus === OrderReleaseStatus.REJECTED) {
             const reopenableStatuses = [OrderStatus.PENDING, OrderStatus.IN_PRODUCTION, OrderStatus.READY];
@@ -4211,11 +4232,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const [createdOrder] = await tx.insert(orders).values({
               tenantId: quotation.tenantId,
               empresaId: quotation.empresaId,
-              quotationId: updatedAuth.quotationId,
+              quotationId: currentAuth.quotationId,
               status: OrderStatus.PENDING,
             }).returning();
             resolvedOrder = createdOrder;
           }
+
+          const [approvedAuth] = await tx.update(creditAuthorizations).set(updateData)
+            .where(eq(creditAuthorizations.id, id))
+            .returning();
+          if (!approvedAuth) throw new Error("Credit authorization not found");
 
           await tx.update(quotations).set({
             status: QuotationStatus.CONVERTED,
@@ -4224,13 +4250,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             convertedToOrderId: resolvedOrder.id,
             updatedAt: new Date(),
           }).where(and(
-            eq(quotations.id, updatedAuth.quotationId),
+            eq(quotations.id, currentAuth.quotationId),
             eq(quotations.tenantId, quotation.tenantId),
           ));
 
-          return resolvedOrder;
+          return { auth: approvedAuth, order: resolvedOrder };
         });
+        updatedAuth = result.auth;
+        order = result.order;
+      } else {
+        updatedAuth = await scopedStorage.updateCreditAuthorization(id, updateData);
+        if (!updatedAuth) {
+          return res.status(404).json({ error: "Credit authorization not found" });
+        }
+      }
 
+      if (status === CreditAuthStatus.APPROVED) {
         // Notify admins that a new order is pending release (fire and forget)
         (async () => {
           try {
