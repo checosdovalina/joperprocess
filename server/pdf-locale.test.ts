@@ -44,6 +44,21 @@ async function streamToText(stream: Readable, name: string): Promise<string> {
   return stdout;
 }
 
+async function streamToBbox(stream: Readable, name: string): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "nexxo-pdf-layout-"));
+  temporaryDirectories.push(directory);
+  const pdfPath = join(directory, `${name}.pdf`);
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on("end", resolve);
+    stream.on("error", reject);
+  });
+  await writeFile(pdfPath, Buffer.concat(chunks));
+  const { stdout } = await execFileAsync("pdftotext", ["-bbox", pdfPath, "-"]);
+  return stdout;
+}
+
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
@@ -267,5 +282,46 @@ describe("PDF locale helpers", () => {
     expect(text).toContain("TEXTO DEL USUARIO");
     expect(text).toContain("COMENTARIO DEL USUARIO");
     expect(text).not.toContain("INCIDENT REPORT / SERVICE TICKET");
+  });
+});
+
+describe("shipment remision product layout", () => {
+  it("gives wrapped product descriptions enough height before the next row", async () => {
+    const pdf = await generateShipmentRemisionPDF({
+      folio: "MEX-LAYOUT",
+      orderStatus: "shipped",
+      scheduledDate: null,
+      customerName: "Test customer",
+      transporter: "Test carrier",
+      transportType: "propio",
+      products: [
+        {
+          name: "LongDescription ".repeat(30).trim(),
+          quantity: 1,
+          unitOfMeasure: "PZA",
+          desde: "Almacén/Salida",
+          serialNumbers: [],
+        },
+        {
+          name: "NEXT-PRODUCT",
+          quantity: 1,
+          unitOfMeasure: "PZA",
+          desde: "Almacén/Salida",
+          serialNumbers: [],
+        },
+      ],
+      tenant: tenant("es"),
+    });
+    const bbox = await streamToBbox(pdf, "remision-long-product");
+    const boxes = [...bbox.matchAll(/<word\b([^>]*)>(.*?)<\/word>/gs)].map(([, attributes, content]) => ({
+      text: content.trim(),
+      yMin: Number(attributes.match(/\byMin="([^"]+)"/)?.[1]),
+      yMax: Number(attributes.match(/\byMax="([^"]+)"/)?.[1]),
+    }));
+    const longDescriptionWords = boxes.filter(word => word.text === "LongDescription");
+    const nextProduct = boxes.find(word => word.text === "NEXT-PRODUCT");
+    expect(longDescriptionWords.length).toBeGreaterThan(1);
+    expect(nextProduct).toBeDefined();
+    expect(nextProduct!.yMin).toBeGreaterThan(Math.max(...longDescriptionWords.map(word => word.yMax)));
   });
 });
