@@ -211,15 +211,19 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
     serie: MARGIN + 400,
   };
   const ROW_H = 18;
+  const PRODUCT_TEXT_W = 232;
+  const TABLE_BOTTOM = 680;
 
-  // Table header
-  doc.rect(MARGIN, Y, CONTENT_W, ROW_H).fill(mediumColor);
-  doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
-  doc.text(t({ es: "PRODUCTO", en: "PRODUCT" }), COL.producto + 4, Y + 5, { width: 232 });
-  doc.text(t({ es: "CANTIDAD", en: "QUANTITY" }), COL.cantidad + 4, Y + 5, { width: 76 });
-  doc.text(t({ es: "DESDE", en: "FROM" }), COL.desde + 4, Y + 5, { width: 76 });
-  doc.text(t({ es: "NÚMERO DE LOTE/SERIE", en: "LOT/SERIAL NUMBER" }), COL.serie + 4, Y + 5, { width: 128 });
-  Y += ROW_H;
+  const drawTableHeader = () => {
+    doc.rect(MARGIN, Y, CONTENT_W, ROW_H).fill(mediumColor);
+    doc.fontSize(7.5).font("Helvetica-Bold").fillColor(primaryColor);
+    doc.text(t({ es: "PRODUCTO", en: "PRODUCT" }), COL.producto + 4, Y + 5, { width: PRODUCT_TEXT_W });
+    doc.text(t({ es: "CANTIDAD", en: "QUANTITY" }), COL.cantidad + 4, Y + 5, { width: 76 });
+    doc.text(t({ es: "DESDE", en: "FROM" }), COL.desde + 4, Y + 5, { width: 76 });
+    doc.text(t({ es: "NÚMERO DE LOTE/SERIE", en: "LOT/SERIAL NUMBER" }), COL.serie + 4, Y + 5, { width: 128 });
+    Y += ROW_H;
+  };
+  drawTableHeader();
 
   // Expand products: one row per serial number (or one row if no serials)
   // When multiple serials exist each one represents 1 unit, so show 1.00 per row
@@ -228,19 +232,24 @@ export async function generateShipmentRemisionPDF(data: ShipmentRemisionData): P
     const rows = p.serialNumbers.length > 0 ? p.serialNumbers : ["—"];
     const qtyPerRow = p.serialNumbers.length > 1 ? 1 : p.quantity;
     for (const serial of rows) {
-      if (rowIndex % 2 === 0) doc.rect(MARGIN, Y, CONTENT_W, ROW_H).fill(lightColor);
       doc.fontSize(7.5).font("Helvetica").fillColor("#111827");
-      doc.text(p.name, COL.producto + 4, Y + 5, { width: 232, lineBreak: false, ellipsis: true });
-       doc.text(`${formatPdfNumber(qtyPerRow, language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${p.unitOfMeasure}`, COL.cantidad + 4, Y + 5, { width: 76 });
-      doc.text(p.desde, COL.desde + 4, Y + 5, { width: 76 });
-      doc.font("Helvetica-Bold").text(serial, COL.serie + 4, Y + 5, { width: 128, lineBreak: false, ellipsis: true });
-      Y += ROW_H;
-      rowIndex++;
-
-      if (Y > 680) {
+      const productTextHeight = doc.heightOfString(p.name, { width: PRODUCT_TEXT_W });
+      const rowHeight = Math.max(ROW_H, Math.ceil(productTextHeight) + 10);
+      if (Y + rowHeight > TABLE_BOTTOM) {
         doc.addPage();
         Y = 40;
+        drawTableHeader();
       }
+      if (rowIndex % 2 === 0) doc.rect(MARGIN, Y, CONTENT_W, rowHeight).fill(lightColor);
+      // Product descriptions can wrap; size each row to the rendered text so it
+      // never collides with the following product.
+      doc.fontSize(7.5).font("Helvetica").fillColor("#111827");
+      doc.text(p.name, COL.producto + 4, Y + 5, { width: PRODUCT_TEXT_W });
+      doc.text(`${formatPdfNumber(qtyPerRow, language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${p.unitOfMeasure}`, COL.cantidad + 4, Y + 5, { width: 76 });
+      doc.text(p.desde, COL.desde + 4, Y + 5, { width: 76 });
+      doc.font("Helvetica-Bold").text(serial, COL.serie + 4, Y + 5, { width: 128, lineBreak: false, ellipsis: true });
+      Y += rowHeight;
+      rowIndex++;
     }
   }
 
