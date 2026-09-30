@@ -56,7 +56,7 @@ export default function CheckinsPage() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [isProspectMode, setIsProspectMode] = useState(false);
   const [creatingProspect, setCreatingProspect] = useState(false);
-  const [prospectData, setProspectData] = useState({ name: "", address: "", phone: "" });
+  const [prospectData, setProspectData] = useState({ name: "", contactName: "" });
   const [formData, setFormData] = useState<Partial<InsertCheckin>>({
     customerId: "",
     meetingType: MeetingType.VISITA,
@@ -219,7 +219,7 @@ export default function CheckinsPage() {
       });
       setLocation(null);
       setIsProspectMode(false);
-      setProspectData({ name: "", address: "", phone: "" });
+      setProspectData({ name: "", contactName: "" });
       toast({
         title: t("checkins.toast-registered"),
         description: t("checkins.toast-registered-desc"),
@@ -298,8 +298,8 @@ export default function CheckinsPage() {
       createMutation.mutate(submissionData as InsertCheckin);
       return;
     }
-    if (!prospectData.name.trim()) {
-      toast({ title: "Nombre requerido", description: "Captura el nombre del prospecto.", variant: "destructive" });
+    if (!prospectData.name.trim() || !prospectData.contactName.trim()) {
+      toast({ title: "Datos requeridos", description: "Captura el nombre de la empresa y de su contacto.", variant: "destructive" });
       return;
     }
     try {
@@ -329,7 +329,7 @@ export default function CheckinsPage() {
       });
       setLocation(null);
       setIsProspectMode(false);
-      setProspectData({ name: "", address: "", phone: "" });
+      setProspectData({ name: "", contactName: "" });
       toast({ title: "Prospecto y check-in registrados" });
     } catch (error) {
       toast({
@@ -408,21 +408,14 @@ export default function CheckinsPage() {
                       <Input
                         value={prospectData.name}
                         onChange={(e) => setProspectData({ ...prospectData, name: e.target.value })}
-                        placeholder="Nombre del prospecto *"
+                        placeholder="Nombre de la empresa *"
                         data-testid="input-prospect-name"
                       />
                       <Input
-                        value={prospectData.address}
-                        onChange={(e) => setProspectData({ ...prospectData, address: e.target.value })}
-                        placeholder="Dirección"
-                        data-testid="input-prospect-address"
-                      />
-                      <Input
-                        type="tel"
-                        value={prospectData.phone}
-                        onChange={(e) => setProspectData({ ...prospectData, phone: e.target.value })}
-                        placeholder="Teléfono"
-                        data-testid="input-prospect-phone"
+                        value={prospectData.contactName}
+                        onChange={(e) => setProspectData({ ...prospectData, contactName: e.target.value })}
+                        placeholder="Nombre del contacto *"
+                        data-testid="input-prospect-contact"
                       />
                     </div>
                   ) : (
@@ -785,7 +778,10 @@ export default function CheckinsPage() {
                       <TableCell>
                         {checkin.checkoutAt ? (
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            {t("status.done")}
+                            {checkin.followUpOutcome === "sale" ? "Venta concretada"
+                              : checkin.followUpOutcome === "rental" ? "Renta concretada"
+                                : checkin.followUpOutcome === "not_converted" ? "No concretada"
+                                  : t("status.done")}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">

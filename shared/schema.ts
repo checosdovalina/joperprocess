@@ -188,6 +188,17 @@ export const MeetingType = {
 
 export type MeetingTypeType = typeof MeetingType[keyof typeof MeetingType];
 
+export const FollowUpStatus = {
+  OPEN: "open",
+  CLOSED: "closed",
+} as const;
+
+export const FollowUpOutcome = {
+  SALE: "sale",
+  RENTAL: "rental",
+  NOT_CONVERTED: "not_converted",
+} as const;
+
 // Enum for incident type
 export const IncidentType = {
   GARANTIA: "garantia",
@@ -328,6 +339,26 @@ export const checkins = pgTable("checkins", {
   minutePdfPath: text("minute_pdf_path"),
   internalNotes: text("internal_notes"), // Notas internas que NO se envían al cliente
   salesPersonId: varchar("sales_person_id").references(() => users.id), // Vendedor asignado
+  followUpStatus: text("follow_up_status").notNull().default(FollowUpStatus.OPEN),
+  followUpOutcome: text("follow_up_outcome"),
+  followUpClosedAt: timestamp("follow_up_closed_at"),
+  followUpClosedById: varchar("follow_up_closed_by_id").references(() => users.id),
+  followUpReason: text("follow_up_reason"),
+});
+
+// Contact history for an open commercial follow-up. A saved contact never
+// closes the opportunity; only an explicit outcome does.
+export const checkinUpdates = pgTable("checkin_updates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  checkinId: varchar("checkin_id").notNull().references(() => checkins.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  meetingType: text("meeting_type").notNull().default(MeetingType.VISITA),
+  agreements: text("agreements"),
+  internalNotes: text("internal_notes"),
+  photos: text("photos").array().notNull().default(sql`ARRAY[]::text[]`),
+  minutePdfPath: text("minute_pdf_path"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Scheduled visits table (for pre-checkin planning)
@@ -803,6 +834,17 @@ export const checkinsRelations = relations(checkins, ({ one }) => ({
   customerLocation: one(customerLocations, {
     fields: [checkins.customerLocationId],
     references: [customerLocations.id],
+  }),
+}));
+
+export const checkinUpdatesRelations = relations(checkinUpdates, ({ one }) => ({
+  checkin: one(checkins, {
+    fields: [checkinUpdates.checkinId],
+    references: [checkins.id],
+  }),
+  user: one(users, {
+    fields: [checkinUpdates.userId],
+    references: [users.id],
   }),
 }));
 
@@ -1464,6 +1506,7 @@ export type CustomerLocation = typeof customerLocations.$inferSelect;
 export type InsertCheckin = z.infer<typeof insertCheckinSchema>;
 export type UpdateCheckin = z.infer<typeof updateCheckinSchema>;
 export type Checkin = typeof checkins.$inferSelect;
+export type CheckinUpdate = typeof checkinUpdates.$inferSelect;
 
 export type InsertScheduledVisit = z.infer<typeof insertScheduledVisitSchema>;
 export type UpdateScheduledVisit = z.infer<typeof updateScheduledVisitSchema>;

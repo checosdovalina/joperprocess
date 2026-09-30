@@ -18,7 +18,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 type Results = {
   summary: { totalContacts: number; prospectVisits: number; customerVisits: number; completed: number; active: number; uniqueCustomers: number };
   daily: { date: string; contacts: number; prospects: number; customers: number }[];
-  bySeller: { id: string; name: string; contacts: number; prospects: number; completed: number }[];
+  bySeller: { id: string; name: string; contacts: number; prospects: number; followUps: number; completed: number }[];
   byCustomer: { id: string; name: string; contacts: number; prospects: number; lastContactAt: string | null }[];
   byMeetingType: { type: string; count: number }[];
 };

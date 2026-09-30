@@ -6,11 +6,17 @@ import { formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfL
 
 export interface CommercialActivityRow {
   id: string;
+  followUpId?: string;
+  followUpStatus?: string;
+  followUpOutcome?: string | null;
   checkinAt: Date | string;
   checkoutAt: Date | string | null;
   meetingType: string;
   wasProspect: boolean;
-  customer: { id: string; name: string };
+  agreements?: string | null;
+  internalNotes?: string | null;
+  photosCount?: number;
+  customer: { id: string; name: string; contactName?: string | null };
   seller: { id: string; name: string };
 }
 
@@ -24,7 +30,7 @@ export interface CommercialResults {
     uniqueCustomers: number;
   };
   daily: Array<{ date: string; contacts: number; prospects: number; customers: number }>;
-  bySeller: Array<{ id: string; name: string; contacts: number; prospects: number; completed: number }>;
+  bySeller: Array<{ id: string; name: string; contacts: number; prospects: number; followUps: number; completed: number }>;
   byCustomer: Array<{ id: string; name: string; contacts: number; prospects: number; lastContactAt: string }>;
   byMeetingType: Array<{ type: string; count: number }>;
   items: CommercialActivityRow[];
@@ -142,22 +148,36 @@ function commercialDateKey(value: Date | string, timezoneOffsetMinutes: number, 
 
 export function summarizeCommercialActivity(items: CommercialActivityRow[], timezoneOffsetMinutes = 0, timezone?: string | null): CommercialResults {
   const daily = new Map<string, { contacts: number; prospects: number; customers: number }>();
-  const sellers = new Map<string, { id: string; name: string; contacts: number; prospects: number; completed: number }>();
+  const sellers = new Map<string, { id: string; name: string; contacts: number; prospects: number; followUps: number; completed: number }>();
   const customerTotals = new Map<string, { id: string; name: string; contacts: number; prospects: number; lastContactAt: string }>();
   const meetingTypes = new Map<string, number>();
+  const followUpStates = new Map<string, boolean>();
+  const countedSellerFollowUps = new Set<string>();
+  const countedSellerClosures = new Set<string>();
 
   const reportTimezone = timezone ? resolveCommercialTimezone(timezone) : undefined;
   for (const item of items) {
+    const followUpId = item.followUpId ?? item.id;
+    const isClosed = item.followUpStatus ? item.followUpStatus === "closed" : Boolean(item.checkoutAt);
+    followUpStates.set(followUpId, isClosed);
     const date = commercialDateKey(item.checkinAt, timezoneOffsetMinutes, reportTimezone);
     const day = daily.get(date) ?? { contacts: 0, prospects: 0, customers: 0 };
     day.contacts++;
     item.wasProspect ? day.prospects++ : day.customers++;
     daily.set(date, day);
 
-    const seller = sellers.get(item.seller.id) ?? { ...item.seller, contacts: 0, prospects: 0, completed: 0 };
+    const seller = sellers.get(item.seller.id) ?? { ...item.seller, contacts: 0, prospects: 0, followUps: 0, completed: 0 };
     seller.contacts++;
     if (item.wasProspect) seller.prospects++;
-    if (item.checkoutAt) seller.completed++;
+    const sellerClosureKey = `${item.seller.id}:${followUpId}`;
+    if (!countedSellerFollowUps.has(sellerClosureKey)) {
+      seller.followUps++;
+      countedSellerFollowUps.add(sellerClosureKey);
+    }
+    if (isClosed && !countedSellerClosures.has(sellerClosureKey)) {
+      seller.completed++;
+      countedSellerClosures.add(sellerClosureKey);
+    }
     sellers.set(item.seller.id, seller);
 
     const checkinIso = new Date(item.checkinAt).toISOString();
@@ -176,8 +196,8 @@ export function summarizeCommercialActivity(items: CommercialActivityRow[], time
       totalContacts: items.length,
       prospectVisits: items.filter(item => item.wasProspect).length,
       customerVisits: items.filter(item => !item.wasProspect).length,
-      completed: items.filter(item => item.checkoutAt).length,
-      active: items.filter(item => !item.checkoutAt).length,
+      completed: Array.from(followUpStates.values()).filter(Boolean).length,
+      active: Array.from(followUpStates.values()).filter(value => !value).length,
       uniqueCustomers: customerTotals.size,
     },
     daily: Array.from(daily, ([date, values]) => ({ date, ...values })).sort((a, b) => a.date.localeCompare(b.date)),
@@ -341,8 +361,8 @@ export async function generateCommercialResultsPdf(results: CommercialResults, c
     [t("Contactos", "Contacts"), summary.totalContacts, t("actividad registrada", "recorded activity"), blue],
     [t("Prospectos", "Prospects"), summary.prospectVisits, `${pct(summary.prospectVisits, summary.totalContacts)} ${t("del total", "of total")}`, teal],
     [t("Clientes / prospectos", "Customers / prospects"), summary.uniqueCustomers, t("entidades con seguimiento", "entities followed up"), blue],
-    [t("Terminados", "Completed"), summary.completed, `${pct(summary.completed, summary.totalContacts)} ${t("completados", "completed")}`, teal],
-    [t("Activos", "Active"), summary.active, `${pct(summary.active, summary.totalContacts)} ${t("pendientes", "pending")}`, "#d17b22"],
+    [t("Seguimientos cerrados", "Closed follow-ups"), summary.completed, `${pct(summary.completed, summary.completed + summary.active)} ${t("del total", "of total")}`, teal],
+    [t("Seguimientos abiertos", "Open follow-ups"), summary.active, `${pct(summary.active, summary.completed + summary.active)} ${t("del total", "of total")}`, "#d17b22"],
   ] as const;
   const cardWidth = 128;
   const cardsY = doc.y;
@@ -356,19 +376,19 @@ export async function generateCommercialResultsPdf(results: CommercialResults, c
   });
   doc.y = cardsY + 92;
   sectionTitle(t("Lectura ejecutiva", "Executive readout"), t("Indicadores derivados para una revisión rápida de la ejecución.", "Derived indicators for a fast execution review."));
-  const completion = pct(summary.completed, summary.totalContacts);
+  const completion = pct(summary.completed, summary.completed + summary.active);
   const prospectShare = pct(summary.prospectVisits, summary.totalContacts);
   doc.roundedRect(left, doc.y, contentWidth, 48, 6).fill("#f5f8fc");
   doc.fillColor(ink).font("Helvetica").fontSize(9)
-    .text(t(`Se registraron ${num(summary.totalContacts)} contactos: ${num(summary.customerVisits)} con clientes y ${num(summary.prospectVisits)} con prospectos (${prospectShare}). La tasa de cierre de contacto es ${completion}, con ${num(summary.active)} actividades aún activas.`,
-      `${num(summary.totalContacts)} contacts recorded: ${num(summary.customerVisits)} customers and ${num(summary.prospectVisits)} prospects (${prospectShare}). Contact completion is ${completion}, with ${num(summary.active)} active activities.`), left + 14, doc.y + 12, { width: contentWidth - 28, lineGap: 2 });
+    .text(t(`Se registraron ${num(summary.totalContacts)} contactos: ${num(summary.customerVisits)} con clientes y ${num(summary.prospectVisits)} con prospectos (${prospectShare}). La tasa de cierre de seguimientos es ${completion}; ${num(summary.active)} siguen abiertos.`,
+      `${num(summary.totalContacts)} contacts recorded: ${num(summary.customerVisits)} customers and ${num(summary.prospectVisits)} prospects (${prospectShare}). The follow-up close rate is ${completion}; ${num(summary.active)} remain open.`), left + 14, doc.y + 12, { width: contentWidth - 28, lineGap: 2 });
   doc.y += 70;
   const colGap = 24;
   const colWidth = (contentWidth - colGap) / 2;
   const startY = doc.y;
   doc.x = left;
   drawBars(t("Actividad por vendedor", "Activity by seller"), results.bySeller.map(row => ({
-    label: row.name, value: row.contacts, detail: `${num(row.contacts)}  ·  ${pct(row.completed, row.contacts)} ${t("fin.", "done")}`,
+    label: row.name, value: row.contacts, detail: `${num(row.contacts)}  ·  ${pct(row.completed, row.followUps)} ${t("cierre seg.", "closed")}`,
   })), colWidth, 5);
   const leftEnd = doc.y;
   doc.x = left + colWidth + colGap;
@@ -390,9 +410,10 @@ export async function generateCommercialResultsPdf(results: CommercialResults, c
   doc.y += 12;
   sectionTitle(t("Detalle por vendedor", "Seller detail"), t("Volumen, prospección y avance de terminación.", "Volume, prospecting and completion progress."));
   drawTable([
-    { label: t("Vendedor", "Seller"), width: 260 }, { label: t("Contactos", "Contacts"), width: 110, align: "right" },
-    { label: t("Prospectos", "Prospects"), width: 110, align: "right" }, { label: t("Terminadas", "Completed"), width: 110, align: "right" }, { label: t("% finalizado", "% completed"), width: 118, align: "right" },
-  ], results.bySeller.map(row => [safe(row.name), num(row.contacts), num(row.prospects), num(row.completed), pct(row.completed, row.contacts)]), { rowHeight: 25 });
+    { label: t("Vendedor", "Seller"), width: 225 }, { label: t("Contactos", "Contacts"), width: 90, align: "right" },
+    { label: t("Prospectos", "Prospects"), width: 90, align: "right" }, { label: t("Seguimientos", "Follow-ups"), width: 95, align: "right" },
+    { label: t("Cerrados", "Closed"), width: 95, align: "right" }, { label: t("% cierre", "Close rate"), width: 100, align: "right" },
+  ], results.bySeller.map(row => [safe(row.name), num(row.contacts), num(row.prospects), num(row.followUps), num(row.completed), pct(row.completed, row.followUps)]), { rowHeight: 25 });
 
   // Operational pages are deliberately tabular: they are useful in a meeting and remain readable when printed.
   doc.addPage();
@@ -429,12 +450,17 @@ export async function generateCommercialResultsPdf(results: CommercialResults, c
   }
   sectionTitle(t("Registro de actividad", "Activity register"), t("Detalle de contactos incluidos en este reporte.", "Detail of contacts included in this report."));
   const detailRows = results.items.map(row => [
-    dateTime(row.checkinAt), safe(row.customer.name), safe(row.seller.name), meetingTypeLabel(row.meetingType),
-    row.wasProspect ? t("Prospecto", "Prospect") : t("Cliente", "Customer"), row.checkoutAt ? t("Terminada", "Completed") : t("Activa", "Active"),
+    dateTime(row.checkinAt), safe(row.customer.name), safe(row.customer.contactName), safe(row.seller.name), meetingTypeLabel(row.meetingType),
+    row.wasProspect ? t("Prospecto", "Prospect") : t("Cliente", "Customer"),
+    row.followUpOutcome === "sale" ? t("Venta concretada", "Sale completed")
+      : row.followUpOutcome === "rental" ? t("Renta concretada", "Rental completed")
+        : row.followUpOutcome === "not_converted" ? t("No concretada", "Not converted")
+          : row.followUpStatus === "closed" ? t("Cerrada", "Closed") : t("Abierta", "Open"),
   ]);
   drawTable([
-    { label: t("Fecha y hora", "Date and time"), width: 105 }, { label: t("Cliente / prospecto", "Customer / prospect"), width: 197 }, { label: t("Vendedor", "Seller"), width: 145 },
-    { label: t("Tipo", "Type"), width: 95 }, { label: t("Segmento", "Segment"), width: 83 }, { label: t("Estado", "Status"), width: 83 },
+    { label: t("Fecha y hora", "Date and time"), width: 92 }, { label: t("Cliente / prospecto", "Customer / prospect"), width: 145 },
+    { label: t("Contacto", "Contact"), width: 95 }, { label: t("Vendedor", "Seller"), width: 115 },
+    { label: t("Tipo", "Type"), width: 75 }, { label: t("Segmento", "Segment"), width: 68 }, { label: t("Estado", "Status"), width: 90 },
   ], detailRows, { rowHeight: 22 });
   if (!detailRows.length) {
     doc.fillColor(slate).font("Helvetica-Oblique").fontSize(9).text(t("No hay contactos para mostrar.", "No contacts to display."));
@@ -469,8 +495,8 @@ export async function generateCommercialResultsExcel(results: CommercialResults,
     "Contactos totales": results.summary.totalContacts,
     "Contactos con prospectos": results.summary.prospectVisits,
     "Contactos con clientes": results.summary.customerVisits,
-    "Contactos terminados": results.summary.completed,
-    "Contactos activos": results.summary.active,
+    "Seguimientos cerrados": results.summary.completed,
+    "Seguimientos abiertos": results.summary.active,
     "Clientes y prospectos únicos": results.summary.uniqueCustomers,
   }).forEach(entry => summary.addRow(entry));
   summary.columns = [{ width: 34 }, { width: 18 }];
@@ -481,9 +507,11 @@ export async function generateCommercialResultsExcel(results: CommercialResults,
   daily.columns = [{ width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }];
 
   const sellers = workbook.addWorksheet("Por vendedor");
-  addHeader(sellers, ["Vendedor", "Contactos", "Prospectos", "Terminadas"]);
-  results.bySeller.forEach(row => sellers.addRow([row.name, row.contacts, row.prospects, row.completed]));
-  sellers.columns = [{ width: 34 }, { width: 14 }, { width: 14 }, { width: 14 }];
+  addHeader(sellers, ["Vendedor", "Contactos", "Prospectos", "Seguimientos", "Seguimientos cerrados", "Tasa de cierre"]);
+  results.bySeller.forEach(row => sellers.addRow([
+    row.name, row.contacts, row.prospects, row.followUps, row.completed, row.followUps ? row.completed / row.followUps : 0,
+  ]));
+  sellers.columns = [{ width: 34 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 24 }, { width: 18 }];
 
   const customers = workbook.addWorksheet("Por cliente y prospecto");
   addHeader(customers, ["Cliente o prospecto", "Contactos", "Contactos como prospecto", "Último contacto"]);
@@ -491,12 +519,17 @@ export async function generateCommercialResultsExcel(results: CommercialResults,
   customers.columns = [{ width: 40 }, { width: 14 }, { width: 24 }, { width: 22 }];
 
   const detail = workbook.addWorksheet("Detalle");
-  addHeader(detail, ["Fecha", "Cliente", "Vendedor", "Tipo", "Prospecto", "Estado"]);
+  addHeader(detail, ["Fecha", "Empresa", "Contacto", "Vendedor", "Tipo", "Prospecto", "Resultado del seguimiento", "Acuerdos y comentarios", "Notas internas", "Fotos"]);
   results.items.forEach(row => detail.addRow([
-    new Date(row.checkinAt), row.customer.name, row.seller.name, row.meetingType,
-    row.wasProspect ? "Sí" : "No", row.checkoutAt ? "Terminada" : "Activa",
+    new Date(row.checkinAt), row.customer.name, row.customer.contactName ?? "", row.seller.name, row.meetingType,
+    row.wasProspect ? "Sí" : "No",
+    row.followUpOutcome === "sale" ? "Venta concretada"
+      : row.followUpOutcome === "rental" ? "Renta concretada"
+        : row.followUpOutcome === "not_converted" ? "No concretada"
+          : row.followUpStatus === "closed" ? "Cerrada" : "Abierta",
+    row.agreements ?? "", row.internalNotes ?? "", row.photosCount ?? 0,
   ]));
-  detail.columns = [{ width: 22 }, { width: 38 }, { width: 30 }, { width: 18 }, { width: 14 }, { width: 14 }];
+  detail.columns = [{ width: 22 }, { width: 34 }, { width: 24 }, { width: 28 }, { width: 18 }, { width: 14 }, { width: 24 }, { width: 48 }, { width: 42 }, { width: 10 }];
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }

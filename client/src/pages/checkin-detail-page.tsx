@@ -1,7 +1,7 @@
 import { useParams, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { Checkin, Customer } from "@shared/schema";
+import { Checkin, CheckinUpdate, Customer, FollowUpOutcome, FollowUpStatus } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, Save, EyeOff, ExternalLink } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, EyeOff, ExternalLink, History, CheckCircle2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType, type MeetingTypeType } from "@shared/schema";
 import { Link } from "wouter";
@@ -74,6 +74,15 @@ interface CustomerSummary {
   }>;
 }
 
+type CheckinUpdateWithUser = CheckinUpdate & {
+  user?: { id: string; fullName: string | null; username: string } | null;
+};
+
+type CheckinWithHistory = Checkin & {
+  customer: Customer;
+  updates?: CheckinUpdateWithUser[];
+};
+
 function safeNumber(value: number | undefined | null): number {
   return Number.isFinite(value) ? (value as number) : 0;
 }
@@ -83,6 +92,10 @@ export default function CheckinDetailPage() {
   const { toast } = useToast();
   const { t } = useI18n();
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
+  const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
+  const [followUpOutcome, setFollowUpOutcome] = useState("");
+  const [followUpReason, setFollowUpReason] = useState("");
+  const [interactionType, setInteractionType] = useState<MeetingTypeType>(MeetingType.VISITA);
   const [checkoutNotes, setCheckoutNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [emailList, setEmailList] = useState<string[]>([]);
@@ -102,7 +115,7 @@ export default function CheckinDetailPage() {
     setEmailList(prev => prev.filter(e => e !== email));
   };
 
-  const { data: checkin, isLoading: checkinLoading } = useQuery<Checkin & { customer: Customer }>({
+  const { data: checkin, isLoading: checkinLoading } = useQuery<CheckinWithHistory>({
     queryKey: [`/api/checkins/${id}`],
     enabled: !!id,
   });
@@ -149,30 +162,16 @@ export default function CheckinDetailPage() {
     if (checkin) {
       setCheckoutNotes(checkin.checkoutNotes ?? "");
       setInternalNotes(checkin.internalNotes ?? "");
+      setInteractionType((checkin.meetingType || MeetingType.VISITA) as MeetingTypeType);
     }
   }, [checkin?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const saveNotesMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("PATCH", `/api/checkins/${id}`, {
-        checkoutNotes: checkoutNotes,
-        internalNotes: internalNotes,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
-      toast({ title: t("checkins.toast-notes-saved"), description: t("checkins.toast-notes-saved-desc") });
-    },
-    onError: (error: Error) => {
-      toast({ variant: "destructive", title: t("label.error"), description: error.message || t("label.error-save") });
-    },
-  });
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", `/api/checkins/${id}/checkout`, {
         checkoutNotes: checkoutNotes || undefined,
         internalNotes: internalNotes || undefined,
+        meetingType: interactionType,
         recipients: emailList,
       });
       return response.json() as Promise<{ email?: { status: "sent" | "partial" | "failed" | "skipped"; sent: string[]; failed: Array<{ email: string }> } }>;
@@ -180,20 +179,22 @@ export default function CheckinDetailPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins/activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/commercial-results"] });
       setCheckoutDialogOpen(false);
       setEmailList([]);
       setEmailInput("");
       toast({
         title: result.email?.status === "failed" || result.email?.status === "partial" || result.email?.status === "skipped"
-          ? "Visita cerrada con aviso de correo"
-          : t("checkins.toast-visit-finished"),
+          ? "Contacto guardado con aviso de correo"
+          : "Contacto agregado al historial",
         description: result.email?.status === "failed"
-          ? "La visita se guardó, pero no se pudo enviar ningún correo."
+          ? "El contacto se guardó, pero no se pudo enviar ningún correo."
           : result.email?.status === "partial"
-            ? "La visita se guardó, pero algunos correos no pudieron enviarse."
+            ? "El contacto se guardó, pero algunos correos no pudieron enviarse."
             : result.email?.status === "skipped"
-              ? "La visita se guardó, pero no había destinatarios para el correo."
-            : t("checkins.toast-visit-finished-desc"),
+              ? "El contacto se guardó, pero no había destinatarios para el correo."
+            : "El seguimiento continúa abierto.",
         variant: result.email?.status === "failed" || result.email?.status === "partial" ? "destructive" : "default",
       });
     },
@@ -203,6 +204,31 @@ export default function CheckinDetailPage() {
         title: t("label.error"),
         description: error.message || t("checkins.toast-finish-error"),
       });
+    },
+  });
+
+  const closeFollowUpMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/checkins/${id}/close-followup`, {
+        outcome: followUpOutcome,
+        reason: followUpReason.trim() || undefined,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/checkins/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins/activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/commercial-results"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/customers/${checkin?.customerId}/summary`] });
+      setFollowUpDialogOpen(false);
+      setFollowUpOutcome("");
+      setFollowUpReason("");
+      toast({ title: "Seguimiento cerrado", description: "El resultado quedó guardado y el historial se conservó." });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", title: t("label.error"), description: error.message || "No se pudo cerrar el seguimiento." });
     },
   });
 
@@ -244,6 +270,13 @@ export default function CheckinDetailPage() {
     },
   });
 
+  const openContactDialog = () => {
+    setCheckoutNotes("");
+    setInternalNotes("");
+    setInteractionType((checkin?.meetingType || MeetingType.VISITA) as MeetingTypeType);
+    setCheckoutDialogOpen(true);
+  };
+
   if (!id) {
     return <Redirect to="/checkins" />;
   }
@@ -273,6 +306,16 @@ export default function CheckinDetailPage() {
     );
   }
 
+  const followUpIsOpen = checkin.followUpStatus === FollowUpStatus.OPEN;
+  const recordedPhotoIds = new Set((checkin.updates ?? []).flatMap((update) => update.photos));
+  const outcomeLabel = checkin.followUpOutcome === FollowUpOutcome.SALE
+    ? "Venta concretada"
+    : checkin.followUpOutcome === FollowUpOutcome.RENTAL
+      ? "Renta concretada"
+      : checkin.followUpOutcome === FollowUpOutcome.NOT_CONVERTED
+        ? "No concretada"
+        : "Seguimiento cerrado";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -286,6 +329,9 @@ export default function CheckinDetailPage() {
           <p className="text-muted-foreground mt-1">
             {checkin.customer.name} - {format(new Date(checkin.checkinAt), "PPP", { locale: es })}
           </p>
+          {checkin.customer.contactName && (
+            <p className="mt-1 text-sm text-muted-foreground">Contacto: {checkin.customer.contactName}</p>
+          )}
         </div>
         <div className="flex gap-2">
           {checkin.minutePdfPath && (
@@ -300,14 +346,28 @@ export default function CheckinDetailPage() {
               </a>
             </Button>
           )}
-          {!checkin.checkoutAt && (
-            <Button 
+          {followUpIsOpen && (
+            <>
+              <Button
+                variant="outline"
+                data-testid="button-add-followup-update"
+                onClick={openContactDialog}
+              >
+                <History className="h-4 w-4 mr-2" />
+                Registrar contacto
+              </Button>
+              <Button
               data-testid="button-checkout"
-              onClick={() => setCheckoutDialogOpen(true)}
+              onClick={() => {
+                setFollowUpOutcome("");
+                setFollowUpReason("");
+                setFollowUpDialogOpen(true);
+              }}
             >
-              <FileText className="h-4 w-4 mr-2" />
-              {t("checkins.finish-visit")}
-            </Button>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Cerrar seguimiento
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -324,13 +384,13 @@ export default function CheckinDetailPage() {
             <div>
               <div className="text-sm font-medium text-muted-foreground">{t("label.status")}</div>
               <div className="mt-1">
-                {checkin.checkoutAt ? (
+                {!followUpIsOpen ? (
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
-                    {t("status.done")}
+                    {outcomeLabel}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                    {t("status.ongoing")}
+                    Seguimiento abierto
                   </Badge>
                 )}
               </div>
@@ -339,7 +399,7 @@ export default function CheckinDetailPage() {
             <div>
               <div className="text-sm font-medium text-muted-foreground">{t("checkins.meeting-type")}</div>
               <div className="mt-1">
-                {!checkin.checkoutAt ? (
+                {followUpIsOpen ? (
                   <Select
                     value={checkin.meetingType || MeetingType.VISITA}
                     onValueChange={(value) => updateMeetingTypeMutation.mutate(value as MeetingTypeType)}
@@ -390,12 +450,18 @@ export default function CheckinDetailPage() {
               </div>
             </div>
 
-            {checkin.checkoutAt && (
+            {!followUpIsOpen && checkin.followUpClosedAt && (
               <div>
-                <div className="text-sm font-medium text-muted-foreground">{t("checkins.checkout-label")}</div>
+                <div className="text-sm font-medium text-muted-foreground">Seguimiento cerrado</div>
                 <div className="mt-1 text-sm">
-                  {format(new Date(checkin.checkoutAt), "PPP 'a las' p", { locale: es })}
+                  {format(new Date(checkin.followUpClosedAt), "PPP 'a las' p", { locale: es })}
                 </div>
+              </div>
+            )}
+            {!followUpIsOpen && checkin.followUpReason && (
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Motivo</div>
+                <div className="mt-1 text-sm whitespace-pre-wrap">{checkin.followUpReason}</div>
               </div>
             )}
 
@@ -647,101 +713,82 @@ export default function CheckinDetailPage() {
         </Card>
       )}
 
-      {/* ── Acuerdos y Comentarios ── */}
+      {/* ── Historial de seguimiento ── */}
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 flex-wrap">
+        <CardHeader>
           <div>
             <CardTitle className="flex items-center gap-2">
-              <NotebookPen className="h-5 w-5 text-blue-600" />
-              {t("checkins.agreements")}
+              <History className="h-5 w-5 text-blue-600" />
+              Historial de seguimiento
             </CardTitle>
-            <CardDescription className="mt-1">
-              {checkin.checkoutAt
-                ? t("checkins.notes-registered")
-                : t("checkins.add-agreements")}
-            </CardDescription>
+            <CardDescription className="mt-1">Cada contacto queda guardado por separado; el seguimiento solo se cierra con un resultado.</CardDescription>
           </div>
-          {!checkin.checkoutAt && (
-            <Button
-              data-testid="button-save-notes"
-              onClick={() => saveNotesMutation.mutate()}
-              disabled={saveNotesMutation.isPending}
-              size="default"
-            >
-              {saveNotesMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Guardar notas
-            </Button>
-          )}
         </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Acuerdos para el cliente */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5 text-sm font-semibold">
-              <FileText className="h-3.5 w-3.5 text-blue-600" />
-              {t("checkins.agreements")}
-              <span className="text-xs font-normal text-muted-foreground ml-1">{t("checkins.go-in-minute")}</span>
-            </Label>
-            {checkin.checkoutAt ? (
-              checkin.checkoutNotes ? (
-                <div className="text-sm rounded-md bg-muted/50 px-3 py-3 whitespace-pre-wrap leading-relaxed">
-                  {checkin.checkoutNotes}
+        <CardContent className="space-y-4">
+          {checkin.notes && (
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium">Registro inicial</p>
+                <p className="text-xs text-muted-foreground">{format(new Date(checkin.checkinAt), "PPP 'a las' p", { locale: es })}</p>
+              </div>
+              <p className="whitespace-pre-wrap text-sm">{checkin.notes}</p>
+            </div>
+          )}
+          {(checkin.updates ?? []).map((update) => (
+            <div key={update.id} className="rounded-lg border p-4" data-testid={`card-followup-update-${update.id}`}>
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">
+                    {update.meetingType === MeetingType.LLAMADA ? t("checkins.type.call")
+                      : update.meetingType === MeetingType.VIDEOLLAMADA ? t("checkins.type.video")
+                        : t("checkins.type.visit")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(update.createdAt), "PPP 'a las' p", { locale: es })}
+                    {update.user ? ` · ${update.user.fullName || update.user.username}` : ""}
+                  </p>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">Sin acuerdos registrados.</p>
-              )
-            ) : (
-              <>
-                <Textarea
-                  data-testid="textarea-notes-agreements"
-                  placeholder={t("checkins.agreements-ph")}
-                  value={checkoutNotes}
-                  onChange={(e) => setCheckoutNotes(e.target.value)}
-                  className="min-h-[110px] text-sm"
-                />
-                <p className="text-xs font-medium text-destructive">
-                  {t("checkins.agreements-hint")}
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* Notas internas */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5 text-sm font-semibold">
-              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-              {t("checkins.internal-notes")}
-              <span className="text-xs font-normal text-muted-foreground ml-1">{t("checkins.internal-not-sent")}</span>
-            </Label>
-            {checkin.checkoutAt ? (
-              checkin.internalNotes ? (
-                <div className="text-sm rounded-md bg-muted/30 border border-dashed px-3 py-3 whitespace-pre-wrap leading-relaxed text-muted-foreground">
-                  <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-2">
-                    <Lock className="h-3 w-3" /> Solo visible internamente
-                  </div>
-                  {checkin.internalNotes}
+                {update.minutePdfPath && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/api/checkins/${id}/updates/${update.id}/pdf`} download>
+                      <Download className="mr-2 h-4 w-4" /> Minuta PDF
+                    </a>
+                  </Button>
+                )}
+              </div>
+              {update.agreements && (
+                <div className="mb-3">
+                  <p className="mb-1 flex items-center gap-1.5 text-sm font-medium"><NotebookPen className="h-4 w-4 text-blue-600" />Acuerdos y comentarios</p>
+                  <p className="whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm">{update.agreements}</p>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">{t("checkins.no-internal-notes")}</p>
-              )
-            ) : (
-              <>
-                <Textarea
-                  data-testid="textarea-notes-internal"
-                  placeholder={t("checkins.internal-ph")}
-                  value={internalNotes}
-                  onChange={(e) => setInternalNotes(e.target.value)}
-                  className="min-h-[80px] text-sm border-dashed"
-                />
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Lock className="h-3 w-3" /> {t("checkins.private-notes-hint")}
-                </p>
-              </>
-            )}
-          </div>
+              )}
+              {update.internalNotes && (
+                <div className="mb-3">
+                  <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><EyeOff className="h-4 w-4" />Notas internas</p>
+                  <p className="whitespace-pre-wrap rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">{update.internalNotes}</p>
+                </div>
+              )}
+              {update.photos.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {update.photos.map((photoId, index) => (
+                    <a key={photoId} href={`/objects/${photoId}`} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-md bg-muted">
+                      <img src={`/objects/${photoId}`} alt={`Foto del contacto ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {!checkin.updates?.length && (checkin.checkoutNotes || checkin.internalNotes) && (
+            <div className="rounded-lg border p-4">
+              <p className="mb-2 text-sm font-medium">Notas de la visita registrada</p>
+              {checkin.checkoutNotes && <p className="mb-3 whitespace-pre-wrap text-sm">{checkin.checkoutNotes}</p>}
+              {checkin.internalNotes && <p className="whitespace-pre-wrap border-t border-dashed pt-3 text-sm text-muted-foreground"><Lock className="mr-1 inline h-3 w-3" />{checkin.internalNotes}</p>}
+            </div>
+          )}
+          {!checkin.notes && !checkin.updates?.length && !checkin.checkoutNotes && !checkin.internalNotes && (
+            <p className="py-6 text-center text-sm text-muted-foreground">Aún no hay contactos ni notas en el historial.</p>
+          )}
         </CardContent>
       </Card>
 
@@ -749,7 +796,7 @@ export default function CheckinDetailPage() {
         <CardHeader>
           <CardTitle>{t("checkins.photos-title")}</CardTitle>
           <CardDescription>
-            {checkin.photos?.length || 0} {t("checkins.photos-count-suffix")}
+            {checkin.photos?.length || 0} {t("checkins.photos-count-suffix")} · las fotos registradas quedan ligadas al contacto de su historial
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -772,29 +819,34 @@ export default function CheckinDetailPage() {
                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center">
                       Foto {index + 1}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(t("checkins.delete-photo-confirm"))) {
-                          deletePhotoMutation.mutate(photoEntityId);
-                        }
-                      }}
-                      disabled={deletePhotoMutation.isPending}
-                      data-testid={`button-delete-photo-${index}`}
-                      className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-600 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
-                      aria-label="Eliminar foto"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {recordedPhotoIds.has(photoEntityId) ? (
+                      <div className="absolute right-1.5 top-1.5 rounded bg-black/60 px-2 py-1 text-[10px] text-white">En historial</div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(t("checkins.delete-photo-confirm"))) {
+                            deletePhotoMutation.mutate(photoEntityId);
+                          }
+                        }}
+                        disabled={deletePhotoMutation.isPending}
+                        data-testid={`button-delete-photo-${index}`}
+                        className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-600 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                        aria-label="Eliminar foto"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {!checkin.checkoutAt && (
+          {followUpIsOpen && (
             <div>
-              <h3 className="text-sm font-medium mb-3">{t("checkins.add-photos")}</h3>
+              <h3 className="mb-1 text-sm font-medium">{t("checkins.add-photos")}</h3>
+              <p className="mb-3 text-xs text-muted-foreground">Las fotos nuevas se incorporarán al historial al guardar el siguiente contacto.</p>
               <CheckinPhotoUploader
                 checkinId={checkin.id}
                 currentPhotoCount={checkin.photos?.length || 0}
@@ -802,7 +854,7 @@ export default function CheckinDetailPage() {
             </div>
           )}
 
-          {checkin.checkoutAt && (checkin.photos?.length || 0) === 0 && (
+          {!followUpIsOpen && (checkin.photos?.length || 0) === 0 && (
             <div className="text-center py-8 text-muted-foreground flex flex-col items-center gap-2">
               <ImageIcon className="w-12 h-12 opacity-20" />
               <p>No se capturaron fotos durante esta visita</p>
@@ -814,9 +866,9 @@ export default function CheckinDetailPage() {
       <Dialog open={checkoutDialogOpen} onOpenChange={(open) => { setCheckoutDialogOpen(open); if (!open) { setEmailList([]); setEmailInput(""); } }}>
         <DialogContent data-testid="dialog-checkout" className="max-w-lg max-h-[90dvh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>{t("checkins.finish-visit")}</DialogTitle>
+            <DialogTitle>Registrar contacto</DialogTitle>
             <DialogDescription>
-              {t("checkins.pdf-will-generate")}
+              Guarda esta interacción en el historial. El seguimiento seguirá abierto; aquí también puedes generar y enviar la minuta.
             </DialogDescription>
           </DialogHeader>
 
@@ -824,6 +876,20 @@ export default function CheckinDetailPage() {
             {/* Leyenda de advertencia */}
             <div className="bg-red-600 text-white p-3 rounded-md text-sm font-medium">
               {t("checkins.pdf-sent-to")}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="interaction-type">Tipo de contacto</Label>
+              <Select value={interactionType} onValueChange={(value) => setInteractionType(value as MeetingTypeType)}>
+                <SelectTrigger id="interaction-type" data-testid="select-followup-contact-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={MeetingType.VISITA}>{t("checkins.type.visit")}</SelectItem>
+                  <SelectItem value={MeetingType.LLAMADA}>{t("checkins.type.call")}</SelectItem>
+                  <SelectItem value={MeetingType.VIDEOLLAMADA}>{t("checkins.type.video")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Destinatarios de la minuta */}
@@ -949,9 +1015,63 @@ export default function CheckinDetailPage() {
               ) : (
                 <>
                   <FileText className="mr-2 h-4 w-4" />
-                  Finalizar y Generar PDF
+                  Guardar contacto y generar PDF
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={followUpDialogOpen} onOpenChange={setFollowUpDialogOpen}>
+        <DialogContent data-testid="dialog-close-followup" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cerrar seguimiento</DialogTitle>
+            <DialogDescription>¿Cómo terminó esta oportunidad? El historial de contactos se conservará.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="followup-outcome">Resultado</Label>
+              <Select value={followUpOutcome} onValueChange={setFollowUpOutcome}>
+                <SelectTrigger id="followup-outcome" data-testid="select-followup-outcome">
+                  <SelectValue placeholder="Selecciona el resultado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FollowUpOutcome.SALE}>Venta concretada</SelectItem>
+                  <SelectItem value={FollowUpOutcome.RENTAL}>Renta concretada</SelectItem>
+                  <SelectItem value={FollowUpOutcome.NOT_CONVERTED}>No concretada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {followUpOutcome === FollowUpOutcome.NOT_CONVERTED && (
+              <div className="space-y-2">
+                <Label htmlFor="followup-reason">Motivo por el que no se concretó *</Label>
+                <Textarea
+                  id="followup-reason"
+                  value={followUpReason}
+                  onChange={(event) => setFollowUpReason(event.target.value)}
+                  placeholder="Describe brevemente el motivo"
+                  className="min-h-[90px]"
+                  data-testid="textarea-followup-reason"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFollowUpDialogOpen(false)} disabled={closeFollowUpMutation.isPending}>
+              {t("btn.cancel")}
+            </Button>
+            <Button
+              onClick={() => closeFollowUpMutation.mutate()}
+              disabled={
+                closeFollowUpMutation.isPending
+                || !followUpOutcome
+                || (followUpOutcome === FollowUpOutcome.NOT_CONVERTED && !followUpReason.trim())
+              }
+              data-testid="button-confirm-close-followup"
+            >
+              {closeFollowUpMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Confirmar cierre
             </Button>
           </DialogFooter>
         </DialogContent>

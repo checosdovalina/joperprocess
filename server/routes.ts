@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { randomUUID } from "node:crypto";
 import { storage, createTenantScopedStorage } from "./storage";
 import { setupAuth, isAuthenticated, hasRole } from "./auth";
 import { db } from "./db";
@@ -116,7 +117,7 @@ import {
   insertIncidentCommentSchema,
   insertIncidentAttachmentSchema,
 } from "@shared/schema";
-import { customers, quotations, quotationItems, checkins, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, checkinUpdates, FollowUpStatus, FollowUpOutcome, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
 import { allocateManualTaxToLines, calculateQuotationTotals, ManualTaxRateValidationError, validateManualTaxRate } from "@shared/quotation-calculations";
 import { logSystemActivity } from "./system-log";
@@ -1955,18 +1956,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (toDate.getTime() - fromDate.getTime() > 366 * 24 * 60 * 60 * 1000) {
       throw new Error("RANGE_TOO_LARGE");
     }
-    const conditions = [];
-    if (tenantId) conditions.push(eq(checkins.tenantId, tenantId));
-    conditions.push(gte(checkins.checkinAt, fromDate));
-    conditions.push(lt(checkins.checkinAt, toDate));
-    if (parsed.customerId) conditions.push(eq(checkins.customerId, parsed.customerId));
-    if (parsed.meetingType) conditions.push(eq(checkins.meetingType, parsed.meetingType));
-    if (parsed.audience === "prospects") conditions.push(eq(checkins.wasProspect, true));
-    if (parsed.audience === "customers") conditions.push(eq(checkins.wasProspect, false));
+    const parentConditions = [];
+    if (tenantId) parentConditions.push(eq(checkins.tenantId, tenantId));
+    if (parsed.customerId) parentConditions.push(eq(checkins.customerId, parsed.customerId));
+    if (parsed.audience === "prospects") parentConditions.push(eq(checkins.wasProspect, true));
+    if (parsed.audience === "customers") parentConditions.push(eq(checkins.wasProspect, false));
 
     if (req.user!.role === UserRole.VENDEDOR) {
       if (parsed.sellerId && parsed.sellerId !== req.user!.id) throw new Error("SELLER_FORBIDDEN");
-      conditions.push(or(
+      parentConditions.push(or(
         eq(checkins.salesPersonId, req.user!.id),
         and(isNull(checkins.salesPersonId), eq(checkins.userId, req.user!.id)),
       )!);
@@ -1978,35 +1976,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
         : await db.query.users.findFirst({ where: and(eq(users.id, parsed.sellerId), eq(users.active, true)), columns: { id: true } });
       if (!seller) throw new Error("INVALID_SELLER");
-      conditions.push(or(
+      parentConditions.push(or(
         eq(checkins.salesPersonId, parsed.sellerId),
         and(isNull(checkins.salesPersonId), eq(checkins.userId, parsed.sellerId)),
       )!);
     }
 
+    const initialConditions = [
+      ...parentConditions,
+      gte(checkins.checkinAt, fromDate),
+      lt(checkins.checkinAt, toDate),
+    ];
+    if (parsed.meetingType) initialConditions.push(eq(checkins.meetingType, parsed.meetingType));
     const rows = await db.query.checkins.findMany({
-      where: conditions.length ? and(...conditions) : undefined,
+      where: and(...initialConditions),
       orderBy: [desc(checkins.checkinAt)],
       limit: 20_001,
       with: {
-        customer: { columns: { id: true, name: true } },
+        customer: { columns: { id: true, name: true, contactName: true } },
         user: { columns: { id: true, fullName: true, username: true } },
         salesPerson: { columns: { id: true, fullName: true, username: true } },
       },
     });
     if (rows.length > 20_000) throw new Error("TOO_MANY_RESULTS");
-    const items = rows.map(row => ({
+
+    const updateConditions = [
+      gte(checkinUpdates.createdAt, fromDate),
+      lt(checkinUpdates.createdAt, toDate),
+    ];
+    if (tenantId) updateConditions.push(eq(checkinUpdates.tenantId, tenantId));
+    const updateRows = await db.query.checkinUpdates.findMany({
+      where: and(...updateConditions),
+      orderBy: [desc(checkinUpdates.createdAt)],
+      limit: 20_001,
+      with: {
+        checkin: {
+          with: {
+            customer: { columns: { id: true, name: true, contactName: true } },
+            user: { columns: { id: true, fullName: true, username: true } },
+            salesPerson: { columns: { id: true, fullName: true, username: true } },
+          },
+        },
+      },
+    });
+    const visibleUpdates = updateRows.filter((update) => {
+      const parent = update.checkin;
+      if (!parent) return false;
+      const assignedSellerId = parent.salesPersonId ?? parent.userId;
+      if (parsed.customerId && parent.customerId !== parsed.customerId) return false;
+      if (parsed.meetingType && update.meetingType !== parsed.meetingType) return false;
+      if (parsed.audience === "prospects" && !parent.wasProspect) return false;
+      if (parsed.audience === "customers" && parent.wasProspect) return false;
+      if (req.user!.role === UserRole.VENDEDOR && assignedSellerId !== req.user!.id) return false;
+      if (parsed.sellerId && assignedSellerId !== parsed.sellerId) return false;
+      return true;
+    });
+    if (rows.length + visibleUpdates.length > 20_000) throw new Error("TOO_MANY_RESULTS");
+
+    const items = [
+      ...rows.map(row => ({
       id: row.id,
+      followUpId: row.id,
+      followUpStatus: row.followUpStatus,
+      followUpOutcome: row.followUpOutcome,
       checkinAt: row.checkinAt,
-      checkoutAt: row.checkoutAt,
+      checkoutAt: row.followUpClosedAt ?? row.checkoutAt,
       meetingType: row.meetingType,
       wasProspect: row.wasProspect,
+      agreements: row.checkoutNotes ?? row.notes,
+      internalNotes: row.internalNotes,
+      photosCount: 0,
       customer: row.customer,
       seller: {
         id: row.salesPerson?.id ?? row.user.id,
         name: row.salesPerson?.fullName || row.salesPerson?.username || row.user.fullName || row.user.username,
       },
-    }));
+      })),
+      ...visibleUpdates.map(update => {
+        const parent = update.checkin!;
+        const creator = parent.salesPerson ?? parent.user;
+        return {
+          id: update.id,
+          followUpId: parent.id,
+          followUpStatus: parent.followUpStatus,
+          followUpOutcome: parent.followUpOutcome,
+          checkinAt: update.createdAt,
+          checkoutAt: parent.followUpClosedAt ?? parent.checkoutAt,
+          meetingType: update.meetingType,
+          wasProspect: parent.wasProspect,
+          agreements: update.agreements,
+          internalNotes: update.internalNotes,
+          photosCount: update.photos.length,
+          customer: parent.customer,
+          seller: {
+            id: parent.salesPerson?.id ?? parent.user.id,
+            name: parent.salesPerson?.fullName || parent.salesPerson?.username || parent.user.fullName || parent.user.username,
+          },
+        };
+      }),
+    ].sort((a, b) => new Date(b.checkinAt).getTime() - new Date(a.checkinAt).getTime());
     const { summarizeCommercialActivity } = await import("./commercial-results");
     return { results: summarizeCommercialActivity(items, parsed.timezoneOffsetMinutes), parsed, tenantId };
   }
@@ -2136,7 +2204,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Check-in not found" });
       }
 
-      res.json(checkin);
+      const updates = await db.query.checkinUpdates.findMany({
+        where: eq(checkinUpdates.checkinId, id),
+        orderBy: [desc(checkinUpdates.createdAt)],
+        with: {
+          user: { columns: { id: true, fullName: true, username: true } },
+        },
+      });
+      res.json({ ...checkin, updates });
     } catch (error) {
       console.error("Error fetching check-in:", error);
       res.status(500).json({ error: "Error fetching check-in" });
@@ -2152,6 +2227,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId: req.user!.id,
         salesPersonId: req.body.salesPersonId || req.user!.id,
+        checkoutAt: null,
+        followUpStatus: FollowUpStatus.OPEN,
+        followUpOutcome: null,
+        followUpClosedAt: null,
+        followUpClosedById: null,
+        followUpReason: null,
         latitude:  req.body.latitude  === "" ? undefined : req.body.latitude,
         longitude: req.body.longitude === "" ? undefined : req.body.longitude,
         locationAccuracyMeters: req.body.locationAccuracyMeters === "" ? undefined : req.body.locationAccuracyMeters,
@@ -2202,8 +2283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const inputSchema = z.object({
         prospect: z.object({
           name: z.string().trim().min(1, "El nombre es obligatorio"),
-          address: z.string().trim().optional(),
-          phone: z.string().trim().optional(),
+          contactName: z.string().trim().min(1, "El nombre del contacto es obligatorio"),
         }),
         checkin: insertCheckinSchema.omit({ customerId: true, wasProspect: true, customerLocationId: true }),
       });
@@ -2217,8 +2297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const [prospect] = await tx.insert(customers).values({
           tenantId,
           name: input.prospect.name,
-          address: input.prospect.address || null,
-          phone: input.prospect.phone || null,
+          contactName: input.prospect.contactName,
           isProspect: true,
         }).returning({ id: customers.id });
         const [created] = await tx.insert(checkins).values({
@@ -2228,6 +2307,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customerId: prospect.id,
           salesPersonId: seller.id,
           wasProspect: true,
+          checkoutAt: null,
+          followUpStatus: FollowUpStatus.OPEN,
+          followUpOutcome: null,
+          followUpClosedAt: null,
+          followUpClosedById: null,
+          followUpReason: null,
           latitude: input.checkin.latitude === "" ? null : input.checkin.latitude,
           longitude: input.checkin.longitude === "" ? null : input.checkin.longitude,
           locationCapturedAt: input.checkin.latitude != null && input.checkin.longitude != null ? new Date() : null,
@@ -7735,6 +7820,9 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!canAccessAssignedRecord(req, checkin)) {
         return res.status(403).json({ error: "Not authorized" });
       }
+      if (checkin.followUpStatus !== FollowUpStatus.OPEN) {
+        return res.status(409).json({ error: "No se pueden agregar fotos a un seguimiento cerrado." });
+      }
 
       // For local storage, return a special response indicating direct upload
       if (useLocalStorage()) {
@@ -7885,6 +7973,9 @@ Proporciona tu análisis en el siguiente formato JSON:
           ) {
             throw new Error("CHECKIN_NOT_FOUND");
           }
+          if (locked.followUpStatus !== FollowUpStatus.OPEN) {
+            throw new Error("FOLLOWUP_CLOSED");
+          }
 
           if (!canAccessAssignedRecord(req, locked)) {
             throw new Error("NOT_AUTHORIZED");
@@ -7915,6 +8006,9 @@ Proporciona tu análisis en el siguiente formato JSON:
         }
         if (txError.message === "NOT_AUTHORIZED") {
           return res.status(403).json({ error: "Not authorized" });
+        }
+        if (txError.message === "FOLLOWUP_CLOSED") {
+          return res.status(409).json({ error: "No se pueden agregar fotos a un seguimiento cerrado." });
         }
         if (txError.message === "DUPLICATE_PHOTO") {
           return res.status(409).json({ error: "Photo already attached to this check-in" });
@@ -8243,6 +8337,13 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!currentPhotos.includes(entityId)) {
         return res.status(404).json({ error: "Photo not found in this check-in" });
       }
+      const recordedUpdates = await db.query.checkinUpdates.findMany({
+        where: eq(checkinUpdates.checkinId, checkinId),
+        columns: { photos: true },
+      });
+      if (recordedUpdates.some((update) => update.photos.includes(entityId))) {
+        return res.status(409).json({ error: "Esta foto ya forma parte del historial y no se puede eliminar." });
+      }
 
       // Remove from DB first
       const updatedPhotos = currentPhotos.filter((p) => p !== entityId);
@@ -8321,15 +8422,17 @@ Proporciona tu análisis en el siguiente formato JSON:
     const userId = req.user!.id;
 
     try {
-      // Parse optional checkoutNotes, internalNotes, and recipients from body
+      // Store this contact as a history entry. The commercial follow-up remains open.
       // `recipients` is the full list of emails to send to (overrides auto-detection when provided)
       const schema = z.object({
         checkoutNotes: z.string().optional(),
         internalNotes: z.string().optional(),
+        meetingType: z.enum([MeetingType.LLAMADA, MeetingType.VISITA, MeetingType.VIDEOLLAMADA]).optional(),
         recipients: z.array(z.string()).optional(),
       });
       const parsed = schema.parse(req.body);
       const { checkoutNotes, internalNotes } = parsed;
+      const meetingType = parsed.meetingType ?? MeetingType.VISITA;
       // Sanitize recipients: split any multi-email strings and keep only valid ones
       const overrideRecipients = parsed.recipients
         ? parsed.recipients.flatMap((r) => parseEmailList(r)).filter((e, i, arr) => arr.indexOf(e) === i)
@@ -8351,9 +8454,18 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(403).json({ error: "Not authorized to checkout this check-in" });
       }
 
-      if (checkin.checkoutAt) {
-        return res.status(400).json({ error: "Check-in already checked out" });
+      if (checkin.followUpStatus !== FollowUpStatus.OPEN) {
+        return res.status(400).json({ error: "El seguimiento ya está cerrado" });
       }
+
+      const previousUpdates = await db.query.checkinUpdates.findMany({
+        where: eq(checkinUpdates.checkinId, checkinId),
+        columns: { photos: true },
+      });
+      const previouslyRecordedPhotos = new Set(previousUpdates.flatMap((update) => update.photos));
+      const photosForUpdate = (checkin.photos ?? []).filter((photoId) => !previouslyRecordedPhotos.has(photoId));
+      const updateId = randomUUID();
+      const updateAt = new Date();
 
       const customer = checkin.customerId ? await scopedStorage.getCustomer(checkin.customerId) : null;
       if (checkin.customerId && !customer) {
@@ -8381,8 +8493,15 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       console.log(`Generating and uploading PDF for check-in ${checkinId}...`);
       const { generateMinutePDFStream } = await import("./pdf-generator");
+      const updateForPdf = {
+        ...checkin,
+        checkinAt: updateAt,
+        checkoutAt: updateAt,
+        meetingType,
+        photos: photosForUpdate,
+      };
       const pdfStream = await generateMinutePDFStream({ 
-        checkin, 
+        checkin: updateForPdf,
         customer: effectiveCustomer, 
         user: seller,
         checkoutNotes,
@@ -8394,25 +8513,35 @@ Proporciona tu análisis en el siguiente formato JSON:
         console.log("Using local storage for PDF...");
         pdfPath = await localStorageService.uploadPdfStreamToStorage(
           pdfStream,
-          checkinId,
+          updateId,
           userId
         );
       } else {
         const objectStorageService = new ObjectStorageService();
         pdfPath = await objectStorageService.uploadPdfStreamToStorage(
           pdfStream,
-          checkinId,
+          updateId,
           userId
         );
       }
 
-      console.log(`Updating check-in with checkout time and PDF path...`);
-      const updatedCheckin = await scopedStorage.updateCheckin(checkinId, {
-        checkoutAt: new Date(),
-        checkoutNotes,
-        internalNotes,
+      const [createdUpdate] = await db.insert(checkinUpdates).values({
+        id: updateId,
+        tenantId: checkin.tenantId,
+        checkinId,
+        userId,
+        meetingType,
+        agreements: checkoutNotes ?? null,
+        internalNotes: internalNotes ?? null,
+        photos: photosForUpdate,
         minutePdfPath: pdfPath,
-      });
+        createdAt: updateAt,
+      }).returning();
+      await db.update(checkins).set({
+        minutePdfPath: pdfPath,
+      }).where(eq(checkins.id, checkinId));
+
+      console.log(`Saved contact update ${updateId} for check-in ${checkinId}.`);
 
       let emailDelivery: Awaited<ReturnType<typeof sendCheckoutEmail>> = {
         status: "skipped",
@@ -8446,7 +8575,7 @@ Proporciona tu análisis en el siguiente formato JSON:
           emailDelivery = await sendCheckoutEmail({
             to: recipients,
             checkinData: {
-              customerName: customer!.name,
+              customerName: effectiveCustomer.name,
               vendedorName: seller.fullName,
               checkoutDate: format(new Date(), "PPP 'a las' p", { locale: es }),
               notes: checkoutNotes,
@@ -8468,13 +8597,110 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       res.status(200).json({
-        checkin: updatedCheckin,
+        update: createdUpdate,
         pdfPath: pdfPath,
         email: emailDelivery,
       });
     } catch (error) {
       console.error(`Error during checkout for check-in ${checkinId}:`, error);
       res.status(500).json({ error: "Error processing checkout" });
+    }
+  });
+
+  app.post("/api/checkins/:id/close-followup", isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    const user = req.user!;
+    const schema = z.object({
+      outcome: z.enum([FollowUpOutcome.SALE, FollowUpOutcome.RENTAL, FollowUpOutcome.NOT_CONVERTED]),
+      reason: z.string().trim().max(2000).optional(),
+    }).superRefine((value, context) => {
+      if (value.outcome === FollowUpOutcome.NOT_CONVERTED && !value.reason) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "Indica el motivo por el que no se concretó." });
+      }
+    });
+
+    try {
+      const parsed = schema.parse(req.body);
+      const checkin = await db.query.checkins.findFirst({ where: eq(checkins.id, id) });
+      if (!assertTenantScope(req, res, checkin, { notFoundMessage: "Seguimiento no encontrado" })) return;
+      if (!canAccessAssignedRecord(req, checkin) && user.role !== UserRole.ADMIN && user.role !== UserRole.VENTAS_LOGISTICA) {
+        return res.status(403).json({ error: "No tienes permiso para cerrar este seguimiento." });
+      }
+
+      const closedAt = new Date();
+      const updated = await db.transaction(async (tx) => {
+        const [locked] = await tx.select().from(checkins).where(eq(checkins.id, id)).for("update");
+        const effectiveTenantId = getEffectiveTenantId(req);
+        if (!locked || (effectiveTenantId && locked.tenantId !== effectiveTenantId) || (!effectiveTenantId && !user.isSuperAdmin)) return null;
+        if (locked.followUpStatus !== FollowUpStatus.OPEN) throw new Error("FOLLOWUP_ALREADY_CLOSED");
+
+        if (parsed.outcome !== FollowUpOutcome.NOT_CONVERTED) {
+          await tx.update(customers)
+            .set({ isProspect: false })
+            .where(and(eq(customers.id, locked.customerId), eq(customers.tenantId, locked.tenantId)));
+        }
+
+        const [result] = await tx.update(checkins)
+          .set({
+            followUpStatus: FollowUpStatus.CLOSED,
+            followUpOutcome: parsed.outcome,
+            followUpClosedAt: closedAt,
+            followUpClosedById: user.id,
+            followUpReason: parsed.reason || null,
+            checkoutAt: locked.checkoutAt ?? closedAt,
+          })
+          .where(and(eq(checkins.id, id), eq(checkins.followUpStatus, FollowUpStatus.OPEN)))
+          .returning();
+        return result ?? null;
+      });
+
+      if (!updated) return res.status(404).json({ error: "Seguimiento no encontrado." });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof Error && error.message === "FOLLOWUP_ALREADY_CLOSED") {
+        return res.status(409).json({ error: "El seguimiento ya está cerrado." });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.issues[0]?.message ?? "Datos inválidos." });
+      }
+      console.error("Error closing check-in follow-up:", error);
+      res.status(500).json({ error: "No se pudo cerrar el seguimiento." });
+    }
+  });
+
+  app.get("/api/checkins/:id/updates/:updateId/pdf", isAuthenticated, async (req, res) => {
+    const { id, updateId } = req.params;
+    try {
+      const scopedStorage = createTenantScopedStorage(req);
+      const checkin = await scopedStorage.getCheckin(id);
+      if (!checkin) return res.status(404).json({ error: "Check-in not found" });
+      if (!canAccessAssignedRecord(req, checkin)) return res.status(403).json({ error: "Not authorized" });
+
+      const update = await db.query.checkinUpdates.findFirst({
+        where: and(
+          eq(checkinUpdates.id, updateId),
+          eq(checkinUpdates.checkinId, id),
+          eq(checkinUpdates.tenantId, checkin.tenantId),
+        ),
+      });
+      if (!update?.minutePdfPath) return res.status(404).json({ error: "PDF not found" });
+      if (update.minutePdfPath.includes("..")) return res.status(400).json({ error: "Invalid PDF path" });
+
+      if (useLocalStorage()) {
+        const success = await localStorageService.streamFile(update.minutePdfPath, res);
+        if (!success) return res.status(404).json({ error: "PDF file not found" });
+      } else {
+        const objectStorageService = new ObjectStorageService();
+        await objectStorageService.downloadObjectByPath(update.minutePdfPath, res, {
+          isPublic: false,
+          contentType: "application/pdf",
+          disposition: "attachment",
+          filename: `minuta-${update.id}.pdf`,
+        });
+      }
+    } catch (error) {
+      console.error("Error downloading contact update PDF:", error);
+      if (!res.headersSent) res.status(500).json({ error: "Error downloading PDF" });
     }
   });
 

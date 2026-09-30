@@ -136,6 +136,36 @@ const MIGRATIONS: { id: string; sql: string }[] = [
         AND location_captured_at IS NULL;
     `,
   },
+  {
+    id: "016_add_checkin_follow_up_history",
+    sql: `
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS follow_up_status text NOT NULL DEFAULT 'open';
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS follow_up_outcome text;
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS follow_up_closed_at timestamp;
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS follow_up_closed_by_id varchar REFERENCES users(id);
+      ALTER TABLE checkins ADD COLUMN IF NOT EXISTS follow_up_reason text;
+      UPDATE checkins
+        SET follow_up_status = 'closed'
+        WHERE checkout_at IS NOT NULL AND follow_up_status = 'open';
+
+      CREATE TABLE IF NOT EXISTS checkin_updates (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id varchar NOT NULL REFERENCES tenants(id),
+        checkin_id varchar NOT NULL REFERENCES checkins(id) ON DELETE CASCADE,
+        user_id varchar NOT NULL REFERENCES users(id),
+        meeting_type text NOT NULL DEFAULT 'visita',
+        agreements text,
+        internal_notes text,
+        photos text[] NOT NULL DEFAULT ARRAY[]::text[],
+        minute_pdf_path text,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS checkin_updates_checkin_created_idx
+        ON checkin_updates (checkin_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS checkin_updates_tenant_created_idx
+        ON checkin_updates (tenant_id, created_at DESC);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

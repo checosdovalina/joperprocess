@@ -40,6 +40,7 @@ import {
   scheduledVisits,
   creditAuthorizations,
   microsipConfigs,
+  microsipSyncLogs,
   UserRole,
   QuotationStatus,
   ScheduledVisitStatus,
@@ -289,6 +290,7 @@ async function cleanup() {
   await db.delete(quotations).where(inArray(quotations.tenantId, tIds));
   await db.delete(products).where(inArray(products.tenantId, tIds));
   await db.delete(customers).where(inArray(customers.tenantId, tIds));
+  await db.delete(microsipSyncLogs).where(inArray(microsipSyncLogs.tenantId, tIds));
   await db.delete(microsipConfigs).where(inArray(microsipConfigs.tenantId, tIds));
   await db.delete(users).where(inArray(users.tenantId, tIds));
   if (ctx.superadmin?.id) await db.delete(users).where(eq(users.id, ctx.superadmin.id));
@@ -873,6 +875,7 @@ describe("GET /api/checkins/activity", () => {
     const response = await asVendedorA1("POST", "/api/checkins/prospect", {
       prospect: {
         name: `Prospecto ${Date.now()}`,
+        contactName: "Contacto de prueba",
         address: "Calle de prueba 123",
         phone: "5551234567",
       },
@@ -892,6 +895,57 @@ describe("GET /api/checkins/activity", () => {
     const activity = await activityResponse.json();
     expect(activity.items.some((row: any) => row.id === created.id)).toBe(true);
     expect(activity.prospectVisits).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps the follow-up open after a contact and closes it with a separate outcome", async () => {
+    const createResponse = await asVendedorA1("POST", "/api/checkins/prospect", {
+      prospect: {
+        name: `Seguimiento ${Date.now()}`,
+        contactName: "Contacto de prueba",
+      },
+      checkin: { meetingType: "visita" },
+    });
+    expect(createResponse.status).toBe(201);
+    const created = await createResponse.json();
+
+    const contactResponse = await asVendedorA1("POST", `/api/checkins/${created.id}/checkout`, {
+      meetingType: "llamada",
+      checkoutNotes: "Enviar propuesta actualizada",
+      internalNotes: "Revisar margen antes de responder",
+      recipients: [],
+    });
+    expect(contactResponse.status).toBe(200);
+
+    const historyResponse = await asVendedorA1("GET", `/api/checkins/${created.id}`);
+    expect(historyResponse.status).toBe(200);
+    const afterContact = await historyResponse.json();
+    expect(afterContact.followUpStatus).toBe("open");
+    expect(afterContact.checkoutAt).toBeNull();
+    expect(afterContact.updates).toHaveLength(1);
+    expect(afterContact.updates[0]).toMatchObject({
+      meetingType: "llamada",
+      agreements: "Enviar propuesta actualizada",
+      internalNotes: "Revisar margen antes de responder",
+    });
+    expect(afterContact.updates[0].minutePdfPath).toBeTruthy();
+
+    const missingReason = await asVendedorA1("POST", `/api/checkins/${created.id}/close-followup`, {
+      outcome: "not_converted",
+    });
+    expect(missingReason.status).toBe(400);
+
+    const closeResponse = await asVendedorA1("POST", `/api/checkins/${created.id}/close-followup`, {
+      outcome: "sale",
+    });
+    expect(closeResponse.status).toBe(200);
+
+    const closedResponse = await asVendedorA1("GET", `/api/checkins/${created.id}`);
+    const closed = await closedResponse.json();
+    expect(closed.followUpStatus).toBe("closed");
+    expect(closed.followUpOutcome).toBe("sale");
+    expect(closed.wasProspect).toBe(true);
+    expect(closed.customer.isProspect).toBe(false);
+    expect(closed.updates).toHaveLength(1);
   });
 
   it("applies activity filters on the server and groups matching records by day", async () => {
