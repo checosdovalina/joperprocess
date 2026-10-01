@@ -1184,9 +1184,9 @@ export default function CheckinDetailPage() {
                   <SelectValue placeholder="Selecciona el resultado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={FollowUpOutcome.SALE}>Venta concretada</SelectItem>
-                  <SelectItem value={FollowUpOutcome.RENTAL}>Renta concretada</SelectItem>
-                  <SelectItem value={FollowUpOutcome.NOT_CONVERTED}>No concretada</SelectItem>
+                  <SelectItem value={FollowUpOutcome.SALE} className="focus:text-white data-[highlighted]:text-white">Venta concretada</SelectItem>
+                  <SelectItem value={FollowUpOutcome.RENTAL} className="focus:text-white data-[highlighted]:text-white">Renta concretada</SelectItem>
+                  <SelectItem value={FollowUpOutcome.NOT_CONVERTED} className="focus:text-white data-[highlighted]:text-white">No concretada</SelectItem>
                 </SelectContent>
               </Select>
             </div>
