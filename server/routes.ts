@@ -2375,9 +2375,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "No tienes permiso para editar este check-in" });
       }
 
-      // Only allow editing if check-in is still in progress (no checkout)
-      if (existingCheckin.checkoutAt) {
-        return res.status(400).json({ error: "No se puede editar un check-in ya finalizado" });
+      // Follow-up notes remain editable until the commercial follow-up is explicitly closed.
+      if (existingCheckin.followUpStatus !== FollowUpStatus.OPEN) {
+        return res.status(400).json({ error: "No se pueden editar las notas de un seguimiento cerrado" });
       }
 
       // Build update payload (only fields present in request)
@@ -8457,6 +8457,10 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (checkin.followUpStatus !== FollowUpStatus.OPEN) {
         return res.status(400).json({ error: "El seguimiento ya está cerrado" });
       }
+      // Saved notes are a draft for the next contact. Explicit request values (including
+      // empty strings) override the draft; omitted values inherit it into this contact.
+      const contactAgreements = checkoutNotes ?? checkin.checkoutNotes ?? undefined;
+      const contactInternalNotes = internalNotes ?? checkin.internalNotes ?? undefined;
 
       const previousUpdates = await db.query.checkinUpdates.findMany({
         where: eq(checkinUpdates.checkinId, checkinId),
@@ -8504,7 +8508,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         checkin: updateForPdf,
         customer: effectiveCustomer, 
         user: seller,
-        checkoutNotes,
+        checkoutNotes: contactAgreements,
         tenant,
       });
 
@@ -8531,14 +8535,16 @@ Proporciona tu análisis en el siguiente formato JSON:
         checkinId,
         userId,
         meetingType,
-        agreements: checkoutNotes ?? null,
-        internalNotes: internalNotes ?? null,
+        agreements: contactAgreements ?? null,
+        internalNotes: contactInternalNotes ?? null,
         photos: photosForUpdate,
         minutePdfPath: pdfPath,
         createdAt: updateAt,
       }).returning();
       await db.update(checkins).set({
         minutePdfPath: pdfPath,
+        checkoutNotes: null,
+        internalNotes: null,
       }).where(eq(checkins.id, checkinId));
 
       console.log(`Saved contact update ${updateId} for check-in ${checkinId}.`);
@@ -8578,7 +8584,7 @@ Proporciona tu análisis en el siguiente formato JSON:
               customerName: effectiveCustomer.name,
               vendedorName: seller.fullName,
               checkoutDate: format(new Date(), "PPP 'a las' p", { locale: es }),
-              notes: checkoutNotes,
+              notes: contactAgreements,
             },
             pdfPath,
           });

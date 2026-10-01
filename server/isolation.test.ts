@@ -908,10 +908,14 @@ describe("GET /api/checkins/activity", () => {
     expect(createResponse.status).toBe(201);
     const created = await createResponse.json();
 
-    const contactResponse = await asVendedorA1("POST", `/api/checkins/${created.id}/checkout`, {
-      meetingType: "llamada",
+    const saveNotesResponse = await asVendedorA1("PATCH", `/api/checkins/${created.id}`, {
       checkoutNotes: "Enviar propuesta actualizada",
       internalNotes: "Revisar margen antes de responder",
+    });
+    expect(saveNotesResponse.status).toBe(200);
+
+    const contactResponse = await asVendedorA1("POST", `/api/checkins/${created.id}/checkout`, {
+      meetingType: "llamada",
       recipients: [],
     });
     expect(contactResponse.status).toBe(200);
@@ -921,6 +925,8 @@ describe("GET /api/checkins/activity", () => {
     const afterContact = await historyResponse.json();
     expect(afterContact.followUpStatus).toBe("open");
     expect(afterContact.checkoutAt).toBeNull();
+    expect(afterContact.checkoutNotes).toBeNull();
+    expect(afterContact.internalNotes).toBeNull();
     expect(afterContact.updates).toHaveLength(1);
     expect(afterContact.updates[0]).toMatchObject({
       meetingType: "llamada",
@@ -946,6 +952,11 @@ describe("GET /api/checkins/activity", () => {
     expect(closed.wasProspect).toBe(true);
     expect(closed.customer.isProspect).toBe(false);
     expect(closed.updates).toHaveLength(1);
+
+    const editClosedNotesResponse = await asVendedorA1("PATCH", `/api/checkins/${created.id}`, {
+      checkoutNotes: "No se debe editar",
+    });
+    expect(editClosedNotesResponse.status).toBe(400);
   });
 
   it("applies activity filters on the server and groups matching records by day", async () => {

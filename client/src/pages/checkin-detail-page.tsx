@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, EyeOff, ExternalLink, History, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, EyeOff, ExternalLink, History, CheckCircle2, Save } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType, type MeetingTypeType } from "@shared/schema";
 import { Link } from "wouter";
@@ -98,6 +98,8 @@ export default function CheckinDetailPage() {
   const [interactionType, setInteractionType] = useState<MeetingTypeType>(MeetingType.VISITA);
   const [checkoutNotes, setCheckoutNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
+  const [draftAgreements, setDraftAgreements] = useState("");
+  const [draftInternalNotes, setDraftInternalNotes] = useState("");
   const [emailList, setEmailList] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState("");
 
@@ -162,6 +164,8 @@ export default function CheckinDetailPage() {
     if (checkin) {
       setCheckoutNotes(checkin.checkoutNotes ?? "");
       setInternalNotes(checkin.internalNotes ?? "");
+      setDraftAgreements(checkin.checkoutNotes ?? "");
+      setDraftInternalNotes(checkin.internalNotes ?? "");
       setInteractionType((checkin.meetingType || MeetingType.VISITA) as MeetingTypeType);
     }
   }, [checkin?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -169,8 +173,8 @@ export default function CheckinDetailPage() {
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", `/api/checkins/${id}/checkout`, {
-        checkoutNotes: checkoutNotes || undefined,
-        internalNotes: internalNotes || undefined,
+        checkoutNotes,
+        internalNotes,
         meetingType: interactionType,
         recipients: emailList,
       });
@@ -184,6 +188,10 @@ export default function CheckinDetailPage() {
       setCheckoutDialogOpen(false);
       setEmailList([]);
       setEmailInput("");
+      setCheckoutNotes("");
+      setInternalNotes("");
+      setDraftAgreements("");
+      setDraftInternalNotes("");
       toast({
         title: result.email?.status === "failed" || result.email?.status === "partial" || result.email?.status === "skipped"
           ? "Contacto guardado con aviso de correo"
@@ -232,6 +240,36 @@ export default function CheckinDetailPage() {
     },
   });
 
+  const saveFollowUpNotesMutation = useMutation({
+    mutationFn: async (notes: { checkoutNotes: string; internalNotes: string }) => {
+      const response = await apiRequest("PATCH", `/api/checkins/${id}`, notes);
+      return response.json() as Promise<Checkin>;
+    },
+    onSuccess: (updated) => {
+      setDraftAgreements(updated.checkoutNotes ?? "");
+      setDraftInternalNotes(updated.internalNotes ?? "");
+      queryClient.setQueryData<CheckinWithHistory>([`/api/checkins/${id}`], (current) =>
+        current ? {
+          ...current,
+          checkoutNotes: updated.checkoutNotes,
+          internalNotes: updated.internalNotes,
+        } : current,
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/checkins"] });
+      toast({
+        title: t("checkins.save-notes"),
+        description: t("checkins.toast-notes-saved-desc"),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: t("label.error"),
+        description: error.message || "No se pudieron guardar las notas.",
+      });
+    },
+  });
+
   const updateMeetingTypeMutation = useMutation({
     mutationFn: async (meetingType: MeetingTypeType) => {
       return await apiRequest("PATCH", `/api/checkins/${id}`, { meetingType });
@@ -271,8 +309,8 @@ export default function CheckinDetailPage() {
   });
 
   const openContactDialog = () => {
-    setCheckoutNotes("");
-    setInternalNotes("");
+    setCheckoutNotes(draftAgreements);
+    setInternalNotes(draftInternalNotes);
     setInteractionType((checkin?.meetingType || MeetingType.VISITA) as MeetingTypeType);
     setCheckoutDialogOpen(true);
   };
@@ -307,6 +345,9 @@ export default function CheckinDetailPage() {
   }
 
   const followUpIsOpen = checkin.followUpStatus === FollowUpStatus.OPEN;
+  const followUpNotesChanged =
+    draftAgreements !== (checkin.checkoutNotes ?? "") ||
+    draftInternalNotes !== (checkin.internalNotes ?? "");
   const recordedPhotoIds = new Set((checkin.updates ?? []).flatMap((update) => update.photos));
   const outcomeLabel = checkin.followUpOutcome === FollowUpOutcome.SALE
     ? "Venta concretada"
@@ -791,6 +832,73 @@ export default function CheckinDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {followUpIsOpen && (
+        <Card data-testid="card-followup-notes">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <NotebookPen className="h-5 w-5 text-blue-600" />
+                  {t("checkins.agreements")}
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  {t("checkins.followup-notes-draft-hint")}
+                </CardDescription>
+              </div>
+              <Button
+                onClick={() => saveFollowUpNotesMutation.mutate({
+                  checkoutNotes: draftAgreements,
+                  internalNotes: draftInternalNotes,
+                })}
+                disabled={!followUpNotesChanged || saveFollowUpNotesMutation.isPending}
+                data-testid="button-save-followup-notes"
+              >
+                {saveFollowUpNotesMutation.isPending
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : <Save className="mr-2 h-4 w-4" />}
+                {t("checkins.save-notes")}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="followup-draft-agreements" className="flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-blue-600" />
+                {t("checkins.agreements")}
+                <span className="text-xs font-normal text-muted-foreground">{t("checkins.goes-to-pdf")}</span>
+              </Label>
+              <Textarea
+                id="followup-draft-agreements"
+                data-testid="textarea-followup-draft-agreements"
+                placeholder={t("checkins.agreements-placeholder")}
+                value={draftAgreements}
+                onChange={(event) => setDraftAgreements(event.target.value)}
+                disabled={saveFollowUpNotesMutation.isPending}
+                className="min-h-[100px]"
+              />
+              <p className="text-xs text-muted-foreground">{t("checkins.pdf-notice")}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="followup-draft-internal-notes" className="flex items-center gap-1.5">
+                <EyeOff className="h-3.5 w-3.5" />
+                {t("checkins.internal-notes")}
+                <span className="text-xs font-normal text-muted-foreground">{t("checkins.not-sent-client")}</span>
+              </Label>
+              <Textarea
+                id="followup-draft-internal-notes"
+                data-testid="textarea-followup-draft-internal-notes"
+                placeholder={t("checkins.internal-placeholder")}
+                value={draftInternalNotes}
+                onChange={(event) => setDraftInternalNotes(event.target.value)}
+                disabled={saveFollowUpNotesMutation.isPending}
+                className="min-h-[80px] border-dashed"
+              />
+              <p className="text-xs text-muted-foreground">{t("checkins.internal-private-notice")}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
