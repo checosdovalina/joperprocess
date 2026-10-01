@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, EyeOff, ExternalLink, History, CheckCircle2, Save } from "lucide-react";
+import { ArrowLeft, MapPin, FileText, Loader2, ImageIcon, Download, Phone, Video, Users, Mail, X, UserPlus, Trash2, NotebookPen, Lock, EyeOff, ExternalLink, History, CheckCircle2, Save, ChevronDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeetingType, type MeetingTypeType } from "@shared/schema";
 import { Link } from "wouter";
@@ -767,18 +767,23 @@ export default function CheckinDetailPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {checkin.notes && (
-            <div className="rounded-lg border bg-muted/20 p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="font-medium">Registro inicial</p>
-                <p className="text-xs text-muted-foreground">{format(new Date(checkin.checkinAt), "PPP 'a las' p", { locale: es })}</p>
+            <details className="group rounded-lg border bg-muted/20" data-testid="card-initial-checkin-record">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="font-medium">Registro inicial</p>
+                  <p className="text-xs text-muted-foreground">{format(new Date(checkin.checkinAt), "PPP 'a las' p", { locale: es })}</p>
+                </div>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="border-t px-4 py-3">
+                <p className="whitespace-pre-wrap text-sm">{checkin.notes}</p>
               </div>
-              <p className="whitespace-pre-wrap text-sm">{checkin.notes}</p>
-            </div>
+            </details>
           )}
           {(checkin.updates ?? []).map((update) => (
-            <div key={update.id} className="rounded-lg border p-4" data-testid={`card-followup-update-${update.id}`}>
-              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                <div>
+            <details key={update.id} className="group rounded-lg border" data-testid={`card-followup-update-${update.id}`}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+                <div className="min-w-0">
                   <p className="font-semibold">
                     {update.meetingType === MeetingType.LLAMADA ? t("checkins.type.call")
                       : update.meetingType === MeetingType.VIDEOLLAMADA ? t("checkins.type.video")
@@ -789,36 +794,47 @@ export default function CheckinDetailPage() {
                     {update.user ? ` · ${update.user.fullName || update.user.username}` : ""}
                   </p>
                 </div>
+                <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                  Ver detalle
+                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                </span>
+              </summary>
+              <div className="space-y-4 border-t px-4 py-4">
                 {update.minutePdfPath && (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={`/api/checkins/${id}/updates/${update.id}/pdf`} download>
-                      <Download className="mr-2 h-4 w-4" /> Minuta PDF
-                    </a>
-                  </Button>
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={`/api/checkins/${id}/updates/${update.id}/pdf`} download>
+                        <Download className="mr-2 h-4 w-4" /> Minuta PDF
+                      </a>
+                    </Button>
+                  </div>
+                )}
+                {update.agreements && (
+                  <div>
+                    <p className="mb-1 flex items-center gap-1.5 text-sm font-medium"><NotebookPen className="h-4 w-4 text-blue-600" />Acuerdos y comentarios</p>
+                    <p className="whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm">{update.agreements}</p>
+                  </div>
+                )}
+                {update.internalNotes && (
+                  <div>
+                    <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><EyeOff className="h-4 w-4" />Notas internas</p>
+                    <p className="whitespace-pre-wrap rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">{update.internalNotes}</p>
+                  </div>
+                )}
+                {update.photos.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {update.photos.map((photoId, index) => (
+                      <a key={photoId} href={`/objects/${photoId}`} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-md bg-muted">
+                        <img src={`/objects/${photoId}`} alt={`Foto del contacto ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {!update.agreements && !update.internalNotes && update.photos.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Este contacto no tiene comentarios ni fotos.</p>
                 )}
               </div>
-              {update.agreements && (
-                <div className="mb-3">
-                  <p className="mb-1 flex items-center gap-1.5 text-sm font-medium"><NotebookPen className="h-4 w-4 text-blue-600" />Acuerdos y comentarios</p>
-                  <p className="whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm">{update.agreements}</p>
-                </div>
-              )}
-              {update.internalNotes && (
-                <div className="mb-3">
-                  <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><EyeOff className="h-4 w-4" />Notas internas</p>
-                  <p className="whitespace-pre-wrap rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">{update.internalNotes}</p>
-                </div>
-              )}
-              {update.photos.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {update.photos.map((photoId, index) => (
-                    <a key={photoId} href={`/objects/${photoId}`} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-md bg-muted">
-                      <img src={`/objects/${photoId}`} alt={`Foto del contacto ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
+            </details>
           ))}
           {!checkin.updates?.length && (checkin.checkoutNotes || checkin.internalNotes) && (
             <div className="rounded-lg border p-4">
