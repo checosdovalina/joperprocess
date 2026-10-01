@@ -100,6 +100,7 @@ export default function CheckinDetailPage() {
   const [internalNotes, setInternalNotes] = useState("");
   const [draftAgreements, setDraftAgreements] = useState("");
   const [draftInternalNotes, setDraftInternalNotes] = useState("");
+  const [expandedFollowUpIds, setExpandedFollowUpIds] = useState<Set<string>>(new Set());
   const [emailList, setEmailList] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState("");
 
@@ -115,6 +116,15 @@ export default function CheckinDetailPage() {
 
   const removeCheckinEmail = (email: string) => {
     setEmailList(prev => prev.filter(e => e !== email));
+  };
+
+  const toggleFollowUpRecord = (recordId: string) => {
+    setExpandedFollowUpIds((current) => {
+      const next = new Set(current);
+      if (next.has(recordId)) next.delete(recordId);
+      else next.add(recordId);
+      return next;
+    });
   };
 
   const { data: checkin, isLoading: checkinLoading } = useQuery<CheckinWithHistory>({
@@ -781,27 +791,34 @@ export default function CheckinDetailPage() {
             </details>
           )}
           {(checkin.updates ?? []).map((update) => (
-            <details key={update.id} className="group rounded-lg border" data-testid={`card-followup-update-${update.id}`}>
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
-                <div className="min-w-0">
-                  <p className="font-semibold">
-                    {update.meetingType === MeetingType.LLAMADA ? t("checkins.type.call")
-                      : update.meetingType === MeetingType.VIDEOLLAMADA ? t("checkins.type.video")
-                        : t("checkins.type.visit")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(update.createdAt), "PPP 'a las' p", { locale: es })}
-                    {update.user ? ` · ${update.user.fullName || update.user.username}` : ""}
-                  </p>
-                </div>
-                <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                  Ver detalle
-                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-                </span>
-              </summary>
-              <div className="space-y-4 border-t px-4 py-4">
+            <div key={update.id} className="overflow-hidden rounded-lg border" data-testid={`card-followup-update-${update.id}`}>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => toggleFollowUpRecord(update.id)}
+                  aria-expanded={expandedFollowUpIds.has(update.id)}
+                  aria-controls={`followup-update-details-${update.id}`}
+                  data-testid={`button-toggle-followup-update-${update.id}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block font-semibold">
+                      {update.meetingType === MeetingType.LLAMADA ? t("checkins.type.call")
+                        : update.meetingType === MeetingType.VIDEOLLAMADA ? t("checkins.type.video")
+                          : t("checkins.type.visit")}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {format(new Date(update.createdAt), "PPP 'a las' p", { locale: es })}
+                      {update.user ? ` · ${update.user.fullName || update.user.username}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                    {expandedFollowUpIds.has(update.id) ? "Ocultar" : "Ver detalle"}
+                    <ChevronDown className={`h-4 w-4 transition-transform ${expandedFollowUpIds.has(update.id) ? "rotate-180" : ""}`} />
+                  </span>
+                </button>
                 {update.minutePdfPath && (
-                  <div className="flex justify-end">
+                  <div className="shrink-0 pr-4">
                     <Button variant="outline" size="sm" asChild>
                       <a href={`/api/checkins/${id}/updates/${update.id}/pdf`} download>
                         <Download className="mr-2 h-4 w-4" /> Minuta PDF
@@ -809,6 +826,12 @@ export default function CheckinDetailPage() {
                     </Button>
                   </div>
                 )}
+              </div>
+              <div
+                id={`followup-update-details-${update.id}`}
+                hidden={!expandedFollowUpIds.has(update.id)}
+                className="space-y-4 border-t px-4 py-4"
+              >
                 {update.agreements && (
                   <div>
                     <p className="mb-1 flex items-center gap-1.5 text-sm font-medium"><NotebookPen className="h-4 w-4 text-blue-600" />Acuerdos y comentarios</p>
@@ -834,7 +857,7 @@ export default function CheckinDetailPage() {
                   <p className="text-sm text-muted-foreground">Este contacto no tiene comentarios ni fotos.</p>
                 )}
               </div>
-            </details>
+            </div>
           ))}
           {!checkin.updates?.length && (checkin.checkoutNotes || checkin.internalNotes) && (
             <div className="rounded-lg border p-4">
