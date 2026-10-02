@@ -37,6 +37,7 @@ import {
   shipmentProductInstances,
   invoices,
   checkins,
+  checkinUpdates,
   scheduledVisits,
   creditAuthorizations,
   microsipConfigs,
@@ -823,6 +824,85 @@ describe("Check-in location capture is immutable", () => {
 });
 
 describe("Commercial results analytics", () => {
+  it("counts closure outcomes separately from visits, with historical prospect and seller/tenant scope", async () => {
+    const base = {
+      tenantId: ctx.tenantA, userId: ctx.vendedorA1.id, salesPersonId: ctx.vendedorA1.id,
+      customerId: ctx.customerA, checkinAt: new Date("2026-01-10T18:00:00Z"),
+      followUpStatus: "closed",
+    };
+    const saleId = await insertReturningId(checkins, {
+      ...base, wasProspect: true, followUpOutcome: "sale",
+      followUpClosedAt: new Date("2026-03-01T04:30:00Z"),
+    });
+    await insertReturningId(checkins, {
+      ...base, followUpOutcome: "rental", checkoutAt: new Date("2026-03-10T18:00:00Z"),
+    });
+    await insertReturningId(checkins, {
+      ...base, salesPersonId: null, followUpOutcome: "not_converted", followUpClosedAt: new Date("2026-03-12T18:00:00Z"),
+    });
+    await insertReturningId(checkins, {
+      ...base, followUpOutcome: null, followUpClosedAt: new Date("2026-03-13T18:00:00Z"),
+    });
+    await insertReturningId(checkins, {
+      ...base, followUpStatus: "open", followUpOutcome: "sale", followUpClosedAt: new Date("2026-03-13T18:00:00Z"),
+    });
+    await insertReturningId(checkins, {
+      ...base, followUpOutcome: "sale", followUpClosedAt: new Date("2026-04-01T06:00:00Z"),
+    });
+    await insertReturningId(checkins, {
+      ...base, userId: ctx.adminA.id, salesPersonId: ctx.adminA.id,
+      followUpOutcome: "sale", followUpClosedAt: new Date("2026-02-20T18:00:00Z"),
+    });
+    await insertReturningId(checkins, {
+      ...base, tenantId: ctx.tenantB, userId: ctx.adminB.id, salesPersonId: ctx.adminB.id, customerId: ctx.customerB,
+      followUpOutcome: "sale", followUpClosedAt: new Date("2026-02-20T18:00:00Z"),
+    });
+    for (const [meetingType, createdAt] of [
+      ["visita", "2026-02-10T18:00:00Z"], ["visita", "2026-02-12T18:00:00Z"], ["llamada", "2026-02-15T18:00:00Z"],
+    ]) {
+      await insertReturningId(checkinUpdates, {
+        tenantId: ctx.tenantA, checkinId: saleId, userId: ctx.adminA.id, meetingType, createdAt: new Date(createdAt),
+      });
+    }
+    const params = new URLSearchParams({
+      from: "2026-02-01T06:00:00Z", to: "2026-04-01T06:00:00Z", customerId: ctx.customerA,
+    });
+    const read = async (request: typeof asAdminA, extra = "") => {
+      const response = await request("GET", `/api/commercial-results?${params}${extra}`);
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    const seller = await read(asVendedorA1);
+    expect(seller.comparison.totals).toEqual({ visits: 2, sales: 1, rentals: 1, notConverted: 1 });
+    expect(seller.comparison.bySeller.map((row: any) => row.id)).toEqual([ctx.vendedorA1.id]);
+    expect(seller.comparison.byMonth).toEqual([
+      { month: "2026-02", visits: 2, sales: 1, rentals: 0, notConverted: 0 },
+      { month: "2026-03", visits: 0, sales: 0, rentals: 1, notConverted: 1 },
+    ]);
+    expect(seller.closures).toBeUndefined();
+    expect(seller.items).toBeUndefined();
+    expect((await read(asAdminA)).comparison.totals.sales).toBe(2);
+    expect((await read(asAdminA, `&sellerId=${ctx.vendedorA1.id}`)).comparison).toEqual(seller.comparison);
+    expect((await read(asVendedorA1, "&meetingType=llamada")).comparison.totals)
+      .toEqual({ visits: 0, sales: 1, rentals: 1, notConverted: 1 });
+    expect((await read(asVendedorA1, "&audience=prospects")).comparison.totals)
+      .toEqual({ visits: 2, sales: 1, rentals: 0, notConverted: 0 });
+    expect((await read(asVendedorA1, "&audience=customers")).comparison.totals)
+      .toEqual({ visits: 0, sales: 0, rentals: 1, notConverted: 1 });
+    const closureOnly = await asVendedorA1("GET",
+      `/api/commercial-results?from=2026-03-03T06:00:00Z&to=2026-04-01T06:00:00Z&customerId=${ctx.customerA}`);
+    const body = await closureOnly.json();
+    expect(closureOnly.status).toBe(200);
+    expect(body.summary.totalContacts).toBe(0);
+    expect(body.comparison.totals).toEqual({ visits: 0, sales: 0, rentals: 1, notConverted: 1 });
+    const foreignParams = new URLSearchParams(params);
+    foreignParams.set("customerId", ctx.customerB);
+    const foreignResponse = await asVendedorA1("GET", `/api/commercial-results?${foreignParams}`);
+    expect(foreignResponse.status).toBe(200);
+    expect((await foreignResponse.json()).comparison.totals)
+      .toEqual({ visits: 0, sales: 0, rentals: 0, notConverted: 0 });
+  });
+
   it("limits sellers to their own activity while admins can query global results", async () => {
     const ownCheckinId = await insertReturningId(checkins, {
       tenantId: ctx.tenantA,

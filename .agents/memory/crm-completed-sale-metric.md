@@ -1,10 +1,10 @@
 ---
-name: CRM completed-sale metric
-description: Defines the agreed event for future CRM completed-sale reporting.
+name: Commercial results metric source
+description: User-selected source for visits versus commercial outcomes in Resultados comerciales.
 ---
 
-When the CRM completed-sale graph is implemented, count a sale when a quotation is converted into an order. Do not infer it from check-in notes or from the seller closing a visit.
+En Resultados comerciales, comparar visitas con los resultados registrados al cerrar cada seguimiento de Check-in: venta concretada, renta concretada y no concretada, por vendedor y por mes. No usar la conversión de cotizaciones a pedidos para estas comparaciones.
 
-**Why:** The user selected quotation-to-order conversion as the authoritative event and asked to leave this specific metric for later.
+**Why:** El usuario sustituyó explícitamente la idea previa de usar cotizaciones por «de cada checkin» y confirmó las tres categorías del cierre de seguimiento.
 
-**How to apply:** Use the quotation/order conversion relationship and timestamp for future CRM counts and charts. Keep it separate from the contact and prospect-visit metrics already available.
+**How to apply:** Mantener esta definición en las gráficas y el Excel de Resultados comerciales. Una métrica financiera de pedidos es distinta y no debe reemplazar estos resultados de Check-in.

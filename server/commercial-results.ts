@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { PassThrough, Readable } from "stream";
 import { localStorageService } from "./localStorage";
 import { formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
+import { commercialDateKey, summarizeCheckinComparison, type CheckinComparison, type CommercialClosureRow, type ComparisonPeriod } from "./commercial-checkin-comparison";
 
 export interface CommercialActivityRow {
   id: string;
@@ -34,6 +35,8 @@ export interface CommercialResults {
   byCustomer: Array<{ id: string; name: string; contacts: number; prospects: number; lastContactAt: string }>;
   byMeetingType: Array<{ type: string; count: number }>;
   items: CommercialActivityRow[];
+  closures: CommercialClosureRow[];
+  comparison: CheckinComparison;
 }
 
 export interface CommercialReportContext {
@@ -131,22 +134,13 @@ export function resolveCommercialTimezone(timezone?: string | null, locale?: str
   }
 }
 
-function commercialDateKey(value: Date | string, timezoneOffsetMinutes: number, timezone?: string): string {
-  const date = new Date(value);
-  if (timezone) {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date);
-    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value || "";
-    return `${part("year")}-${part("month")}-${part("day")}`;
-  }
-  return new Date(date.getTime() - timezoneOffsetMinutes * 60_000).toISOString().slice(0, 10);
-}
-
-export function summarizeCommercialActivity(items: CommercialActivityRow[], timezoneOffsetMinutes = 0, timezone?: string | null): CommercialResults {
+export function summarizeCommercialActivity(
+  items: CommercialActivityRow[],
+  timezoneOffsetMinutes = 0,
+  timezone?: string | null,
+  closures: CommercialClosureRow[] = [],
+  period?: ComparisonPeriod,
+): CommercialResults {
   const daily = new Map<string, { contacts: number; prospects: number; customers: number }>();
   const sellers = new Map<string, { id: string; name: string; contacts: number; prospects: number; followUps: number; completed: number }>();
   const customerTotals = new Map<string, { id: string; name: string; contacts: number; prospects: number; lastContactAt: string }>();
@@ -205,6 +199,8 @@ export function summarizeCommercialActivity(items: CommercialActivityRow[], time
     byCustomer: Array.from(customerTotals.values()).sort((a, b) => b.contacts - a.contacts || a.name.localeCompare(b.name)),
     byMeetingType: Array.from(meetingTypes, ([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count),
     items,
+    closures,
+    comparison: summarizeCheckinComparison(items, closures, timezoneOffsetMinutes, reportTimezone, period),
   };
 }
 
@@ -498,6 +494,10 @@ export async function generateCommercialResultsExcel(results: CommercialResults,
     "Seguimientos cerrados": results.summary.completed,
     "Seguimientos abiertos": results.summary.active,
     "Clientes y prospectos únicos": results.summary.uniqueCustomers,
+    "Visitas presenciales": results.comparison.totals.visits,
+    "Ventas concretadas (Check-ins)": results.comparison.totals.sales,
+    "Rentas concretadas (Check-ins)": results.comparison.totals.rentals,
+    "No concretadas (Check-ins)": results.comparison.totals.notConverted,
   }).forEach(entry => summary.addRow(entry));
   summary.columns = [{ width: 34 }, { width: 18 }];
 
@@ -517,6 +517,42 @@ export async function generateCommercialResultsExcel(results: CommercialResults,
   addHeader(customers, ["Cliente o prospecto", "Contactos", "Contactos como prospecto", "Último contacto"]);
   results.byCustomer.forEach(row => customers.addRow([row.name, row.contacts, row.prospects, new Date(row.lastContactAt)]));
   customers.columns = [{ width: 40 }, { width: 14 }, { width: 24 }, { width: 22 }];
+
+  const comparisonHeaders = ["Visitas", "Ventas concretadas", "Rentas concretadas", "No concretadas"];
+  const sellerComparison = workbook.addWorksheet("Visitas y resultados vendedor");
+  addHeader(sellerComparison, ["Vendedor", ...comparisonHeaders]);
+  results.comparison.bySeller.forEach(row => sellerComparison.addRow([
+    row.name, row.visits, row.sales, row.rentals, row.notConverted,
+  ]));
+  sellerComparison.columns = [{ width: 34 }, ...comparisonHeaders.map(() => ({ width: 22 }))];
+  const monthlyComparison = workbook.addWorksheet("Visitas y resultados mes");
+  addHeader(monthlyComparison, ["Mes", ...comparisonHeaders]);
+  results.comparison.byMonth.forEach(row => monthlyComparison.addRow([
+    row.month, row.visits, row.sales, row.rentals, row.notConverted,
+  ]));
+  monthlyComparison.columns = [{ width: 16 }, ...comparisonHeaders.map(() => ({ width: 22 }))];
+  const closureDetail = workbook.addWorksheet("Cierres de seguimiento");
+  addHeader(closureDetail, ["Check-in", "Fecha de cierre", "Cliente", "Vendedor", "Resultado"]);
+  const outcomeLabel = (outcome: string | null) => outcome === "sale" ? "Venta concretada"
+    : outcome === "rental" ? "Renta concretada" : outcome === "not_converted" ? "No concretada" : "Sin resultado registrado";
+  results.closures.forEach(row => closureDetail.addRow([
+    row.id,
+    formatPdfDateTime(row.closedAt, resolvePdfLanguage(context.tenantBranding), resolveCommercialTimezone(context.tenantBranding?.timezone, context.tenantBranding?.locale)),
+    row.customer.name, row.seller.name, outcomeLabel(row.outcome),
+  ]));
+  closureDetail.columns = [{ width: 38 }, { width: 25 }, { width: 35 }, { width: 30 }, { width: 25 }];
+  const methodology = workbook.addWorksheet("Definiciones");
+  methodology.addRows([
+    ["Visitas", "Solo contactos presenciales, iniciales y de seguimiento; llamadas y videollamadas no cuentan."],
+    ["Resultados", "Un cierre por Check-in, según Venta concretada, Renta concretada o No concretada."],
+    ["Fechas", "Las visitas usan la fecha de contacto; los resultados, la fecha de cierre del seguimiento."],
+    ["Vendedor", "Vendedor asignado al seguimiento; si no existe, autor del Check-in."],
+    ["Tipo de contacto", "Filtra contactos y visitas, pero no los resultados de cierre."],
+    ["Sin resultado", "Los cierres antiguos sin resultado registrado no se clasifican como ventas, rentas ni no concretadas."],
+    ["Comparación", "Son cantidades de actividad y cierres del periodo, no una tasa de conversión de las visitas."],
+    ["Zona horaria", resolveCommercialTimezone(context.tenantBranding?.timezone, context.tenantBranding?.locale)],
+  ]);
+  methodology.columns = [{ width: 24 }, { width: 115 }];
 
   const detail = workbook.addWorksheet("Detalle");
   addHeader(detail, ["Fecha", "Empresa", "Contacto", "Vendedor", "Tipo", "Prospecto", "Resultado del seguimiento", "Acuerdos y comentarios", "Notas internas", "Fotos"]);

@@ -14,7 +14,7 @@
 - [Firebird chained auth and product sync](firebird-chained-auth-product-sync.md) — legacy Microsip databases may require SRP followed by Legacy_Auth; product sync must avoid per-row DB round trips.
 - [Internal email recipient isolation](internal-email-recipient-isolation.md) — automatic staff emails must require matching tenant, active user, and explicit email opt-in.
 - [Statement recipient selection](statement-recipient-selection.md) — configured customer recipients are authoritative; never fall back to all addresses when a saved selection becomes stale.
-- [CRM completed-sale metric](crm-completed-sale-metric.md) — when implemented, count a sale when its quotation converts to an order; this metric is intentionally deferred.
+- [Commercial results source](crm-completed-sale-metric.md) — compare visits with Check-in closure outcomes (sale, rental, not converted), not quotation/order conversion.
 - [Credit reauthorization order reuse](credit-reauthorization-order-reuse.md) — reapproval must atomically reuse/reopen the existing order; never create another order for the same quotation.
 - [Partial MEX cancellation](partial-mex-cancellation.md) — cancel only unfulfilled quantities; preserve releases and financial documents, and never reactivate a cancelled order.
 - [Vitest JSX transform](vitest-jsx-transform.md) — Vitest's Vite/OXC pipeline may need its own JSX runtime setting when testing client TSX.

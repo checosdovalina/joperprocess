@@ -2022,6 +2022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const visibleUpdates = updateRows.filter((update) => {
       const parent = update.checkin;
       if (!parent) return false;
+      if (tenantId && parent.tenantId !== tenantId) return false;
       const assignedSellerId = parent.salesPersonId ?? parent.userId;
       if (parsed.customerId && parent.customerId !== parsed.customerId) return false;
       if (parsed.meetingType && update.meetingType !== parsed.meetingType) return false;
@@ -2075,14 +2076,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }),
     ].sort((a, b) => new Date(b.checkinAt).getTime() - new Date(a.checkinAt).getTime());
-    const { summarizeCommercialActivity } = await import("./commercial-results");
-    return { results: summarizeCommercialActivity(items, parsed.timezoneOffsetMinutes), parsed, tenantId };
+    // Query closure events independently: a September visit may close in October.
+    // Never derive outcomes by counting the repeated parent outcome on contact rows.
+    const closedAt = sql<Date>`coalesce(${checkins.followUpClosedAt}, ${checkins.checkoutAt})`;
+    const closureRows = await db.query.checkins.findMany({
+      where: and(
+        ...parentConditions,
+        eq(checkins.followUpStatus, FollowUpStatus.CLOSED),
+        gte(closedAt, fromDate),
+        lt(closedAt, toDate),
+      ),
+      orderBy: [desc(checkins.followUpClosedAt)],
+      limit: 20_001,
+      with: {
+        customer: { columns: { id: true, name: true } },
+        user: { columns: { id: true, fullName: true, username: true } },
+        salesPerson: { columns: { id: true, fullName: true, username: true } },
+      },
+    });
+    if (closureRows.length > 20_000) throw new Error("TOO_MANY_RESULTS");
+    const closures = closureRows.map(row => ({
+      id: row.id,
+      closedAt: (row.followUpClosedAt ?? row.checkoutAt)!,
+      outcome: row.followUpOutcome,
+      wasProspect: row.wasProspect,
+      customer: row.customer,
+      seller: {
+        id: row.salesPerson?.id ?? row.user.id,
+        name: row.salesPerson?.fullName || row.salesPerson?.username || row.user.fullName || row.user.username,
+      },
+    }));
+    const tenantBranding = tenantId ? await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }) : null;
+    const { summarizeCommercialActivity, resolveCommercialTimezone } = await import("./commercial-results");
+    const timezone = resolveCommercialTimezone(tenantBranding?.timezone, tenantBranding?.locale);
+    return {
+      results: summarizeCommercialActivity(items, parsed.timezoneOffsetMinutes, timezone, closures, { from: fromDate, to: toDate }),
+      parsed, tenantId, tenantBranding,
+    };
   }
 
   app.get("/api/commercial-results", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA), async (req, res) => {
     try {
       const { results } = await loadCommercialResults(req);
-      const { items: _items, ...dashboardResults } = results;
+      const { items: _items, closures: _closures, ...dashboardResults } = results;
       res.json(dashboardResults);
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: "Filtros inválidos", details: error.flatten() });
@@ -2099,11 +2135,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/commercial-results/export/:format", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA), async (req, res) => {
     try {
       if (req.params.format !== "pdf" && req.params.format !== "xlsx") return res.status(404).json({ error: "Formato no disponible" });
-      let { results, parsed, tenantId } = await loadCommercialResults(req);
-      const tenantBranding = tenantId ? await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) }) : null;
+      const { results, parsed, tenantBranding } = await loadCommercialResults(req);
       const report = await import("./commercial-results");
       const reportTimezone = report.resolveCommercialTimezone(tenantBranding?.timezone, tenantBranding?.locale);
-      results = report.summarizeCommercialActivity(results.items, parsed.timezoneOffsetMinutes, reportTimezone);
       if (req.params.format === "pdf" && results.items.length > 2_000) {
         return res.status(413).json({ error: "El PDF contiene demasiados registros; selecciona un periodo menor o descarga Excel" });
       }
@@ -2115,8 +2149,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : parsed.meetingType === "videollamada"
             ? (english ? "Video call" : "Videollamada")
             : null;
-      const selectedCustomer = parsed.customerId ? results.byCustomer.find(row => row.id === parsed.customerId)?.name : null;
-      const selectedSeller = parsed.sellerId ? results.bySeller.find(row => row.id === parsed.sellerId)?.name : null;
+      const selectedCustomer = parsed.customerId
+        ? results.byCustomer.find(row => row.id === parsed.customerId)?.name
+          ?? results.closures.find(row => row.customer.id === parsed.customerId)?.customer.name
+        : null;
+      const selectedSeller = parsed.sellerId
+        ? results.bySeller.find(row => row.id === parsed.sellerId)?.name
+          ?? results.comparison.bySeller.find(row => row.id === parsed.sellerId)?.name
+        : null;
       const filters = [
         parsed.from ? `${english ? "From" : "Desde"} ${parsed.from.slice(0, 10)}` : null,
         parsed.to ? `${english ? "To" : "Hasta"} ${parsed.to.slice(0, 10)}` : null,
