@@ -2,6 +2,11 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+    },
+  },
   resolve: {
     alias: {
       "@shared": path.resolve(import.meta.dirname, "shared"),
@@ -11,7 +16,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["server/**/*.test.ts"],
+    include: ["server/**/*.test.ts", "client/**/*.test.ts", "client/**/*.test.tsx"],
     testTimeout: 30000,
     hookTimeout: 60000,
     fileParallelism: false,
