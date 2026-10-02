@@ -35,6 +35,12 @@ function useLocalStorage(): boolean {
          (process.env.NODE_ENV === "production" && !process.env.PRIVATE_OBJECT_DIR);
 }
 
+// Product images are uploaded through the server, so no browser CORS workaround
+// is needed. Prefer durable object storage in development as well as production.
+function useProductImageLocalStorage(): boolean {
+  return process.env.USE_LOCAL_STORAGE === "true" || !process.env.PRIVATE_OBJECT_DIR;
+}
+
 // Internal notifications are tenant-scoped and can be disabled per user.
 // The preference defaults to true for existing behavior, while allowing an
 // admin account to keep access without receiving automatic emails.
@@ -2986,7 +2992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const filename = `${randomUUID()}.${extension}`;
       const imageUrl = `/api/product-images/${tenantId}/${filename}`;
-      if (useLocalStorage()) {
+      if (useProductImageLocalStorage()) {
         await localStorageService.uploadProductImage(imageBuffer, tenantId, filename);
       } else {
         await new ObjectStorageService().uploadProductImage(
@@ -3001,27 +3007,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/product-images/:tenantId/:filename", isAuthenticated, async (req, res) => {
-    const { tenantId, filename } = req.params;
-    const filenamePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp|gif)$/i;
-    const effectiveTenantId = getEffectiveTenantId(req);
-    if (!filenamePattern.test(filename) || (effectiveTenantId && effectiveTenantId !== tenantId) ||
-        (!effectiveTenantId && !req.user!.isSuperAdmin)) {
-      return res.sendStatus(404);
-    }
-    const imageUrl = `/api/product-images/${tenantId}/${filename}`;
-    const product = await db.query.products.findFirst({
-      where: and(eq(products.tenantId, tenantId), eq(products.imageUrl, imageUrl)),
-      columns: { id: true },
-    });
-    if (!product) return res.sendStatus(404);
-
-    if (useLocalStorage()) {
-      const found = await localStorageService.streamFile(`product-images/${tenantId}/${filename}`, res);
-      return found ? undefined : res.sendStatus(404);
-    }
     try {
-      const image = await new ObjectStorageService().getObjectEntityFile(`product-images/${tenantId}/${filename}`);
-      return await new ObjectStorageService().downloadObject(image, res);
+      const { tenantId, filename } = req.params;
+      const filenamePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp|gif)$/i;
+      const effectiveTenantId = getEffectiveTenantId(req);
+      if (!filenamePattern.test(filename) || (effectiveTenantId && effectiveTenantId !== tenantId) ||
+          (!effectiveTenantId && !req.user!.isSuperAdmin)) {
+        return res.sendStatus(404);
+      }
+      const imageUrl = `/api/product-images/${tenantId}/${filename}`;
+      const product = await db.query.products.findFirst({
+        where: and(eq(products.tenantId, tenantId), eq(products.imageUrl, imageUrl)),
+        columns: { id: true },
+      });
+      if (!product) return res.sendStatus(404);
+
+      if (useProductImageLocalStorage()) {
+        const found = await localStorageService.streamFile(`product-images/${tenantId}/${filename}`, res);
+        if (!found) return res.sendStatus(404);
+        return;
+      }
+      const objectStorageService = new ObjectStorageService();
+      const image = await objectStorageService.getObjectEntityFile(`product-images/${tenantId}/${filename}`);
+      return await objectStorageService.downloadObject(image, res);
     } catch (error) {
       if (error instanceof ObjectNotFoundError) return res.sendStatus(404);
       console.error("Error serving product image:", error);
@@ -3793,6 +3801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { sendQuotationEmail } = await import("./quotation-email-service");
         await sendQuotationEmail({
           to: recipients,
+          tenantName: tenant?.name || "Nexxo",
           quotationData: {
             folio: quotation.folio,
             customerName: quotation.customer.name,
@@ -3961,6 +3970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const { sendQuotationEmail } = await import("./quotation-email-service");
             await sendQuotationEmail({
               to: recipients,
+              tenantName: tenant?.name || "Nexxo",
               quotationData: {
                 folio: quotation.folio,
                 customerName: quotation.customer.name,
@@ -4136,6 +4146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const { sendQuotationEmail } = await import("./quotation-email-service");
             await sendQuotationEmail({
               to: recipients,
+              tenantName: tenant?.name || "Nexxo",
               quotationData: {
                 folio: quotation.folio,
                 customerName: quotation.customer.name,
@@ -7060,8 +7071,13 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(400).json({ error: "El cliente no tiene correo electrónico configurado" });
       }
 
+      const emailTenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, invoice.tenantId),
+        columns: { name: true },
+      });
       const { sendInvoiceEmail } = await import("./invoice-email-service");
       await sendInvoiceEmail({
+        tenantName: emailTenant?.name || "Nexxo",
         invoice,
         customer: invoice.customer,
         recipientEmail: invoice.customer.email,
@@ -7855,6 +7871,12 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
     const userId = req.user!.id;
     const objectPath = req.params.objectPath;
+    const pathSegments = objectPath.split("/").filter(Boolean);
+    // Product images must use their tenant-scoped route, not this generic one.
+    if (objectPath.includes("\\") || pathSegments.some(segment => segment === ".." || segment === ".") ||
+        pathSegments[0] === "product-images") {
+      return res.sendStatus(404);
+    }
     
     // For local storage, serve files directly from filesystem
     if (useLocalStorage()) {
@@ -8692,6 +8714,7 @@ Proporciona tu análisis en el siguiente formato JSON:
         if (recipients.length > 0) {
           emailDelivery = await sendCheckoutEmail({
             to: recipients,
+            tenantName: tenant?.name || "Nexxo",
             checkinData: {
               customerName: effectiveCustomer.name,
               vendedorName: seller.fullName,

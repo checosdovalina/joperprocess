@@ -13,6 +13,7 @@
 - [Tenant PDF localization](tenant-pdf-localization.md) — all generated PDFs follow tenants.locale: en uses en-US; unknown/missing locales fall back to es-MX.
 - [Firebird chained auth and product sync](firebird-chained-auth-product-sync.md) — legacy Microsip databases may require SRP followed by Legacy_Auth; product sync must avoid per-row DB round trips.
 - [Internal email recipient isolation](internal-email-recipient-isolation.md) — automatic staff emails must require matching tenant, active user, and explicit email opt-in.
+- [Company email branding](company-email-branding.md) — company transactional emails use their own company name, not a fixed Grupo Joper sender or message label.
 - [Statement recipient selection](statement-recipient-selection.md) — configured customer recipients are authoritative; never fall back to all addresses when a saved selection becomes stale.
 - [Commercial results source](crm-completed-sale-metric.md) — compare visits with Check-in closure outcomes (sale, rental, not converted), not quotation/order conversion.
 - [Credit reauthorization order reuse](credit-reauthorization-order-reuse.md) — reapproval must atomically reuse/reopen the existing order; never create another order for the same quotation.

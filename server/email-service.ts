@@ -1,6 +1,7 @@
 import { MailerSend, EmailParams, Sender, Recipient, Attachment } from 'mailersend';
 import { ObjectStorageService } from './objectStorage';
 import { localStorageService } from './localStorage';
+import { companyEmailBranding } from './email-branding';
 
 const mailerSend = new MailerSend({
   apiKey: process.env.MAILERSEND_API_KEY || '',
@@ -15,6 +16,7 @@ function useLocalStorage(): boolean {
 
 interface SendCheckoutEmailParams {
   to: string[];
+  tenantName: string;
   checkinData: {
     customerName: string;
     vendedorName: string;
@@ -32,10 +34,12 @@ export interface CheckoutEmailResult {
 
 export async function sendCheckoutEmail({
   to,
+  tenantName,
   checkinData,
   pdfPath,
 }: SendCheckoutEmailParams): Promise<CheckoutEmailResult> {
   try {
+    const company = companyEmailBranding(tenantName);
     const recipients = [...new Set((to || []).map(email => email.trim().toLowerCase()).filter(Boolean))];
     if (recipients.length === 0) return { status: "skipped", sent: [], failed: [] };
     if (!process.env.MAILERSEND_API_KEY) {
@@ -183,7 +187,7 @@ export async function sendCheckoutEmail({
           </div>
           
           <div class="footer">
-            <p><strong>GRUPO JOPER</strong> - Sistema Comercial</p>
+            <p><strong>${company.htmlName}</strong> - Sistema Comercial</p>
             <p style="font-size: 12px; margin-top: 10px;">
               Este es un correo automático, por favor no responder.
             </p>
@@ -193,7 +197,7 @@ export async function sendCheckoutEmail({
     `;
     
     // Prepare sender
-    const sentFrom = new Sender('noreply@nexxo.com.mx', 'GRUPO JOPER');
+    const sentFrom = new Sender('noreply@nexxo.com.mx', company.name);
     
     // Prepare PDF attachment
     const attachment = new Attachment(

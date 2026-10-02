@@ -664,13 +664,12 @@ class MicrosipSyncService {
           id: products.id,
           code: products.code,
           active: products.active,
-          description: products.description,
           microsipArticuloId: products.microsipArticuloId,
         })
         .from(products)
         .where(eq(products.tenantId, this.tenantId));
 
-      const existingByMicrosipId = new Map<number, { id: string; code: string; active: boolean; description: string | null }>();
+      const existingByMicrosipId = new Map<number, { id: string; code: string; active: boolean }>();
       const existingCodes = new Set<string>();
       for (const product of allTenantProducts) {
         existingCodes.add(product.code);
@@ -728,8 +727,8 @@ class MicrosipSyncService {
           const productData = {
             code: msProduct.CLAVE_ARTICULO?.toString().trim() || (msProduct as any).CLAVE?.toString().trim() || String(msProduct.ARTICULO_ID),
             name: msProduct.NOMBRE?.trim() || 'Sin nombre',
-            // Descriptions are maintained in this app; Microsip doesn't provide one.
-            description: existing?.description ?? null,
+            // Intentionally omit description: it belongs to this app, not Microsip.
+            // Writing even a preloaded value could overwrite an edit made during sync.
             categoryId,
             unitOfMeasure: 'PZA',
             listPrice,

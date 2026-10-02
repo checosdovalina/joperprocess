@@ -19,6 +19,7 @@ import type { Server } from "http";
 import { inArray, eq } from "drizzle-orm";
 
 import { db } from "./db";
+import { localStorageService } from "./localStorage";
 import { registerRoutes } from "./routes";
 import { tenantMiddleware } from "./tenant";
 import { hashPassword } from "./auth";
@@ -1259,6 +1260,9 @@ describe("PATCH /api/products/:id (write guard, tenant-scoped)", () => {
 });
 
 describe("Product image upload", () => {
+  beforeAll(() => vi.stubEnv("USE_LOCAL_STORAGE", "true"));
+  afterAll(() => vi.unstubAllEnvs());
+
   it("accepts a validated image, associates it with a product, and isolates reads by tenant", async () => {
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const upload = await asAdminA.raw("POST", "/api/products/image-upload", png, "image/png");
@@ -1276,6 +1280,8 @@ describe("Product image upload", () => {
     expect(image.headers.get("content-type")).toContain("image/png");
     expect(Buffer.from(await image.arrayBuffer())).toEqual(png);
     expect((await asAdminB("GET", imageUrl)).status).toBe(404);
+    const genericObjectUrl = imageUrl.replace("/api/product-images/", "/objects/product-images/");
+    expect((await asAdminB("GET", genericObjectUrl)).status).toBe(404);
     expect((await asVendedorA1.raw("POST", "/api/products/image-upload", png, "image/png")).status).toBe(403);
 
     const invalidType = await asAdminA.raw("POST", "/api/products/image-upload", Buffer.from("not image"), "text/plain");
@@ -1284,6 +1290,7 @@ describe("Product image upload", () => {
       "POST", "/api/products/image-upload", Buffer.alloc(5 * 1024 * 1024 + 1), "image/png",
     );
     expect(tooLarge.status).toBe(413);
+    await localStorageService.deleteFile(imageUrl.replace(/^\/api\//, ""));
   });
 });
 

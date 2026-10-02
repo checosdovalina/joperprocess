@@ -1,7 +1,9 @@
 import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 import type { Invoice, Customer } from "@shared/schema";
+import { companyEmailBranding } from "./email-branding";
 
 interface SendInvoiceEmailParams {
+  tenantName: string;
   invoice: Invoice;
   customer: Customer;
   recipientEmail: string;
@@ -29,6 +31,7 @@ function formatDate(date: Date | string | null): string {
 }
 
 export async function sendInvoiceEmail({
+  tenantName,
   invoice,
   customer,
   recipientEmail,
@@ -41,6 +44,7 @@ export async function sendInvoiceEmail({
   }
 
   const mailerSend = new MailerSend({ apiKey });
+  const company = companyEmailBranding(tenantName);
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -64,7 +68,7 @@ export async function sendInvoiceEmail({
     <body>
       <div class="container">
         <div class="header">
-          <h1>GRUPO JOPER</h1>
+          <h1>${company.htmlName}</h1>
           <p>Sistema Comercial</p>
         </div>
         
@@ -121,7 +125,7 @@ export async function sendInvoiceEmail({
         </div>
         
         <div class="footer">
-          <p>Este correo fue generado automáticamente por el Sistema Comercial de GRUPO JOPER.</p>
+          <p>Este correo fue generado automáticamente por el Sistema Comercial de ${company.htmlName}.</p>
           <p>Por favor no responda directamente a este correo.</p>
         </div>
       </div>
@@ -129,7 +133,7 @@ export async function sendInvoiceEmail({
     </html>
   `;
 
-  const sentFrom = new Sender("noreply@nexxo.com.mx", "GRUPO JOPER");
+  const sentFrom = new Sender("noreply@nexxo.com.mx", company.name);
 
   const recipients = [new Recipient(recipientEmail, customer.name)];
   
@@ -140,7 +144,7 @@ export async function sendInvoiceEmail({
   const emailParams = new EmailParams()
     .setFrom(sentFrom)
     .setTo(recipients)
-    .setSubject(`Factura ${invoice.serie}-${invoice.folio} - GRUPO JOPER`)
+    .setSubject(`Factura ${invoice.serie}-${invoice.folio} - ${company.name}`)
     .setHtml(htmlContent);
 
   if (cc.length > 0) {

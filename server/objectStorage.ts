@@ -372,7 +372,7 @@ export class ObjectStorageService {
     contentType: string,
     ownerId: string,
   ): Promise<void> {
-    const fullPath = `${this.getPrivateObjectDir()}/product-images/${tenantId}/${filename}`;
+    const fullPath = `${this.getNormalizedPrivateDir()}/product-images/${tenantId}/${filename}`;
     const { bucketName, objectName } = parseObjectPath(fullPath);
     const file = objectStorageClient.bucket(bucketName).file(objectName);
     await new Promise<void>((resolve, reject) => {

@@ -1,4 +1,5 @@
 import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
+import { companyEmailBranding } from "./email-branding";
 
 interface ScheduledVisitReminderData {
   customerName: string;
@@ -32,7 +33,8 @@ export async function sendScheduledVisitReminderEmail(
   const sellerName = escapeHtml(visit.sellerName);
   const scheduledDate = escapeHtml(visit.scheduledDate);
   const meetingType = escapeHtml(visit.meetingType);
-  const companyName = escapeHtml(visit.companyName);
+  const company = companyEmailBranding(visit.companyName);
+  const companyName = company.htmlName;
   const topics = visit.topics.map(escapeHtml);
   const notes = visit.notes ? escapeHtml(visit.notes) : "";
 
@@ -59,7 +61,7 @@ export async function sendScheduledVisitReminderEmail(
   `;
 
   const email = new EmailParams()
-    .setFrom(new Sender("noreply@nexxo.com.mx", "NEXXO"))
+    .setFrom(new Sender("noreply@nexxo.com.mx", company.name))
     .setTo([new Recipient(to)])
     .setSubject(`Recordatorio de visita: ${visit.customerName}`)
     .setHtml(html);

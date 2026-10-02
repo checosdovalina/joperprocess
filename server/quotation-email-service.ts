@@ -1,9 +1,11 @@
 import { MailerSend, EmailParams, Sender, Recipient, Attachment } from "mailersend";
 import { ObjectStorageService } from "./objectStorage";
 import { localStorageService } from "./localStorage";
+import { companyEmailBranding } from "./email-branding";
 
 interface SendQuotationEmailParams {
   to: string[];
+  tenantName: string;
   quotationData: {
     folio: string;
     customerName: string;
@@ -29,11 +31,13 @@ const mailerSend = new MailerSend({
 
 export async function sendQuotationEmail({
   to,
+  tenantName,
   quotationData,
   pdfPath,
   approvalUrl,
 }: SendQuotationEmailParams): Promise<void> {
   try {
+    const company = companyEmailBranding(tenantName);
     if (!to || to.length === 0) {
       throw new Error("No recipients provided for email");
     }
@@ -53,7 +57,7 @@ export async function sendQuotationEmail({
       pdfBuffer = await objectStorageService.downloadObjectAsBuffer(pdfPath);
     }
 
-    const subject = `Cotización ${quotationData.folio} - GRUPO JOPER`;
+    const subject = `Cotización ${quotationData.folio} - ${company.name}`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -197,7 +201,7 @@ export async function sendQuotationEmail({
         <body>
           <div class="container">
             <div class="header">
-              <h1>GRUPO JOPER</h1>
+              <h1>${company.htmlName}</h1>
               <p>Sistema Comercial</p>
             </div>
             <div class="content">
@@ -247,10 +251,10 @@ export async function sendQuotationEmail({
 
               <p>Si tiene alguna pregunta o desea realizar algún cambio, no dude en contactarnos. Estamos a sus órdenes.</p>
               
-              <p>Atentamente,<br><strong>${quotationData.vendedorName}</strong><br>GRUPO JOPER</p>
+              <p>Atentamente,<br><strong>${quotationData.vendedorName}</strong><br>${company.htmlName}</p>
             </div>
             <div class="footer">
-              <p>Este correo fue enviado automáticamente desde el Sistema Comercial de GRUPO JOPER.</p>
+              <p>Este correo fue enviado automáticamente desde el Sistema Comercial de ${company.htmlName}.</p>
               <p>Por favor, no responda directamente a este correo.</p>
             </div>
           </div>
@@ -260,7 +264,7 @@ export async function sendQuotationEmail({
 
     const sentFrom = new Sender(
       "noreply@nexxo.com.mx",
-      "GRUPO JOPER - Sistema Comercial"
+      company.name
     );
 
     const recipients = to.map((email) => new Recipient(email));

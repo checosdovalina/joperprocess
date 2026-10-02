@@ -135,7 +135,7 @@ export function ProductForm({
         active: true,
       });
     }
-  }, [editingProduct, form]);
+  }, [editingProduct, form, open]);
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
     if (imageError) return;
@@ -143,7 +143,9 @@ export function ProductForm({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={nextOpen => {
+      if (!isPending) onOpenChange(nextOpen);
+    }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -203,6 +205,7 @@ export function ProductForm({
                 <Input
                   id="product-image-file"
                   type="file"
+                  disabled={isPending}
                   accept="image/jpeg,image/png,image/webp,image/gif"
                   data-testid="input-product-image-file"
                   onChange={event => {
@@ -234,24 +237,6 @@ export function ProductForm({
               )}
             </div>
 
-            <FormField
-              control={form.control}
-              name="imageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("products.image-url")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      value={field.value || ""}
-                      placeholder="https://..."
-                      data-testid="input-product-image-url"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <FormField
               control={form.control}
               name="description"
@@ -525,6 +510,7 @@ export function ProductForm({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                disabled={isPending}
                 data-testid="button-cancel"
               >
                 {t("btn.cancel")}
