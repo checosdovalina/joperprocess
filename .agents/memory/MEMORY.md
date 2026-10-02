@@ -19,3 +19,4 @@
 - [Credit reauthorization order reuse](credit-reauthorization-order-reuse.md) — reapproval must atomically reuse/reopen the existing order; never create another order for the same quotation.
 - [Partial MEX cancellation](partial-mex-cancellation.md) — cancel only unfulfilled quantities; preserve releases and financial documents, and never reactivate a cancelled order.
 - [Vitest JSX transform](vitest-jsx-transform.md) — Vitest's Vite/OXC pipeline may need its own JSX runtime setting when testing client TSX.
+- [Quotation descriptions](quotation-description-rules.md) — read-only below the product name; long descriptions must remain complete in all quotation views and across PDF pages.

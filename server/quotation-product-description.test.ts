@@ -95,8 +95,10 @@ describe("quotation PDF product descriptions", () => {
       .join("\n");
 
     expect(pageCount).toBeGreaterThan(2);
-    expect(renderedText).toContain("SPEC-0000");
-    expect(renderedText).toContain("SPEC-1399");
+    expect(renderedText.match(/SPEC-\d{4}/g)).toEqual(description.match(/SPEC-\d{4}/g));
+    expect(textSpy.mock.calls.filter(([text]) => text === "Código")).toHaveLength(pageCount);
+    expect(textSpy.mock.calls.filter(([text]) => text === "LONG-DESC")).toHaveLength(1);
     expect(textSpy.mock.calls.some(([text]) => typeof text === "string" && text.includes("TOTAL:"))).toBe(true);
+    expect(renderedText.indexOf("TOTAL:")).toBeGreaterThan(renderedText.indexOf("SPEC-1399"));
   });
 });
