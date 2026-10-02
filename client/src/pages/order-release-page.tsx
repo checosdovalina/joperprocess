@@ -449,6 +449,16 @@ export default function OrderReleasePage() {
   const filteredPendingOrders = pendingOrders.filter(matchesSearch);
   const filteredHistoryOrders = historyOrders.filter(matchesSearch);
 
+  const releaseErrorMessage = (error: Error, fallbackKey: string) => {
+    if (/^401:/.test(error.message)) return t("release.toast.session-expired");
+    if (/^403:/.test(error.message)) return t("release.toast.not-allowed");
+    return error.message || t(fallbackKey);
+  };
+  const refreshReleaseLists = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=pending"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
+  };
+
   const approveMutation = useMutation({
     mutationFn: ({ orderId, notes }: { orderId: string; notes: string }) =>
       apiRequest("POST", `/api/order-release/${orderId}/approve`, { releaseNotes: notes }),
@@ -457,12 +467,13 @@ export default function OrderReleasePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
-      toast({ title: t("release.toast.released"), description: t("release.toast.notified") });
+      toast({ title: t("release.toast.released"), description: t("release.toast.release-saved") });
       setApproveTarget(null);
       setApproveNotes("");
     },
-    onError: () => {
-      toast({ variant: "destructive", title: t("label.error"), description: t("release.toast.release-error") });
+    onError: (error: Error) => {
+      refreshReleaseLists();
+      toast({ variant: "destructive", title: t("label.error"), description: releaseErrorMessage(error, "release.toast.release-error") });
     },
   });
 
@@ -492,12 +503,13 @@ export default function OrderReleasePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/order-release?status=history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quotations"] });
-      toast({ title: t("release.toast.rejected"), description: t("release.toast.notified") });
+      toast({ title: t("release.toast.rejected"), description: t("release.toast.reject-saved") });
       setRejectTarget(null);
       setRejectNotes("");
     },
-    onError: () => {
-      toast({ variant: "destructive", title: t("label.error"), description: t("release.toast.reject-error") });
+    onError: (error: Error) => {
+      refreshReleaseLists();
+      toast({ variant: "destructive", title: t("label.error"), description: releaseErrorMessage(error, "release.toast.reject-error") });
     },
   });
 
@@ -513,8 +525,9 @@ export default function OrderReleasePage() {
       setCloseTarget(null);
       setCloseNotes("");
     },
-    onError: () => {
-      toast({ variant: "destructive", title: t("label.error"), description: t("release.toast.close-error") });
+    onError: (error: Error) => {
+      refreshReleaseLists();
+      toast({ variant: "destructive", title: t("label.error"), description: releaseErrorMessage(error, "release.toast.close-error") });
     },
   });
 

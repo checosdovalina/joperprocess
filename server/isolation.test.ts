@@ -46,14 +46,18 @@ import {
   UserRole,
   QuotationStatus,
   ScheduledVisitStatus,
+  OrderStatus,
+  OrderReleaseStatus,
 } from "@shared/schema";
 
 // Stub the transactional email provider so the send-email happy path can be
 // asserted without dispatching a real email. The route imports it dynamically
 // (`await import("./quotation-email-service")`), which vi.mock intercepts.
 const sendQuotationEmailMock = vi.fn(async () => {});
+const sendOrderReleaseEmailMock = vi.fn(async (_data: any) => {});
 vi.mock("./quotation-email-service", () => ({
   sendQuotationEmail: (...args: any[]) => sendQuotationEmailMock(...args),
+  sendOrderReleaseEmail: (data: any) => sendOrderReleaseEmailMock(data),
 }));
 
 const sendScheduledVisitReminderEmailMock = vi.fn(async () => {});
@@ -106,6 +110,113 @@ type Ctx = {
 };
 
 const ctx = {} as Ctx;
+
+describe("Administrative order release", () => {
+  async function newOrder(status = OrderStatus.PENDING) {
+    return insertReturningId(orders, {
+      tenantId: ctx.tenantA, empresaId: ctx.empresaA1, quotationId: ctx.qA1,
+      status, releaseStatus: OrderReleaseStatus.PENDING,
+    });
+  }
+  const readOrder = (id: string) => db.query.orders.findFirst({ where: eq(orders.id, id) });
+
+  it("saves approval, comments and approving user before notifying only the document's company", async () => {
+    sendOrderReleaseEmailMock.mockClear();
+    const id = await newOrder();
+    const response = await asAdminA("POST", `/api/order-release/${id}/approve`, { releaseNotes: "  Ya está listo  " });
+    expect(response.status).toBe(200);
+    expect(await readOrder(id)).toMatchObject({
+      releaseStatus: OrderReleaseStatus.APPROVED, releaseNotes: "Ya está listo", releasedById: ctx.adminA.id,
+    });
+    expect((await readOrder(id))?.releasedAt).toBeInstanceOf(Date);
+    const pending = await (await asAdminA("GET", "/api/order-release?status=pending")).json();
+    const history = await (await asAdminA("GET", "/api/order-release?status=history")).json();
+    expect(pending.some((order: any) => order.id === id)).toBe(false);
+    expect(history.some((order: any) => order.id === id && order.releaseStatus === "approved")).toBe(true);
+    await vi.waitFor(() => expect(sendOrderReleaseEmailMock).toHaveBeenCalled());
+    const message = sendOrderReleaseEmailMock.mock.calls.at(-1)![0];
+    expect(message.tenantName).toBe(`TenantA ${RUN}`);
+    expect(message.recipients.some((recipient: any) => recipient.email === ctx.adminB.email)).toBe(false);
+  });
+
+  it("cannot approve another company's order or approve as a salesperson", async () => {
+    const id = await newOrder();
+    expect((await asAdminB("POST", `/api/order-release/${id}/approve`, {})).status).toBe(404);
+    expect((await asVendedorA1("POST", `/api/order-release/${id}/approve`, {})).status).toBe(403);
+    expect((await readOrder(id))?.releaseStatus).toBe(OrderReleaseStatus.PENDING);
+  });
+
+  it("allows exactly one transition when approval and rejection arrive together", async () => {
+    const id = await newOrder();
+    const results = await Promise.all([
+      asAdminA("POST", `/api/order-release/${id}/approve`, { releaseNotes: "Listo" }),
+      asAdminA("POST", `/api/order-release/${id}/reject`, { releaseNotes: "No continuar" }),
+    ]);
+    expect(results.map(response => response.status).sort()).toEqual([200, 409]);
+    const saved = await readOrder(id);
+    const finalStatus = saved!.releaseStatus;
+    expect([OrderReleaseStatus.APPROVED, OrderReleaseStatus.REJECTED]).toContain(finalStatus);
+    expect((await asAdminA("POST", `/api/order-release/${id}/approve`, {})).status).toBe(409);
+    expect((await readOrder(id))?.releaseStatus).toBe(finalStatus);
+  });
+
+  it.each([OrderStatus.CANCELLED, OrderStatus.CLOSED])("never offers or processes a finalized %s order", async status => {
+    const id = await newOrder(status);
+    const pending = await (await asAdminA("GET", "/api/order-release?status=pending")).json();
+    expect(pending.some((order: any) => order.id === id)).toBe(false);
+    for (const action of ["approve", "reject", "close"]) {
+      expect((await asAdminA("POST", `/api/order-release/${id}/${action}`, { releaseNotes: "Listo" })).status).toBe(409);
+    }
+    expect(await readOrder(id)).toMatchObject({ status, releaseStatus: OrderReleaseStatus.PENDING });
+  });
+
+  it("rejects invalid comments without treating them as a server error", async () => {
+    const id = await newOrder();
+    for (const action of ["approve", "reject", "close"]) {
+      expect((await asAdminA("POST", `/api/order-release/${id}/${action}`, { releaseNotes: { invalid: true } })).status).toBe(400);
+    }
+    expect((await asAdminA("POST", `/api/order-release/${id}/reject`, { releaseNotes: "  " })).status).toBe(400);
+    expect((await readOrder(id))?.releaseStatus).toBe(OrderReleaseStatus.PENDING);
+  });
+
+  it("records rejection and administrative closure with their distinct states", async () => {
+    const rejectedId = await newOrder();
+    expect((await asAdminA("POST", `/api/order-release/${rejectedId}/reject`, { releaseNotes: "  Requiere revisión  " })).status).toBe(200);
+    expect(await readOrder(rejectedId)).toMatchObject({
+      status: OrderStatus.PENDING, releaseStatus: OrderReleaseStatus.REJECTED, releaseNotes: "Requiere revisión",
+    });
+    const closedId = await newOrder();
+    expect((await asAdminA("POST", `/api/order-release/${closedId}/close`, { releaseNotes: "Cliente no continúa" })).status).toBe(200);
+    expect(await readOrder(closedId)).toMatchObject({
+      status: OrderStatus.CLOSED, releaseStatus: OrderReleaseStatus.CLOSED, releaseNotes: "Cliente no continúa",
+    });
+  });
+
+  it("a notification failure never rolls back a saved approval", async () => {
+    const id = await newOrder();
+    const previousCalls = sendOrderReleaseEmailMock.mock.calls.length;
+    sendOrderReleaseEmailMock.mockRejectedValueOnce(new Error("Simulated email outage"));
+    expect((await asAdminA("POST", `/api/order-release/${id}/approve`, {})).status).toBe(200);
+    await vi.waitFor(() => expect(sendOrderReleaseEmailMock.mock.calls.length).toBeGreaterThan(previousCalls));
+    await expect(sendOrderReleaseEmailMock.mock.results[previousCalls].value).rejects.toThrow("Simulated email outage");
+    expect((await readOrder(id))?.releaseStatus).toBe(OrderReleaseStatus.APPROVED);
+    sendOrderReleaseEmailMock.mockResolvedValue(undefined);
+  });
+
+  it("does not bypass a salesperson's notification opt-out", async () => {
+    const id = await newOrder();
+    await db.update(users).set({ receiveEmailNotifications: false }).where(eq(users.id, ctx.vendedorA1.id));
+    try {
+      const previousCalls = sendOrderReleaseEmailMock.mock.calls.length;
+      expect((await asAdminA("POST", `/api/order-release/${id}/approve`, {})).status).toBe(200);
+      await vi.waitFor(() => expect(sendOrderReleaseEmailMock.mock.calls.length).toBeGreaterThan(previousCalls));
+      const message = sendOrderReleaseEmailMock.mock.calls[previousCalls][0];
+      expect(message.recipients.some((recipient: any) => recipient.email === ctx.vendedorA1.email)).toBe(false);
+    } finally {
+      await db.update(users).set({ receiveEmailNotifications: true }).where(eq(users.id, ctx.vendedorA1.id));
+    }
+  });
+});
 
 async function insertReturningId(table: any, values: any): Promise<string> {
   const [row] = await db.insert(table).values(values).returning({ id: table.id });

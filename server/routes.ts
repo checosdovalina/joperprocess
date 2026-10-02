@@ -5827,6 +5827,10 @@ Proporciona tu análisis en el siguiente formato JSON:
 
   // ─── ORDER RELEASE ──────────────────────────────────────────────────────────
 
+  const releaseActionSchema = z.object({
+    releaseNotes: z.string().trim().max(10000).optional(),
+  });
+
   app.get("/api/order-release", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const { status } = req.query as { status?: string };
@@ -5869,7 +5873,8 @@ Proporciona tu análisis en el siguiente formato JSON:
 
       let filtered = orderRows;
       if (status === "pending") {
-        filtered = orderRows.filter(o => o.releaseStatus === "pending");
+        filtered = orderRows.filter(o => o.releaseStatus === "pending" &&
+          ![OrderStatus.CANCELLED, OrderStatus.CLOSED].includes(o.status as any));
       } else if (status === "history") {
         filtered = orderRows.filter(o => o.releaseStatus === "approved" || o.releaseStatus === "rejected" || o.releaseStatus === "closed");
       }
@@ -5945,6 +5950,8 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/order-release/:id/approve", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const { id } = req.params;
+      const parsed = releaseActionSchema.safeParse(req.body ?? {});
+      if (!parsed.success) return res.status(400).json({ error: "Comentarios inválidos: usa texto de hasta 10,000 caracteres" });
       const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
 
       const order = await db.query.orders.findFirst({
@@ -5956,14 +5963,14 @@ Proporciona tu análisis en el siguiente formato JSON:
         },
       });
 
-      if (!order) return res.status(404).json({ error: "Order not found" });
-      if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
+      if (!order) return res.status(404).json({ error: "Pedido no encontrado en la compañía seleccionada" });
+      if (order.releaseStatus !== "pending") return res.status(409).json({ error: "El pedido ya no está pendiente de liberación. Actualiza la lista" });
       if ([OrderStatus.CANCELLED, OrderStatus.CLOSED].includes(order.status as any)) {
         return res.status(409).json({ error: "El pedido ya está finalizado" });
       }
 
-      const { releaseNotes: approveNotes } = req.body;
-      await db.update(orders).set({
+      const approveNotes = parsed.data.releaseNotes;
+      const [approved] = await db.update(orders).set({
         releaseStatus: OrderReleaseStatus.APPROVED,
         releasedById: req.user!.id,
         releasedAt: new Date(),
@@ -5971,9 +5978,11 @@ Proporciona tu análisis en el siguiente formato JSON:
         ...(approveNotes?.trim() && { releaseNotes: approveNotes.trim() }),
       }).where(and(
         eq(orders.id, id),
+        eq(orders.tenantId, order.tenantId),
         eq(orders.releaseStatus, OrderReleaseStatus.PENDING),
         notInArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.CLOSED]),
-      ));
+      )).returning({ id: orders.id });
+      if (!approved) return res.status(409).json({ error: "El pedido ya fue procesado o finalizado. Actualiza la lista" });
 
       // Skip email if the order is already past the initial stage (in production,
       // shipped, delivered, etc.) — avoids spam when approving backlog orders.
@@ -5993,28 +6002,16 @@ Proporciona tu análisis en el siguiente formato JSON:
           try {
             const { sendOrderReleaseEmail } = await import("./quotation-email-service");
             const quotation = order.quotation as any;
-            const tenantName = req.tenant?.name || "Sistema Comercial";
+            const company = await db.query.tenants.findFirst({ where: eq(tenants.id, order.tenantId), columns: { name: true } });
+            const tenantName = company?.name || "Nexxo";
             const releasedByName = req.user!.fullName;
 
             // Collect recipients: vendedor + C&C + admins (not the customer)
-            const allUsers = resolvedTenantId
-              ? await getTenantEmailUsers(resolvedTenantId)
-              : await db.query.users.findMany({
-                  where: and(eq(users.active, true), eq(users.receiveEmailNotifications, true)),
-                });
+            const allUsers = await getTenantEmailUsers(order.tenantId);
             const recipients = allUsers
               .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
               .filter(u => u.email)
               .map(u => ({ email: u.email!, name: u.fullName }));
-
-            // Add vendedor if not already included
-            const vendedorEmail = quotation?.user?.email;
-            const vendedorName = quotation?.user?.fullName;
-           if (vendedorEmail &&
-               quotation?.user?.receiveEmailNotifications !== false &&
-               !recipients.find(r => r.email === vendedorEmail)) {
-              recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
-            }
 
             const uniqueRecipients = [...new Map(recipients.map(r => [r.email, r])).values()];
 
@@ -6041,14 +6038,16 @@ Proporciona tu análisis en el siguiente formato JSON:
       res.json({ success: true });
     } catch (error) {
       console.error("Error approving order release:", error);
-      res.status(500).json({ error: "Error approving order release" });
+      res.status(500).json({ error: "No se pudo guardar la liberación del pedido. Revisa el registro de errores del servidor" });
     }
   });
 
   app.post("/api/order-release/:id/reject", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const { id } = req.params;
-      const { releaseNotes } = req.body;
+      const parsed = releaseActionSchema.safeParse(req.body ?? {});
+      if (!parsed.success) return res.status(400).json({ error: "Comentarios inválidos: usa texto de hasta 10,000 caracteres" });
+      const { releaseNotes } = parsed.data;
       if (!releaseNotes?.trim()) return res.status(400).json({ error: "Motivo de rechazo requerido" });
 
       const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
@@ -6062,42 +6061,40 @@ Proporciona tu análisis en el siguiente formato JSON:
         },
       });
 
-      if (!order) return res.status(404).json({ error: "Order not found" });
-      if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
+      if (!order) return res.status(404).json({ error: "Pedido no encontrado en la compañía seleccionada" });
+      if (order.releaseStatus !== "pending") return res.status(409).json({ error: "El pedido ya no está pendiente de liberación. Actualiza la lista" });
+      if ([OrderStatus.CANCELLED, OrderStatus.CLOSED].includes(order.status as any)) {
+        return res.status(409).json({ error: "El pedido ya está finalizado" });
+      }
 
-      await db.update(orders).set({
+      const [rejected] = await db.update(orders).set({
         releaseStatus: OrderReleaseStatus.REJECTED,
         releaseNotes: releaseNotes.trim(),
         releasedById: req.user!.id,
         releasedAt: new Date(),
         updatedAt: new Date(),
-      }).where(eq(orders.id, id));
+      }).where(and(
+        eq(orders.id, id),
+        eq(orders.tenantId, order.tenantId),
+        eq(orders.releaseStatus, OrderReleaseStatus.PENDING),
+        notInArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.CLOSED]),
+      )).returning({ id: orders.id });
+      if (!rejected) return res.status(409).json({ error: "El pedido ya fue procesado o finalizado. Actualiza la lista" });
 
       // Send email notifications (fire and forget)
       (async () => {
         try {
           const { sendOrderReleaseEmail } = await import("./quotation-email-service");
           const quotation = order.quotation as any;
-          const tenantName = req.tenant?.name || "Sistema Comercial";
+          const company = await db.query.tenants.findFirst({ where: eq(tenants.id, order.tenantId), columns: { name: true } });
+          const tenantName = company?.name || "Nexxo";
           const releasedByName = req.user!.fullName;
 
-           const allUsers = resolvedTenantId
-             ? await getTenantEmailUsers(resolvedTenantId)
-             : await db.query.users.findMany({
-                 where: and(eq(users.active, true), eq(users.receiveEmailNotifications, true)),
-               });
+          const allUsers = await getTenantEmailUsers(order.tenantId);
           const recipients = allUsers
             .filter(u => [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.VENTAS_LOGISTICA].includes(u.role as any) || u.id === quotation?.userId)
             .filter(u => u.email)
             .map(u => ({ email: u.email!, name: u.fullName }));
-
-          const vendedorEmail = quotation?.user?.email;
-          const vendedorName = quotation?.user?.fullName;
-           if (vendedorEmail &&
-               quotation?.user?.receiveEmailNotifications !== false &&
-               !recipients.find(r => r.email === vendedorEmail)) {
-            recipients.push({ email: vendedorEmail, name: vendedorName || "Vendedor" });
-          }
 
           const uniqueRecipients = [...new Map(recipients.map(r => [r.email, r])).values()];
 
@@ -6124,7 +6121,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       res.json({ success: true });
     } catch (error) {
       console.error("Error rejecting order release:", error);
-      res.status(500).json({ error: "Error rejecting order release" });
+      res.status(500).json({ error: "No se pudo guardar el rechazo del pedido. Revisa el registro de errores del servidor" });
     }
   });
 
@@ -6134,7 +6131,9 @@ Proporciona tu análisis en el siguiente formato JSON:
   app.post("/api/order-release/:id/close", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const { id } = req.params;
-      const { releaseNotes } = req.body;
+      const parsed = releaseActionSchema.safeParse(req.body ?? {});
+      if (!parsed.success) return res.status(400).json({ error: "Comentarios inválidos: usa texto de hasta 10,000 caracteres" });
+      const { releaseNotes } = parsed.data;
 
       const resolvedTenantId = req.tenant?.id || req.user?.tenantId || null;
 
@@ -6142,8 +6141,8 @@ Proporciona tu análisis en el siguiente formato JSON:
         where: and(eq(orders.id, id), resolvedTenantId ? eq(orders.tenantId, resolvedTenantId) : undefined),
       });
 
-      if (!order) return res.status(404).json({ error: "Order not found" });
-      if (order.releaseStatus !== "pending") return res.status(400).json({ error: "Order is not pending release" });
+      if (!order) return res.status(404).json({ error: "Pedido no encontrado en la compañía seleccionada" });
+      if (order.releaseStatus !== "pending") return res.status(409).json({ error: "El pedido ya no está pendiente de liberación. Actualiza la lista" });
 
       const [closed] = await db.update(orders).set({
         releaseStatus: OrderReleaseStatus.CLOSED,
@@ -6163,7 +6162,7 @@ Proporciona tu análisis en el siguiente formato JSON:
       res.json({ success: true });
     } catch (error) {
       console.error("Error closing order release:", error);
-      res.status(500).json({ error: "Error closing order release" });
+      res.status(500).json({ error: "No se pudo guardar el cierre del pedido. Revisa el registro de errores del servidor" });
     }
   });
 
