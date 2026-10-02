@@ -282,28 +282,66 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       total:  { x: MARGIN + 94 + DESC_W + 44 + 72 + DISC_W + MON_W, w: 80 },
     };
 
-    // Table header row
     const TH = 15;
-    doc.rect(MARGIN, currentY, CONTENT_W, TH).fill(primaryColor);
-    doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text("#",          cols.num.x  + 2, currentY + 4, { width: cols.num.w  - 2, align: "center" });
-    doc.text(t("Código", "Code"), cols.code.x + 2, currentY + 4, { width: cols.code.w - 2 });
-    doc.text(t("Descripción", "Description"),cols.desc.x + 2, currentY + 4, { width: cols.desc.w - 2 });
-    doc.text(t("Cant.", "Qty."), cols.qty.x + 2, currentY + 4, { width: cols.qty.w - 4, align: "center" });
-    doc.text(t("P. Unit.", "Unit Price"), cols.price.x + 2, currentY + 4, { width: cols.price.w - 4, align: "right" });
-    if (!hideDiscount) {
-      doc.text(t("Desc%", "Disc%"), cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
-    }
-    if (showMonColumn) {
-      doc.text(t("Mon.", "Curr."), cols.mon.x + 2, currentY + 4, { width: cols.mon.w - 2, align: "center" });
-    }
-    doc.text("Subtotal",   cols.total.x+ 2, currentY + 4, { width: cols.total.w- 4, align: "right" });
-    currentY += TH;
+    const drawTableHeader = () => {
+      doc.rect(MARGIN, currentY, CONTENT_W, TH).fill(primaryColor);
+      doc.fontSize(7.5).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text("#",          cols.num.x  + 2, currentY + 4, { width: cols.num.w  - 2, align: "center" });
+      doc.text(t("Código", "Code"), cols.code.x + 2, currentY + 4, { width: cols.code.w - 2 });
+      doc.text(t("Descripción", "Description"),cols.desc.x + 2, currentY + 4, { width: cols.desc.w - 2 });
+      doc.text(t("Cant.", "Qty."), cols.qty.x + 2, currentY + 4, { width: cols.qty.w - 4, align: "center" });
+      doc.text(t("P. Unit.", "Unit Price"), cols.price.x + 2, currentY + 4, { width: cols.price.w - 4, align: "right" });
+      if (!hideDiscount) {
+        doc.text(t("Desc%", "Disc%"), cols.disc.x + 2, currentY + 4, { width: cols.disc.w - 2, align: "center" });
+      }
+      if (showMonColumn) {
+        doc.text(t("Mon.", "Curr."), cols.mon.x + 2, currentY + 4, { width: cols.mon.w - 2, align: "center" });
+      }
+      doc.text("Subtotal", cols.total.x + 2, currentY + 4, { width: cols.total.w - 4, align: "right" });
+      currentY += TH;
+    };
+    const startNewTablePage = () => {
+      doc.addPage({ size: "LETTER", margin: 0 });
+      currentY = 20;
+      drawTableHeader();
+    };
+    drawTableHeader();
 
-    // Table rows — dynamic height to handle long product names
+    // Reserve space for totals/footer and split unusually long descriptions across pages.
     const ROW_PAD = 4;
     const MIN_ROW_H = 16;
+    const TABLE_BOTTOM = PAGE_H - 160;
+    const textWidth = cols.desc.w - 4;
     doc.fontSize(7.5).font("Helvetica");
+
+    const takeTextChunk = (text: string, maxHeight: number): { chunk: string; rest: string } => {
+      const chars = Array.from(text);
+      doc.font("Helvetica").fontSize(7);
+      const fits = (length: number) =>
+        doc.heightOfString(chars.slice(0, length).join(""), { width: textWidth }) <= maxHeight - 1;
+
+      let low = 0;
+      let high = chars.length;
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (fits(middle)) low = middle;
+        else high = middle - 1;
+      }
+
+      // Prefer ending at a word or paragraph boundary, but split a long unbroken token
+      // when necessary so even pasted SKUs/URLs cannot push the text off the page.
+      let splitAt = low;
+      if (splitAt < chars.length) {
+        const fittedText = chars.slice(0, splitAt).join("");
+        const boundary = Math.max(fittedText.lastIndexOf(" "), fittedText.lastIndexOf("\n"));
+        if (boundary >= Math.floor(splitAt * 0.75)) splitAt = boundary + 1;
+      }
+      if (splitAt === 0) splitAt = Math.min(1, chars.length);
+
+      const chunk = chars.slice(0, splitAt).join("").trimEnd();
+      const rest = chars.slice(splitAt).join("").trimStart();
+      return { chunk, rest };
+    };
 
     const fmtMXN = (v: number) => formatPdfCurrency(v, "MXN", language);
     const fmtUSD = (v: number) => formatPdfCurrency(v, "USD", language);
@@ -311,7 +349,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // For legacy mixed-currency rows: format each item in its own currency
     const fmtItem = (v: number, cur: string) => cur === "USD" ? fmtUSD(v) : fmtMXN(v);
 
-    items.forEach((item, index) => {
+    for (const [index, item] of items.entries()) {
       const itemCurrency = (item as any).currency || "MXN";
       // If items have mixed currencies (legacy AMBAS), display in their own currency; otherwise convert
       const displayUnitPrice = showMonColumn
@@ -322,51 +360,87 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
         : convertToQuote(parseFloat(String(item.subtotal))  || 0, itemCurrency);
 
       const productDescription = item.description?.trim();
-      const rowDescription = productDescription
-        ? `${item.productName}\n${productDescription}`
-        : item.productName;
-      // Account for both the product name and its description before drawing the row.
-      const descH = doc.heightOfString(rowDescription, { width: cols.desc.w - 4 });
+      const nameHeight = doc.heightOfString(item.productName, { width: textWidth });
+      doc.font("Helvetica").fontSize(7);
+      const productDescriptionHeight = productDescription
+        ? doc.heightOfString(productDescription, { width: textWidth })
+        : 0;
+      doc.fontSize(7.5);
+      const descH = nameHeight + (productDescription ? 2 + productDescriptionHeight : 0);
       const rowH = Math.max(MIN_ROW_H, descH + ROW_PAD * 2);
 
-      if (currentY + rowH > PAGE_H - 160) {
-        doc.addPage({ size: "LETTER", margin: 0 });
-        currentY = 20;
+      // A regular long description remains one row, moving intact to a fresh page
+      // when needed. Only descriptions taller than a full content page are continued.
+      if (rowH > TABLE_BOTTOM - currentY && rowH <= TABLE_BOTTOM - 20 - TH) {
+        startNewTablePage();
       }
 
       const rowBg = index % 2 === 0 ? "#ffffff" : lightColor;
-      doc.rect(MARGIN, currentY, CONTENT_W, rowH).fill(rowBg);
-      doc.fillColor("#333333");
-
-      const rowY = currentY + ROW_PAD;
-      doc.text(String(index + 1),  cols.num.x  + 2, rowY, { width: cols.num.w  - 2, align: "center", lineBreak: false });
-      doc.text(item.productCode || "-", cols.code.x + 2, rowY, { width: cols.code.w - 4, lineBreak: false });
-      doc.text(item.productName,   cols.desc.x + 2, rowY, { width: cols.desc.w - 4 });
-      if (productDescription) {
-        const nameHeight = doc.heightOfString(item.productName, { width: cols.desc.w - 4 });
-        doc.font("Helvetica").fontSize(7).fillColor("#555555").text(
-          productDescription,
-          cols.desc.x + 2,
-          rowY + nameHeight + 2,
-          { width: cols.desc.w - 4 },
-        );
-        doc.fontSize(7.5).fillColor("#333333");
-      }
-      doc.text(formatPdfNumber(parseFloat(item.quantity), language), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
       const rowFmt = showMonColumn ? (v: number) => fmtItem(v, itemCurrency) : fmtQuote;
-      doc.text(rowFmt(displayUnitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
-      if (!hideDiscount) {
-        doc.text(formatPdfNumber(parseFloat(item.discountPercent || "0"), language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
-      }
-      if (showMonColumn) {
-        doc.fillColor(itemCurrency === "USD" ? "#1a6b3a" : "#444");
-        doc.text(itemCurrency, cols.mon.x + 2, rowY, { width: cols.mon.w - 2, align: "center", lineBreak: false });
-        doc.fillColor("#333333");
-      }
-      doc.text(rowFmt(displaySubtotal), cols.total.x + 2, rowY, { width: cols.total.w - 4, align: "right", lineBreak: false });
 
-      currentY += rowH;
-    });
+      const drawNumericCells = (rowY: number) => {
+        doc.fontSize(7.5).font("Helvetica").fillColor("#333333");
+        doc.text(String(index + 1), cols.num.x + 2, rowY, { width: cols.num.w - 2, align: "center", lineBreak: false });
+        doc.text(item.productCode || "-", cols.code.x + 2, rowY, { width: cols.code.w - 4, lineBreak: false });
+        doc.text(formatPdfNumber(parseFloat(item.quantity), language), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
+        doc.text(rowFmt(displayUnitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });
+        if (!hideDiscount) {
+          doc.text(formatPdfNumber(parseFloat(item.discountPercent || "0"), language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%", cols.disc.x + 2, rowY, { width: cols.disc.w - 2, align: "center", lineBreak: false });
+        }
+        if (showMonColumn) {
+          doc.fillColor(itemCurrency === "USD" ? "#1a6b3a" : "#444");
+          doc.text(itemCurrency, cols.mon.x + 2, rowY, { width: cols.mon.w - 2, align: "center", lineBreak: false });
+          doc.fillColor("#333333");
+        }
+        doc.text(rowFmt(displaySubtotal), cols.total.x + 2, rowY, { width: cols.total.w - 4, align: "right", lineBreak: false });
+      };
+
+      if (rowH <= TABLE_BOTTOM - currentY) {
+        doc.rect(MARGIN, currentY, CONTENT_W, rowH).fill(rowBg);
+        doc.fillColor("#333333");
+        const rowY = currentY + ROW_PAD;
+        doc.text(item.productName, cols.desc.x + 2, rowY, { width: textWidth });
+        if (productDescription) {
+          doc.font("Helvetica").fontSize(7).fillColor("#555555")
+            .text(productDescription, cols.desc.x + 2, rowY + nameHeight + 2, { width: textWidth });
+        }
+        drawNumericCells(rowY);
+        currentY += rowH;
+      } else {
+        // Begin on a fresh page, then add description chunks that fit above the
+        // reserved totals/footer area. Repeat table headers on every continuation.
+        startNewTablePage();
+        let remaining = productDescription || "";
+        let isFirstSegment = true;
+        while (remaining) {
+          const continuationName = isFirstSegment
+            ? item.productName
+            : `${t("Continuación:", "Continued:")} ${item.productName}`;
+          const segmentNameHeight = doc.heightOfString(continuationName, { width: textWidth });
+          const descriptionTop = currentY + ROW_PAD + segmentNameHeight + 2;
+          const availableDescriptionHeight = TABLE_BOTTOM - descriptionTop - ROW_PAD;
+          const { chunk, rest } = takeTextChunk(remaining, availableDescriptionHeight);
+          doc.font("Helvetica").fontSize(7);
+          const chunkHeight = doc.heightOfString(chunk, { width: textWidth });
+          const segmentHeight = Math.max(MIN_ROW_H, ROW_PAD * 2 + segmentNameHeight + 2 + chunkHeight);
+
+          doc.rect(MARGIN, currentY, CONTENT_W, segmentHeight).fill(rowBg);
+          doc.fillColor("#333333");
+          const rowY = currentY + ROW_PAD;
+          doc.text(continuationName, cols.desc.x + 2, rowY, { width: textWidth });
+          if (chunk) {
+            doc.font("Helvetica").fontSize(7).fillColor("#555555")
+              .text(chunk, cols.desc.x + 2, rowY + segmentNameHeight + 2, { width: textWidth });
+          }
+          if (isFirstSegment) drawNumericCells(rowY);
+          currentY += segmentHeight;
+          remaining = rest;
+          isFirstSegment = false;
+          if (remaining) startNewTablePage();
+        }
+        if (!productDescription) currentY += rowH;
+      }
+    }
 
     // Bottom border of table
     doc.rect(MARGIN, currentY, CONTENT_W, 1).fill(mediumColor);
