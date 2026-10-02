@@ -1119,7 +1119,14 @@ export default function QuotationsPage() {
                                 return (
                                   <TableRow key={item.id}>
                                     <TableCell className="font-mono text-xs">{item.productCode || "-"}</TableCell>
-                                    <TableCell>{item.productName}</TableCell>
+                                    <TableCell>
+                                      <div className="font-medium">{item.productName}</div>
+                                      {item.description?.trim() && (
+                                        <div className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                                          {item.description}
+                                        </div>
+                                      )}
+                                    </TableCell>
                                     <TableCell className="text-center">{parseFloat(item.quantity)}</TableCell>
                                     <TableCell className="text-right">{fmt(item.unitPrice)}</TableCell>
                                     <TableCell className="text-center">{parseFloat(item.discountPercent || "0").toFixed(1)}%</TableCell>

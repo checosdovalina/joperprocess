@@ -1274,6 +1274,11 @@ export function QuotationForm({
                                     </span>
                                   )}
                                 </Button>
+                                {item.description?.trim() && (
+                                  <div className="mt-1 max-w-[200px] whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                                    {item.description}
+                                  </div>
+                                )}
                                 {item.exceedsMaxDiscount && (
                                   <div className="flex items-center gap-1 mt-1 text-destructive text-xs">
                                     <AlertTriangle className="h-3 w-3" />
@@ -1378,6 +1383,11 @@ export function QuotationForm({
                               </span>
                             )}
                           </Button>
+                          {item.description?.trim() && (
+                            <div className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                              {item.description}
+                            </div>
+                          )}
                           {item.exceedsMaxDiscount && (
                             <div className="flex items-center gap-1 text-destructive text-xs">
                               <AlertTriangle className="h-3 w-3" />

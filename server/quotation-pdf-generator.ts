@@ -321,8 +321,12 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
         ? (parseFloat(String(item.subtotal)) || 0)
         : convertToQuote(parseFloat(String(item.subtotal))  || 0, itemCurrency);
 
-      // Calculate row height based on description text wrapping
-      const descH = doc.heightOfString(item.productName, { width: cols.desc.w - 4 });
+      const productDescription = item.description?.trim();
+      const rowDescription = productDescription
+        ? `${item.productName}\n${productDescription}`
+        : item.productName;
+      // Account for both the product name and its description before drawing the row.
+      const descH = doc.heightOfString(rowDescription, { width: cols.desc.w - 4 });
       const rowH = Math.max(MIN_ROW_H, descH + ROW_PAD * 2);
 
       if (currentY + rowH > PAGE_H - 160) {
@@ -337,8 +341,17 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const rowY = currentY + ROW_PAD;
       doc.text(String(index + 1),  cols.num.x  + 2, rowY, { width: cols.num.w  - 2, align: "center", lineBreak: false });
       doc.text(item.productCode || "-", cols.code.x + 2, rowY, { width: cols.code.w - 4, lineBreak: false });
-      // Description allows wrapping
       doc.text(item.productName,   cols.desc.x + 2, rowY, { width: cols.desc.w - 4 });
+      if (productDescription) {
+        const nameHeight = doc.heightOfString(item.productName, { width: cols.desc.w - 4 });
+        doc.font("Helvetica").fontSize(7).fillColor("#555555").text(
+          productDescription,
+          cols.desc.x + 2,
+          rowY + nameHeight + 2,
+          { width: cols.desc.w - 4 },
+        );
+        doc.fontSize(7.5).fillColor("#333333");
+      }
       doc.text(formatPdfNumber(parseFloat(item.quantity), language), cols.qty.x + 2, rowY, { width: cols.qty.w - 4, align: "center", lineBreak: false });
       const rowFmt = showMonColumn ? (v: number) => fmtItem(v, itemCurrency) : fmtQuote;
       doc.text(rowFmt(displayUnitPrice), cols.price.x + 2, rowY, { width: cols.price.w - 4, align: "right", lineBreak: false });

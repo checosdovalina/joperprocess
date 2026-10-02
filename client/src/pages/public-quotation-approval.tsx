@@ -18,6 +18,7 @@ interface QuotationItem {
   id: string;
   productName: string;
   productCode: string | null;
+  description?: string | null;
   quantity: number;
   unit: string;
   unitPrice: string;
@@ -316,6 +317,11 @@ export default function PublicQuotationApproval() {
                         <TableCell>
                           <div>
                             <p className="font-medium">{item.productName}</p>
+                            {item.description?.trim() && (
+                              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                                {item.description}
+                              </p>
+                            )}
                             {item.productCode && (
                               <p className="text-xs text-muted-foreground">{item.productCode}</p>
                             )}
