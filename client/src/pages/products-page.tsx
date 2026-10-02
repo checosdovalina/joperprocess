@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, invalidateEntityQueries } from "@/lib/queryClient";
 import { ProductForm } from "@/components/product-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -165,7 +165,7 @@ export default function ProductsPage() {
         body: JSON.stringify({ active: !category.active }),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/product-categories"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      invalidateEntityQueries("/api/products");
     } finally {
       setTogglingCategoryId(null);
     }

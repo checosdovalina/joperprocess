@@ -1,5 +1,5 @@
 import { useQuery, useMutation, UseQueryOptions } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, invalidateEntityQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export function useEntityQuery<T>(
@@ -35,7 +35,7 @@ export function useEntityMutation<TData, TVariables = TData>({
     onSuccess: (data) => {
       if (invalidateQueries) {
         invalidateQueries.forEach((key) => {
-          queryClient.invalidateQueries({ queryKey: [key] });
+          invalidateEntityQueries(key);
         });
       }
       if (successMessage) {

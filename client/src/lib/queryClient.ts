@@ -85,3 +85,14 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Collection queries encode filters in the first key entry. Invalidating only
+// [endpoint] leaves those cached searches stale (e.g. products?limit=150).
+export function invalidateEntityQueries(endpoint: string) {
+  return queryClient.invalidateQueries({
+    predicate: ({ queryKey }) => {
+      const key = queryKey[0];
+      return typeof key === "string" && (key === endpoint || key.startsWith(`${endpoint}?`));
+    },
+  });
+}

@@ -205,11 +205,11 @@ export function QuotationForm({
   productQuery.set("limit", "150");
   const { data: products, isLoading: productsLoading } = useEntityQuery<ProductWithCategory[]>(
     `/api/products?${productQuery.toString()}`,
-    { enabled: open },
+    { enabled: open, staleTime: 0, refetchOnMount: "always" },
   );
   const { data: initialProducts } = useEntityQuery<ProductWithCategory[]>(
     `/api/products?ids=${initialProductIds.join(",")}`,
-    { enabled: open && isEditing && initialProductIds.length > 0 },
+    { enabled: open && isEditing && initialProductIds.length > 0, staleTime: 0, refetchOnMount: "always" },
   );
   const productsForEditing = useMemo(() => {
     const merged = new Map<string, ProductWithCategory>();
