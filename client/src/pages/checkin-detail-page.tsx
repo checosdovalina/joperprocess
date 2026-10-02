@@ -1,4 +1,4 @@
-import { useParams, Redirect } from "wouter";
+import { useLocation, useParams, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Checkin, CheckinUpdate, Customer, FollowUpOutcome, FollowUpStatus } from "@shared/schema";
@@ -89,6 +89,7 @@ function safeNumber(value: number | undefined | null): number {
 
 export default function CheckinDetailPage() {
   const { id } = useParams();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const { t } = useI18n();
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
@@ -215,6 +216,7 @@ export default function CheckinDetailPage() {
             : "El seguimiento continúa abierto.",
         variant: result.email?.status === "failed" || result.email?.status === "partial" ? "destructive" : "default",
       });
+      navigate("/dashboard");
     },
     onError: (error: Error) => {
       toast({
@@ -244,6 +246,7 @@ export default function CheckinDetailPage() {
       setFollowUpOutcome("");
       setFollowUpReason("");
       toast({ title: "Seguimiento cerrado", description: "El resultado quedó guardado y el historial se conservó." });
+      navigate("/dashboard");
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", title: t("label.error"), description: error.message || "No se pudo cerrar el seguimiento." });
