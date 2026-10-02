@@ -26,6 +26,7 @@ import { useEntityQuery, useEntityMutation } from "@/hooks/use-entity-query";
 import { queryClient } from "@/lib/queryClient";
 import { ProductForm } from "@/components/product-form";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import { UserRole } from "@shared/schema";
 import {
   Dialog,
@@ -43,7 +44,9 @@ type ProductWithCategory = Product & { category?: ProductCategory | null };
 
 export default function ProductsPage() {
   const { t } = useI18n();
+  const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploadingProductImage, setUploadingProductImage] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithCategory | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -173,11 +176,37 @@ export default function ProductsPage() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = (data: InsertProduct) => {
+  const handleSubmit = async (data: InsertProduct, imageFile: File | null) => {
+    let productData = data;
+    if (imageFile) {
+      setUploadingProductImage(true);
+      try {
+        const response = await fetch("/api/products/image-upload", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": imageFile.type },
+          body: imageFile,
+        });
+        const result = await response.json();
+        if (!response.ok || typeof result.imageUrl !== "string") {
+          throw new Error(result.error || t("products.image-upload-failed"));
+        }
+        productData = { ...data, imageUrl: result.imageUrl };
+      } catch (error) {
+        toast({
+          title: t("label.error"),
+          description: error instanceof Error ? error.message : t("products.image-upload-failed"),
+          variant: "destructive",
+        });
+        setUploadingProductImage(false);
+        return;
+      }
+      setUploadingProductImage(false);
+    }
     if (editingProduct) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(productData);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(productData);
     }
   };
 
@@ -357,7 +386,12 @@ export default function ProductsPage() {
                             <div className="font-mono font-medium text-sm">{product.code}</div>
                           </TableCell>
                           <TableCell>
-                            <div className="font-medium">{product.name}</div>
+                            <div className="flex items-center gap-3">
+                              {product.imageUrl && (
+                                <img src={product.imageUrl} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded border object-cover" />
+                              )}
+                              <div className="font-medium">{product.name}</div>
+                            </div>
                             {product.description && (
                               <div className="text-xs text-muted-foreground line-clamp-1">
                                 {product.description}
@@ -537,7 +571,7 @@ export default function ProductsPage() {
             if (!open) setEditingProduct(null);
           }}
           onSubmit={handleSubmit}
-          isPending={createMutation.isPending || updateMutation.isPending}
+          isPending={createMutation.isPending || updateMutation.isPending || uploadingProductImage}
           categories={categories || []}
           editingProduct={editingProduct}
         />

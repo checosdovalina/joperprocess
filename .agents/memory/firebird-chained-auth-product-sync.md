@@ -9,8 +9,8 @@ Some older Microsip databases on the same Firebird server can complete SRP and t
 
 **How to apply:** Keep the reproducible node-firebird compatibility patch installed after dependency installation, and verify logs for both SRP completion and the Legacy_Auth continuation before treating a timeout as a network or path failure.
 
-Large Microsip product catalogs must preload tenant products and perform inserts/updates/deactivations in bounded batches. Per-product PostgreSQL lookups and sequential writes make synchronization appear stuck.
+Large Microsip product catalogs must preload tenant products and perform inserts/updates/deactivations in bounded batches. Product descriptions are maintained in this app, not Microsip, so syncing must preserve existing descriptions rather than write null.
 
-**Why:** Product synchronization previously multiplied network round trips by the catalog size.
+**Why:** Product synchronization previously multiplied network round trips by the catalog size. Its Firebird query does not fetch a description, so writing a null during updates silently erased app-entered descriptions.
 
-**How to apply:** Preserve tenant scoping, code-collision safety, historical inactive rows, and valid zero prices while batching catalog writes.
+**How to apply:** Preserve tenant scoping, code-collision safety, historical inactive rows, app-entered product descriptions, and valid zero prices while batching catalog writes.

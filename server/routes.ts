@@ -7,6 +7,7 @@ import { db } from "./db";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { localStorageService, LocalStorageService } from "./localStorage";
+import { getProductImageExtension, MAX_PRODUCT_IMAGE_BYTES } from "./product-images";
 
 // Parse a potentially multi-value email field (values separated by ; or ,)
 // Returns an array of trimmed, non-empty, valid-looking email addresses.
@@ -2954,6 +2955,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Datos inválidos: " + error.errors?.map((e: any) => e.message).join(', ') });
       }
       res.status(400).json({ error: error.message || "Error al crear producto" });
+    }
+  });
+
+  app.post("/api/products/image-upload", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "No hay un tenant seleccionado" });
+      const contentType = (req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+      const contentLength = Number(req.headers["content-length"] || 0);
+      if (contentLength > MAX_PRODUCT_IMAGE_BYTES) {
+        return res.status(413).json({ error: "La imagen no puede superar 5 MB" });
+      }
+      if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(contentType)) {
+        return res.status(400).json({ error: "Selecciona una imagen JPG, PNG, WEBP o GIF" });
+      }
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of req) {
+        const buffer = Buffer.from(chunk);
+        size += buffer.length;
+        if (size > MAX_PRODUCT_IMAGE_BYTES) {
+          return res.status(413).json({ error: "La imagen no puede superar 5 MB" });
+        }
+        chunks.push(buffer);
+      }
+      const imageBuffer = Buffer.concat(chunks);
+      const extension = getProductImageExtension(imageBuffer, contentType);
+      if (!extension) return res.status(400).json({ error: "El archivo no es una imagen válida" });
+
+      const filename = `${randomUUID()}.${extension}`;
+      const imageUrl = `/api/product-images/${tenantId}/${filename}`;
+      if (useLocalStorage()) {
+        await localStorageService.uploadProductImage(imageBuffer, tenantId, filename);
+      } else {
+        await new ObjectStorageService().uploadProductImage(
+          imageBuffer, tenantId, filename, contentType, req.user!.id,
+        );
+      }
+      return res.status(201).json({ imageUrl });
+    } catch (error) {
+      console.error("Error uploading product image:", error);
+      return res.status(500).json({ error: "No se pudo guardar la imagen del producto" });
+    }
+  });
+
+  app.get("/api/product-images/:tenantId/:filename", isAuthenticated, async (req, res) => {
+    const { tenantId, filename } = req.params;
+    const filenamePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp|gif)$/i;
+    const effectiveTenantId = getEffectiveTenantId(req);
+    if (!filenamePattern.test(filename) || (effectiveTenantId && effectiveTenantId !== tenantId) ||
+        (!effectiveTenantId && !req.user!.isSuperAdmin)) {
+      return res.sendStatus(404);
+    }
+    const imageUrl = `/api/product-images/${tenantId}/${filename}`;
+    const product = await db.query.products.findFirst({
+      where: and(eq(products.tenantId, tenantId), eq(products.imageUrl, imageUrl)),
+      columns: { id: true },
+    });
+    if (!product) return res.sendStatus(404);
+
+    if (useLocalStorage()) {
+      const found = await localStorageService.streamFile(`product-images/${tenantId}/${filename}`, res);
+      return found ? undefined : res.sendStatus(404);
+    }
+    try {
+      const image = await new ObjectStorageService().getObjectEntityFile(`product-images/${tenantId}/${filename}`);
+      return await new ObjectStorageService().downloadObject(image, res);
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) return res.sendStatus(404);
+      console.error("Error serving product image:", error);
+      return res.sendStatus(500);
     }
   });
 

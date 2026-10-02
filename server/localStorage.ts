@@ -19,6 +19,7 @@ export class LocalStorageService {
       path.join(this.baseDir, "minutes"),
       path.join(this.baseDir, "quotations"),
       path.join(this.baseDir, "photos"),
+      path.join(this.baseDir, "product-images"),
       path.join(this.baseDir, "incidents"),
       path.join(this.baseDir, "logos"),
       path.join(this.baseDir, "documents"),
@@ -75,6 +76,14 @@ export class LocalStorageService {
     const relativePath = `photos/${filename}`;
     const fullPath = path.join(this.baseDir, relativePath);
 
+    await fs.promises.writeFile(fullPath, buffer);
+    return relativePath;
+  }
+
+  async uploadProductImage(buffer: Buffer, tenantId: string, filename: string): Promise<string> {
+    const relativePath = path.join("product-images", tenantId, filename);
+    const fullPath = path.join(this.baseDir, relativePath);
+    await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.promises.writeFile(fullPath, buffer);
     return relativePath;
   }

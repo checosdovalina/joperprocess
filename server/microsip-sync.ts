@@ -664,12 +664,13 @@ class MicrosipSyncService {
           id: products.id,
           code: products.code,
           active: products.active,
+          description: products.description,
           microsipArticuloId: products.microsipArticuloId,
         })
         .from(products)
         .where(eq(products.tenantId, this.tenantId));
 
-      const existingByMicrosipId = new Map<number, { id: string; code: string; active: boolean }>();
+      const existingByMicrosipId = new Map<number, { id: string; code: string; active: boolean; description: string | null }>();
       const existingCodes = new Set<string>();
       for (const product of allTenantProducts) {
         existingCodes.add(product.code);
@@ -708,6 +709,7 @@ class MicrosipSyncService {
             : null;
           const categoryId = categoryEntry ? categoryEntry.id : null;
           const categoryActive = categoryEntry ? categoryEntry.active : true;
+          const existing = existingByMicrosipId.get(msProduct.ARTICULO_ID);
 
           // Firebird driver ignores aliases - use actual column name PRECIO
           const rawPrice = (msProduct as any).PRECIO ?? msProduct.PRECIO_1;
@@ -726,7 +728,8 @@ class MicrosipSyncService {
           const productData = {
             code: msProduct.CLAVE_ARTICULO?.toString().trim() || (msProduct as any).CLAVE?.toString().trim() || String(msProduct.ARTICULO_ID),
             name: msProduct.NOMBRE?.trim() || 'Sin nombre',
-            description: null,
+            // Descriptions are maintained in this app; Microsip doesn't provide one.
+            description: existing?.description ?? null,
             categoryId,
             unitOfMeasure: 'PZA',
             listPrice,
@@ -739,7 +742,6 @@ class MicrosipSyncService {
             updatedAt: syncTimestamp,
           };
 
-          const existing = existingByMicrosipId.get(msProduct.ARTICULO_ID);
           if (existing) {
             toUpdate.push({
               id: existing.id,

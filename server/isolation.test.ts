@@ -319,7 +319,7 @@ async function login(username: string, subdomain: string): Promise<string> {
 }
 
 function req(cookie: string, subdomain: string) {
-  return (method: string, path: string, body?: any) =>
+  const requester = (method: string, path: string, body?: any) =>
     fetch(`${ctx.baseUrl}${path}`, {
       method,
       headers: {
@@ -329,6 +329,14 @@ function req(cookie: string, subdomain: string) {
       },
       body: body ? JSON.stringify(body) : undefined,
     });
+  return Object.assign(requester, {
+    raw: (method: string, path: string, body: Buffer, contentType: string) =>
+      fetch(`${ctx.baseUrl}${path}`, {
+        method,
+        headers: { Cookie: cookie, "X-Tenant-Subdomain": subdomain, "Content-Type": contentType },
+        body: body as unknown as BodyInit,
+      }),
+  });
 }
 
 // Simulates a superadmin on the platform MAIN domain (nexxo.com.mx). Setting
@@ -1232,11 +1240,50 @@ describe("PATCH /api/accounts-receivable/:id (write guard, tenant-scoped)", () =
 });
 
 describe("PATCH /api/products/:id (write guard, tenant-scoped)", () => {
+  it("saves and returns product descriptions so they persist when the product is reloaded", async () => {
+    const description = "Tractor para uso agrícola.\nMotor de alto rendimiento.";
+    const saved = await asAdminA("PATCH", `/api/products/${ctx.productA1}`, { description });
+    expect(saved.status).toBe(200);
+    expect((await saved.json()).description).toBe(description);
+    const reread = await asAdminA("GET", `/api/products/${ctx.productA1}`);
+    expect(reread.status).toBe(200);
+    expect((await reread.json()).description).toBe(description);
+  });
+
   it("blocked cross-tenant (404) and leaves the record unchanged", async () => {
     const [before] = await db.select({ name: products.name }).from(products).where(eq(products.id, ctx.productB1));
     expect((await asAdminA("PATCH", `/api/products/${ctx.productB1}`, { name: "hacked" })).status).toBe(404);
     const [after] = await db.select({ name: products.name }).from(products).where(eq(products.id, ctx.productB1));
     expect(after.name).toBe(before.name);
+  });
+});
+
+describe("Product image upload", () => {
+  it("accepts a validated image, associates it with a product, and isolates reads by tenant", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const upload = await asAdminA.raw("POST", "/api/products/image-upload", png, "image/png");
+    expect(upload.status).toBe(201);
+    const { imageUrl } = await upload.json();
+    expect(imageUrl).toMatch(/^\/api\/product-images\/[^/]+\/[0-9a-f-]+\.png$/i);
+
+    const description = "Descripción guardada junto con la imagen";
+    const savedProduct = await asAdminA("PATCH", `/api/products/${ctx.productA1}`, { description, imageUrl });
+    expect(savedProduct.status).toBe(200);
+    expect(await savedProduct.json()).toMatchObject({ description, imageUrl });
+
+    const image = await asAdminA("GET", imageUrl);
+    expect(image.status).toBe(200);
+    expect(image.headers.get("content-type")).toContain("image/png");
+    expect(Buffer.from(await image.arrayBuffer())).toEqual(png);
+    expect((await asAdminB("GET", imageUrl)).status).toBe(404);
+    expect((await asVendedorA1.raw("POST", "/api/products/image-upload", png, "image/png")).status).toBe(403);
+
+    const invalidType = await asAdminA.raw("POST", "/api/products/image-upload", Buffer.from("not image"), "text/plain");
+    expect(invalidType.status).toBe(400);
+    const tooLarge = await asAdminA.raw(
+      "POST", "/api/products/image-upload", Buffer.alloc(5 * 1024 * 1024 + 1), "image/png",
+    );
+    expect(tooLarge.status).toBe(413);
   });
 });
 

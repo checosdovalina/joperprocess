@@ -365,6 +365,32 @@ export class ObjectStorageService {
     });
   }
 
+  async uploadProductImage(
+    buffer: Buffer,
+    tenantId: string,
+    filename: string,
+    contentType: string,
+    ownerId: string,
+  ): Promise<void> {
+    const fullPath = `${this.getPrivateObjectDir()}/product-images/${tenantId}/${filename}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const file = objectStorageClient.bucket(bucketName).file(objectName);
+    await new Promise<void>((resolve, reject) => {
+      const writeStream = file.createWriteStream({
+        resumable: false,
+        metadata: {
+          contentType,
+          metadata: {
+            [ACL_POLICY_METADATA_KEY]: JSON.stringify({ owner: ownerId, visibility: "private" } as ObjectAclPolicy),
+          },
+        },
+      });
+      writeStream.on("error", reject);
+      writeStream.on("finish", resolve);
+      writeStream.end(buffer);
+    });
+  }
+
   async uploadQuotationPdfToStorage(
     pdfStream: NodeJS.ReadableStream,
     folio: string,

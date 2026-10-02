@@ -29,14 +29,14 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
 
 interface ProductFormProps {
   categories: ProductCategory[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: InsertProduct) => void;
+  onSubmit: (data: InsertProduct, imageFile: File | null) => void;
   isPending: boolean;
   editingProduct?: (Product & { category?: ProductCategory | null }) | null;
 }
@@ -70,6 +70,12 @@ export function ProductForm({
   editingProduct,
 }: ProductFormProps) {
   const { t } = useI18n();
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imagePreview = useMemo(() => selectedImage ? URL.createObjectURL(selectedImage) : null, [selectedImage]);
+  useEffect(() => () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
   const formSchema = useMemo(() => makeFormSchema(t), [t]);
   const form = useForm<ProductFormData>({
     resolver: zodResolver(formSchema),
@@ -92,6 +98,8 @@ export function ProductForm({
   });
 
   useEffect(() => {
+    setSelectedImage(null);
+    setImageError(null);
     if (editingProduct) {
       form.reset({
         code: editingProduct.code,
@@ -130,7 +138,8 @@ export function ProductForm({
   }, [editingProduct, form]);
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    onSubmit(data as InsertProduct);
+    if (imageError) return;
+    onSubmit(data as InsertProduct, selectedImage);
   };
 
   return (
@@ -187,6 +196,62 @@ export function ProductForm({
               />
             </div>
 
+            <div className="space-y-2">
+              <label htmlFor="product-image-file" className="text-sm font-medium leading-none">
+                {t("products.image-upload-label")}
+              </label>
+                <Input
+                  id="product-image-file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  data-testid="input-product-image-file"
+                  onChange={event => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    setImageError(null);
+                    if (file && !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+                      setImageError(t("products.image-upload-invalid"));
+                      setSelectedImage(null);
+                      event.currentTarget.value = "";
+                      return;
+                    }
+                    if (file && file.size > 5 * 1024 * 1024) {
+                      setImageError(t("products.image-upload-size"));
+                      setSelectedImage(null);
+                      event.currentTarget.value = "";
+                      return;
+                    }
+                    setSelectedImage(file);
+                  }}
+                />
+              <p className="text-xs text-muted-foreground">{t("products.image-upload-help")}</p>
+              {imageError && <p role="alert" className="text-sm text-destructive">{imageError}</p>}
+              {(imagePreview || editingProduct?.imageUrl) && (
+                <img
+                  src={imagePreview || editingProduct?.imageUrl || ""}
+                  alt={editingProduct?.name || t("products.image-upload-label")}
+                  className="mt-2 h-24 w-24 rounded-md border object-cover"
+                />
+              )}
+            </div>
+
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("products.image-url")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      value={field.value || ""}
+                      placeholder="https://..."
+                      data-testid="input-product-image-url"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="description"
