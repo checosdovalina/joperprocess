@@ -26,6 +26,16 @@ export class ManualTaxRateValidationError extends Error {
 const roundCurrency = (amount: number) => Math.round((amount + Number.EPSILON) * 100) / 100;
 const toCents = (amount: number) => Math.round(roundCurrency(amount) * 100);
 
+/** USA uses quote-level sales tax; Mexican lines use catalog IVA except foreign RFCs. */
+export function resolveQuotationLineTaxRate(
+  catalogRate: string | number,
+  isForeignCustomer: boolean,
+  manualTaxRate: number | null = null,
+): number {
+  if (manualTaxRate != null) return Math.max(0, Number(manualTaxRate) || 0);
+  return isForeignCustomer ? 0 : Math.max(0, Number(catalogRate) || 0);
+}
+
 /** Validates a user-entered manual sales-tax percentage at the API boundary. */
 export function validateManualTaxRate(value: unknown): number {
   const rawRate = typeof value === "string" ? value.trim() : String(value);

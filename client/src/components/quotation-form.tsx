@@ -47,7 +47,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CustomerCombobox } from "@/components/customer-combobox";
 import { Customer } from "@shared/schema";
-import { calculateQuotationTotals } from "@shared/quotation-calculations";
+import { calculateQuotationTotals, resolveQuotationLineTaxRate } from "@shared/quotation-calculations";
 
 type ProductWithCategory = Product & { category?: ProductCategory | null };
 
@@ -77,6 +77,7 @@ interface QuotationLineItem {
   discountAmount: string;
   subtotal: string;
   taxRate: string;
+  catalogTaxRate?: string;
   taxAmount: string;
   total: string;
   exceedsMaxDiscount: boolean;
@@ -324,6 +325,7 @@ export function QuotationForm({
             discountAmount: item.discountAmount?.toString() || "0",
             subtotal: item.subtotal?.toString() || "0",
             taxRate: item.taxRate?.toString() || "16",
+            catalogTaxRate: productData?.taxRate ?? item.taxRate?.toString() ?? "16",
             taxAmount: item.taxAmount?.toString() || "0",
             total: item.total?.toString() || "0",
             exceedsMaxDiscount: maxDisc > 0 && discountPercent > maxDisc,
@@ -405,7 +407,9 @@ export function QuotationForm({
     };
   }, []);
 
-  // Mexican quotations adjust tax by customer type. USA quotations keep the
+  // Mexican quotations use catalog IVA unless the customer has a foreign RFC.
+  // Keep the catalog rate separately so returning from a foreign customer restores it.
+  // USA quotations keep the
   // manually entered quote-level sales-tax rate regardless of customer changes.
   useEffect(() => {
     const prevId = prevCustomerIdRef.current;
@@ -413,9 +417,11 @@ export function QuotationForm({
     // Only update if there was already a customer selected before (avoids overwriting on initial load)
     if (!prevId || prevId === watchedCustomerId) return;
     setLineItems(prev => prev.map(item => {
-      const newTaxRate = isUsaTenant
-        ? String(Math.max(0, Number(form.getValues("taxRate")) || 0))
-        : (isForeignCustomer ? "0" : "16");
+      const newTaxRate = String(resolveQuotationLineTaxRate(
+        item.catalogTaxRate ?? item.taxRate,
+        isForeignCustomer,
+        isUsaTenant ? Number(form.getValues("taxRate")) : null,
+      ));
       const newItem = { ...item, taxRate: newTaxRate };
       return calculateLineItem(newItem, "discountPercent");
     }));
@@ -489,7 +495,11 @@ export function QuotationForm({
     const unitPrice = listPrice - discountAmount;
     const quantity = 1;
     const subtotal = unitPrice * quantity;
-    const taxRate = isUsaTenant ? parseFloat(form.getValues("taxRate")) || 0 : (isForeignCustomer ? 0 : parseFloat(product.taxRate));
+    const taxRate = resolveQuotationLineTaxRate(
+      product.taxRate,
+      isForeignCustomer,
+      isUsaTenant ? Number(form.getValues("taxRate")) : null,
+    );
     const taxAmount = subtotal * (taxRate / 100);
     const total = subtotal + taxAmount;
     const exceedsMaxDiscount = maxDiscount > 0 && discountPercent > maxDiscount;
@@ -507,6 +517,7 @@ export function QuotationForm({
       discountAmount: discountAmount.toFixed(2),
       subtotal: subtotal.toFixed(2),
       taxRate: taxRate.toString(),
+      catalogTaxRate: product.taxRate,
       taxAmount: taxAmount.toFixed(2),
       total: total.toFixed(2),
       exceedsMaxDiscount,
@@ -742,7 +753,7 @@ export function QuotationForm({
       validUntil: data.validUntil ? new Date(data.validUntil + "T12:00:00") : null,
       subtotal: freshTotals.subtotal,
       globalDiscount: data.globalDiscount,
-      taxRate: data.taxRate,
+      taxRate: isUsaTenant ? data.taxRate : submitCalculation.taxRate.toFixed(2),
       tax: freshTotals.tax,
       total: freshTotals.total,
       totalSavings: freshTotals.totalSavings,

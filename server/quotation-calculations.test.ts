@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { allocateManualTaxToLines, calculateQuotationTotals, validateManualTaxRate } from "@shared/quotation-calculations";
+import { allocateManualTaxToLines, calculateQuotationTotals, validateManualTaxRate, resolveQuotationLineTaxRate } from "@shared/quotation-calculations";
+
+describe("catalog IVA selection", () => {
+  it.each(["0", "8", "16"])("preserves product IVA %s for domestic customers", rate => {
+    expect(resolveQuotationLineTaxRate(rate, false)).toBe(Number(rate));
+  });
+
+  it("removes IVA for a foreign RFC and restores the catalog rate on returning to domestic", () => {
+    expect(resolveQuotationLineTaxRate("8", true)).toBe(0);
+    expect(resolveQuotationLineTaxRate("8", false)).toBe(8);
+  });
+
+  it("keeps USA quote-level tax authoritative instead of catalog IVA or RFC", () => {
+    expect(resolveQuotationLineTaxRate("16", true, 7.25)).toBe(7.25);
+    expect(resolveQuotationLineTaxRate("16", false, 0)).toBe(0);
+  });
+});
 
 describe("calculateQuotationTotals", () => {
   it("calculates automatic Mexican tax and discount", () => {

@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import type { Quotation, QuotationItem, Customer, User } from "@shared/schema";
 import { localStorageService } from "./localStorage";
 import { formatPdfCurrency, formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
+import { resolveQuotationLineTaxRate } from "@shared/quotation-calculations";
 
 interface TenantBranding {
   name: string;
@@ -457,20 +458,31 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       !customer.country ||
       ["mx", "mexico", "méxico", "mex"].includes(customer.country.toLowerCase().trim())
     );
-    const quotationTaxRate = language === "en"
-      ? Math.max(0, Number(quotation.taxRate ?? 0))
-      : (isMexicoCustomer ? 16 : 0);
+    const lineTaxRate = (item: QuotationItem) => resolveQuotationLineTaxRate(
+      item.taxRate ?? (isMexicoCustomer ? 16 : 0),
+      isForeignCustomer,
+      language === "en" ? Number(quotation.taxRate ?? 0) : null,
+    );
+    // Different products can have different IVA rates. Do not label their
+    // combined tax as a fixed 16% or an artificial blended percentage.
+    const labelTaxRate = (group: QuotationItem[]): number | null => {
+      const rates = new Set(group.map(lineTaxRate));
+      return rates.size === 1 ? [...rates][0] : null;
+    };
 
     const drawTotalsBox = (
       bx: number, by: number, bw: number,
       label: string, labelColor: string,
       sub: number, disc: number, tax: number, total: number,
-      fmtFn: (v: number) => string
+      fmtFn: (v: number) => string,
+      taxRate: number | null
     ) => {
       const rows: [string, string][] = [
         [`${t("Subtotal", "Subtotal")}:`, fmtFn(sub)],
         ...(disc > 0 ? [[`${t("Desc.", "Discount")} (${formatPdfNumber(discountPct, language)}%):`, `-${fmtFn(disc)}`] as [string, string]] : []),
-        ...(quotationTaxRate > 0 ? [[`${t("IVA", "Sales tax")} (${formatPdfNumber(quotationTaxRate, language)}%):`, fmtFn(tax)] as [string, string]] : []),
+        ...(tax > 0 || (taxRate != null && taxRate > 0)
+          ? [[`${t("IVA", "Sales tax")}${taxRate == null ? "" : ` (${formatPdfNumber(taxRate, language)}%)`}:`, fmtFn(tax)] as [string, string]]
+          : []),
       ];
       const boxH = rows.length * TOTALS_ROW_H + 22 + 26;
 
@@ -506,9 +518,13 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const usdSub = usdItems.reduce((s, i) => s + (parseFloat(String(i.subtotal)) || 0), 0);
       const mxnDisc = discountPct > 0 ? mxnSub * (discountPct / 100) : 0;
       const usdDisc = discountPct > 0 ? usdSub * (discountPct / 100) : 0;
-      const mxnTax = (mxnSub - mxnDisc) * quotationTaxRate / 100;
+      const discountFactor = 1 - discountPct / 100;
+      const mxnTax = mxnItems.reduce((sum, item) =>
+        sum + Number(item.subtotal || 0) * lineTaxRate(item) / 100, 0) * discountFactor;
+      const usdTax = usdItems.reduce((sum, item) =>
+        sum + Number(item.subtotal || 0) * lineTaxRate(item) / 100, 0) * discountFactor;
       const mxnTotal = mxnSub - mxnDisc + mxnTax;
-      const usdTotal = usdSub - usdDisc;
+      const usdTotal = usdSub - usdDisc + usdTax;
 
       const TOTALS_W = 195;
       const GAP = 10;
@@ -518,11 +534,11 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const mxnH = drawTotalsBox(BOX2_START, currentY, TOTALS_W, t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)"), primaryColor,
         hideDiscount ? (mxnSub - mxnDisc) : mxnSub,
         hideDiscount ? 0 : mxnDisc,
-        mxnTax, mxnTotal, fmtMXN);
+        mxnTax, mxnTotal, fmtMXN, labelTaxRate(mxnItems));
       const usdH = drawTotalsBox(BOX2_START + TOTALS_W + GAP, currentY, TOTALS_W, t("DÓLARES AMERICANOS (USD)", "US DOLLARS (USD)"), "#1a6b3a",
         hideDiscount ? (usdSub - usdDisc) : usdSub,
         hideDiscount ? 0 : usdDisc,
-        0, usdTotal, fmtUSD);
+        usdTax, usdTotal, fmtUSD, labelTaxRate(usdItems));
 
       currentY += Math.max(mxnH, usdH) + 20;
     } else {
@@ -539,7 +555,10 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       }, 0);
       const discountAmt = discountPct > 0 ? subtotalVal * (discountPct / 100) : 0;
       const subtotalAfterDisc = subtotalVal - discountAmt;
-      const taxVal = subtotalAfterDisc * quotationTaxRate / 100;
+      const taxVal = items.reduce((sum, item) => {
+        const itemTax = Number(item.subtotal || 0) * lineTaxRate(item) / 100;
+        return sum + convertToQuote(itemTax, (item as any).currency || "MXN");
+      }, 0) * (1 - discountPct / 100);
       const totalVal = subtotalAfterDisc + taxVal;
 
       const quoteLabel = quoteCurrency === "USD" ? t("DÓLARES AMERICANOS (USD)", "US DOLLARS (USD)") : t("PESOS MEXICANOS (MXN)", "MEXICAN PESOS (MXN)");
@@ -549,7 +568,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
       const singleH = drawTotalsBox(TOTALS_X, currentY, TOTALS_W, quoteLabel, quoteColor,
         hideDiscount ? subtotalAfterDisc : subtotalVal,
         hideDiscount ? 0 : discountAmt,
-        taxVal, totalVal, fmtQuote);
+        taxVal, totalVal, fmtQuote, labelTaxRate(items));
 
       currentY += singleH + 20;
     }
