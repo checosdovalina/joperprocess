@@ -21,3 +21,4 @@
 - [Vitest JSX transform](vitest-jsx-transform.md) — Vitest's Vite/OXC pipeline may need its own JSX runtime setting when testing client TSX.
 - [Quotation descriptions](quotation-description-rules.md) — read-only below the product name; long descriptions must remain complete in all quotation views and across PDF pages.
 - [Quotation IVA policy](quotation-iva-policy.md) — USD alone does not exempt IVA; foreign-customer exemption and domestic catalog rates apply regardless of currency.
+- [Company-specific customizations](company-specific-customizations.md) — Agroesa requests must not affect other companies; confirm the Agroesa/Argosa naming before activation.
