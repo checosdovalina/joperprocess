@@ -13,6 +13,8 @@ export interface TenantContext {
   active: boolean;
   timezone: string | null;
   locale: string | null;
+  sellerCanDownloadStatements?: boolean;
+  quotationFolioPrefix?: string | null;
 }
 
 export interface EmpresaContext {
@@ -84,6 +86,8 @@ export async function tenantMiddleware(req: Request, res: Response, next: NextFu
         active: tenants.active,
         timezone: tenants.timezone,
         locale: tenants.locale,
+        sellerCanDownloadStatements: tenants.sellerCanDownloadStatements,
+        quotationFolioPrefix: tenants.quotationFolioPrefix,
       })
       .from(tenants)
       .where(eq(tenants.subdomain, subdomain))
@@ -202,6 +206,8 @@ export async function getTenantById(id: string): Promise<TenantContext | null> {
       active: tenants.active,
       timezone: tenants.timezone,
       locale: tenants.locale,
+      sellerCanDownloadStatements: tenants.sellerCanDownloadStatements,
+      quotationFolioPrefix: tenants.quotationFolioPrefix,
     })
     .from(tenants)
     .where(eq(tenants.id, id))
@@ -222,6 +228,8 @@ export async function getTenantBySubdomain(subdomain: string): Promise<TenantCon
       active: tenants.active,
       timezone: tenants.timezone,
       locale: tenants.locale,
+      sellerCanDownloadStatements: tenants.sellerCanDownloadStatements,
+      quotationFolioPrefix: tenants.quotationFolioPrefix,
     })
     .from(tenants)
     .where(eq(tenants.subdomain, subdomain))

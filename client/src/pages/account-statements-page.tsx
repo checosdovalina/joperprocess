@@ -60,7 +60,7 @@ import {
   Loader2,
   Settings,
 } from "lucide-react";
-import { Customer } from "@shared/schema";
+import { Customer, UserRole } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 
 interface CustomerBalance {
@@ -101,6 +101,7 @@ export default function AccountStatementsPage() {
   const { t } = useI18n();
   const { toast } = useToast();
   const { user } = useAuth();
+  const isSellerReadOnly = user?.role === UserRole.VENDEDOR;
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -178,6 +179,7 @@ export default function AccountStatementsPage() {
     lastRunAt: string | null;
   } | null>({
     queryKey: ["/api/account-statement-schedule"],
+    enabled: !isSellerReadOnly,
   });
 
   const saveScheduleMutation = useMutation({
@@ -282,7 +284,7 @@ export default function AccountStatementsPage() {
   async function handleDownloadAny(customer: Customer) {
     setDownloadingAnyId(customer.id);
     try {
-      const res = await fetch(`/api/customers/${customer.id}/account-statement-pdf`);
+      const res = await apiRequest("GET", `/api/customers/${customer.id}/account-statement-pdf`);
       if (!res.ok) throw new Error("Error al generar PDF");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -381,7 +383,7 @@ export default function AccountStatementsPage() {
   async function handleDownloadPDF(customerId: string, customerName: string) {
     setDownloadingId(customerId);
     try {
-      const res = await fetch(`/api/customers/${customerId}/account-statement-pdf`);
+      const res = await apiRequest("GET", `/api/customers/${customerId}/account-statement-pdf`);
       if (!res.ok) throw new Error("Error al generar PDF");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -438,7 +440,7 @@ export default function AccountStatementsPage() {
       <div className="flex items-center justify-between gap-3 px-6 py-4 border-b flex-wrap">
         <h1 className="text-xl font-semibold">{t("statements.title")}</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          {selected.size > 0 && (
+          {!isSellerReadOnly && selected.size > 0 && (
             <Button
               data-testid="button-bulk-send"
               onClick={() => setBulkConfirmOpen(true)}
@@ -448,7 +450,7 @@ export default function AccountStatementsPage() {
               {t("stmts.send-selected")} ({selected.size})
             </Button>
           )}
-          <Button
+          {!isSellerReadOnly && <Button
             variant={scheduleConfig?.enabled ? "default" : "outline"}
             size="default"
             data-testid="button-schedule"
@@ -456,7 +458,7 @@ export default function AccountStatementsPage() {
           >
             <CalendarClock className="w-4 h-4 mr-2" />
             {scheduleConfig?.enabled ? t("stmts.sched.active-btn") : t("stmts.sched.program-btn")}
-          </Button>
+          </Button>}
           <div className="flex flex-col items-end gap-1">
             <Button
               variant="outline"
@@ -482,7 +484,7 @@ export default function AccountStatementsPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-6 py-4">
+      <div className={`grid grid-cols-1 ${isSellerReadOnly ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-4 px-6 py-4`}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{t("stmts.total-balance")}</CardTitle>
@@ -503,7 +505,7 @@ export default function AccountStatementsPage() {
             <p className="text-xs text-muted-foreground mt-1">{customersWithOverdue} cliente(s) vencido(s)</p>
           </CardContent>
         </Card>
-        <Card>
+        {!isSellerReadOnly && <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Seleccionados</CardTitle>
             <Users className="w-4 h-4 text-muted-foreground" />
@@ -514,7 +516,7 @@ export default function AccountStatementsPage() {
               {selectedWithEmail.length} {t("stmts.with-email")} / {selectedWithoutEmail.length} {t("stmts.without-email")}
             </p>
           </CardContent>
-        </Card>
+        </Card>}
       </div>
 
       {/* Filters */}
@@ -617,7 +619,7 @@ export default function AccountStatementsPage() {
                   >
                     <div className="min-w-0">
                       <div className="font-medium truncate">{c.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">{c.rfc ?? ""}{c.rfc && c.email ? " · " : ""}{c.email ?? ""}</div>
+                      {!isSellerReadOnly && <div className="text-xs text-muted-foreground truncate">{c.rfc ?? ""}{c.rfc && c.email ? " · " : ""}{c.email ?? ""}</div>}
                     </div>
                     {downloadingAnyId === c.id
                       ? <Loader2 className="w-4 h-4 shrink-0 animate-spin text-muted-foreground" />
@@ -653,12 +655,12 @@ export default function AccountStatementsPage() {
                     data-testid={`row-customer-${s.customer.id}`}
                     className={`flex items-center gap-3 px-3 py-3 ${isSelected ? "bg-muted/30" : ""}`}
                   >
-                    <Checkbox
+                    {!isSellerReadOnly && <Checkbox
                       data-testid={`checkbox-customer-${s.customer.id}`}
                       checked={isSelected}
                       onCheckedChange={() => toggleOne(s.customer.id)}
                       className="shrink-0"
-                    />
+                    />}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate" data-testid={`text-customer-name-${s.customer.id}`}>
                         {s.customer.name}
@@ -679,7 +681,19 @@ export default function AccountStatementsPage() {
                         )}
                       </div>
                     </div>
-                    <DropdownMenu>
+                    {isSellerReadOnly ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        data-testid={`button-download-${s.customer.id}`}
+                        className="shrink-0"
+                        onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)}
+                        disabled={downloadingId === s.customer.id}
+                        aria-label={t("invoices.download-pdf")}
+                      >
+                        {downloadingId === s.customer.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      </Button>
+                    ) : <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
                           size="icon"
@@ -711,7 +725,7 @@ export default function AccountStatementsPage() {
                           {copiedId === s.customer.id ? t("stmts.copied-excl") : t("stmts.copy-link-7")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
-                    </DropdownMenu>
+                    </DropdownMenu>}
                   </div>
                 );
               })}
@@ -722,17 +736,17 @@ export default function AccountStatementsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 border-b">
                   <tr>
-                    <th className="w-10 px-3 py-3">
+                    {!isSellerReadOnly && <th className="w-10 px-3 py-3">
                       <Checkbox
                         data-testid="checkbox-all"
                         checked={allSelected}
                         onCheckedChange={toggleAll}
                       />
-                    </th>
+                    </th>}
                     <th className="px-3 py-3 text-left font-semibold text-muted-foreground">{t("label.client")}</th>
                     <th className="px-3 py-3 text-right font-semibold text-muted-foreground">{t("stmts.col.total-balance")}</th>
                     <th className="px-3 py-3 text-right font-semibold text-muted-foreground">{t("stmts.col.overdue")}</th>
-                    <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">{t("stmts.col.email")}</th>
+                    {!isSellerReadOnly && <th className="px-3 py-3 text-left font-semibold text-muted-foreground hidden md:table-cell">{t("stmts.col.email")}</th>}
                     <th className="px-3 py-3 w-10"></th>
                   </tr>
                 </thead>
@@ -746,13 +760,13 @@ export default function AccountStatementsPage() {
                         data-testid={`row-customer-${s.customer.id}`}
                         className={`border-b last:border-0 transition-colors ${isSelected ? "bg-muted/30" : "hover:bg-muted/20"}`}
                       >
-                        <td className="px-3 py-3">
+                        {!isSellerReadOnly && <td className="px-3 py-3">
                           <Checkbox
                             data-testid={`checkbox-customer-${s.customer.id}`}
                             checked={isSelected}
                             onCheckedChange={() => toggleOne(s.customer.id)}
                           />
-                        </td>
+                        </td>}
                         <td className="px-3 py-3">
                           <p className="font-medium" data-testid={`text-customer-name-${s.customer.id}`}>{s.customer.name}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{s.customer.rfc ?? ""}</p>
@@ -777,15 +791,26 @@ export default function AccountStatementsPage() {
                             <p className="text-xs text-muted-foreground font-normal">{fmtDate(s.oldestDueDate)}</p>
                           )}
                         </td>
-                        <td className="px-3 py-3 hidden md:table-cell max-w-[220px]">
+                        {!isSellerReadOnly && <td className="px-3 py-3 hidden md:table-cell max-w-[220px]">
                           {s.customer.email ? (
                             <span className="text-muted-foreground text-xs block truncate" title={s.customer.email}>{s.customer.email}</span>
                           ) : (
                             <span className="text-muted-foreground/40 text-xs italic">{t("stmts.no-email-short")}</span>
                           )}
-                        </td>
+                        </td>}
                         <td className="px-3 py-3 text-right w-10 shrink-0">
-                          <DropdownMenu>
+                          {isSellerReadOnly ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              data-testid={`button-download-${s.customer.id}`}
+                              onClick={() => handleDownloadPDF(s.customer.id, s.customer.name)}
+                              disabled={downloadingId === s.customer.id}
+                              aria-label={t("invoices.download-pdf")}
+                            >
+                              {downloadingId === s.customer.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            </Button>
+                          ) : <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 size="icon"
@@ -816,7 +841,7 @@ export default function AccountStatementsPage() {
                                 {copiedId === s.customer.id ? t("stmts.copied-excl") : t("stmts.copy-link-7")}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
-                          </DropdownMenu>
+                          </DropdownMenu>}
                         </td>
                       </tr>
                     );
@@ -829,7 +854,7 @@ export default function AccountStatementsPage() {
       </div>
 
       {/* ── Single send dialog ── */}
-      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+      {!isSellerReadOnly && <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-xl">
           <DialogHeader className="text-left">
             <DialogTitle className="text-base">{t("statements.send-title")}</DialogTitle>
@@ -918,9 +943,9 @@ export default function AccountStatementsPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
-      <Dialog open={!!emailSettingsCustomer} onOpenChange={(open) => !open && setEmailSettingsCustomer(null)}>
+      {!isSellerReadOnly && <Dialog open={!!emailSettingsCustomer} onOpenChange={(open) => !open && setEmailSettingsCustomer(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Destinatarios de estado de cuenta</DialogTitle>
@@ -969,10 +994,10 @@ export default function AccountStatementsPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       {/* ── Bulk send confirmation ── */}
-      <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
+      {!isSellerReadOnly && <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("stmts.bulk.title")}</AlertDialogTitle>
@@ -1013,10 +1038,10 @@ export default function AccountStatementsPage() {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
 
       {/* ── Bulk results dialog ── */}
-      <Dialog open={resultsOpen} onOpenChange={setResultsOpen}>
+      {!isSellerReadOnly && <Dialog open={resultsOpen} onOpenChange={setResultsOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("stmts.bulk.result-title")}</DialogTitle>
@@ -1048,10 +1073,10 @@ export default function AccountStatementsPage() {
             <Button onClick={() => setResultsOpen(false)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       {/* ── Schedule config dialog ── */}
-      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+      {!isSellerReadOnly && <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1185,7 +1210,7 @@ export default function AccountStatementsPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

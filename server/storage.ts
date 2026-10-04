@@ -59,6 +59,7 @@ import {
   type Incident,
 } from "@shared/schema";
 import { db } from "./db";
+import { tenants } from "@shared/schema";
 import { eq, desc, and, or, ilike, asc, isNull, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -335,11 +336,17 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async createQuotation(insertQuotation: InsertQuotation): Promise<Quotation> {
+  async createQuotation(insertQuotation: InsertQuotation & { tenantId?: string | null }): Promise<Quotation> {
+    const [company] = insertQuotation.tenantId
+      ? await db.select({ prefix: tenants.quotationFolioPrefix }).from(tenants)
+        .where(eq(tenants.id, insertQuotation.tenantId))
+      : [];
     const FOREIGN_RFC = 'XEXX010101000';
-    // Prefijo de folio según el cliente: MEX (México) / EXT (extranjero).
-    let prefix = 'MEX';
-    if (insertQuotation.customerId) {
+    // Existing null settings preserve historical customer-based MEX/EXT.
+    // Configured/new tenants use their explicit prefix regardless of currency,
+    // tax or customer nationality. Changes never renumber stored quotations.
+    let prefix = company?.prefix || 'MEX';
+    if (company?.prefix == null && insertQuotation.customerId) {
       const customer = await this.getCustomer(insertQuotation.customerId);
       if (customer) {
         if (customer.rfc === FOREIGN_RFC) {

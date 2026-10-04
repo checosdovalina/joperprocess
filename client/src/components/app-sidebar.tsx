@@ -124,7 +124,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { titleKey: "nav.accounts-receivable", url: "/accounts-receivable", icon: FileSpreadsheet, roles: [UserRole.ADMIN, UserRole.FACTURACION] },
       { titleKey: "nav.payments", url: "/payments", icon: DollarSign, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA] },
-      { titleKey: "nav.account-statements", url: "/account-statements", icon: Mail, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION] },
+      { titleKey: "nav.account-statements", url: "/account-statements", icon: Mail, roles: [UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION, UserRole.VENDEDOR] },
     ],
   },
   {
@@ -169,7 +169,7 @@ export function AppSidebar() {
       queryClient.setQueryData(["/api/user"], (current: any) => current ? { ...current, ...preference } : current);
     },
   });
-  const { tenant, selectedTenantId, setSelectedTenantId } = useTenant();
+  const { tenant, isLoading: tenantLoading, selectedTenantId, setSelectedTenantId } = useTenant();
   const { isMobile, setOpenMobile } = useSidebar();
   const { t } = useI18n();
 
@@ -209,6 +209,9 @@ export function AppSidebar() {
       items: group.items.filter((item) => {
         if (!item.roles.includes(user.role as any)) return false;
         if ((item as any).superAdminOnly && !user.isSuperAdmin) return false;
+        if (item.url === "/account-statements" && user.role === UserRole.VENDEDOR) {
+          return !tenantLoading && tenant?.sellerCanDownloadStatements === true;
+        }
         return true;
       }),
     }))

@@ -20,3 +20,9 @@ El prefijo de cotizaciones también debe configurarse desde Nexxo al crear o edi
 **Why:** El usuario pidió poder elegir el folio por empresa y especificó explícitamente el valor por defecto.
 
 **How to apply:** No cambiar los folios históricos al editar esta configuración.
+
+Las compañías existentes sin configuración explícita conservan su selección histórica MEX/EXT; el valor MEX se aplica a nuevas compañías o cuando Nexxo guarda explícitamente el prefijo vacío.
+
+**Why:** La personalización no debe cambiar indirectamente las series de otras compañías, especialmente las que usan EXT para clientes extranjeros.
+
+**How to apply:** Al introducir o migrar esta opción, preservar la ausencia de configuración en filas existentes. No usar un valor predeterminado de base de datos que rellene esas filas con MEX; asignarlo al crear compañías nuevas.

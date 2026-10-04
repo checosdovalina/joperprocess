@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Building2, Globe, Palette, Settings, Users, Loader2, ExternalLink, Languages } from "lucide-react";
 import { LOCALE_LABELS, type Locale } from "@/lib/i18n";
+import { buildTenantSettingsPayload } from "@/lib/tenant-settings-form";
 
 interface Tenant {
   id: string;
@@ -28,6 +29,8 @@ interface Tenant {
   plan: string | null;
   maxUsers: number | null;
   locale: string | null;
+  sellerCanDownloadStatements: boolean;
+  quotationFolioPrefix: string | null;
   createdAt: string;
 }
 
@@ -51,7 +54,10 @@ export default function TenantsPage() {
     maxUsers: 10,
     locale: "es" as Locale,
     inheritMicrosip: false,
+    sellerCanDownloadStatements: false,
+    quotationFolioPrefix: "",
   });
+  const [quotationPrefixTouched, setQuotationPrefixTouched] = useState(false);
 
   const { data: tenantsList = [], isLoading } = useQuery<Tenant[]>({
     queryKey: ["/api/tenants"],
@@ -78,7 +84,7 @@ export default function TenantsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
       const response = await apiRequest("PATCH", `/api/tenants/${id}`, data);
       return response.json();
     },
@@ -122,7 +128,10 @@ export default function TenantsPage() {
       maxUsers: 10,
       locale: "es" as Locale,
       inheritMicrosip: false,
+      sellerCanDownloadStatements: false,
+      quotationFolioPrefix: "",
     });
+    setQuotationPrefixTouched(false);
   };
 
   const openEditDialog = (tenant: Tenant) => {
@@ -140,16 +149,25 @@ export default function TenantsPage() {
       maxUsers: tenant.maxUsers || 10,
       locale: (tenant.locale as Locale) || "es",
       inheritMicrosip: false,
+      sellerCanDownloadStatements: tenant.sellerCanDownloadStatements ?? false,
+      // A null prefix is a legacy series; keep the field visually unconfigured.
+      quotationFolioPrefix: tenant.quotationFolioPrefix ?? "",
     });
+    setQuotationPrefixTouched(false);
     setIsDialogOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = buildTenantSettingsPayload(formData, {
+      isEditing: !!editingTenant,
+      originalPrefix: editingTenant?.quotationFolioPrefix,
+      prefixTouched: quotationPrefixTouched,
+    });
     if (editingTenant) {
-      updateMutation.mutate({ id: editingTenant.id, data: formData });
+      updateMutation.mutate({ id: editingTenant.id, data: payload });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload as typeof formData);
     }
   };
 
@@ -200,7 +218,7 @@ export default function TenantsPage() {
               {t("tenants.new")}
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingTenant ? t("tenants.edit") : t("tenants.new")}
@@ -381,6 +399,48 @@ export default function TenantsPage() {
                   ))}
                 </select>
               </div>
+
+              <section className="space-y-4 rounded-md border p-4">
+                <div>
+                  <h3 className="text-sm font-semibold">{t("tenants.seller-statements-title")}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("tenants.seller-statements-help")}</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Switch
+                    id="sellerCanDownloadStatements"
+                    checked={formData.sellerCanDownloadStatements}
+                    onCheckedChange={(checked) => setFormData({ ...formData, sellerCanDownloadStatements: checked })}
+                    data-testid="switch-seller-statements"
+                  />
+                  <Label htmlFor="sellerCanDownloadStatements" className="cursor-pointer leading-5">
+                    {t("tenants.seller-statements-label")}
+                  </Label>
+                </div>
+              </section>
+
+              <section className="space-y-2 rounded-md border p-4">
+                <div>
+                  <Label htmlFor="quotationFolioPrefix">{t("tenants.quotation-prefix-label")}</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("tenants.quotation-prefix-help")}</p>
+                </div>
+                <Input
+                  id="quotationFolioPrefix"
+                  value={formData.quotationFolioPrefix}
+                  maxLength={20}
+                  onChange={(e) => {
+                    setQuotationPrefixTouched(true);
+                    setFormData({ ...formData, quotationFolioPrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") });
+                  }}
+                  placeholder={t("tenants.quotation-prefix-placeholder")}
+                  data-testid="input-quotation-prefix"
+                />
+                <p className="text-xs text-muted-foreground" data-testid="text-quotation-prefix-preview">
+                  {t("tenants.quotation-prefix-preview")} {formData.quotationFolioPrefix.replace(/-+$/, "") || "MEX"}-1
+                </p>
+                {editingTenant && (
+                  <p className="text-xs text-muted-foreground">{t("tenants.quotation-prefix-existing-note")}</p>
+                )}
+              </section>
 
               <div className="flex items-center space-x-2">
                 <Switch

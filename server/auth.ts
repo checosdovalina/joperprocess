@@ -289,6 +289,7 @@ export function setupAuth(app: Express) {
                 email: contactEmail,
                 phone,
                 active: false,
+                quotationFolioPrefix: "MEX",
               })
               .returning();
 

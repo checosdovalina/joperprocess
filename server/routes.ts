@@ -8,6 +8,7 @@ import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { localStorageService, LocalStorageService } from "./localStorage";
 import { getProductImageExtension, MAX_PRODUCT_IMAGE_BYTES } from "./product-images";
+import { requireAccountStatementReadAccess } from "./account-statement-access";
 
 // Parse a potentially multi-value email field (values separated by ; or ,)
 // Returns an array of trimmed, non-empty, valid-looking email addresses.
@@ -354,6 +355,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       locale: (req.tenant as any).locale || "es",
       empresaId: empresa?.id ?? null,
       empresaName: empresa?.name ?? null,
+      sellerCanDownloadStatements: req.tenant.sellerCanDownloadStatements === true,
+      quotationFolioPrefix: req.tenant.quotationFolioPrefix ?? null,
     });
   });
 
@@ -7102,7 +7105,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   const ACCOUNT_STATEMENTS_TTL_MS = 60_000;
 
   // GET /api/account-statements — returns all customers with their outstanding balance summary
-  app.get("/api/account-statements", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+  app.get("/api/account-statements", isAuthenticated, requireAccountStatementReadAccess, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
       if (!tenantId) return res.status(400).json({ error: "Tenant no encontrado" });
@@ -7535,7 +7538,7 @@ Proporciona tu análisis en el siguiente formato JSON:
   });
 
   // GET /api/customers/:id/account-statement-pdf — download PDF
-  app.get("/api/customers/:id/account-statement-pdf", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+  app.get("/api/customers/:id/account-statement-pdf", isAuthenticated, requireAccountStatementReadAccess, async (req, res) => {
     try {
       const scopedStorage = createTenantScopedStorage(req);
       const { id } = req.params;

@@ -211,6 +211,18 @@ ALTER TABLE quotations
   ADD COLUMN IF NOT EXISTS tax_rate numeric(8,2) DEFAULT 16;
 
 -- ================================================================
+-- [2026-10-04] Opciones comerciales por compañía
+-- Configuración por compañía: estados de cuenta para vendedores y serie.
+-- Agregar el prefijo SIN DEFAULT primero conserva NULL en compañías existentes
+-- (su serie MEX/EXT histórica). Las APIs asignan MEX a compañías nuevas.
+ALTER TABLE tenants
+  ADD COLUMN IF NOT EXISTS seller_can_download_statements boolean NOT NULL DEFAULT false;
+ALTER TABLE tenants
+  ADD COLUMN IF NOT EXISTS quotation_folio_prefix text;
+ALTER TABLE tenants
+  ALTER COLUMN quotation_folio_prefix DROP DEFAULT;
+
+-- ================================================================
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
 -- 1. Agrega la columna en shared/schema.ts

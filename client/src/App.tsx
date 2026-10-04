@@ -48,7 +48,7 @@ import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import { useAuth } from "./hooks/use-auth";
 import { Loader2, Moon, Sun } from "lucide-react";
-import { TenantProvider } from "./hooks/use-tenant";
+import { TenantProvider, useTenant } from "./hooks/use-tenant";
 import { ThemeProvider, useTheme } from "./hooks/use-theme";
 import CustomersPage from "@/pages/customers-page";
 import CheckinsPage from "@/pages/checkins-page";
@@ -165,6 +165,18 @@ function SmartLandingPage() {
   return <LandingPage />;
 }
 
+function AccountStatementsAccess() {
+  const { user } = useAuth();
+  const { tenant, isLoading } = useTenant();
+  if (user?.role === UserRole.VENDEDOR) {
+    if (isLoading) {
+      return <div className="flex min-h-[40vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>;
+    }
+    if (!tenant?.sellerCanDownloadStatements) return <Redirect to="/dashboard" />;
+  }
+  return <AccountStatementsPage />;
+}
+
 function Router() {
   return (
     <Switch>
@@ -181,7 +193,7 @@ function Router() {
       <ProtectedRoute path="/shipments" component={ShipmentsPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
       <ProtectedRoute path="/accounts-receivable" component={AccountsReceivablePage} />
-      <ProtectedRoute path="/account-statements" component={AccountStatementsPage} allowedRoles={[UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION]} />
+      <ProtectedRoute path="/account-statements" component={AccountStatementsAccess} allowedRoles={[UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION, UserRole.VENDEDOR]} />
       <ProtectedRoute path="/payments" component={PaymentsPage} />
       <ProtectedRoute path="/users" component={UsersPage} />
       <ProtectedRoute path="/products" component={ProductsPage} />

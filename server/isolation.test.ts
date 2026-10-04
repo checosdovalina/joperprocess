@@ -230,8 +230,8 @@ async function seed() {
   ctx.subA = `${RUN}a`;
   ctx.subB = `${RUN}b`;
 
-  ctx.tenantA = await insertReturningId(tenants, { name: `TenantA ${RUN}`, subdomain: ctx.subA, locale: "en", active: true });
-  ctx.tenantB = await insertReturningId(tenants, { name: `TenantB ${RUN}`, subdomain: ctx.subB, locale: "es", active: true });
+  ctx.tenantA = await insertReturningId(tenants, { name: `TenantA ${RUN}`, subdomain: ctx.subA, locale: "en", active: true, quotationFolioPrefix: "MEX" });
+  ctx.tenantB = await insertReturningId(tenants, { name: `TenantB ${RUN}`, subdomain: ctx.subB, locale: "es", active: true, quotationFolioPrefix: "MEX" });
 
   await db.insert(microsipConfigs).values({
     tenantId: ctx.tenantA,
@@ -517,6 +517,149 @@ afterAll(async () => {
 });
 
 // ── Tests ────────────────────────────────────────────────────────────────────
+
+describe("Company-specific statement access and quotation prefixes", () => {
+  let sellerB: typeof users.$inferSelect;
+  let sellerCookie: string;
+  let asSellerB: ReturnType<typeof req>;
+  let foreignCustomerId: string;
+  const prefix = `ZZ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
+
+  beforeAll(async () => {
+    [sellerB] = await db.insert(users).values({
+      tenantId: ctx.tenantB, username: `statement_seller_${RUN}`,
+      password: await hashPassword("Test-1234"), fullName: "Statement seller",
+      email: `statement_seller_${RUN}@test.local`,
+      role: UserRole.VENDEDOR, active: true,
+    }).returning();
+    sellerCookie = await login(sellerB.username, ctx.subB);
+    asSellerB = req(sellerCookie, ctx.subB);
+    foreignCustomerId = await insertReturningId(customers, {
+      tenantId: ctx.tenantB, name: `Foreign ${RUN}`, rfc: "XEXX010101000", country: "USA",
+    });
+  });
+
+  it("denies statement summaries and PDFs by default without changing existing roles", async () => {
+    expect((await asSellerB("GET", "/api/account-statements")).status).toBe(403);
+    expect((await asSellerB("GET", `/api/customers/${ctx.customerB}/account-statement-pdf`)).status).toBe(403);
+    expect((await asAdminB("GET", `/api/customers/${ctx.customerB}/account-statement-pdf`)).status).toBe(200);
+  });
+
+  it("enables all company customer statements and PDFs only in the selected company", async () => {
+    const changed = await asSuperadmin("PATCH", `/api/tenants/${ctx.tenantB}`, { sellerCanDownloadStatements: true });
+    expect(changed.status).toBe(200);
+    expect((await changed.json()).sellerCanDownloadStatements).toBe(true);
+    const config = await (await asSellerB("GET", "/api/tenant-config")).json();
+    expect(config.sellerCanDownloadStatements).toBe(true);
+    expect((await (await asVendedorA1("GET", "/api/tenant-config")).json()).sellerCanDownloadStatements).toBe(false);
+    expect((await asVendedorA1("GET", "/api/account-statements")).status).toBe(403);
+
+    const summary = await asSellerB("GET", "/api/account-statements");
+    expect(summary.status).toBe(200);
+    expect((await summary.json()).every((row: any) => row.customer.id !== ctx.customerA)).toBe(true);
+    for (const customerId of [ctx.customerB, foreignCustomerId]) {
+      const pdf = await asSellerB("GET", `/api/customers/${customerId}/account-statement-pdf`);
+      expect(pdf.status).toBe(200);
+      expect(Buffer.from(await pdf.arrayBuffer()).subarray(0, 4).toString()).toBe("%PDF");
+    }
+    expect((await asSellerB("GET", `/api/customers/${ctx.customerA}/account-statement-pdf`)).status).toBe(404);
+    // Reusing a session against a different tenant must not inherit that tenant's permission.
+    expect((await req(sellerCookie, ctx.subA)("GET", "/api/account-statements")).status).toBe(403);
+  });
+
+  it("never grants sending, schedules, recipient edits or share links to permitted sellers", async () => {
+    const denied: [string, string, any?][] = [
+      ["POST", `/api/customers/${ctx.customerB}/send-account-statement`, {}],
+      ["POST", "/api/account-statements/send-bulk", { customerIds: [ctx.customerB] }],
+      ["GET", "/api/account-statement-schedule"],
+      ["PUT", "/api/account-statement-schedule", { enabled: true }],
+      ["GET", `/api/customers/${ctx.customerB}/account-statement-link`],
+      ["PATCH", `/api/customers/${ctx.customerB}/statement-email-settings`, { statementEmails: [] }],
+      ["GET", "/api/system-logs"],
+    ];
+    for (const [method, path, body] of denied) {
+      expect((await asSellerB(method, path, body)).status, path).toBe(403);
+    }
+  });
+
+  it("revokes seller access immediately when Nexxo disables the option", async () => {
+    expect((await asSuperadmin("PATCH", `/api/tenants/${ctx.tenantB}`, { sellerCanDownloadStatements: false })).status).toBe(200);
+    expect((await asSellerB("GET", "/api/account-statements")).status).toBe(403);
+    expect((await asSellerB("GET", `/api/customers/${ctx.customerB}/account-statement-pdf`)).status).toBe(403);
+  });
+
+  it("allows only Nexxo superadmins to change these settings", async () => {
+    expect((await asAdminB("PATCH", `/api/tenants/${ctx.tenantB}`, { sellerCanDownloadStatements: true })).status).toBe(403);
+    const response = await asAdminB("PATCH", "/api/company-settings", {
+      name: `TenantB ${RUN}`, sellerCanDownloadStatements: true, quotationFolioPrefix: "BAD",
+    });
+    expect(response.status).toBe(200);
+    const company = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) });
+    expect(company?.sellerCanDownloadStatements).toBe(false);
+    expect(company?.quotationFolioPrefix).toBe("MEX");
+  });
+
+  it("creates independent settings without inheriting a parent's enabled permission or prefix", async () => {
+    await asSuperadmin("PATCH", `/api/tenants/${ctx.tenantB}`, { sellerCanDownloadStatements: true, quotationFolioPrefix: prefix });
+    try {
+      const response = await asSuperadmin("POST", "/api/tenants", {
+        name: `Settings child ${RUN}`, subdomain: `settings-child-${RUN}`, parentId: ctx.tenantB,
+      });
+      expect(response.status).toBe(201);
+      const company = await response.json();
+      ctx.createdTenantIds.push(company.id);
+      expect(company.sellerCanDownloadStatements).toBe(false);
+      expect(company.quotationFolioPrefix).toBe("MEX");
+      const normalized = await asSuperadmin("PATCH", `/api/tenants/${company.id}`, {
+        quotationFolioPrefix: " agr1- ", sellerCanDownloadStatements: true,
+      });
+      expect(normalized.status).toBe(200);
+      expect(await normalized.json()).toMatchObject({ quotationFolioPrefix: "AGR1", sellerCanDownloadStatements: true });
+      expect((await asSuperadmin("PATCH", `/api/tenants/${company.id}`, { quotationFolioPrefix: "bad%prefix" })).status).toBe(400);
+    } finally {
+      await asSuperadmin("PATCH", `/api/tenants/${ctx.tenantB}`, { sellerCanDownloadStatements: false });
+    }
+  });
+
+  it("uses custom prefixes for future folios and retains MAX-based concurrency-safe sequences", async () => {
+    expect((await asSuperadmin("PATCH", `/api/tenants/${ctx.tenantB}`, { quotationFolioPrefix: prefix })).status).toBe(200);
+    const scoped = createTenantScopedStorage({
+      user: ctx.adminB, tenant: { id: ctx.tenantB, subdomain: ctx.subB }, headers: {},
+    } as any);
+    const makeQuotation = (customerId = ctx.customerB) => scoped.createQuotation({
+      customerId, userId: ctx.adminB.id, status: QuotationStatus.DRAFT,
+    } as any);
+    const created = await Promise.all([makeQuotation(), makeQuotation(), makeQuotation()]);
+    expect(new Set(created.map(quote => quote.folio)).size).toBe(3);
+    expect(created.every(quote => quote.folio.startsWith(`${prefix}-`))).toBe(true);
+    const sorted = [...created].sort((a, b) => Number(a.folio.split("-").at(-1)) - Number(b.folio.split("-").at(-1)));
+    await db.delete(quotations).where(eq(quotations.id, sorted[1].id));
+    expect((await makeQuotation()).folio).toBe(`${prefix}-4`);
+    expect((await makeQuotation(foreignCustomerId)).folio).toBe(`${prefix}-5`);
+
+    await asSuperadmin("PATCH", `/api/tenants/${ctx.tenantB}`, { quotationFolioPrefix: "" });
+    expect((await makeQuotation(foreignCustomerId)).folio).toMatch(/^MEX-\d+$/);
+    expect((await db.query.quotations.findFirst({ where: eq(quotations.id, sorted[0].id) }))?.folio).toBe(sorted[0].folio);
+    expect((await db.query.quotations.findFirst({ where: eq(quotations.id, ctx.qB1) }))?.folio).toBe(`F-${RUN}-B1`);
+  });
+
+  it("preserves legacy MEX/EXT for unconfigured pre-existing companies", async () => {
+    await db.update(tenants).set({ quotationFolioPrefix: null }).where(eq(tenants.id, ctx.tenantB));
+    try {
+      const scoped = createTenantScopedStorage({
+        user: ctx.adminB, tenant: { id: ctx.tenantB, subdomain: ctx.subB }, headers: {},
+      } as any);
+      const quote = await scoped.createQuotation({
+        customerId: foreignCustomerId, userId: ctx.adminB.id, status: QuotationStatus.DRAFT,
+      } as any);
+      expect(quote.folio).toMatch(/^EXT-\d+$/);
+      expect((await asSuperadmin("PATCH", `/api/tenants/${ctx.tenantB}`, { active: true })).status).toBe(200);
+      expect((await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) }))?.quotationFolioPrefix).toBeNull();
+    } finally {
+      await db.update(tenants).set({ quotationFolioPrefix: "MEX" }).where(eq(tenants.id, ctx.tenantB));
+    }
+  });
+});
 
 describe("GET /api/quotations/:id", () => {
   it("restricted vendedor CAN read their own empresa's quotation", async () => {

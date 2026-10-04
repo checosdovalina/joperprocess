@@ -2,6 +2,7 @@ import { sql, relations } from "drizzle-orm";
 import { pgTable, text, varchar, decimal, timestamp, boolean, integer, jsonb, bigint, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { quotationFolioPrefixSchema } from "./tenant-settings";
 
 // ==================== SESSION TABLE (connect-pg-simple) ====================
 // This table is managed by connect-pg-simple for session storage
@@ -45,12 +46,18 @@ export const tenants = pgTable("tenants", {
   // Billing/subscription info (for future)
   plan: text("plan").default("basic"), // basic, professional, enterprise
   maxUsers: integer("max_users").default(10),
+  sellerCanDownloadStatements: boolean("seller_can_download_statements").notNull().default(false),
+  // null is retained for pre-existing tenants using legacy MEX/EXT selection.
+  // New companies and explicitly cleared settings use MEX.
+  quotationFolioPrefix: text("quotation_folio_prefix"),
   // Timestamps
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertTenantSchema = createInsertSchema(tenants).omit({
+export const insertTenantSchema = createInsertSchema(tenants, {
+  quotationFolioPrefix: quotationFolioPrefixSchema,
+}).omit({
   id: true,
   parentId: true,
   createdAt: true,

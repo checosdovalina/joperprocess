@@ -10,6 +10,8 @@ export interface TenantConfig {
   secondaryColor: string | null;
   timezone: string | null;
   locale: string | null;
+  sellerCanDownloadStatements: boolean;
+  quotationFolioPrefix: string | null;
   empresaId?: string | null;
   empresaName?: string | null;
 }
