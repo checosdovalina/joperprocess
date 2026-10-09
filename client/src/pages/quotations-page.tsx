@@ -85,7 +85,7 @@ export default function QuotationsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   const [quotationForPDF, setQuotationForPDF] = useState<QuotationWithDetails | null>(null);
-  const [activeTab, setActiveTab] = useState<"active" | "inactive">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "sent" | "rejected" | "expired">("active");
   const [hideConverted, setHideConverted] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSeller, setFilterSeller] = useState("all");
@@ -95,7 +95,12 @@ export default function QuotationsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const status = params.get("status");
-    if (status) setFilterStatus(status);
+    if (status) {
+      setFilterStatus(status);
+      if (status === QuotationStatus.SENT) setActiveTab("sent");
+      else if (status === QuotationStatus.REJECTED) setActiveTab("rejected");
+      else if (status === QuotationStatus.EXPIRED) setActiveTab("expired");
+    }
   }, []);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -511,26 +516,30 @@ export default function QuotationsPage() {
     por_confirmar: t("quotations.delivery.tbc"),
   };
 
-  const INACTIVE_STATUSES = [QuotationStatus.SENT, QuotationStatus.REJECTED, QuotationStatus.EXPIRED];
-  const { convertedCount, inactiveCount } = useMemo(() => {
+  const SEPARATE_TAB_STATUSES = [QuotationStatus.SENT, QuotationStatus.REJECTED, QuotationStatus.EXPIRED];
+  const { convertedCount, tabCounts } = useMemo(() => {
     let converted = 0;
-    let inactive = 0;
+    const counts = { active: 0, sent: 0, rejected: 0, expired: 0 };
     for (const quotation of quotations ?? []) {
       if (quotation.status === QuotationStatus.CONVERTED) converted++;
-      if (INACTIVE_STATUSES.includes(quotation.status as any)) inactive++;
+      if (quotation.status === QuotationStatus.SENT) counts.sent++;
+      else if (quotation.status === QuotationStatus.REJECTED) counts.rejected++;
+      else if (quotation.status === QuotationStatus.EXPIRED) counts.expired++;
+      else if (!(hideConverted && quotation.status === QuotationStatus.CONVERTED)) counts.active++;
     }
-    return { convertedCount: converted, inactiveCount: inactive };
-  }, [quotations]);
+    return { convertedCount: converted, tabCounts: counts };
+  }, [quotations, hideConverted]);
 
   const hasActiveFilters = filterStatus !== "all" || filterSeller !== "all" || filterEmpresa !== "all" || filterDateFrom !== "" || filterDateTo !== "" || searchText !== "";
 
   const filteredQuotations = useMemo(() => (quotations ?? []).filter(q => {
-    // Tab split
-    const isInactive = INACTIVE_STATUSES.includes(q.status as any);
-    if (activeTab === "active" && isInactive) return false;
-    if (activeTab === "inactive" && !isInactive) return false;
-
-    if (activeTab === "active" && hideConverted && q.status === QuotationStatus.CONVERTED) return false;
+    // Keep each terminal status in its own tab.
+    if (activeTab === "active") {
+      if (SEPARATE_TAB_STATUSES.includes(q.status as any)) return false;
+      if (hideConverted && q.status === QuotationStatus.CONVERTED) return false;
+    } else if (q.status !== activeTab) {
+      return false;
+    }
     if (filterStatus !== "all" && q.status !== filterStatus) return false;
     if (filterSeller !== "all" && q.userId !== filterSeller) return false;
     if (filterEmpresa !== "all" && q.empresaId !== filterEmpresa) return false;
@@ -610,41 +619,32 @@ export default function QuotationsPage() {
             </div>
           </div>
 
-          {/* Tab selector */}
-          <div className="flex gap-1 border-b mt-2">
-            <button
-              onClick={() => { setActiveTab("active"); setFilterStatus("all"); }}
-              data-testid="tab-active"
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "active"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t("quotations.tab-active")}
-              <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
-                {(quotations ?? []).filter(q =>
-                  !INACTIVE_STATUSES.includes(q.status as any) &&
-                  !(hideConverted && q.status === QuotationStatus.CONVERTED)
-                ).length}
-              </span>
-            </button>
-            <button
-              onClick={() => { setActiveTab("inactive"); setFilterStatus("all"); }}
-              data-testid="tab-inactive"
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "inactive"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t("quotations.tab-inactive")}
-              {inactiveCount > 0 && (
+          {/* Distinct status tabs, with expired quotations kept accessible too. */}
+          <div className="flex flex-wrap gap-1 border-b mt-2" role="group" aria-label={t("quotations.title")}>
+            {([
+              { id: "active", label: "quotations.tab-active", testId: "tab-active" },
+              { id: "sent", label: "quotations.tab-sent", testId: "tab-sent" },
+              { id: "rejected", label: "quotations.tab-rejected", testId: "tab-rejected" },
+              { id: "expired", label: "quotations.tab-expired", testId: "tab-expired" },
+            ] as const).map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => { setActiveTab(tab.id); setFilterStatus("all"); }}
+                data-testid={tab.testId}
+                aria-pressed={activeTab === tab.id}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t(tab.label)}
                 <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
-                  {inactiveCount}
+                  {tabCounts[tab.id]}
                 </span>
-              )}
-            </button>
+              </button>
+            ))}
           </div>
 
           {/* Filter bar */}
@@ -924,7 +924,7 @@ export default function QuotationsPage() {
                 </TableBody>
               </Table>
             </div>
-          ) : hideConverted && convertedCount > 0 ? (
+          ) : activeTab === "active" && hideConverted && convertedCount > 0 ? (
             <div className="text-center py-12">
               <EyeOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">{t("quotations.all-converted")}</p>
