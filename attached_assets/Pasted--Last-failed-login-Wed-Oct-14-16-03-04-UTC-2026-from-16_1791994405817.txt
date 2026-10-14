@@ -1,0 +1,142 @@
+
+Last failed login: Wed Oct 14 16:03:04 UTC 2026 from 165.154.218.226 on ssh:notty
+There were 12977 failed login attempts since the last successful login.
+Last login: Fri Oct  9 02:41:36 2026 from 177.242.4.64
+[root@localhost ~]# cd /var/www/joper
+[root@localhost joper]# cd /var/www/joper
+[root@localhost joper]# sudo certbot certificates
+sudo certbot renew --dry-run
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Found the following certs:
+  Certificate Name: apineoskin.nexxo.com.mx
+    Serial Number: 5284010e91e45fa38eee4469a25ef63fb7a
+    Key Type: ECDSA
+    Domains: apineoskin.nexxo.com.mx
+    Expiry Date: 2026-12-08 22:07:05+00:00 (VALID: 55 days)
+    Certificate Path: /etc/letsencrypt/live/apineoskin.nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/apineoskin.nexxo.com.mx/privkey.pem
+  Certificate Name: events-ots.com
+    Serial Number: 58920b4afaf90fe5275ec6f6edc2bc4ad86
+    Key Type: ECDSA
+    Domains: events-ots.com www.events-ots.com
+    Expiry Date: 2026-10-14 15:35:36+00:00 (INVALID: EXPIRED)
+    Certificate Path: /etc/letsencrypt/live/events-ots.com/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/events-ots.com/privkey.pem
+  Certificate Name: joper.nexxo.com.mx
+    Serial Number: 6a54851efa1f71d21af26b640499a91ce99
+    Key Type: ECDSA
+    Domains: joper.nexxo.com.mx
+    Expiry Date: 2026-12-08 23:05:12+00:00 (VALID: 55 days)
+    Certificate Path: /etc/letsencrypt/live/joper.nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/joper.nexxo.com.mx/privkey.pem
+  Certificate Name: microsipdashboard.events-ots.com
+    Serial Number: 53f94e2f73aec36d60602cf06064421d03f
+    Key Type: ECDSA
+    Domains: microsipdashboard.events-ots.com
+    Expiry Date: 2026-10-14 14:51:25+00:00 (INVALID: EXPIRED)
+    Certificate Path: /etc/letsencrypt/live/microsipdashboard.events-ots.com/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/microsipdashboard.events-ots.com/privkey.pem
+  Certificate Name: microsipdashboard.nexxo.com.mx
+    Serial Number: 56a9264030bf322935aff173bb33e0f6db8
+    Key Type: ECDSA
+    Domains: microsipdashboard.nexxo.com.mx
+    Expiry Date: 2026-10-14 14:29:49+00:00 (INVALID: EXPIRED)
+    Certificate Path: /etc/letsencrypt/live/microsipdashboard.nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/microsipdashboard.nexxo.com.mx/privkey.pem
+  Certificate Name: nexxo.com.mx-0001
+    Serial Number: 5213e094c789617245269d18392d120ee16
+    Key Type: ECDSA
+    Domains: nexxo.com.mx *.nexxo.com.mx
+    Expiry Date: 2026-10-14 15:46:40+00:00 (INVALID: EXPIRED)
+    Certificate Path: /etc/letsencrypt/live/nexxo.com.mx-0001/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxo.com.mx-0001/privkey.pem
+  Certificate Name: nexxo.com.mx
+    Serial Number: 58d8713bdff8639aa4b5480c924244acdd0
+    Key Type: ECDSA
+    Domains: nexxo.com.mx www.nexxo.com.mx
+    Expiry Date: 2026-10-14 15:35:45+00:00 (INVALID: EXPIRED)
+    Certificate Path: /etc/letsencrypt/live/nexxo.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxo.com.mx/privkey.pem
+  Certificate Name: nexxobi.com.mx
+    Serial Number: 60c234d20aee3f1dc91df379120c1f0a4cd
+    Key Type: ECDSA
+    Domains: nexxobi.com.mx
+    Expiry Date: 2026-11-10 19:50:51+00:00 (VALID: 27 days)
+    Certificate Path: /etc/letsencrypt/live/nexxobi.com.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/nexxobi.com.mx/privkey.pem
+  Certificate Name: novaskin.mx
+    Serial Number: 5119059ba80da310bf071f38058f8a98362
+    Key Type: ECDSA
+    Domains: novaskin.mx www.novaskin.mx
+    Expiry Date: 2026-12-10 17:14:59+00:00 (VALID: 57 days)
+    Certificate Path: /etc/letsencrypt/live/novaskin.mx/fullchain.pem
+    Private Key Path: /etc/letsencrypt/live/novaskin.mx/privkey.pem
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/apineoskin.nexxo.com.mx.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for apineoskin.nexxo.com.mx
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/events-ots.com.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for events-ots.com and www.events-ots.com
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/joper.nexxo.com.mx.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for joper.nexxo.com.mx
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/microsipdashboard.events-ots.com.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for microsipdashboard.events-ots.com
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/microsipdashboard.nexxo.com.mx.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for microsipdashboard.nexxo.com.mx
+Failed to renew certificate microsipdashboard.nexxo.com.mx with error: urn:ietf:params:acme:error:malformed :: The request message was malformed :: No such authorization
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/nexxo.com.mx-0001.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Failed to renew certificate nexxo.com.mx-0001 with error: The manual plugin is not working; there may be problems with your existing configuration.
+The error was: PluginError('An authentication script must be provided with --manual-auth-hook when using the manual plugin non-interactively.')
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/nexxo.com.mx.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for nexxo.com.mx and www.nexxo.com.mx
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/nexxobi.com.mx.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for nexxobi.com.mx
+Failed to renew certificate nexxobi.com.mx with error: Could not bind TCP port 80 because it is already in use by another process on this system (such as a web server). Please stop the program in question and then try again.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Processing /etc/letsencrypt/renewal/novaskin.mx.conf
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Simulating renewal of an existing certificate for novaskin.mx and www.novaskin.mx
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+The following simulated renewals succeeded:
+  /etc/letsencrypt/live/apineoskin.nexxo.com.mx/fullchain.pem (success)
+  /etc/letsencrypt/live/events-ots.com/fullchain.pem (success)
+  /etc/letsencrypt/live/joper.nexxo.com.mx/fullchain.pem (success)
+  /etc/letsencrypt/live/microsipdashboard.events-ots.com/fullchain.pem (success)
+  /etc/letsencrypt/live/nexxo.com.mx/fullchain.pem (success)
+  /etc/letsencrypt/live/novaskin.mx/fullchain.pem (success)
+
+The following simulated renewals failed:
+  /etc/letsencrypt/live/microsipdashboard.nexxo.com.mx/fullchain.pem (failure)
+  /etc/letsencrypt/live/nexxo.com.mx-0001/fullchain.pem (failure)
+  /etc/letsencrypt/live/nexxobi.com.mx/fullchain.pem (failure)
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+3 renew failure(s), 0 parse failure(s)
+Ask for help or search for solutions at https://community.letsencrypt.org. See the logfile /var/log/letsencrypt/letsencrypt.log or re-run Certbot with -v for more details.
