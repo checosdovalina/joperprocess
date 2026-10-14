@@ -22,3 +22,4 @@
 - [Quotation descriptions](quotation-description-rules.md) — read-only below the product name; long descriptions must remain complete in all quotation views and across PDF pages.
 - [Quotation IVA policy](quotation-iva-policy.md) — USD alone does not exempt IVA; foreign-customer exemption and domestic catalog rates apply regardless of currency.
 - [Company-specific customizations](company-specific-customizations.md) — Agroesa requests must not affect other companies; Argosa is a confirmed spelling error for the same company.
+- [Production DNS provider](production-dns-provider.md) — the user identified IONOS as the DNS provider for nexxo.com.mx.
