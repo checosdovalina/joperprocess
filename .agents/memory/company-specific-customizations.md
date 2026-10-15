@@ -32,3 +32,9 @@ Las cotizaciones de Agroesa deben llevar tres logos: el corporativo de Agroesa, 
 **Why:** El usuario compartió la petición de Agroesa y proporcionó los logos de McCormick y Faresin.
 
 **How to apply:** Conservar el logo corporativo configurado para esa empresa, mantener las proporciones de las marcas y no extender este encabezado a otras compañías.
+
+El administrador debe poder subir las imágenes de las marcas desde Configuración, sin depender de un cambio de código.
+
+**Why:** El usuario pidió expresamente esa forma de administrar las imágenes al revisar el encabezado de Agroesa.
+
+**How to apply:** Mantener los controles de carga y reemplazo en la configuración de la compañía y conservar el aislamiento entre empresas.

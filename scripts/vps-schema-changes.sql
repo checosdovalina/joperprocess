@@ -223,6 +223,10 @@ ALTER TABLE tenants
   ALTER COLUMN quotation_folio_prefix DROP DEFAULT;
 
 -- ================================================================
+-- Configuración de marcas en cotizaciones, por compañía; NULL conserva los logos iniciales.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_brand_logo_1_url text;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_brand_logo_2_url text;
+
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
 -- 1. Agrega la columna en shared/schema.ts

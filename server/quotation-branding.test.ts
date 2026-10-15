@@ -45,7 +45,7 @@ describe("Agroesa quotation letterhead", () => {
     expect(await loadQuotationPartnerLogos({ name: "Joper" })).toEqual([]);
     const logos = await loadQuotationPartnerLogos({ name: "Agroesa" });
     expect(logos).toHaveLength(2);
-    for (const buffer of logos) expect((await sharp(buffer).metadata()).format).toBe("png");
+    for (const buffer of logos) expect((await sharp(buffer!).metadata()).format).toBe("png");
   });
 
   it("renders the company logo and two brand logos in a single aligned row", async () => {
@@ -64,7 +64,7 @@ describe("Agroesa quotation letterhead", () => {
 
   it("preserves the original single-logo header for other companies", async () => {
     const logo = (await loadQuotationPartnerLogos({ name: "Agroesa" }))[0];
-    vi.spyOn(localStorageService, "getFile").mockResolvedValue(logo);
+    vi.spyOn(localStorageService, "getFile").mockResolvedValue(logo!);
     const image = vi.spyOn(PDFDocument.prototype, "image");
     const rect = vi.spyOn(PDFDocument.prototype, "rect");
     await render({ name: "Joper", logoUrl: "/api/logos/company.png" });
@@ -81,5 +81,19 @@ describe("Agroesa quotation letterhead", () => {
     expect(text.mock.calls.some(([value]) => value === "Agroesa")).toBe(true);
     expect(text.mock.calls.some(([value]) => value === "QUOTATION")).toBe(true);
     expect(addPage.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("uses the uploaded image and does not restore a deliberately removed logo", async () => {
+    const custom = await sharp({ create: { width: 100, height: 30, channels: 3, background: "#228833" } }).png().toBuffer();
+    const getFile = vi.spyOn(localStorageService, "getFile").mockResolvedValue(custom);
+    const image = vi.spyOn(PDFDocument.prototype, "image");
+    const company = {
+      name: "Agroesa", quotationBrandLogo1Url: "/api/logos/custom.png", quotationBrandLogo2Url: "",
+    };
+    expect(await loadQuotationPartnerLogos(company)).toEqual([custom, null]);
+    expect(getFile).toHaveBeenCalledWith("logos/custom.png");
+    await render(company);
+    expect(image).toHaveBeenCalledTimes(1);
+    expect(image.mock.calls[0][0]).toEqual(custom);
   });
 });

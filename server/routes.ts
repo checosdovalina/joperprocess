@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { randomUUID } from "node:crypto";
 import { storage, createTenantScopedStorage } from "./storage";
 import { setupAuth, isAuthenticated, hasRole } from "./auth";
+import { registerQuotationLogoRoutes } from "./quotation-logo-routes";
 import { db } from "./db";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -971,6 +972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== COMPANY SETTINGS ENDPOINTS ====================
   
   // Get current tenant company settings (for tenant admins)
+  registerQuotationLogoRoutes(app, getEffectiveTenantId);
   app.get("/api/company-settings", isAuthenticated, hasRole(UserRole.ADMIN), async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);

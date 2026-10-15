@@ -9,6 +9,8 @@ import { isAgroesaQuotation, loadQuotationPartnerLogos } from "./quotation-brand
 interface TenantBranding {
   name: string;
   subdomain?: string | null;
+  quotationBrandLogo1Url?: string | null;
+  quotationBrandLogo2Url?: string | null;
   legalName?: string | null;
   logoUrl?: string | null;
   primaryColor?: string | null;
@@ -137,8 +139,8 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
         doc.font("Helvetica-Bold").fontSize(22).fillColor(primaryColor)
           .text(tenant?.name || "Agroesa", MARGIN, 25, { width: 180, lineBreak: false });
       }
-      doc.image(partnerLogos[0], 288, 18, { fit: [112, 38], align: "center", valign: "center" });
-      doc.image(partnerLogos[1], 444, 18, { fit: [128, 38], align: "right", valign: "center" });
+      if (partnerLogos[0]) doc.image(partnerLogos[0], 288, 18, { fit: [112, 38], align: "center", valign: "center" });
+      if (partnerLogos[1]) doc.image(partnerLogos[1], 444, 18, { fit: [128, 38], align: "right", valign: "center" });
       doc.moveTo(MARGIN, 74).lineTo(PAGE_W - MARGIN, 74).lineWidth(1).strokeColor(primaryColor).stroke();
       doc.font("Helvetica-Bold").fontSize(10).fillColor(primaryColor)
         .text(companyName.toUpperCase(), MARGIN, 83, { width: CONTENT_W, lineBreak: false });

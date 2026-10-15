@@ -20,6 +20,8 @@ import { inArray, eq } from "drizzle-orm";
 
 import { db } from "./db";
 import { localStorageService } from "./localStorage";
+import sharp from "sharp";
+import { loadQuotationPartnerLogos } from "./quotation-branding";
 import { registerRoutes } from "./routes";
 import { tenantMiddleware } from "./tenant";
 import { hashPassword } from "./auth";
@@ -1510,6 +1512,66 @@ describe("PATCH /api/products/:id (write guard, tenant-scoped)", () => {
     expect((await asAdminA("PATCH", `/api/products/${ctx.productB1}`, { name: "hacked" })).status).toBe(404);
     const [after] = await db.select({ name: products.name }).from(products).where(eq(products.id, ctx.productB1));
     expect(after.name).toBe(before.name);
+  });
+});
+
+describe("Quotation brand logo settings", () => {
+  it("persists uploads/removals for the effective company, validates files, and blocks other roles/companies", async () => {
+    const original = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) });
+    const tenantB = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) });
+    const stored: string[] = [];
+    await db.update(tenants).set({ name: "Agroesa", quotationBrandLogo1Url: null, quotationBrandLogo2Url: null })
+      .where(eq(tenants.id, ctx.tenantA));
+    const endpoint = "/api/company-settings/quotation-logos/mccormick";
+    const png = await sharp({ create: { width: 240, height: 80, channels: 3, background: "#228833" } }).png().toBuffer();
+    try {
+      expect((await asVendedorA1.raw("POST", endpoint, png, "image/png")).status).toBe(403);
+      expect((await asVendedorA1("DELETE", endpoint)).status).toBe(403);
+      expect((await asAdminB.raw("POST", endpoint, png, "image/png")).status).toBe(403);
+      expect((await asAdminA.raw("POST", endpoint.replace("mccormick", "__proto__"), png, "image/png")).status).toBe(400);
+      expect((await asAdminA.raw("POST", endpoint, Buffer.from("not an image"), "text/plain")).status).toBe(400);
+      expect((await asAdminA.raw("POST", endpoint, Buffer.from("broken png"), "image/png")).status).toBe(400);
+      expect((await asAdminA.raw("POST", endpoint, Buffer.alloc(5 * 1024 * 1024 + 1), "image/png")).status).toBe(413);
+      for (const slot of ["mccormick", "faresin", "mccormick"]) {
+        const upload = await asAdminA.raw("POST", endpoint.replace("mccormick", slot), png, "image/png");
+        expect(upload.status).toBe(200);
+        const company = await upload.json();
+        const field = slot === "mccormick" ? "quotationBrandLogo1Url" : "quotationBrandLogo2Url";
+        expect(company[field]).toMatch(/^\/api\/logos\/.+\.png$/);
+        stored.push(company[field].replace("/api/", ""));
+      }
+      const saved = await (await asAdminA("GET", "/api/company-settings")).json();
+      expect(saved.quotationBrandLogo1Url).not.toBe(`/api/${stored[0]}`);
+      const logos = await loadQuotationPartnerLogos(saved);
+      expect(logos).toHaveLength(2);
+      expect((await sharp(logos[0]!).metadata()).format).toBe("png");
+      expect((await asAdminA("DELETE", endpoint)).status).toBe(200);
+      expect((await asAdminA("DELETE", endpoint.replace("mccormick", "faresin"))).status).toBe(200);
+      const removed = await (await asAdminA("GET", "/api/company-settings")).json();
+      expect(removed.quotationBrandLogo1Url).toBe("");
+      expect(removed.quotationBrandLogo2Url).toBe("");
+      expect(await loadQuotationPartnerLogos(removed)).toEqual([null, null]);
+      const unchanged = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) });
+      expect(unchanged?.quotationBrandLogo1Url).toBe(tenantB?.quotationBrandLogo1Url);
+      expect(unchanged?.quotationBrandLogo2Url).toBe(tenantB?.quotationBrandLogo2Url);
+      await db.update(tenants).set({ name: "Agroesa" }).where(eq(tenants.id, ctx.tenantB));
+      const uploadB = await asAdminB.raw("POST", endpoint, png, "image/png");
+      expect(uploadB.status).toBe(200);
+      const savedB = await uploadB.json();
+      stored.push(savedB.quotationBrandLogo1Url.replace("/api/", ""));
+      expect(savedB.quotationBrandLogo1Url).toContain(ctx.tenantB);
+      expect((await (await asAdminA("GET", "/api/company-settings")).json()).quotationBrandLogo1Url).toBe("");
+    } finally {
+      await db.update(tenants).set({
+        name: original!.name, quotationBrandLogo1Url: original!.quotationBrandLogo1Url,
+        quotationBrandLogo2Url: original!.quotationBrandLogo2Url,
+      }).where(eq(tenants.id, ctx.tenantA));
+      await db.update(tenants).set({
+        name: tenantB!.name, quotationBrandLogo1Url: tenantB!.quotationBrandLogo1Url,
+        quotationBrandLogo2Url: tenantB!.quotationBrandLogo2Url,
+      }).where(eq(tenants.id, ctx.tenantB));
+      for (const file of stored) await localStorageService.deleteFile(file);
+    }
   });
 });
 

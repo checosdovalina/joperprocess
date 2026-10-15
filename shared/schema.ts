@@ -26,6 +26,8 @@ export const tenants = pgTable("tenants", {
   // scripts/vps-schema-changes.sql (auto-referencia). null = compañía raíz.
   parentId: varchar("parent_id"),
   logoUrl: text("logo_url"),
+  quotationBrandLogo1Url: text("quotation_brand_logo_1_url"),
+  quotationBrandLogo2Url: text("quotation_brand_logo_2_url"),
   primaryColor: text("primary_color").default("#4DA3FF"), // Nexxo blue default
   secondaryColor: text("secondary_color").default("#1F3C88"),
   active: boolean("active").notNull().default(true),
@@ -60,6 +62,8 @@ export const insertTenantSchema = createInsertSchema(tenants, {
 }).omit({
   id: true,
   parentId: true,
+  quotationBrandLogo1Url: true,
+  quotationBrandLogo2Url: true,
   createdAt: true,
   updatedAt: true,
 });

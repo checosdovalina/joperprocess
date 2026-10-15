@@ -37,6 +37,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/hooks/use-i18n";
 import type { Tenant } from "@shared/schema";
+import QuotationBrandLogosSettings from "@/components/quotation-brand-logos-settings";
 
 const CONFIRM_PHRASE = "CONFIRMAR RESET";
 
@@ -342,6 +343,8 @@ export default function CompanySettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <QuotationBrandLogosSettings company={company} />
 
         <Card>
           <CardHeader>
