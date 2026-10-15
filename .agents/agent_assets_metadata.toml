@@ -70,3 +70,17 @@ mtime_ms = 1789165964762
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:b4943a74-0ec5-4000-9a4f-6370e63082f5/19ed8c69-7552-4c85-9884-86f62a7fd1c9/f40256b0-17d2-426b-bb14-b527c3cab14a"
 storage_version_token = "1789165975023829"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "DmD9FoqPjLihYkufvd56i"
+uri = "file://generated-artifacts/agroesa-cotizacion-ejemplo.pdf"
+type = "pdf"
+title = "Muestra de cotización · Agroesa"
+description = "Encabezado integrado con McCormick y Faresin. En esta muestra el nombre Agroesa ocupa el espacio del logo corporativo; las cotizaciones reales utilizan el logo configurado para la empresa."
+logical_id = "7db79b71-b0b8-4edc-b81d-36e211c93b72"
+content_hash = "sha256:02f3073cbf437a95d89a88d329f6882c18246ece82488613d2df56fafd562415"
+size = 13120
+mtime_ms = 1792081800275
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:b4943a74-0ec5-4000-9a4f-6370e63082f5/7db79b71-b0b8-4edc-b81d-36e211c93b72/589d9e3c-95d6-4968-ad49-bfacfe758e84"
+storage_version_token = "1792081901041654"
+content_type = "application/pdf"

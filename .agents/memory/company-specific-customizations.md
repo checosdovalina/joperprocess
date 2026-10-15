@@ -26,3 +26,9 @@ Las compañías existentes sin configuración explícita conservan su selección
 **Why:** La personalización no debe cambiar indirectamente las series de otras compañías, especialmente las que usan EXT para clientes extranjeros.
 
 **How to apply:** Al introducir o migrar esta opción, preservar la ausencia de configuración en filas existentes. No usar un valor predeterminado de base de datos que rellene esas filas con MEX; asignarlo al crear compañías nuevas.
+
+Las cotizaciones de Agroesa deben llevar tres logos: el corporativo de Agroesa, McCormick y Faresin, integrados visualmente para que no parezcan un parche pegado.
+
+**Why:** El usuario compartió la petición de Agroesa y proporcionó los logos de McCormick y Faresin.
+
+**How to apply:** Conservar el logo corporativo configurado para esa empresa, mantener las proporciones de las marcas y no extender este encabezado a otras compañías.

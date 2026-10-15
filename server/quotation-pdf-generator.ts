@@ -4,9 +4,11 @@ import type { Quotation, QuotationItem, Customer, User } from "@shared/schema";
 import { localStorageService } from "./localStorage";
 import { formatPdfCurrency, formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
 import { resolveQuotationLineTaxRate } from "@shared/quotation-calculations";
+import { isAgroesaQuotation, loadQuotationPartnerLogos } from "./quotation-branding";
 
 interface TenantBranding {
   name: string;
+  subdomain?: string | null;
   legalName?: string | null;
   logoUrl?: string | null;
   primaryColor?: string | null;
@@ -96,6 +98,8 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
   const t = (es: string, en: string) => pdfText(language, { es, en });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
+  const agroesaHeader = isAgroesaQuotation(tenant);
+  const partnerLogos = await loadQuotationPartnerLogos(tenant);
   const companyName = tenant?.legalName || tenant?.name || t("Empresa", "Company");
   const primaryColor = tenant?.primaryColor || "#1a365d";
   const lightColor = lightenColor(primaryColor, 0.92);
@@ -110,27 +114,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     // HEADER BAND — full width colored bar
     // ═══════════════════════════════════════════════
-    const HEADER_H = 112;
-    doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
-
-    // Logo: always on the LEFT side
-    if (logoBuffer) {
-      try {
-        doc.image(logoBuffer, MARGIN, (HEADER_H - 68) / 2, {
-          fit: [110, 68] as [number, number],
-        });
-      } catch { /* ignore logo errors */ }
-    }
-
-    // Text block: always on the RIGHT side, right-aligned
-    const TEXT_X = PAGE_W / 2;
-    const TEXT_W = PAGE_W - TEXT_X - MARGIN;
-
-    // Company name — single line, never wraps
-    doc.fontSize(13).font("Helvetica-Bold").fillColor("#ffffff");
-    doc.text(companyName.toUpperCase(), TEXT_X, 14, { width: TEXT_W, align: "right", lineBreak: false });
-
-    // Company info lines — each part on its own line to avoid overflow
+    // Company info lines — shared content, company-specific presentation below.
     const infoLines: string[] = [];
     if (tenant?.rfc) infoLines.push(`RFC: ${tenant.rfc}`);
     if (tenant?.address) {
@@ -142,10 +126,46 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     if (contactParts.length) infoLines.push(contactParts.join("   |   "));
     if (tenant?.website) infoLines.push(tenant.website);
 
-    doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
-    infoLines.forEach((line, i) => {
-      doc.text(line, TEXT_X, 33 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
-    });
+    const infoRowCount = Math.ceil(infoLines.length / 2);
+    const HEADER_H = agroesaHeader ? Math.max(128, 108 + infoRowCount * 11) : 112;
+    if (agroesaHeader) {
+      // A continuous white letterhead integrates all three brands without pasted-on boxes.
+      doc.rect(0, 0, PAGE_W, HEADER_H).fill("#ffffff");
+      if (logoBuffer) {
+        doc.image(logoBuffer, MARGIN, 14, { fit: [162, 46], valign: "center" });
+      } else {
+        doc.font("Helvetica-Bold").fontSize(22).fillColor(primaryColor)
+          .text(tenant?.name || "Agroesa", MARGIN, 25, { width: 180, lineBreak: false });
+      }
+      doc.image(partnerLogos[0], 288, 18, { fit: [112, 38], align: "center", valign: "center" });
+      doc.image(partnerLogos[1], 444, 18, { fit: [128, 38], align: "right", valign: "center" });
+      doc.moveTo(MARGIN, 74).lineTo(PAGE_W - MARGIN, 74).lineWidth(1).strokeColor(primaryColor).stroke();
+      doc.font("Helvetica-Bold").fontSize(10).fillColor(primaryColor)
+        .text(companyName.toUpperCase(), MARGIN, 83, { width: CONTENT_W, lineBreak: false });
+      doc.font("Helvetica").fontSize(7.5).fillColor("#475569");
+      infoLines.forEach((line, i) => {
+        const column = i < infoRowCount ? 0 : 1;
+        doc.text(line, MARGIN + column * (CONTENT_W / 2 + 8), 101 + (i % infoRowCount) * 11, {
+          width: CONTENT_W / 2 - 8, lineBreak: false,
+        });
+      });
+    } else {
+      // Preserve the existing letterhead for all other companies.
+      doc.rect(0, 0, PAGE_W, HEADER_H).fill(primaryColor);
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, MARGIN, (HEADER_H - 68) / 2, { fit: [110, 68] });
+        } catch { /* ignore logo errors */ }
+      }
+      const TEXT_X = PAGE_W / 2;
+      const TEXT_W = PAGE_W - TEXT_X - MARGIN;
+      doc.fontSize(13).font("Helvetica-Bold").fillColor("#ffffff");
+      doc.text(companyName.toUpperCase(), TEXT_X, 14, { width: TEXT_W, align: "right", lineBreak: false });
+      doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.85)");
+      infoLines.forEach((line, i) => {
+        doc.text(line, TEXT_X, 33 + i * 11, { width: TEXT_W, align: "right", lineBreak: false });
+      });
+    }
 
     // ═══════════════════════════════════════════════
     // DOCUMENT TITLE BAND
