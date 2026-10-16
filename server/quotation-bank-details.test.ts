@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import PDFDocument from "pdfkit";
-import { getQuotationBankDetails } from "./quotation-bank-details";
+import { drawQuotationBankDetails, getQuotationBankDetails } from "./quotation-bank-details";
+import { emptyQuotationBankDetails } from "@shared/quotation-bank-settings";
 import { generateQuotationPDFStream } from "./quotation-pdf-generator";
 
 afterEach(() => vi.restoreAllMocks());
@@ -82,5 +83,43 @@ describe("quotation bank details", () => {
     }
     expect(calls.some(([value]) => value === "Account: 0112431238")).toBe(true);
     expect(addPage.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("prints saved edits and omits deleted accounts on newly generated PDFs", async () => {
+    const text = vi.spyOn(PDFDocument.prototype, "text");
+    const details = {
+      beneficiary: "Beneficiario actualizado", rfc: "AAA010101AAA",
+      accounts: [{ bank: "Banco actualizado", account: "00001234", clabe: "000000000000000013" }],
+    };
+    await generate({ name: "Agroesa", quotationBankDetails: details });
+    const written = text.mock.calls.map(([value]) => String(value));
+    expect(written).toContain("Banco actualizado");
+    expect(written).toContain("Cuenta: 00001234");
+    expect(written).toContain("CLABE: 000000000000000013");
+    expect(written).not.toContain("BBVA BANCOMER");
+    text.mockClear();
+    await generate({ name: "Agroesa", quotationBankDetails: emptyQuotationBankDetails() });
+    expect(text.mock.calls.some(([value]) => value === "DATOS BANCARIOS")).toBe(false);
+  });
+
+  it("lays out ten accounts across rows and pages without horizontal overflow", async () => {
+    const doc = new PDFDocument({ size: "LETTER", margin: 0 });
+    doc.resume();
+    const rect = vi.spyOn(doc, "roundedRect");
+    const text = vi.spyOn(doc, "text");
+    const accounts = Array.from({ length: 10 }, (_, index) => ({
+      bank: `Banco ${index} ${"Nombre largo ".repeat(5)}`, account: `0000${index}`, clabe: "000000000000000013",
+    }));
+    const y = drawQuotationBankDetails(doc, {
+      beneficiary: "Beneficiario de prueba ".repeat(8), rfc: "AAA010101AAA", accounts,
+    }, 620, { language: "es", primaryColor: "#123456", lightColor: "#eeeeee", borderColor: "#dddddd" });
+    doc.end();
+    expect(rect).toHaveBeenCalledTimes(10);
+    for (const [x, top, width, height] of rect.mock.calls) {
+      expect(x + width).toBeLessThanOrEqual(572);
+      expect(top + height).toBeLessThanOrEqual(732);
+    }
+    for (const account of accounts) expect(text.mock.calls.some(([value]) => value === account.bank)).toBe(true);
+    expect(y).toBeLessThanOrEqual(732);
   });
 });

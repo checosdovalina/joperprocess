@@ -3,6 +3,7 @@ import { pgTable, text, varchar, decimal, timestamp, boolean, integer, jsonb, bi
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { quotationFolioPrefixSchema } from "./tenant-settings";
+import type { QuotationBankDetails } from "./quotation-bank-settings";
 
 // ==================== SESSION TABLE (connect-pg-simple) ====================
 // This table is managed by connect-pg-simple for session storage
@@ -28,6 +29,8 @@ export const tenants = pgTable("tenants", {
   logoUrl: text("logo_url"),
   quotationBrandLogo1Url: text("quotation_brand_logo_1_url"),
   quotationBrandLogo2Url: text("quotation_brand_logo_2_url"),
+  // NULL retains legacy defaults; an explicit empty accounts array removes them.
+  quotationBankDetails: jsonb("quotation_bank_details").$type<QuotationBankDetails>(),
   primaryColor: text("primary_color").default("#4DA3FF"), // Nexxo blue default
   secondaryColor: text("secondary_color").default("#1F3C88"),
   active: boolean("active").notNull().default(true),
@@ -64,6 +67,7 @@ export const insertTenantSchema = createInsertSchema(tenants, {
   parentId: true,
   quotationBrandLogo1Url: true,
   quotationBrandLogo2Url: true,
+  quotationBankDetails: true,
   createdAt: true,
   updatedAt: true,
 });

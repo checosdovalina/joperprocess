@@ -227,6 +227,11 @@ ALTER TABLE tenants
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_brand_logo_1_url text;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_brand_logo_2_url text;
 
+-- Datos bancarios por compañía. NULL conserva las referencias históricas de
+-- Agroesa en la aplicación; un objeto con accounts: [] registra la eliminación.
+-- Sin DEFAULT ni relleno global para no cambiar PDF de otras compañías.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_bank_details jsonb;
+
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
 -- 1. Agrega la columna en shared/schema.ts

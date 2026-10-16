@@ -6,8 +6,10 @@ import { formatPdfCurrency, formatPdfDate, formatPdfDateTime, formatPdfNumber, p
 import { resolveQuotationLineTaxRate } from "@shared/quotation-calculations";
 import { hasQuotationPartnerLogos, loadQuotationPartnerLogos } from "./quotation-branding";
 import { drawQuotationBankDetails, getQuotationBankDetails } from "./quotation-bank-details";
+import type { QuotationBankDetails } from "@shared/quotation-bank-settings";
 
 interface TenantBranding {
+  quotationBankDetails?: QuotationBankDetails | null;
   name: string;
   subdomain?: string | null;
   quotationBrandLogo1Url?: string | null;

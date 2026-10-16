@@ -113,6 +113,120 @@ type Ctx = {
 
 const ctx = {} as Ctx;
 
+describe("Company bank settings", () => {
+  const endpoint = "/api/company-settings/bank-details";
+  const details = {
+    beneficiary: "Empresa de prueba", rfc: "AAA010101AAA",
+    accounts: [{ bank: "Banco de prueba", account: "00001234", clabe: "000000000000000013" }],
+  };
+
+  it("requires administrator authentication for every bank operation", async () => {
+    for (const method of ["GET", "PUT", "DELETE"]) {
+      const anonymous = await fetch(`${ctx.baseUrl}${endpoint}`, {
+        method, headers: { "X-Tenant-Subdomain": ctx.subA },
+      });
+      expect(anonymous.status).toBe(401);
+      expect((await asVendedorA1(method, endpoint, method === "PUT" ? details : undefined)).status).toBe(403);
+      expect((await asSuperadmin(method, endpoint, method === "PUT" ? details : undefined)).status).toBe(400);
+    }
+  });
+
+  it("persists additions, edits, per-account removal and deletion without crossing companies", async () => {
+    const originalA = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) });
+    const originalB = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) });
+    try {
+      expect((await asAdminA("PUT", endpoint, details)).status).toBe(200);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual(details);
+      expect((await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) }))?.quotationBankDetails).toEqual(details);
+      const changed = {
+        ...details, beneficiary: "Beneficiario modificado",
+        accounts: [...details.accounts, { ...details.accounts[0], bank: "Segundo banco", account: "00009999" }],
+      };
+      expect((await asAdminA("PUT", endpoint, changed)).status).toBe(200);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual(changed);
+      const removedOne = { ...changed, accounts: changed.accounts.slice(1) };
+      expect((await asAdminA("PUT", endpoint, removedOne)).status).toBe(200);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual(removedOne);
+      expect((await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) }))?.quotationBankDetails).toEqual(originalB?.quotationBankDetails);
+      const other = { ...details, beneficiary: "Compañía independiente" };
+      expect((await asAdminB("PUT", endpoint, other)).status).toBe(200);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual(removedOne);
+      expect(await (await asAdminB("GET", endpoint)).json()).toEqual(other);
+      const removedAll = { ...details, accounts: [] };
+      expect((await asAdminA("PUT", endpoint, removedAll)).status).toBe(200);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual(removedAll);
+      expect((await asAdminA("DELETE", endpoint)).status).toBe(200);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual({ beneficiary: "", rfc: "", accounts: [] });
+      expect(await (await asAdminB("GET", endpoint)).json()).toEqual(other);
+      expect((await asAdminA("PUT", endpoint, details)).status).toBe(200);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual(details);
+    } finally {
+      await db.update(tenants).set({ quotationBankDetails: originalA!.quotationBankDetails }).where(eq(tenants.id, ctx.tenantA));
+      await db.update(tenants).set({ quotationBankDetails: originalB!.quotationBankDetails }).where(eq(tenants.id, ctx.tenantB));
+    }
+  });
+
+  it("rejects invalid CLABE and tenant overrides without modifying stored values", async () => {
+    const original = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) });
+    for (const body of [
+      { ...details, tenantId: ctx.tenantB },
+      { ...details, accounts: [{ ...details.accounts[0], clabe: "000000000000000019" }] },
+      { ...details, accounts: [{ ...details.accounts[0], clabe: "123" }] },
+      { ...details, accounts: [{ ...details.accounts[0], account: 1234 }] },
+    ]) expect((await asAdminA("PUT", endpoint, body)).status).toBe(400);
+    const bypass = await asAdminA("PATCH", "/api/company-settings", { quotationBankDetails: details });
+    expect(bypass.status).toBe(400);
+    expect((await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) }))?.quotationBankDetails).toEqual(original?.quotationBankDetails);
+  });
+
+  it("persists deletion of legacy Agroesa accounts rather than falling back on reload", async () => {
+    const original = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) });
+    try {
+      await db.update(tenants).set({ name: "Agroesa", quotationBankDetails: null }).where(eq(tenants.id, ctx.tenantA));
+      expect((await (await asAdminA("GET", endpoint)).json()).accounts).toHaveLength(2);
+      expect((await asAdminA("DELETE", endpoint)).status).toBe(200);
+      expect((await (await asAdminA("GET", endpoint)).json()).accounts).toEqual([]);
+    } finally {
+      await db.update(tenants).set({
+        name: original!.name, quotationBankDetails: original!.quotationBankDetails,
+      }).where(eq(tenants.id, ctx.tenantA));
+    }
+  });
+
+  it("edits the selected child company without inheriting or overwriting its parent's accounts", async () => {
+    const original = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) });
+    const created = await asSuperadmin("POST", "/api/tenants", {
+      name: `Bank child ${RUN}`, subdomain: `bank-child-${RUN}`, parentId: ctx.tenantA,
+    });
+    expect(created.status).toBe(201);
+    const child = await created.json();
+    ctx.createdTenantIds.push(child.id);
+    const cookie = await login(ctx.adminA.username, ctx.subA);
+    const selectedRequest = (method: string, selectedId: string, body?: unknown) =>
+      fetch(`${ctx.baseUrl}${endpoint}`, {
+        method,
+        headers: {
+          Cookie: cookie, "X-Tenant-Subdomain": ctx.subA,
+          "X-Selected-Tenant-Id": selectedId, "Content-Type": "application/json",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    try {
+      expect((await asAdminA("PUT", endpoint, details)).status).toBe(200);
+      expect((await (await selectedRequest("GET", child.id)).json()).accounts).toEqual([]);
+      const childDetails = { ...details, beneficiary: "Compañía hija" };
+      expect((await selectedRequest("PUT", child.id, childDetails)).status).toBe(200);
+      expect((await db.query.tenants.findFirst({ where: eq(tenants.id, child.id) }))?.quotationBankDetails).toEqual(childDetails);
+      expect(await (await asAdminA("GET", endpoint)).json()).toEqual(details);
+      for (const method of ["GET", "PUT", "DELETE"]) {
+        expect((await selectedRequest(method, ctx.tenantB, method === "PUT" ? details : undefined)).status).toBe(403);
+      }
+    } finally {
+      await db.update(tenants).set({ quotationBankDetails: original!.quotationBankDetails }).where(eq(tenants.id, ctx.tenantA));
+    }
+  });
+});
+
 describe("Administrative order release", () => {
   async function newOrder(status = OrderStatus.PENDING) {
     return insertReturningId(orders, {

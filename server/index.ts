@@ -40,8 +40,9 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      if (capturedJsonResponse && path !== "/api/company-settings/bank-details") {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse, (key, value) =>
+          key === "quotationBankDetails" ? "[REDACTED]" : value)}`;
       }
 
       if (logLine.length > 80) {

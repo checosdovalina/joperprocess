@@ -166,6 +166,10 @@ const MIGRATIONS: { id: string; sql: string }[] = [
         ON checkin_updates (tenant_id, created_at DESC);
     `,
   },
+  {
+    id: "017_add_quotation_bank_details",
+    sql: `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_bank_details jsonb`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/hooks/use-i18n";
 import type { Tenant } from "@shared/schema";
 import QuotationBrandLogosSettings from "@/components/quotation-brand-logos-settings";
+import QuotationBankSettings from "@/components/quotation-bank-settings";
 
 const CONFIRM_PHRASE = "CONFIRMAR RESET";
 
@@ -602,6 +603,12 @@ export default function CompanySettingsPage() {
           </Button>
         </div>
       </form>
+
+      {company?.id && (
+        <div className="mt-6">
+          <QuotationBankSettings key={company.id} companyId={String(company.id)} />
+        </div>
+      )}
 
       {/* ─── MAX DISCOUNTS ──────────────────────────────────────────────── */}
       <div className="mt-8">
