@@ -48,6 +48,21 @@ describe("Agroesa quotation letterhead", () => {
     for (const buffer of logos) expect((await sharp(buffer!).metadata()).format).toBe("png");
   });
 
+  it("renders only explicitly uploaded partners for another company and restores its original header when removed", async () => {
+    const custom = await sharp({ create: { width: 100, height: 30, channels: 3, background: "#228833" } }).png().toBuffer();
+    vi.spyOn(localStorageService, "getFile").mockResolvedValue(custom);
+    const image = vi.spyOn(PDFDocument.prototype, "image");
+    const company = { name: "Joper", logoUrl: "/api/logos/company.png", quotationBrandLogo1Url: "/api/logos/custom.png" };
+    expect(await loadQuotationPartnerLogos(company)).toEqual([custom, null]);
+    await render(company);
+    expect(image).toHaveBeenCalledTimes(2);
+    expect(image.mock.calls.map(call => call[1])).toEqual([40, 288]);
+    image.mockClear();
+    expect(await loadQuotationPartnerLogos({ ...company, quotationBrandLogo1Url: "" })).toEqual([]);
+    await render({ ...company, quotationBrandLogo1Url: "" });
+    expect(image).toHaveBeenCalledTimes(1);
+  });
+
   it("renders the company logo and two brand logos in a single aligned row", async () => {
     const companyLogo = await sharp({
       create: { width: 120, height: 40, channels: 3, background: "#008743" },

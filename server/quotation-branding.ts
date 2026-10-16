@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { localStorageService } from "./localStorage";
-import { isAgroesaQuotation, quotationLogoSlots, quotationLogoUrl, type QuotationCompanyIdentity } from "@shared/quotation-branding";
-export { isAgroesaQuotation } from "@shared/quotation-branding";
+import { hasQuotationPartnerLogos, quotationLogoSlots, quotationLogoUrl, type QuotationCompanyIdentity } from "@shared/quotation-branding";
+export { isAgroesaQuotation, hasQuotationPartnerLogos } from "@shared/quotation-branding";
 
 export async function loadQuotationPartnerLogos(identity?: QuotationCompanyIdentity | null): Promise<(Buffer | null)[]> {
-  if (!identity || !isAgroesaQuotation(identity)) return [];
+  if (!identity || !hasQuotationPartnerLogos(identity)) return [];
   // Vite copies these assets into dist/public for production builds.
   const publicDir = process.env.NODE_ENV === "production" ? "dist/public" : "client/public";
   return Promise.all((Object.keys(quotationLogoSlots) as (keyof typeof quotationLogoSlots)[]).map(async slot => {

@@ -37,10 +37,13 @@ function PartnerLogoControls({ company, slot }: { company: Tenant; slot: LogoSlo
   const { t } = useI18n();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const brandName = slot === "mccormick" ? "McCormick" : "Faresin";
+  const isAgroesa = isAgroesaQuotation(company);
+  const brandName = isAgroesa
+    ? slot === "mccormick" ? "McCormick" : "Faresin"
+    : t(slot === "mccormick" ? "settings.quotation-logos.additional-1" : "settings.quotation-logos.additional-2");
   const savedLogo = company[quotationLogoSlots[slot].field];
   const logo = quotationLogoUrl(company, slot);
-  const isHidden = savedLogo === "";
+  const isHidden = !logo;
 
   const mutation = useMutation({
     mutationFn: async (variables: LogoAction) => {
@@ -122,10 +125,12 @@ function PartnerLogoControls({ company, slot }: { company: Tenant; slot: LogoSlo
           <h3 id={`quotation-logo-${slot}-title`} className="text-sm font-semibold">{brandName}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {isHidden
-              ? t("settings.quotation-logos.hidden-preview")
-              : savedLogo
-                ? t("settings.quotation-logos.customized")
-                : t("settings.quotation-logos.default")}
+              ? isAgroesa
+                ? t("settings.quotation-logos.hidden-preview")
+                : t("settings.quotation-logos.no-image")
+              : isAgroesa && !savedLogo
+                ? t("settings.quotation-logos.default")
+                : t("settings.quotation-logos.customized")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -174,7 +179,9 @@ function PartnerLogoControls({ company, slot }: { company: Tenant; slot: LogoSlo
         ) : (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <ImagePlus className="h-4 w-4" />
-            {t("settings.quotation-logos.hidden-preview")}
+            {isAgroesa
+              ? t("settings.quotation-logos.hidden-preview")
+              : t("settings.quotation-logos.no-image")}
           </div>
         )}
       </div>
@@ -185,8 +192,9 @@ function PartnerLogoControls({ company, slot }: { company: Tenant; slot: LogoSlo
 export default function QuotationBrandLogosSettings({ company }: { company: Tenant | undefined }) {
   const { t } = useI18n();
 
-  if (!company || !isAgroesaQuotation(company)) return null;
+  if (!company) return null;
 
+  const isAgroesa = isAgroesaQuotation(company);
   const corporateLogo = getLogoUrl(company.logoUrl);
 
   return (
@@ -212,13 +220,15 @@ export default function QuotationBrandLogosSettings({ company }: { company: Tena
               </div>
               <div className="h-10 w-px shrink-0 bg-border" aria-hidden="true" />
               {(["mccormick", "faresin"] as const).map((slot) => {
-                const brand = slot === "mccormick" ? "McCormick" : "Faresin";
+                const brand = isAgroesa
+                  ? slot === "mccormick" ? "McCormick" : "Faresin"
+                  : t(slot === "mccormick" ? "settings.quotation-logos.additional-1" : "settings.quotation-logos.additional-2");
                 const url = quotationLogoUrl(company, slot);
                 return (
                   <div key={slot} className="flex min-w-0 flex-1 items-center justify-center">
                     {url
                       ? <img src={url} alt={brand} className="max-h-14 max-w-full object-contain" />
-                      : <span className="text-xs text-muted-foreground">{brand}</span>}
+                      : null}
                   </div>
                 );
               })}

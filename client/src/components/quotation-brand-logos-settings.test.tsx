@@ -15,6 +15,8 @@ vi.mock("@/hooks/use-i18n", () => ({
       "settings.quotation-logos.choose-file": "Elegir logo {brand}",
       "settings.quotation-logos.replace": "Cambiar logo {brand}",
       "settings.quotation-logos.remove": "Quitar logo {brand}",
+      "settings.quotation-logos.additional-1": "Logo adicional 1",
+      "settings.quotation-logos.additional-2": "Logo adicional 2",
     }[key] || key),
   }),
 }));
@@ -38,10 +40,24 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("quotation brand logo settings controls", () => {
-  it("does not expose these controls for other companies", () => {
+  it("shows upload controls for other companies without assigning Agroesa's logos", () => {
     mount({ ...company, name: "Joper", subdomain: "joper" });
-    expect(screen.queryByLabelText("Elegir logo McCormick")).toBeNull();
+    expect(screen.getByLabelText("Elegir logo Logo adicional 1")).toBeTruthy();
+    expect(screen.getByLabelText("Elegir logo Logo adicional 2")).toBeTruthy();
+    expect(screen.queryByLabelText("Quitar logo Logo adicional 1")).toBeNull();
+    expect(screen.queryAllByAltText("McCormick")).toHaveLength(0);
+    expect(screen.queryAllByAltText("Faresin")).toHaveLength(0);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("allows a non-Agroesa administrator to upload its own additional logo", async () => {
+    mount({ ...company, name: "Joper", subdomain: "joper" });
+    const file = new File(["image"], "my-brand.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Elegir logo Logo adicional 1"), { target: { files: [file] } });
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith("/api/company-settings/quotation-logos/mccormick", expect.objectContaining({
+      method: "POST", body: file,
+    }));
   });
 
   it("uploads the selected binary image, refreshes settings, and resets the input", async () => {

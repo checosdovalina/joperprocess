@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { tenants, UserRole } from "@shared/schema";
-import { isAgroesaQuotation, quotationLogoSlots } from "@shared/quotation-branding";
+import { quotationLogoSlots } from "@shared/quotation-branding";
 import { isAuthenticated, hasRole } from "./auth";
 import { db } from "./db";
 import { localStorageService } from "./localStorage";
@@ -24,10 +24,6 @@ export function registerQuotationLogoRoutes(app: Express, tenantIdFor: (req: Req
     const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
     if (!tenant) {
       res.sendStatus(404);
-      return null;
-    }
-    if (!isAgroesaQuotation(tenant)) {
-      res.status(403).json({ error: "Los logos adicionales están habilitados únicamente para Agroesa" });
       return null;
     }
     return { tenantId, slot, field: quotationLogoSlots[slot].field };

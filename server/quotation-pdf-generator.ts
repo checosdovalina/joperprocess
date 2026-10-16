@@ -4,7 +4,7 @@ import type { Quotation, QuotationItem, Customer, User } from "@shared/schema";
 import { localStorageService } from "./localStorage";
 import { formatPdfCurrency, formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
 import { resolveQuotationLineTaxRate } from "@shared/quotation-calculations";
-import { isAgroesaQuotation, loadQuotationPartnerLogos } from "./quotation-branding";
+import { hasQuotationPartnerLogos, loadQuotationPartnerLogos } from "./quotation-branding";
 
 interface TenantBranding {
   name: string;
@@ -100,7 +100,7 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
   const t = (es: string, en: string) => pdfText(language, { es, en });
 
   const logoBuffer = await loadLogoBuffer(tenant?.logoUrl);
-  const agroesaHeader = isAgroesaQuotation(tenant);
+  const multiLogoHeader = hasQuotationPartnerLogos(tenant);
   const partnerLogos = await loadQuotationPartnerLogos(tenant);
   const companyName = tenant?.legalName || tenant?.name || t("Empresa", "Company");
   const primaryColor = tenant?.primaryColor || "#1a365d";
@@ -129,8 +129,8 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     if (tenant?.website) infoLines.push(tenant.website);
 
     const infoRowCount = Math.ceil(infoLines.length / 2);
-    const HEADER_H = agroesaHeader ? Math.max(128, 108 + infoRowCount * 11) : 112;
-    if (agroesaHeader) {
+    const HEADER_H = multiLogoHeader ? Math.max(128, 108 + infoRowCount * 11) : 112;
+    if (multiLogoHeader) {
       // A continuous white letterhead integrates all three brands without pasted-on boxes.
       doc.rect(0, 0, PAGE_W, HEADER_H).fill("#ffffff");
       if (logoBuffer) {

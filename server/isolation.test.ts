@@ -1516,7 +1516,7 @@ describe("PATCH /api/products/:id (write guard, tenant-scoped)", () => {
 });
 
 describe("Quotation brand logo settings", () => {
-  it("persists uploads/removals for the effective company, validates files, and blocks other roles/companies", async () => {
+  it("persists logos per effective company, validates files, and blocks unauthorized roles", async () => {
     const original = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantA) });
     const tenantB = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) });
     const stored: string[] = [];
@@ -1527,7 +1527,6 @@ describe("Quotation brand logo settings", () => {
     try {
       expect((await asVendedorA1.raw("POST", endpoint, png, "image/png")).status).toBe(403);
       expect((await asVendedorA1("DELETE", endpoint)).status).toBe(403);
-      expect((await asAdminB.raw("POST", endpoint, png, "image/png")).status).toBe(403);
       expect((await asAdminA.raw("POST", endpoint.replace("mccormick", "__proto__"), png, "image/png")).status).toBe(400);
       expect((await asAdminA.raw("POST", endpoint, Buffer.from("not an image"), "text/plain")).status).toBe(400);
       expect((await asAdminA.raw("POST", endpoint, Buffer.from("broken png"), "image/png")).status).toBe(400);
@@ -1554,7 +1553,6 @@ describe("Quotation brand logo settings", () => {
       const unchanged = await db.query.tenants.findFirst({ where: eq(tenants.id, ctx.tenantB) });
       expect(unchanged?.quotationBrandLogo1Url).toBe(tenantB?.quotationBrandLogo1Url);
       expect(unchanged?.quotationBrandLogo2Url).toBe(tenantB?.quotationBrandLogo2Url);
-      await db.update(tenants).set({ name: "Agroesa" }).where(eq(tenants.id, ctx.tenantB));
       const uploadB = await asAdminB.raw("POST", endpoint, png, "image/png");
       expect(uploadB.status).toBe(200);
       const savedB = await uploadB.json();

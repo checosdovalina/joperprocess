@@ -20,5 +20,10 @@ export const quotationLogoSlots = {
 
 // NULL preserves the supplied brand; an empty string explicitly hides a removed logo.
 export function quotationLogoUrl(identity: QuotationCompanyIdentity, slot: keyof typeof quotationLogoSlots) {
-  return identity[quotationLogoSlots[slot].field] ?? quotationLogoSlots[slot].defaultUrl;
+  return identity[quotationLogoSlots[slot].field] ?? (isAgroesaQuotation(identity) ? quotationLogoSlots[slot].defaultUrl : "");
+}
+
+export function hasQuotationPartnerLogos(identity?: QuotationCompanyIdentity | null): boolean {
+  return !!identity && (isAgroesaQuotation(identity) ||
+    !!identity.quotationBrandLogo1Url || !!identity.quotationBrandLogo2Url);
 }
