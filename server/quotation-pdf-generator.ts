@@ -5,6 +5,7 @@ import { localStorageService } from "./localStorage";
 import { formatPdfCurrency, formatPdfDate, formatPdfDateTime, formatPdfNumber, pdfText, resolvePdfLanguage } from "./pdf-locale";
 import { resolveQuotationLineTaxRate } from "@shared/quotation-calculations";
 import { hasQuotationPartnerLogos, loadQuotationPartnerLogos } from "./quotation-branding";
+import { drawQuotationBankDetails, getQuotationBankDetails } from "./quotation-bank-details";
 
 interface TenantBranding {
   name: string;
@@ -635,6 +636,12 @@ export async function generateQuotationPDFStream(data: QuotationPDFData): Promis
     // ═══════════════════════════════════════════════
     // FOOTER
     // ═══════════════════════════════════════════════
+    const bankDetails = getQuotationBankDetails(tenant);
+    if (bankDetails) {
+      currentY = drawQuotationBankDetails(doc, bankDetails, currentY, {
+        language, primaryColor, lightColor, borderColor: mediumColor,
+      });
+    }
     const FOOTER_Y = PAGE_H - 42;
     doc.rect(0, FOOTER_Y, PAGE_W, 42).fill(primaryColor);
 

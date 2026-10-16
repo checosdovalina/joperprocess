@@ -44,3 +44,9 @@ Los controles para logos adicionales deben estar visibles para el administrador 
 **Why:** Ocultar la sección por nombre de empresa hizo que el usuario no encontrara la opción solicitada.
 
 **How to apply:** Separar la disponibilidad de los controles de administración de la selección de imágenes y del diseño predeterminado de cada empresa.
+
+Las cotizaciones de Agroesa deben incluir las dos cuentas bancarias empresariales indicadas por el usuario en sus referencias, como texto legible, sin añadirlas a las cotizaciones de otras compañías.
+
+**Why:** El usuario indicó que ambas cuentas deben ir en la cotización de Agroesa.
+
+**How to apply:** Mantener los datos de pago ligados a esa compañía y verificar cualquier cambio contra las referencias facilitadas, sin conservar números de cuenta en esta memoria.
