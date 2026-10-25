@@ -1,6 +1,6 @@
 ---
 name: Protección de envíos automáticos de estados de cuenta
-description: Envíos como máximo una vez y tratamiento de resultados inciertos del proveedor.
+description: Protección de duplicados, resultados inciertos, límites del proveedor y horario de medianoche.
 ---
 
 Los correos automáticos requieren una reserva persistente por empresa, fecha de envío y cliente, además del marcador general de la programación.
@@ -14,3 +14,15 @@ Un intento cuyo resultado no se confirmó no se debe reenviar automáticamente e
 **Why:** Un timeout puede ocurrir después de que el proveedor haya aceptado el mensaje. Se eligió priorizar evitar copias repetidas frente a reintentar automáticamente un resultado incierto.
 
 **How to apply:** Registrar el resultado incierto para revisión, conservar la reserva y permitir un reenvío manual deliberado. No borrar la reserva por errores del proveedor ni por fallos al registrar un envío confirmado.
+
+Los rechazos explícitos por límite del proveedor (HTTP 429 / Cloudflare 1015) son distintos de un resultado incierto: se puede reintentar una solicitud rechazada después del plazo indicado, sin repetir los envíos confirmados.
+
+**Why:** Los registros de la VPS confirmaron bloqueos por exceso de solicitudes. Continuar el lote o reintentar inmediatamente prolonga el problema y no resuelve la entrega.
+
+**How to apply:** Pausar el lote, persistir el plazo de espera y retomarlo en una revisión posterior. No marcar el lote como completado mientras quede pausado. Sólo esos rechazos conocidos pueden volver a reservarse automáticamente.
+
+Normalizar la hora de medianoche a cero antes de compararla con la hora programada.
+
+**Why:** El formato de hora `en-US` con `hour12: false` devolvió 24 a medianoche en la VPS, haciendo que la comparación considerase vencidas horas posteriores del mismo día.
+
+**How to apply:** Usar un ciclo de 0 a 23 y probar tanto el envío configurado para medianoche como la espera de una hora posterior.

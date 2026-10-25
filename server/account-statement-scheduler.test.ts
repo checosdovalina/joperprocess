@@ -109,4 +109,37 @@ describe("automatic statement scheduler", () => {
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.customers).not.toHaveBeenCalled();
   });
+
+  it("treats midnight as hour zero, not hour 24, and waits for the configured time", async () => {
+    vi.setSystemTime(new Date("2026-10-25T06:30:00Z"));
+    await run();
+    expect(mocks.deliver).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  it("still permits a schedule explicitly configured for midnight", async () => {
+    vi.setSystemTime(new Date("2026-10-25T06:30:00Z"));
+    mocks.schedules.mockResolvedValue([{
+      id: "schedule-a", tenantId: "company-a", scheduleDays: [25], sendHour: 0, lastRunAt: null,
+    }]);
+    await run();
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops the batch on 429 without marking it completed or trying every remaining customer", async () => {
+    mocks.customers.mockResolvedValue([
+      { id: "first", name: "First", email: "first@example.test" },
+      { id: "second", name: "Second", email: "second@example.test" },
+    ]);
+    mocks.send.mockRejectedValueOnce({ statusCode: 429 });
+    await run();
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ retryOnRateLimit: false }));
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.activity).toHaveBeenCalledWith(expect.objectContaining({
+      action: "auto_send_paused", level: "warning",
+    }));
+    await run();
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+  });
 });

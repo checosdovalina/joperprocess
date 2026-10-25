@@ -69,6 +69,25 @@ describe("durable automatic statement dispatch", () => {
     expect(row.status).toBe("unconfirmed");
   });
 
+  it("safely retries a definite 429 rejection after its durable cooldown without duplicating successful sends", async () => {
+    const blocked = { statusCode: 429, headers: { "retry-after": "120" } };
+    const send = vi.fn().mockRejectedValueOnce(blocked).mockResolvedValue(undefined);
+    const before = Date.now();
+    await expect(attempt("rate-limited", send)).rejects.toEqual(blocked);
+    const [row] = await db.select().from(accountStatementDeliveries)
+      .where(eq(accountStatementDeliveries.customerKey, "customer:rate-limited"));
+    expect(row.status).toBe("rate_limited");
+    expect(row.retryAfter!.getTime()).toBeGreaterThanOrEqual(before + 120_000);
+    await expect(attempt("rate-limited", send)).rejects.toMatchObject({ statusCode: 429 });
+    expect(send).toHaveBeenCalledTimes(1);
+    await db.update(accountStatementDeliveries).set({ retryAfter: new Date(Date.now() - 1000) })
+      .where(eq(accountStatementDeliveries.id, row.id));
+    const results = await Promise.all(Array.from({ length: 8 }, () => attempt("rate-limited", send)));
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(send).toHaveBeenCalledTimes(2); // one rejected request, then one accepted
+    expect(await attempt("rate-limited", send)).toBe(false);
+  });
+
   it("retains protection after a crash leaves a pending claim", async () => {
     await db.insert(accountStatementDeliveries).values({
       tenantId: tenantIds[0], deliveryDay: day, customerKey: "customer:interrupted",

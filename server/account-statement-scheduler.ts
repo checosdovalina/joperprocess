@@ -4,6 +4,7 @@ import { accountStatementSchedules, tenants, customers, invoices, payments, user
 import { createMicrosipSyncService } from "./microsip-sync";
 import { logSystemActivity } from "./system-log";
 import { deliverScheduledStatement } from "./account-statement-delivery";
+import { isStatementMailRateLimit, statementMailRetryAt } from "./statement-mail-rate-limit";
 
 let schedulerRunning = false;
 
@@ -12,7 +13,7 @@ function todayInMexico(tz = "America/Mexico_City"): string {
 }
 
 function hourInMexico(tz = "America/Mexico_City"): number {
-  return parseInt(new Date().toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false }), 10);
+  return parseInt(new Date().toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false }), 10) % 24;
 }
 
 function dayOfMonthInMexico(tz = "America/Mexico_City"): number {
@@ -50,9 +51,10 @@ async function runDueStatements(): Promise<void> {
       }
     }
 
-    console.log(`[StatementScheduler] Sending for tenant ${schedule.tenantId} (day ${todayDay}, hour ${currentHour})`);
+    console.log(`[StatementScheduler] Sending for tenant ${schedule.tenantId} (date ${todayStr}, day ${todayDay}, hour ${currentHour})`);
     try {
-      await runForTenant(schedule.tenantId, schedule.onlyOverdue, todayStr);
+      const completed = await runForTenant(schedule.tenantId, schedule.onlyOverdue, todayStr);
+      if (!completed) continue;
       await db
         .update(accountStatementSchedules)
         .set({ lastRunAt: new Date(), updatedAt: new Date() })
@@ -64,9 +66,9 @@ async function runDueStatements(): Promise<void> {
   }
 }
 
-async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay: string): Promise<void> {
+async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay: string): Promise<boolean> {
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
-  if (!tenant) return;
+  if (!tenant) return true;
 
   const allCustomers = await db.query.customers.findMany({
     where: eq(customers.tenantId, tenantId),
@@ -151,6 +153,8 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
   let skipped = 0;
   let failed = 0;
   let duplicatesPrevented = 0;
+  let rateLimited = false;
+  let retryAt: Date | null = null;
   const failedCustomers: string[] = [];
 
   for (const customer of allCustomers) {
@@ -219,6 +223,7 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
         tenantName: tenant.name,
         liveData,
         ccEmails: ccEmails.length > 0 ? ccEmails : undefined,
+        retryOnRateLimit: false,
         }),
       });
       if (!delivered) {
@@ -228,8 +233,14 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
       }
       sent++;
       // Pause between sends to stay under the mail provider's rate limit
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 5000));
     } catch (err) {
+      if (isStatementMailRateLimit(err)) {
+        rateLimited = true;
+        retryAt = statementMailRetryAt(err);
+        console.warn(`[StatementScheduler] Paused tenant ${tenantId} on ${deliveryDay}: provider rate limit; retry after ${retryAt.toISOString()}`);
+        break;
+      }
       failed++;
       failedCustomers.push(customer.name);
       console.error(`[StatementScheduler] Failed to send to ${customer.name}:`, err);
@@ -240,11 +251,13 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
   await logSystemActivity({
     tenantId,
     category: "account_statement",
-    action: "auto_send",
-    level: failed > 0 ? "warning" : "info",
-    message: `Envío automático completado: ${sent} enviados, ${skipped} omitidos, ${failed} fallidos.` +
+    action: rateLimited ? "auto_send_paused" : "auto_send",
+    level: failed > 0 || rateLimited ? "warning" : "info",
+    message: `${rateLimited ? "Envío automático pausado por límite del proveedor" : "Envío automático completado"}: ${sent} enviados, ${skipped} omitidos, ${failed} fallidos.` +
       (onlyOverdue ? " (solo clientes con saldo vencido)" : "") +
-      (duplicatesPrevented ? ` ${duplicatesPrevented} reenvíos evitados por protección de duplicados.` : ""),
-    details: { sent, skipped, failed, failedCustomers, onlyOverdue, duplicatesPrevented },
+      (duplicatesPrevented ? ` ${duplicatesPrevented} reenvíos evitados por protección de duplicados.` : "") +
+      (rateLimited ? " Se retomará en la siguiente revisión programada, sin repetir los envíos confirmados." : ""),
+    details: { sent, skipped, failed, failedCustomers, onlyOverdue, duplicatesPrevented, deliveryDay, retryAfter: retryAt?.toISOString() ?? null },
   });
+  return !rateLimited;
 }

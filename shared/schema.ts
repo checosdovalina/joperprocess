@@ -1490,6 +1490,7 @@ export const accountStatementDeliveries = pgTable("account_statement_deliveries"
   status: text("status").notNull().default("sending"),
   attemptedAt: timestamp("attempted_at").notNull().defaultNow(),
   completedAt: timestamp("completed_at"),
+  retryAfter: timestamp("retry_after"),
 }, (table) => [
   uniqueIndex("account_statement_deliveries_daily_unique").on(table.tenantId, table.deliveryDay, table.customerKey),
 ]);

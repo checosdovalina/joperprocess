@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 import { accountStatementDeliveries } from "@shared/schema";
 import { db } from "./db";
+import { isStatementMailRateLimit, statementMailRetryAt, StatementMailRateLimitPause } from "./statement-mail-rate-limit";
 
 export function statementCustomerKey(customer: { id: string; microsipId?: number | null }): string {
   return customer.microsipId && customer.microsipId > 0
@@ -18,19 +19,38 @@ export async function deliverScheduledStatement(options: {
   customer: { id: string; microsipId?: number | null };
   send: () => Promise<void>;
 }): Promise<boolean> {
+  const customerKey = statementCustomerKey(options.customer);
   const [claim] = await db.insert(accountStatementDeliveries).values({
     tenantId: options.tenantId,
     deliveryDay: options.deliveryDay,
-    customerKey: statementCustomerKey(options.customer),
-  }).onConflictDoNothing().returning({ id: accountStatementDeliveries.id });
-  if (!claim) return false;
+    customerKey,
+  }).onConflictDoUpdate({
+    target: [accountStatementDeliveries.tenantId, accountStatementDeliveries.deliveryDay, accountStatementDeliveries.customerKey],
+    set: { status: "sending", attemptedAt: new Date(), completedAt: null, retryAfter: null },
+    setWhere: and(eq(accountStatementDeliveries.status, "rate_limited"), lte(accountStatementDeliveries.retryAfter, new Date())),
+  }).returning({ id: accountStatementDeliveries.id });
+  if (!claim) {
+    const previous = await db.query.accountStatementDeliveries.findFirst({ where: and(
+      eq(accountStatementDeliveries.tenantId, options.tenantId),
+      eq(accountStatementDeliveries.deliveryDay, options.deliveryDay),
+      eq(accountStatementDeliveries.customerKey, customerKey),
+    ) });
+    if (previous?.status === "rate_limited" && previous.retryAfter) {
+      throw new StatementMailRateLimitPause(previous.retryAfter);
+    }
+    return false;
+  }
 
   try {
     await options.send();
   } catch (error) {
     // Never delete the claim: a timeout can happen after provider acceptance.
     try {
-      await db.update(accountStatementDeliveries).set({ status: "unconfirmed", completedAt: new Date() })
+      const limited = isStatementMailRateLimit(error);
+      await db.update(accountStatementDeliveries).set({
+        status: limited ? "rate_limited" : "unconfirmed", completedAt: new Date(),
+        retryAfter: limited ? statementMailRetryAt(error) : null,
+      })
         .where(eq(accountStatementDeliveries.id, claim.id));
     } catch (recordError) {
       console.error("[StatementScheduler] Could not record unconfirmed delivery:", recordError);

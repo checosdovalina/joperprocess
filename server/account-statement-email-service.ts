@@ -1,5 +1,6 @@
 import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 import type { Invoice, Payment, Customer } from "@shared/schema";
+import { isStatementMailRateLimit } from "./statement-mail-rate-limit";
 
 interface StatementLine {
   serie: string;
@@ -45,6 +46,8 @@ interface SendAccountStatementParams {
   liveData?: { invoices: CxcLiveInvoice[]; payments: CxcLivePayment[] };
   /** Additional CC emails (e.g. internal admin copy) */
   ccEmails?: string[];
+  /** Automatic batches pause and retry later instead of retrying inline. */
+  retryOnRateLimit?: boolean;
 }
 
 function fmt(value: string | number, currency = "MXN"): string {
@@ -95,6 +98,7 @@ export async function sendAccountStatementEmail({
   cutoffDate,
   liveData,
   ccEmails,
+  retryOnRateLimit = true,
 }: SendAccountStatementParams): Promise<void> {
   const apiKey = process.env.MAILERSEND_API_KEY;
   if (!apiKey) throw new Error("MAILERSEND_API_KEY no está configurado");
@@ -400,9 +404,7 @@ export async function sendAccountStatementEmail({
       await mailerSend.email.send(emailParams);
       return;
     } catch (err: any) {
-      const status = err?.statusCode ?? err?.status ?? err?.body?.status;
-      const isRateLimit = status === 429 || err?.body?.error_code === 1015;
-      if (isRateLimit && attempt < maxAttempts) {
+      if (retryOnRateLimit && isStatementMailRateLimit(err) && attempt < maxAttempts) {
         const waitMs = 15000 * attempt;
         console.warn(`[StatementEmail] Rate limited (intento ${attempt}/${maxAttempts}), esperando ${waitMs / 1000}s...`);
         await new Promise((r) => setTimeout(r, waitMs));

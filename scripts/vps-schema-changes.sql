@@ -244,6 +244,7 @@ CREATE TABLE IF NOT EXISTS account_statement_deliveries (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS account_statement_deliveries_daily_unique
   ON account_statement_deliveries (tenant_id, delivery_day, customer_key);
+ALTER TABLE account_statement_deliveries ADD COLUMN IF NOT EXISTS retry_after timestamp;
 
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
