@@ -15,6 +15,7 @@
 - [Internal email recipient isolation](internal-email-recipient-isolation.md) — automatic staff emails must require matching tenant, active user, and explicit email opt-in.
 - [Company email branding](company-email-branding.md) — company transactional emails use their own company name, not a fixed Grupo Joper sender or message label.
 - [Statement recipient selection](statement-recipient-selection.md) — configured customer recipients are authoritative; never fall back to all addresses when a saved selection becomes stale.
+- [Automatic statement delivery](automatic-statement-delivery.md) — persistent daily claims prevent duplicates across restarts; uncertain provider outcomes require review, not automatic resend.
 - [Commercial results source](crm-completed-sale-metric.md) — compare visits with Check-in closure outcomes (sale, rental, not converted), not quotation/order conversion.
 - [Credit reauthorization order reuse](credit-reauthorization-order-reuse.md) — reapproval must atomically reuse/reopen the existing order; never create another order for the same quotation.
 - [Partial MEX cancellation](partial-mex-cancellation.md) — cancel only unfulfilled quantities; preserve releases and financial documents, and never reactivate a cancelled order.

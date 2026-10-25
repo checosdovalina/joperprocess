@@ -1480,6 +1480,20 @@ export const insertAccountStatementScheduleSchema = createInsertSchema(accountSt
 export type InsertAccountStatementSchedule = z.infer<typeof insertAccountStatementScheduleSchema>;
 export type AccountStatementSchedule = typeof accountStatementSchedules.$inferSelect;
 
+// Durable claims for automatic mail. A provider timeout may have delivered the
+// message, so attempted claims must not be silently reset or deleted on retry.
+export const accountStatementDeliveries = pgTable("account_statement_deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  deliveryDay: text("delivery_day").notNull(),
+  customerKey: text("customer_key").notNull(),
+  status: text("status").notNull().default("sending"),
+  attemptedAt: timestamp("attempted_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  uniqueIndex("account_statement_deliveries_daily_unique").on(table.tenantId, table.deliveryDay, table.customerKey),
+]);
+
 // ==================== END ACCOUNT STATEMENT SCHEDULES ====================
 
 // ==================== SYSTEM ACTIVITY LOGS ====================

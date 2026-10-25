@@ -3,6 +3,9 @@ import { eq, and } from "drizzle-orm";
 import { accountStatementSchedules, tenants, customers, invoices, payments, users, microsipConfigs } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
 import { logSystemActivity } from "./system-log";
+import { deliverScheduledStatement } from "./account-statement-delivery";
+
+let schedulerRunning = false;
 
 function todayInMexico(tz = "America/Mexico_City"): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
@@ -17,6 +20,16 @@ function dayOfMonthInMexico(tz = "America/Mexico_City"): number {
 }
 
 export async function runAccountStatementScheduler(): Promise<void> {
+  if (schedulerRunning) return;
+  schedulerRunning = true;
+  try {
+    await runDueStatements();
+  } finally {
+    schedulerRunning = false;
+  }
+}
+
+async function runDueStatements(): Promise<void> {
   const tz = "America/Mexico_City";
   const todayDay = dayOfMonthInMexico(tz);
   const currentHour = hourInMexico(tz);
@@ -39,7 +52,7 @@ export async function runAccountStatementScheduler(): Promise<void> {
 
     console.log(`[StatementScheduler] Sending for tenant ${schedule.tenantId} (day ${todayDay}, hour ${currentHour})`);
     try {
-      await runForTenant(schedule.tenantId, schedule.onlyOverdue);
+      await runForTenant(schedule.tenantId, schedule.onlyOverdue, todayStr);
       await db
         .update(accountStatementSchedules)
         .set({ lastRunAt: new Date(), updatedAt: new Date() })
@@ -51,7 +64,7 @@ export async function runAccountStatementScheduler(): Promise<void> {
   }
 }
 
-async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<void> {
+async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay: string): Promise<void> {
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   if (!tenant) return;
 
@@ -137,6 +150,7 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
   let sent = 0;
   let skipped = 0;
   let failed = 0;
+  let duplicatesPrevented = 0;
   const failedCustomers: string[] = [];
 
   for (const customer of allCustomers) {
@@ -195,7 +209,9 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
     if (onlyOverdue && !hasOverdue) { skipped++; continue; }
 
     try {
-      await sendAccountStatementEmail({
+      const delivered = await deliverScheduledStatement({
+        tenantId, deliveryDay, customer,
+        send: () => sendAccountStatementEmail({
         customer,
         invoices: custInvoices,
         payments: custPayments,
@@ -203,7 +219,13 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
         tenantName: tenant.name,
         liveData,
         ccEmails: ccEmails.length > 0 ? ccEmails : undefined,
+        }),
       });
+      if (!delivered) {
+        duplicatesPrevented++;
+        skipped++;
+        continue;
+      }
       sent++;
       // Pause between sends to stay under the mail provider's rate limit
       await new Promise((r) => setTimeout(r, 2000));
@@ -221,7 +243,8 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean): Promise<voi
     action: "auto_send",
     level: failed > 0 ? "warning" : "info",
     message: `Envío automático completado: ${sent} enviados, ${skipped} omitidos, ${failed} fallidos.` +
-      (onlyOverdue ? " (solo clientes con saldo vencido)" : ""),
-    details: { sent, skipped, failed, failedCustomers, onlyOverdue },
+      (onlyOverdue ? " (solo clientes con saldo vencido)" : "") +
+      (duplicatesPrevented ? ` ${duplicatesPrevented} reenvíos evitados por protección de duplicados.` : ""),
+    details: { sent, skipped, failed, failedCustomers, onlyOverdue, duplicatesPrevented },
   });
 }

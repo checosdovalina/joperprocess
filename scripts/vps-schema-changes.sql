@@ -232,6 +232,19 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_brand_logo_2_url text;
 -- Sin DEFAULT ni relleno global para no cambiar PDF de otras compañías.
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_bank_details jsonb;
 
+-- Claims persistentes para evitar reenvíos automáticos de estados de cuenta.
+CREATE TABLE IF NOT EXISTS account_statement_deliveries (
+  id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id varchar NOT NULL REFERENCES tenants(id),
+  delivery_day text NOT NULL,
+  customer_key text NOT NULL,
+  status text NOT NULL DEFAULT 'sending',
+  attempted_at timestamp NOT NULL DEFAULT now(),
+  completed_at timestamp
+);
+CREATE UNIQUE INDEX IF NOT EXISTS account_statement_deliveries_daily_unique
+  ON account_statement_deliveries (tenant_id, delivery_day, customer_key);
+
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
 -- 1. Agrega la columna en shared/schema.ts
