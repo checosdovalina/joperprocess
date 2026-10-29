@@ -372,13 +372,13 @@ export default function CheckinDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <Link href="/checkins">
           <Button variant="ghost" size="icon" data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div className="flex-1">
+        <div className="min-w-[220px] flex-1">
           <h1 className="text-3xl font-bold tracking-tight">{t("checkins.detail-title")}</h1>
           <p className="text-muted-foreground mt-1">
             {checkin.customer.name} - {format(new Date(checkin.checkinAt), "PPP", { locale: es })}
@@ -387,19 +387,19 @@ export default function CheckinDetailPage() {
             <p className="mt-1 text-sm text-muted-foreground">Contacto: {checkin.customer.contactName}</p>
           )}
         </div>
-        <div className="flex gap-2">
-          {checkin.minutePdfPath && (
-            <Button 
-              variant="outline"
-              data-testid="button-download-pdf"
-              asChild
-            >
-              <a href={`/api/checkins/${id}/pdf`} download>
-                <Download className="h-4 w-4 mr-2" />
-                {t("btn.download-pdf")}
-              </a>
-            </Button>
-          )}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" data-testid="button-view-pdf" asChild>
+            <a href={`/api/checkins/${id}/pdf?view=inline`} target="_blank" rel="noopener noreferrer">
+              <FileText className="h-4 w-4 mr-2" />
+              Ver PDF
+            </a>
+          </Button>
+          <Button variant="outline" data-testid="button-download-pdf" asChild>
+            <a href={`/api/checkins/${id}/pdf`} download>
+              <Download className="h-4 w-4 mr-2" />
+              {t("btn.download-pdf")}
+            </a>
+          </Button>
           {followUpIsOpen && (
             <>
               <Button
@@ -821,7 +821,12 @@ export default function CheckinDetailPage() {
                   </span>
                 </button>
                 {update.minutePdfPath && (
-                  <div className="shrink-0 pr-4">
+                  <div className="flex flex-wrap gap-2 shrink-0 pr-4">
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={`/api/checkins/${id}/updates/${update.id}/pdf?view=inline`} target="_blank" rel="noopener noreferrer">
+                        <FileText className="mr-2 h-4 w-4" /> Ver PDF
+                      </a>
+                    </Button>
                     <Button variant="outline" size="sm" asChild>
                       <a href={`/api/checkins/${id}/updates/${update.id}/pdf`} download>
                         <Download className="mr-2 h-4 w-4" /> Minuta PDF

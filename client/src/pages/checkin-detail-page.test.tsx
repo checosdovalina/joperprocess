@@ -159,14 +159,14 @@ const checkin = {
   updates: [],
 };
 
-function renderPage() {
+function renderPage(overrides: Record<string, unknown> = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
   });
-  queryClient.setQueryData(["/api/checkins/checkin-1"], checkin);
+  queryClient.setQueryData(["/api/checkins/checkin-1"], { ...checkin, ...overrides });
   queryClient.setQueryData(["/api/customers/customer-1/summary"], {});
 
   return render(
@@ -189,6 +189,36 @@ describe("Check-in detail redirects", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("offers view and download for an open visit without a previously generated minute", () => {
+    renderPage();
+    const view = screen.getByTestId("button-view-pdf");
+    expect(view.getAttribute("href")).toBe("/api/checkins/checkin-1/pdf?view=inline");
+    expect(view.getAttribute("target")).toBe("_blank");
+    expect(screen.getByTestId("button-download-pdf").getAttribute("href")).toBe("/api/checkins/checkin-1/pdf");
+    expect(mocks.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("keeps archived PDFs accessible after the follow-up is closed", () => {
+    renderPage({ followUpStatus: FollowUpStatus.CLOSED, minutePdfPath: "minutes/saved.pdf" });
+    expect(screen.getByTestId("button-view-pdf")).toBeTruthy();
+    expect(screen.getByTestId("button-download-pdf")).toBeTruthy();
+    expect(screen.queryByTestId("button-add-followup-update")).toBeNull();
+  });
+
+  it("links each contact's original PDF for preview and download without expanding the contact", () => {
+    renderPage({ updates: [{
+      id: "contact-1", minutePdfPath: "minutes/contact-1.pdf", createdAt: "2026-10-02T15:00:00Z",
+      meetingType: MeetingType.VISITA, photos: [], checkoutNotes: "Acuerdos", internalNotes: "",
+    }] });
+    expect(screen.getAllByRole("link").some(link =>
+      link.getAttribute("href") === "/api/checkins/checkin-1/updates/contact-1/pdf?view=inline" &&
+      link.getAttribute("target") === "_blank")).toBe(true);
+    expect(screen.getAllByRole("link").some(link =>
+      link.getAttribute("href") === "/api/checkins/checkin-1/updates/contact-1/pdf" &&
+      link.hasAttribute("download"))).toBe(true);
+    expect(mocks.apiRequest).not.toHaveBeenCalled();
   });
 
   it("redirects to the dashboard after saving a contact and its agreements", async () => {

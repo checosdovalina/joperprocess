@@ -8833,28 +8833,36 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (!update?.minutePdfPath) return res.status(404).json({ error: "PDF not found" });
       if (update.minutePdfPath.includes("..")) return res.status(400).json({ error: "Invalid PDF path" });
 
+      const disposition = req.query.view === "inline" ? "inline" : "attachment";
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("Content-Disposition", `${disposition}; filename="minuta-${update.id}.pdf"`);
       if (useLocalStorage()) {
         const success = await localStorageService.streamFile(update.minutePdfPath, res);
-        if (!success) return res.status(404).json({ error: "PDF file not found" });
+        if (!success) {
+          res.removeHeader("Content-Disposition");
+          return res.status(404).json({ error: "PDF file not found" });
+        }
       } else {
         const objectStorageService = new ObjectStorageService();
         await objectStorageService.downloadObjectByPath(update.minutePdfPath, res, {
           isPublic: false,
           contentType: "application/pdf",
-          disposition: "attachment",
+          disposition,
           filename: `minuta-${update.id}.pdf`,
         });
       }
     } catch (error) {
       console.error("Error downloading contact update PDF:", error);
-      if (!res.headersSent) res.status(500).json({ error: "Error downloading PDF" });
+      if (!res.headersSent) {
+        res.removeHeader("Content-Disposition");
+        res.status(500).json({ error: "Error downloading PDF" });
+      }
     }
   });
 
   // Download check-in PDF
   app.get("/api/checkins/:id/pdf", isAuthenticated, async (req, res) => {
     const { id: checkinId } = req.params;
-    const userId = req.user!.id;
 
     try {
       const scopedStorage = createTenantScopedStorage(req);
@@ -8868,34 +8876,67 @@ Proporciona tu análisis en el siguiente formato JSON:
         return res.status(403).json({ error: "Not authorized to access this PDF" });
       }
 
-      if (!checkin.minutePdfPath) {
-        return res.status(404).json({ error: "PDF not yet generated for this check-in" });
+      const { resolveCheckinPdf } = await import("./checkin-pdf");
+      const resolved = await resolveCheckinPdf(checkin, {
+        latestMinute: (record) => db.query.checkinUpdates.findFirst({
+          where: and(
+            eq(checkinUpdates.checkinId, record.id),
+            eq(checkinUpdates.tenantId, record.tenantId!),
+            isNotNull(checkinUpdates.minutePdfPath),
+          ),
+          orderBy: desc(checkinUpdates.createdAt),
+          columns: { minutePdfPath: true },
+        }),
+        customer: (id) => scopedStorage.getCustomer(id),
+        seller: (id) => storage.getUser(id),
+        tenant: (id) => db.query.tenants.findFirst({ where: eq(tenants.id, id) }),
+      });
+      const disposition = req.query.view === "inline" ? "inline" : "attachment";
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("Content-Disposition", `${disposition}; filename="minuta-${checkinId}.pdf"`);
+      if (resolved.data) {
+        const { generateMinutePDFStream } = await import("./pdf-generator");
+        const stream = await generateMinutePDFStream(resolved.data);
+        res.setHeader("Content-Type", "application/pdf");
+        stream.on("error", (error) => {
+          console.error("Error streaming check-in PDF:", error);
+          if (!res.headersSent) res.status(500).end();
+          else res.destroy();
+        });
+        stream.pipe(res);
+        return;
       }
+      const pdfPath = resolved.path;
 
       // Validate path to prevent path traversal attacks
-      if (checkin.minutePdfPath.includes('..')) {
-        console.error(`Invalid PDF path detected: ${checkin.minutePdfPath}`);
+      if (pdfPath.includes('..')) {
+        console.error("Invalid check-in PDF path detected");
         return res.status(400).json({ error: "Invalid PDF path" });
       }
 
       // Stream PDF from storage
       if (useLocalStorage()) {
-        const success = await localStorageService.streamFile(checkin.minutePdfPath, res);
+        const success = await localStorageService.streamFile(pdfPath, res);
         if (!success) {
+          res.removeHeader("Content-Disposition");
           return res.status(404).json({ error: "PDF file not found" });
         }
       } else {
         const objectStorageService = new ObjectStorageService();
-        await objectStorageService.downloadObjectByPath(checkin.minutePdfPath, res, {
+        await objectStorageService.downloadObjectByPath(pdfPath, res, {
           isPublic: false,
           contentType: "application/pdf",
-          disposition: "attachment",
+          disposition,
           filename: `minuta-${checkinId}.pdf`,
         });
       }
     } catch (error) {
       console.error(`Error downloading PDF for check-in ${checkinId}:`, error);
       if (!res.headersSent) {
+        res.removeHeader("Content-Disposition");
+        if (error instanceof Error && error.message === "CHECKIN_PDF_MISSING_PARTICIPANT") {
+          return res.status(404).json({ error: "No se encontraron los datos del cliente o del vendedor para generar el PDF." });
+        }
         res.status(500).json({ error: "Error downloading PDF" });
       }
     }

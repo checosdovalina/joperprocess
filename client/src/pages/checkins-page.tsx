@@ -801,6 +801,11 @@ export default function CheckinsPage() {
                               {t("checkins.view-detail")}
                             </Button>
                           </Link>
+                          <Button variant="ghost" size="sm" asChild>
+                            <a href={`/api/checkins/${checkin.id}/pdf?view=inline`} target="_blank" rel="noopener noreferrer" aria-label={`Ver PDF de ${checkin.customer?.name ?? "check-in"}`}>
+                              <FileText className="h-4 w-4 mr-1" /> PDF
+                            </a>
+                          </Button>
                           {isAdmin && (
                             <Button
                               variant="ghost"
