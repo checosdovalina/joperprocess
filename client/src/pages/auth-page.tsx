@@ -19,6 +19,11 @@ export default function AuthPage() {
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
   const tabFromUrl = urlParams.get("tab");
+  const requestedNext = urlParams.get("next");
+  const loginDestination = requestedNext &&
+    /^\/mcp\/consent\?id=[A-Za-z0-9_-]{20,64}$/.test(requestedNext)
+    ? requestedNext
+    : "/dashboard";
   
   const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [registerData, setRegisterData] = useState({
@@ -46,7 +51,7 @@ export default function AuthPage() {
   }, [tabFromUrl, allowRegistration]);
 
   if (user) {
-    return <Redirect to="/dashboard" />;
+    return <Redirect to={loginDestination} />;
   }
 
   const handleLogin = (e: React.FormEvent) => {

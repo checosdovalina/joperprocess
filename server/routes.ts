@@ -11,6 +11,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { localStorageService, LocalStorageService } from "./localStorage";
 import { getProductImageExtension, MAX_PRODUCT_IMAGE_BYTES } from "./product-images";
 import { requireAccountStatementReadAccess } from "./account-statement-access";
+import { registerClaudeMcpRoutes } from "./claude-mcp";
 
 // Parse a potentially multi-value email field (values separated by ; or ,)
 // Returns an array of trimmed, non-empty, valid-looking email addresses.
@@ -334,6 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Allow company admins to operate inside a descendant company (validated server-side).
   app.use(companyHierarchyMiddleware);
+  registerClaudeMcpRoutes(app);
 
   // ==================== TENANT ENDPOINTS ====================
   

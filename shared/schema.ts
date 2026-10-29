@@ -1,7 +1,8 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, timestamp, boolean, integer, jsonb, bigint, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, timestamp, boolean, integer, jsonb, bigint, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { quotationFolioPrefixSchema } from "./tenant-settings";
 import type { QuotationBankDetails } from "./quotation-bank-settings";
 
@@ -373,8 +374,13 @@ export const checkinUpdates = pgTable("checkin_updates", {
   internalNotes: text("internal_notes"),
   photos: text("photos").array().notNull().default(sql`ARRAY[]::text[]`),
   minutePdfPath: text("minute_pdf_path"),
+  sourceRequestId: varchar("source_request_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, table => ({
+  mcpRequestUnique: uniqueIndex("checkin_updates_mcp_request_unique")
+    .on(table.tenantId, table.userId, table.sourceRequestId)
+    .where(sql`${table.sourceRequestId} IS NOT NULL`),
+}));
 
 // Scheduled visits table (for pre-checkin planning)
 export const scheduledVisits = pgTable("scheduled_visits", {
@@ -400,6 +406,54 @@ export const scheduledVisits = pgTable("scheduled_visits", {
   // Index for customer lookup with status filtering
   customerStatusIdx: sql`CREATE INDEX scheduled_visits_customer_status_idx ON ${table} (customer_id, status)`,
 }));
+
+// Claude's remote connector uses per-user OAuth grants. Persist only hashed
+// bearer/refresh tokens; credentials are never stored or shared between users.
+export const claudeMcpClients = pgTable("claude_mcp_clients", {
+  clientId: varchar("client_id").primaryKey(),
+  clientInfo: jsonb("client_info").$type<OAuthClientInformationFull>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const claudeMcpAuthorizations = pgTable("claude_mcp_authorizations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => claudeMcpClients.clientId, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  state: text("state"),
+  codeChallenge: text("code_challenge").notNull(),
+  requestedScopes: text("requested_scopes").array().notNull().default(sql`ARRAY[]::text[]`),
+  grantedScopes: text("granted_scopes").array(),
+  resourceUrl: text("resource_url").notNull(),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  empresaId: varchar("empresa_id").references(() => empresas.id, { onDelete: "set null" }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  authorizationCodeHash: varchar("authorization_code_hash").unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index("claude_mcp_auth_expiry_idx").on(table.expiresAt),
+  index("claude_mcp_auth_user_idx").on(table.userId, table.tenantId),
+]);
+
+export const claudeMcpTokens = pgTable("claude_mcp_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => claudeMcpClients.clientId, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  empresaId: varchar("empresa_id").references(() => empresas.id, { onDelete: "set null" }),
+  scopes: text("scopes").array().notNull().default(sql`ARRAY[]::text[]`),
+  resourceUrl: text("resource_url").notNull(),
+  accessTokenHash: varchar("access_token_hash").notNull().unique(),
+  refreshTokenHash: varchar("refresh_token_hash").notNull().unique(),
+  accessExpiresAt: timestamp("access_expires_at", { withTimezone: true }).notNull(),
+  refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index("claude_mcp_tokens_user_idx").on(table.userId, table.tenantId),
+  index("claude_mcp_tokens_expiry_idx").on(table.refreshExpiresAt),
+]);
 
 // Pending uploads table (for secure photo upload tracking)
 export const pendingUploads = pgTable("pending_uploads", {

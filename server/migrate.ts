@@ -170,6 +170,66 @@ const MIGRATIONS: { id: string; sql: string }[] = [
     id: "017_add_quotation_bank_details",
     sql: `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS quotation_bank_details jsonb`,
   },
+  {
+    id: "018_create_claude_mcp_oauth",
+    sql: `
+      CREATE TABLE IF NOT EXISTS claude_mcp_clients (
+        client_id varchar PRIMARY KEY,
+        client_info jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS claude_mcp_authorizations (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id varchar NOT NULL REFERENCES claude_mcp_clients(client_id) ON DELETE CASCADE,
+        redirect_uri text NOT NULL,
+        state text,
+        code_challenge text NOT NULL,
+        requested_scopes text[] NOT NULL DEFAULT ARRAY[]::text[],
+        granted_scopes text[],
+        resource_url text NOT NULL,
+        tenant_id varchar NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        empresa_id varchar REFERENCES empresas(id) ON DELETE SET NULL,
+        user_id varchar REFERENCES users(id) ON DELETE CASCADE,
+        authorization_code_hash varchar UNIQUE,
+        expires_at timestamptz NOT NULL,
+        consumed_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS claude_mcp_auth_expiry_idx
+        ON claude_mcp_authorizations (expires_at);
+      CREATE INDEX IF NOT EXISTS claude_mcp_auth_user_idx
+        ON claude_mcp_authorizations (user_id, tenant_id);
+
+      CREATE TABLE IF NOT EXISTS claude_mcp_tokens (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id varchar NOT NULL REFERENCES claude_mcp_clients(client_id) ON DELETE CASCADE,
+        user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        tenant_id varchar NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        empresa_id varchar REFERENCES empresas(id) ON DELETE SET NULL,
+        scopes text[] NOT NULL DEFAULT ARRAY[]::text[],
+        resource_url text NOT NULL,
+        access_token_hash varchar NOT NULL UNIQUE,
+        refresh_token_hash varchar NOT NULL UNIQUE,
+        access_expires_at timestamptz NOT NULL,
+        refresh_expires_at timestamptz NOT NULL,
+        revoked_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS claude_mcp_tokens_user_idx
+        ON claude_mcp_tokens (user_id, tenant_id);
+      CREATE INDEX IF NOT EXISTS claude_mcp_tokens_expiry_idx
+        ON claude_mcp_tokens (refresh_expires_at);
+    `,
+  },
+  {
+    id: "019_add_checkin_mcp_request_key",
+    sql: `
+      ALTER TABLE checkin_updates ADD COLUMN IF NOT EXISTS source_request_id varchar;
+      CREATE UNIQUE INDEX IF NOT EXISTS checkin_updates_mcp_request_unique
+        ON checkin_updates (tenant_id, user_id, source_request_id)
+        WHERE source_request_id IS NOT NULL;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
