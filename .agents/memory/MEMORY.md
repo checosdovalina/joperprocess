@@ -25,3 +25,4 @@
 - [Company-specific customizations](company-specific-customizations.md) — Agroesa requests must not affect other companies; Argosa is a confirmed spelling error for the same company.
 - [Production DNS provider](production-dns-provider.md) — the user identified IONOS as the DNS provider for nexxo.com.mx.
 - [Check-in PDFs](checkin-pdf-semantics.md) — viewing a visit PDF must not require closing it or creating a contact; preserve saved historical minutes.
+- [Claude check-in actions](claude-checkin-actions.md) — voice commands record calls, agreements and commitments; email and future follow-up are explicit, separate actions.

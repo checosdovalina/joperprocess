@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -83,9 +83,9 @@ function requireScope(scopes: string[], scope: string): void {
   }
 }
 
-export function createMcpActionRequestKey(clientId: string, userId: string, requestId: string | number): string {
+export function createMcpActionRequestKey(clientId: string, userId: string, requestId: string | number, input: unknown): string {
   return createHash("sha256")
-    .update(`${clientId}:${userId}:${String(requestId)}`)
+    .update(JSON.stringify([clientId, userId, requestId, input]))
     .digest("hex");
 }
 
@@ -174,8 +174,23 @@ function registerTools(server: McpServer, user: McpUser, tenantId: string, scope
         )).limit(1);
       if (!customer) throw new McpActionError("Cliente no encontrado en esta empresa.");
       const rows = await visibleCheckins(user, tenantId, customer.id);
+      if (!isPrivileged(user) && rows.length === 0) {
+        throw new McpActionError("No tienes seguimientos abiertos asignados para este cliente.");
+      }
+      const contacts = rows.length ? await db.select({
+        id: checkinUpdates.id,
+        checkinId: checkinUpdates.checkinId,
+        createdAt: checkinUpdates.createdAt,
+        meetingType: checkinUpdates.meetingType,
+        agreements: checkinUpdates.agreements,
+        internalNotes: checkinUpdates.internalNotes,
+      }).from(checkinUpdates).where(and(
+        eq(checkinUpdates.tenantId, tenantId),
+        inArray(checkinUpdates.checkinId, rows.map((row) => row.id)),
+      )).orderBy(desc(checkinUpdates.createdAt)).limit(50) : [];
       return jsonResult({
         cliente: customer.name,
+        contactosRecientes: contacts,
         checkins: rows.map((row) => ({
           checkinId: row.id,
           fecha: row.checkinAt.toISOString(),
@@ -199,7 +214,7 @@ function registerTools(server: McpServer, user: McpUser, tenantId: string, scope
       requireScope(scopes, "checkins:write");
       if (input.sendEmail) requireScope(scopes, "email:send");
       if (input.followUp) requireScope(scopes, "visits:schedule");
-      const sourceRequestId = createMcpActionRequestKey(clientId, user.id, extra.requestId);
+      const sourceRequestId = createMcpActionRequestKey(clientId, user.id, extra.requestId, input);
 
       const eventAt = new Date();
       const scheduledDate = input.followUp ? new Date(input.followUp.scheduledDate) : null;

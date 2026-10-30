@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Request } from "express";
 import { UserRole } from "@shared/schema";
-import { canAccessMcpCheckin, registerContactInputSchema } from "./claude-mcp";
+import { canAccessMcpCheckin, createMcpActionRequestKey, registerContactInputSchema } from "./claude-mcp";
 import { getClaudeMcpRequestOrigin, isAllowedClaudeRedirectUri } from "./claude-mcp-oauth";
 
 function user(role: string, id: string, isSuperAdmin = false) {
@@ -24,6 +24,12 @@ function request(host: string, secure: boolean, forwardedProto?: string): Reques
 }
 
 describe("Claude MCP connector security", () => {
+  it("recognizes a retried action without conflating different users or actions", () => {
+    const key = createMcpActionRequestKey("client", "user", 1, { agreements: "A" });
+    expect(createMcpActionRequestKey("client", "user", 1, { agreements: "A" })).toBe(key);
+    expect(createMcpActionRequestKey("client", "other", 1, { agreements: "A" })).not.toBe(key);
+    expect(createMcpActionRequestKey("client", "user", 1, { agreements: "B" })).not.toBe(key);
+  });
   it("only accepts Claude's HTTPS callback or a loopback callback", () => {
     expect(isAllowedClaudeRedirectUri("https://claude.ai/api/mcp/auth_callback")).toBe(true);
     expect(isAllowedClaudeRedirectUri("http://127.0.0.1:43123/oauth/callback")).toBe(true);

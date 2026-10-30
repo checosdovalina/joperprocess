@@ -149,6 +149,12 @@ class ClaudeOAuthProvider implements OAuthServerProvider {
     }
 
     const resource = params.resource;
+    if (!/^[A-Za-z0-9_-]{43}$/.test(params.codeChallenge)) {
+      throw new Error("An S256 PKCE challenge is required");
+    }
+    if (params.scopes?.some((scope) => !MCP_SCOPES.includes(scope as typeof MCP_SCOPES[number]))) {
+      throw new Error("Unsupported OAuth scope");
+    }
     if (!resource || resource.origin !== origin || resource.pathname !== MCP_RESOURCE_PATH ||
         resource.search || resource.hash) {
       throw new Error("The requested MCP resource does not match this company host");
