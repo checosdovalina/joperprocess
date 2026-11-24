@@ -18,6 +18,7 @@ import {
   Factory,
   FileBarChart2,
   BarChart3,
+  Target,
   MonitorPlay,
   CreditCard,
   LayoutGrid,
@@ -132,6 +133,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { titleKey: "nav.reports", url: "/reports", icon: FileBarChart2, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR, UserRole.CREDITO_COBRANZA] },
       { titleKey: "nav.commercial-results", url: "/commercial-results", icon: BarChart3, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR] },
+      { titleKey: "nav.prospect-opportunities", url: "/prospect-opportunities", icon: Target, roles: [UserRole.ADMIN, UserRole.VENTAS_LOGISTICA, UserRole.VENDEDOR] },
       { titleKey: "nav.incidents", url: "/incidents", icon: AlertTriangle, roles: [UserRole.ADMIN, UserRole.VENDEDOR, UserRole.SERVICIO_CLIENTE, UserRole.SERVICIO_TECNICO, UserRole.FABRICA] },
     ],
   },
