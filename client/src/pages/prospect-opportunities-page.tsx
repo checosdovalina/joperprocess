@@ -29,7 +29,19 @@ type Checkin = {
 type Quotation = { id: string; customerId: string; folio: string; status: string; total: string; currency: string; createdAt: string; validUntil?: string | null; userId: string; customer?: { id: string; name: string } };
 
 const dateValue = (value: string) => new Date(`${value}T00:00:00`);
-const currency = (amount: number, code: string) => new Intl.NumberFormat("es-MX", { style: "currency", currency: code || "MXN", maximumFractionDigits: 0 }).format(amount);
+const currency = (amount: number, code: string) => {
+  const normalizedCode = (code || "MXN").trim().toUpperCase();
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: normalizedCode,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    // Some mixed-currency quotations use labels such as "AMBAS", not ISO codes.
+    return `${new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(amount)} ${normalizedCode}`;
+  }
+};
 const activeQuoteStatuses = new Set(["draft", "sent", "pending_approval", "pending_authorization", "authorized"]);
 
 function Metric({ title, value, hint, icon: Icon, color = "text-primary" }: { title: string; value: string | number; hint?: string; icon: typeof Users; color?: string }) {
