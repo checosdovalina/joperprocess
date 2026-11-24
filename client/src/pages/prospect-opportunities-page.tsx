@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   Activity, ArrowDownRight, ArrowUpRight, Building2, CalendarClock,
-  FileText, Filter, Search, Target, TrendingUp, Users,
+  FileSpreadsheet, FileText, Filter, Search, Target, TrendingUp, Users,
 } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -57,6 +57,8 @@ export default function ProspectOpportunitiesPage() {
   const [sellerId, setSellerId] = useState("all");
   const [kind, setKind] = useState("opportunities");
   const [search, setSearch] = useState("");
+  const [exportError, setExportError] = useState(false);
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
 
   const customersQuery = useQuery<Customer[]>({ queryKey: ["/api/customers"] });
   const checkinsQuery = useQuery<Checkin[]>({ queryKey: ["/api/checkins"] });
@@ -126,21 +128,72 @@ export default function ProspectOpportunitiesPage() {
     const person = (sellersQuery.data ?? []).find(s => s.id === id);
     return person?.fullName || person?.username || "—";
   };
-  const downloadCsv = () => {
-    const rows = kind === "prospects" ? report.prospects.map(({ customer, last, quoteCount }) => [customer.name, "Prospecto", sellerName(last?.salesPersonId ?? last?.userId), last?.checkinAt ?? "", last?.checkoutNotes ?? last?.notes ?? "", quoteCount]) : report.opportunities.map(({ customer, followup, activeQuotes }) => [customer?.name ?? "", "Oportunidad abierta", sellerName(followup?.salesPersonId ?? followup?.userId), followup?.checkinAt ?? "", activeQuotes.map(q => q.folio).join(" | "), activeQuotes.length]);
-    const csv = [["Cliente", "Tipo", "Vendedor", "Último contacto", "Acuerdo / cotizaciones", "Cotizaciones"], ...rows].map(row => row.map(value => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
-    link.download = `prospectos-oportunidades-${from}-${to}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+  const downloadReport = async (format: "pdf" | "xlsx") => {
+    setExportError(false);
+    setExporting(format);
+    const headers = [t("label.client"), t("prospects.contact"), t("label.seller"), t("prospects.last-activity"), t("prospects.activity-status"), t("prospects.quotes"), t("prospects.detail")];
+    const rows = kind === "prospects"
+      ? report.prospects.map(({ customer, last, quoteCount }) => [
+          customer.name, customer.contactName || customer.email || customer.phone || "—",
+          sellerName(last?.salesPersonId ?? last?.userId), last?.checkinAt ? new Date(last.checkinAt).toLocaleString() : "—",
+          last?.followUpStatus === "open" ? t("prospects.followup-open") : last?.followUpOutcome || t("prospects.no-recent-activity"),
+          String(quoteCount), last?.checkoutNotes || last?.notes || "—",
+        ])
+      : report.opportunities.map(({ customer, followup, activeQuotes }) => [
+          customer?.name ?? "", customer?.contactName || customer?.email || customer?.phone || "—",
+          sellerName(followup?.salesPersonId ?? followup?.userId), followup?.checkinAt ? new Date(followup.checkinAt).toLocaleString() : "—",
+          followup?.followUpStatus === "open" ? t("prospects.followup-open") : t("prospects.no-recent-activity"),
+          String(activeQuotes.length), activeQuotes.map(q => `${q.folio} · ${currency(Number(q.total || 0), q.currency)}`).join(" | ") || "—",
+        ]);
+    const selectedSeller = sellerId === "all" ? t("label.all") : sellerName(sellerId);
+    const body = {
+      title: t("prospects.title"),
+      period: `${t("label.from")} ${from} · ${t("label.to")} ${to}`,
+      filters: [
+        `${t("label.seller")}: ${selectedSeller}`,
+        `${t("prospects.type")}: ${kind === "prospects" ? t("prospects.prospects") : t("prospects.opportunities")}`,
+        search ? `${t("label.search")}: ${search}` : "",
+      ].filter(Boolean),
+      summary: [
+        { label: t("prospects.total-prospects"), value: String(report.prospectCount) },
+        { label: t("prospects.open-opportunities"), value: String(report.openOpportunityCount) },
+        { label: t("prospects.open-quotes"), value: `${report.openQuoteCount} · ${Object.entries(report.quoteTotals).map(([code, amount]) => currency(amount, code)).join(" / ") || t("prospects.no-quote-value")}` },
+        { label: t("prospects.outcomes"), value: `${report.won} / ${report.lost}` },
+      ],
+      headers,
+      rows,
+    };
+    try {
+      const response = await fetch(`/api/prospect-opportunities/export/${format}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error("export");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `prospectos-oportunidades-${from}-${to}.${format}`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setExportError(true);
+    } finally {
+      setExporting(null);
+    }
   };
 
   return <div className="mx-auto max-w-[1500px] space-y-6 pb-10">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary"><Target className="h-4 w-4" />{t("prospects.eyebrow")}</div><h1 className="mt-2 text-3xl font-semibold tracking-tight">{t("prospects.title")}</h1><p className="mt-1 text-sm text-muted-foreground">{t("prospects.subtitle")}</p></div>
-      <Button variant="outline" onClick={downloadCsv} disabled={loading}><FileText className="mr-2 h-4 w-4" />{t("prospects.export")}</Button>
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => downloadReport("xlsx")} disabled={loading || exporting !== null}><FileSpreadsheet className="mr-2 h-4 w-4" />{exporting === "xlsx" ? t("prospects.exporting") : t("prospects.export-excel")}</Button>
+        <Button variant="outline" onClick={() => downloadReport("pdf")} disabled={loading || exporting !== null}><FileText className="mr-2 h-4 w-4" />{exporting === "pdf" ? t("prospects.exporting") : t("prospects.export-pdf")}</Button>
+      </div>
     </div>
+    {exportError && <p role="alert" className="text-sm text-destructive">{t("prospects.export-error")}</p>}
 
     <Card className="border-primary/15 shadow-sm"><CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm"><Filter className="h-4 w-4 text-primary" />{t("prospects.filters")}</CardTitle><CardDescription>{t("prospects.filter-desc")}</CardDescription></CardHeader><CardContent><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <div><Label className="text-xs">{t("label.from")}</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} /></div>

@@ -2212,6 +2212,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const prospectOpportunitiesExportSchema = z.object({
+    title: z.string().min(1).max(100),
+    period: z.string().max(100),
+    filters: z.array(z.string().max(200)).max(10),
+    summary: z.array(z.object({
+      label: z.string().max(100),
+      value: z.string().max(200),
+    })).max(8),
+    headers: z.array(z.string().min(1).max(80)).min(1).max(12),
+    rows: z.array(z.array(z.string().max(1000)).max(12)).max(5_000),
+  }).refine(payload => payload.rows.every(row => row.length === payload.headers.length), {
+    message: "Las filas no coinciden con las columnas del reporte",
+  });
+
+  app.post("/api/prospect-opportunities/export/:format", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.VENDEDOR, UserRole.VENTAS_LOGISTICA), async (req, res) => {
+    try {
+      if (req.params.format !== "pdf" && req.params.format !== "xlsx") {
+        return res.status(404).json({ error: "Formato no disponible" });
+      }
+      const payload = prospectOpportunitiesExportSchema.parse(req.body);
+      if (req.params.format === "pdf" && payload.rows.length > 2_000) {
+        return res.status(413).json({ error: "El PDF contiene demasiados registros; aplica filtros o descarga Excel" });
+      }
+      const report = await import("./prospect-opportunities-export");
+      if (req.params.format === "pdf") {
+        const buffer = await report.generateProspectOpportunitiesPdf(payload);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="prospectos-oportunidades-${Date.now()}.pdf"`);
+        return res.send(buffer);
+      }
+      const buffer = await report.generateProspectOpportunitiesExcel(payload);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="prospectos-oportunidades-${Date.now()}.xlsx"`);
+      return res.send(buffer);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Datos del reporte inválidos", details: error.flatten() });
+      console.error("Error exporting prospect and opportunity report:", error);
+      return res.status(500).json({ error: "Error al generar el reporte" });
+    }
+  });
+
   app.get("/api/checkins", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
