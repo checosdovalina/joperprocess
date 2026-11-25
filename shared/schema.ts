@@ -1520,6 +1520,9 @@ export const accountStatementSchedules = pgTable("account_statement_schedules", 
   scheduleDays: integer("schedule_days").array().notNull().default([1, 15]),
   sendHour: integer("send_hour").notNull().default(9),
   onlyOverdue: boolean("only_overdue").notNull().default(false),
+  // Users who receive the internal copy of each automatic statement.
+  // null = legacy behavior (all admin + cobranza users with notifications on).
+  copyUserIds: text("copy_user_ids").array(),
   lastRunAt: timestamp("last_run_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

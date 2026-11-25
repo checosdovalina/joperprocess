@@ -19,7 +19,7 @@ vi.mock("./account-statement-email-service", () => ({ sendAccountStatementEmail:
 vi.mock("./account-statement-delivery", () => ({ deliverScheduledStatement: mocks.deliver }));
 vi.mock("./system-log", () => ({ logSystemActivity: mocks.activity }));
 vi.mock("./microsip-sync", () => ({ createMicrosipSyncService: mocks.microsip }));
-import { runAccountStatementScheduler } from "./account-statement-scheduler";
+import { resolveStatementCopyEmails, runAccountStatementScheduler } from "./account-statement-scheduler";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -141,5 +141,40 @@ describe("automatic statement scheduler", () => {
     }));
     await run();
     expect(mocks.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the internal copy only to the configured users", async () => {
+    mocks.schedules.mockResolvedValue([{
+      id: "schedule-a", tenantId: "company-a", scheduleDays: [25], sendHour: 1, lastRunAt: null,
+      copyUserIds: ["rodrigo", "eunice"],
+    }]);
+    mocks.users.mockResolvedValue([
+      { id: "rodrigo", role: "admin", email: "rodrigopg@example.test" },
+      { id: "eunice", role: "credito_cobranza", email: "cobranza@example.test" },
+      { id: "andrea", role: "admin", email: "joper@example.test" },
+      { id: "anael", role: "admin", email: "ventas@example.test" },
+    ]);
+    await run();
+    expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({
+      ccEmails: ["rodrigopg@example.test", "cobranza@example.test"],
+    }));
+  });
+});
+
+describe("resolveStatementCopyEmails", () => {
+  const users = [
+    { id: "a", role: "admin", email: "a@example.test" },
+    { id: "c", role: "credito_cobranza", email: "c@example.test; A@example.test" },
+    { id: "v", role: "vendedor", email: "v@example.test" },
+  ];
+  it("keeps the admin + cobranza default when never configured", () => {
+    expect(resolveStatementCopyEmails(users, null)).toEqual(["a@example.test", "c@example.test"]);
+  });
+  it("treats a configured list as authoritative, including an empty one", () => {
+    expect(resolveStatementCopyEmails(users, ["v"])).toEqual(["v@example.test"]);
+    expect(resolveStatementCopyEmails(users, [])).toEqual([]);
+  });
+  it("ignores configured ids that are not active, opted-in users of the company", () => {
+    expect(resolveStatementCopyEmails(users, ["gone", "a"])).toEqual(["a@example.test"]);
   });
 });

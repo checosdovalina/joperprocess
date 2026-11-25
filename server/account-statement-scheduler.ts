@@ -53,7 +53,7 @@ async function runDueStatements(): Promise<void> {
 
     console.log(`[StatementScheduler] Sending for tenant ${schedule.tenantId} (date ${todayStr}, day ${todayDay}, hour ${currentHour})`);
     try {
-      const completed = await runForTenant(schedule.tenantId, schedule.onlyOverdue, todayStr);
+      const completed = await runForTenant(schedule.tenantId, schedule.onlyOverdue, todayStr, schedule.copyUserIds ?? null);
       if (!completed) continue;
       await db
         .update(accountStatementSchedules)
@@ -66,7 +66,27 @@ async function runDueStatements(): Promise<void> {
   }
 }
 
-async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay: string): Promise<boolean> {
+/**
+ * Internal copy recipients. `copyUserIds === null` keeps the legacy default
+ * (every admin + cobranza user); a configured list is authoritative, even when
+ * empty. Users must already be active, opted in and in this tenant.
+ */
+export function resolveStatementCopyEmails(
+  tenantUsers: { id?: string; role: string; email: string | null }[],
+  copyUserIds: string[] | null | undefined,
+): string[] {
+  const chosen = copyUserIds == null
+    ? tenantUsers.filter((u) => u.role === "admin" || u.role === "credito_cobranza")
+    : tenantUsers.filter((u) => u.id && copyUserIds.includes(u.id));
+  return chosen
+    .flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim()))
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+    .filter((email, index, emails) =>
+      emails.findIndex((candidate) => candidate.toLowerCase() === email.toLowerCase()) === index
+    );
+}
+
+async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay: string, copyUserIds: string[] | null = null): Promise<boolean> {
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   if (!tenant) return true;
 
@@ -74,7 +94,7 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
     where: eq(customers.tenantId, tenantId),
   });
 
-  // Admin + cobranza users for this tenant → will receive CC copy of each statement
+  // Active, opted-in users of this tenant; the copy list is chosen from them.
   const adminUsers = await db.query.users.findMany({
     where: and(
       eq(users.tenantId, tenantId),
@@ -82,12 +102,7 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
       eq(users.receiveEmailNotifications, true),
     ),
   });
-  const ccEmails = adminUsers.filter((u) => u.role === "admin" || u.role === "credito_cobranza")
-    .flatMap((u) => (u.email ?? "").split(/[;,]/).map((e) => e.trim()))
-    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
-    .filter((email, index, emails) =>
-      emails.findIndex((candidate) => candidate.toLowerCase() === email.toLowerCase()) === index
-    );
+  const ccEmails = resolveStatementCopyEmails(adminUsers, copyUserIds);
 
   // Try to create Microsip service for live CXC data (one connection per tenant run).
   // Track whether Microsip IS configured but unavailable: in that case linked customers

@@ -230,6 +230,10 @@ const MIGRATIONS: { id: string; sql: string }[] = [
         WHERE source_request_id IS NOT NULL;
     `,
   },
+  {
+    id: "020_add_statement_copy_recipients",
+    sql: `ALTER TABLE account_statement_schedules ADD COLUMN IF NOT EXISTS copy_user_ids text[]`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -246,6 +246,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS account_statement_deliveries_daily_unique
   ON account_statement_deliveries (tenant_id, delivery_day, customer_key);
 ALTER TABLE account_statement_deliveries ADD COLUMN IF NOT EXISTS retry_after timestamp;
 
+-- 2026-11-25: destinatarios configurables de la copia interna de estados de cuenta
+ALTER TABLE account_statement_schedules ADD COLUMN IF NOT EXISTS copy_user_ids text[];
+
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
 -- 1. Agrega la columna en shared/schema.ts

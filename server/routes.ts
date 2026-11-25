@@ -7543,12 +7543,31 @@ Proporciona tu análisis en el siguiente formato JSON:
       const tenantId = getEffectiveTenantId(req);
       if (!tenantId) return res.status(400).json({ error: "Tenant requerido" });
 
-      const { enabled, scheduleDays, sendHour, onlyOverdue } = req.body as {
+      const { enabled, scheduleDays, sendHour, onlyOverdue, copyUserIds: rawCopyUserIds } = req.body as {
         enabled: boolean;
         scheduleDays: number[];
         sendHour: number;
         onlyOverdue: boolean;
+        copyUserIds?: string[] | null;
       };
+
+      // undefined = keep current value; null = legacy default; array = explicit list.
+      let copyUserIds: string[] | null | undefined = undefined;
+      if (rawCopyUserIds === null) copyUserIds = null;
+      else if (rawCopyUserIds !== undefined) {
+        if (!Array.isArray(rawCopyUserIds) || rawCopyUserIds.some((id) => typeof id !== "string")) {
+          return res.status(400).json({ error: "copyUserIds debe ser una lista de usuarios" });
+        }
+        const requested = Array.from(new Set(rawCopyUserIds));
+        const tenantUsers = requested.length
+          ? await db.select({ id: users.id }).from(users)
+              .where(and(eq(users.tenantId, tenantId), inArray(users.id, requested)))
+          : [];
+        if (tenantUsers.length !== requested.length) {
+          return res.status(400).json({ error: "Algún usuario seleccionado no pertenece a esta empresa" });
+        }
+        copyUserIds = requested;
+      }
 
       if (!Array.isArray(scheduleDays) || scheduleDays.length === 0) {
         return res.status(400).json({ error: "scheduleDays debe ser un arreglo con al menos un día" });
@@ -7558,7 +7577,6 @@ Proporciona tu análisis en el siguiente formato JSON:
       }
 
       const { accountStatementSchedules } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
 
       const existing = await db.query.accountStatementSchedules.findFirst({
         where: eq(accountStatementSchedules.tenantId, tenantId),
@@ -7568,17 +7586,34 @@ Proporciona tu análisis en el siguiente formato JSON:
       if (existing) {
         const [updated] = await db
           .update(accountStatementSchedules)
-          .set({ enabled, scheduleDays, sendHour, onlyOverdue, updatedAt: now })
+          .set({ enabled, scheduleDays, sendHour, onlyOverdue, ...(copyUserIds !== undefined ? { copyUserIds } : {}), updatedAt: now })
           .where(eq(accountStatementSchedules.id, existing.id))
           .returning();
         res.json(updated);
       } else {
         const [created] = await db
           .insert(accountStatementSchedules)
-          .values({ tenantId, enabled, scheduleDays, sendHour, onlyOverdue })
+          .values({ tenantId, enabled, scheduleDays, sendHour, onlyOverdue, copyUserIds: copyUserIds ?? null })
           .returning();
         res.json(created);
       }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/account-statement-schedule/copy-candidates — users who can receive the internal copy
+  app.get("/api/account-statement-schedule/copy-candidates", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant requerido" });
+      const rows = await db.select({
+        id: users.id, fullName: users.fullName, email: users.email, role: users.role,
+        receiveEmailNotifications: users.receiveEmailNotifications,
+      }).from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.active, true)))
+        .orderBy(users.fullName);
+      res.json(rows.filter((u) => /@/.test(u.email ?? "")));
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

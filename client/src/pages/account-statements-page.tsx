@@ -129,6 +129,9 @@ export default function AccountStatementsPage() {
   const [schedDaysPreset, setSchedDaysPreset] = useState<string>("1,15");
   const [schedHour, setSchedHour] = useState<number>(9);
   const [schedOnlyOverdue, setSchedOnlyOverdue] = useState(false);
+  const [schedCopyUserIds, setSchedCopyUserIds] = useState<Set<string>>(new Set());
+  // Legacy (never configured): preselect admin + cobranza once candidates load.
+  const [schedCopyLegacy, setSchedCopyLegacy] = useState(false);
 
   const { data: statements = [], isLoading, refetch, dataUpdatedAt } = useQuery<CustomerBalance[]>({
     queryKey: ["/api/account-statements"],
@@ -176,14 +179,22 @@ export default function AccountStatementsPage() {
     scheduleDays: number[];
     sendHour: number;
     onlyOverdue: boolean;
+    copyUserIds: string[] | null;
     lastRunAt: string | null;
   } | null>({
     queryKey: ["/api/account-statement-schedule"],
     enabled: !isSellerReadOnly,
   });
 
+  const { data: copyCandidates = [] } = useQuery<{
+    id: string; fullName: string; email: string | null; role: string; receiveEmailNotifications: boolean;
+  }[]>({
+    queryKey: ["/api/account-statement-schedule/copy-candidates"],
+    enabled: !isSellerReadOnly && scheduleOpen,
+  });
+
   const saveScheduleMutation = useMutation({
-    mutationFn: (data: { enabled: boolean; scheduleDays: number[]; sendHour: number; onlyOverdue: boolean }) =>
+    mutationFn: (data: { enabled: boolean; scheduleDays: number[]; sendHour: number; onlyOverdue: boolean; copyUserIds: string[] | null }) =>
       apiRequest("PUT", "/api/account-statement-schedule", data),
     onSuccess: () => {
       toast({ title: t("stmts.sched.saved-title"), description: t("stmts.sched.saved-desc") });
@@ -233,12 +244,32 @@ export default function AccountStatementsPage() {
       setSchedHour(scheduleConfig.sendHour);
       setSchedOnlyOverdue(scheduleConfig.onlyOverdue);
     }
+    setSchedCopyUserIds(new Set(scheduleConfig?.copyUserIds ?? []));
+    setSchedCopyLegacy(scheduleConfig?.copyUserIds == null);
     setScheduleOpen(true);
   }
 
   function saveSchedule() {
     const days = schedDaysPreset.split(",").map(Number).filter((d) => d >= 1 && d <= 31);
-    saveScheduleMutation.mutate({ enabled: schedEnabled, scheduleDays: days, sendHour: schedHour, onlyOverdue: schedOnlyOverdue });
+    saveScheduleMutation.mutate({
+      enabled: schedEnabled, scheduleDays: days, sendHour: schedHour, onlyOverdue: schedOnlyOverdue,
+      // Candidates not loaded yet for a never-configured schedule: keep the default.
+      copyUserIds: schedCopyLegacy ? null : Array.from(schedCopyUserIds),
+    });
+  }
+
+  useEffect(() => {
+    if (!schedCopyLegacy || copyCandidates.length === 0) return;
+    setSchedCopyUserIds(new Set(copyCandidates
+      .filter((u) => u.role === "admin" || u.role === "credito_cobranza")
+      .map((u) => u.id)));
+    setSchedCopyLegacy(false);
+  }, [schedCopyLegacy, copyCandidates]);
+
+  function toggleCopyUser(id: string) {
+    const next = new Set(schedCopyUserIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSchedCopyUserIds(next);
   }
 
   const filtered = useMemo(() => {
@@ -1179,6 +1210,38 @@ export default function AccountStatementsPage() {
                 checked={schedOnlyOverdue}
                 onCheckedChange={setSchedOnlyOverdue}
               />
+            </div>
+
+            {/* Internal copy recipients */}
+            <div className="rounded-md border px-4 py-3 space-y-2">
+              <div>
+                <p className="text-sm font-medium">Copia interna</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Usuarios que reciben una copia de cada estado de cuenta enviado.
+                </p>
+              </div>
+              <div className="max-h-48 overflow-y-auto space-y-1.5" data-testid="list-copy-recipients">
+                {copyCandidates.map((u) => (
+                  <label key={u.id} className="flex items-start gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      data-testid={`checkbox-copy-user-${u.id}`}
+                      checked={schedCopyUserIds.has(u.id)}
+                      onCheckedChange={() => toggleCopyUser(u.id)}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate">{u.fullName}</span>
+                      <span className="block text-xs text-muted-foreground truncate">
+                        {u.email}
+                        {!u.receiveEmailNotifications && " · notificaciones por correo desactivadas"}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+                {copyCandidates.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No hay usuarios con correo.</p>
+                )}
+              </div>
             </div>
 
             {/* Last run info */}
