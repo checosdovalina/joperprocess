@@ -28,14 +28,38 @@ describe("statement provider rate limits and copies", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("deduplicates addresses across TO and CC in a single provider message", async () => {
+  it("deduplicates addresses across customer and internal copies", async () => {
     await sendAccountStatementEmail({
       ...params, recipientEmails: [" client@example.test ", "CLIENT@example.test"],
       ccEmails: ["client@example.test", "admin@example.test", "ADMIN@example.test"],
     });
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[0][0].to).toHaveLength(1);
-    expect(send.mock.calls[0][0].cc).toHaveLength(1);
+    expect(send.mock.calls[0][0].cc).toBeUndefined();
+    expect(send.mock.calls[1][0].to.map((r: any) => r.email)).toEqual(["admin@example.test"]);
+  });
+
+  it("never attaches internal copies to a multi-recipient customer message", async () => {
+    await sendAccountStatementEmail({
+      ...params,
+      recipientEmails: ["a@client.test", "b@client.test", "c@client.test"],
+      ccEmails: ["cobranza@example.test", "ventas@example.test", "direccion@example.test"],
+    });
+    expect(send).toHaveBeenCalledTimes(2);
+    const [customerMsg, copyMsg] = send.mock.calls.map((c) => c[0]);
+    expect(customerMsg.to).toHaveLength(3);
+    expect(customerMsg.cc).toBeUndefined();
+    // One TO only: the provider fans out per TO, so each copy address gets one email.
+    expect(copyMsg.to).toHaveLength(1);
+    expect(copyMsg.cc.map((r: any) => r.email)).toEqual(["ventas@example.test", "direccion@example.test"]);
+    expect(copyMsg.subject).toMatch(/^\[Copia interna\]/);
+  });
+
+  it("does not fail the customer delivery when only the internal copy fails", async () => {
+    send.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("copy failed"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(sendAccountStatementEmail(params)).resolves.toBeUndefined();
+    expect(send).toHaveBeenCalledTimes(2);
   });
 
   it("does not retry an uncertain provider failure", async () => {
@@ -50,7 +74,7 @@ describe("statement provider rate limits and copies", () => {
     const assertion = expect(pending).resolves.toBeUndefined();
     await vi.runAllTimersAsync();
     await assertion;
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(3); // rejected + accepted customer message, then internal copy
   });
 
   it("recognizes Cloudflare 1015 and respects Retry-After seconds or HTTP dates", () => {

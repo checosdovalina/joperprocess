@@ -27,8 +27,8 @@ Normalizar la hora de medianoche a cero antes de compararla con la hora programa
 
 **How to apply:** Usar un ciclo de 0 a 23 y probar tanto el envío configurado para medianoche como la espera de una hora posterior.
 
-Investigación 2026-11-25 (reporte de "125 correos"): la VPS envió exactamente 1 estado por clave Microsip (61). Las "copias" vienen de (a) varias cuentas Microsip distintas para el mismo cliente real (p. ej. JOPER con 7 CLIENTE_ID, EDUARDO RODRIGUEZ SANTANA 65025 y 65028 "(D01794)"), cada una con su correo, y (b) la copia interna a todos los admin/cobranza con notificaciones activas.
+MailerSend genera un correo separado por cada destinatario TO y adjunta TODAS las CC a cada uno: N correos del cliente × CC = N copias por dirección interna.
 
-**Why:** El asunto truncado en el buzón hace que cuentas distintas parezcan el mismo correo.
+**Why:** El 2026-11-25 la VPS envió 1 estado por cliente, pero la API de MailerSend mostró cada CC interna repetida 3–6 veces (igual al número de correos del cliente). Eso explicó los "125 correos".
 
-**How to apply:** Ante quejas de duplicados, primero contar envíos por customer_key en account_statement_deliveries de la VPS (contraseña vía `pm2 env 0`) antes de tocar la protección de duplicados.
+**How to apply:** Nunca mezclar correos del cliente con CC internas en el mismo mensaje; la copia interna va en un mensaje aparte con un solo TO. Para auditar, `GET /v1/messages` y `/v1/messages/{id}` funcionan con la llave actual (límite de ~60 solicitudes/min); `/domains` y analytics no tienen permiso.

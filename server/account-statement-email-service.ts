@@ -387,30 +387,50 @@ export async function sendAccountStatementEmail({
     if (k && !toSet.has(k) && !ccSet.has(k)) { ccSet.add(k); ccList.push(e.trim()); }
   }
 
-  let emailParams = new EmailParams()
-    .setFrom(sentFrom)
-    .setTo(toList.map((e) => new Recipient(e, customer.name)))
-    .setSubject(`Estado de Cuenta — ${customer.name} — ${fmtDate(now)}`)
-    .setHtml(html);
-
-  if (ccList.length > 0) {
-    emailParams = emailParams.setCc(ccList.map((e) => new Recipient(e, e)));
-  }
+  const subject = `Estado de Cuenta — ${customer.name} — ${fmtDate(now)}`;
 
   // Send with retry on rate limit (MailerSend error 429 / cloudflare 1015)
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      await mailerSend.email.send(emailParams);
-      return;
-    } catch (err: any) {
-      if (retryOnRateLimit && isStatementMailRateLimit(err) && attempt < maxAttempts) {
-        const waitMs = 15000 * attempt;
-        console.warn(`[StatementEmail] Rate limited (intento ${attempt}/${maxAttempts}), esperando ${waitMs / 1000}s...`);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
+  const sendWithRetry = async (params: EmailParams) => {
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await mailerSend.email.send(params);
+        return;
+      } catch (err: any) {
+        if (retryOnRateLimit && isStatementMailRateLimit(err) && attempt < maxAttempts) {
+          const waitMs = 15000 * attempt;
+          console.warn(`[StatementEmail] Rate limited (intento ${attempt}/${maxAttempts}), esperando ${waitMs / 1000}s...`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+        throw err;
       }
-      throw err;
+    }
+  };
+
+  // MailerSend delivers one separate email per TO recipient and attaches every
+  // CC to each of them, so a customer with 6 addresses made each internal CC
+  // receive 6 copies. Never mix customer TO addresses with internal CC copies.
+  await sendWithRetry(new EmailParams()
+    .setFrom(sentFrom)
+    .setTo(toList.map((e) => new Recipient(e, customer.name)))
+    .setSubject(subject)
+    .setHtml(html));
+
+  if (ccList.length > 0) {
+    // Internal copy: exactly one TO, so each internal address gets one copy.
+    let copyParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo([new Recipient(ccList[0], ccList[0])])
+      .setSubject(`[Copia interna] ${subject}`)
+      .setHtml(html);
+    if (ccList.length > 1) copyParams = copyParams.setCc(ccList.slice(1).map((e) => new Recipient(e, e)));
+    try {
+      await sendWithRetry(copyParams);
+    } catch (err) {
+      // The customer already received the statement; a failed internal copy
+      // must not mark the customer delivery as failed or trigger a resend.
+      console.error(`[StatementEmail] Internal copy failed for ${customer.name}:`, err);
     }
   }
 }
