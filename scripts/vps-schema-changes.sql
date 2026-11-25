@@ -249,6 +249,19 @@ ALTER TABLE account_statement_deliveries ADD COLUMN IF NOT EXISTS retry_after ti
 -- 2026-11-25: destinatarios configurables de la copia interna de estados de cuenta
 ALTER TABLE account_statement_schedules ADD COLUMN IF NOT EXISTS copy_user_ids text[];
 
+-- 2026-11-25: zona de vendedor de Microsip por cliente y usuario asignado a cada zona
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS microsip_vendedor_id integer;
+CREATE TABLE IF NOT EXISTS microsip_seller_zones (
+  id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id varchar NOT NULL REFERENCES tenants(id),
+  vendedor_id integer NOT NULL,
+  name text NOT NULL,
+  user_id varchar REFERENCES users(id) ON DELETE SET NULL,
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS microsip_seller_zones_tenant_vendedor_unique
+  ON microsip_seller_zones (tenant_id, vendedor_id);
+
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
 -- 1. Agrega la columna en shared/schema.ts

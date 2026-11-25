@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
-import { accountStatementSchedules, tenants, customers, invoices, payments, users, microsipConfigs } from "@shared/schema";
+import { accountStatementSchedules, tenants, customers, invoices, payments, users, microsipConfigs, microsipSellerZones } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
 import { logSystemActivity } from "./system-log";
 import { deliverScheduledStatement } from "./account-statement-delivery";
@@ -86,6 +86,20 @@ export function resolveStatementCopyEmails(
     );
 }
 
+/** Adds the seller assigned to the customer's Microsip zone to the copy list. */
+export function statementCopyEmailsForCustomer(
+  baseCopyEmails: string[],
+  customer: { microsipVendedorId?: number | null },
+  zoneSellerEmails: Map<number, string[]>,
+): string[] {
+  const seller = customer.microsipVendedorId != null ? zoneSellerEmails.get(customer.microsipVendedorId) ?? [] : [];
+  const merged = [...baseCopyEmails];
+  for (const e of seller) {
+    if (!merged.some((m) => m.toLowerCase() === e.toLowerCase())) merged.push(e);
+  }
+  return merged;
+}
+
 async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay: string, copyUserIds: string[] | null = null): Promise<boolean> {
   const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
   if (!tenant) return true;
@@ -103,6 +117,16 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
     ),
   });
   const ccEmails = resolveStatementCopyEmails(adminUsers, copyUserIds);
+
+  // Seller per Microsip sales zone. Only active, opted-in users of this tenant.
+  const zoneSellerEmails = new Map<number, string[]>();
+  const zones = await db.select().from(microsipSellerZones).where(eq(microsipSellerZones.tenantId, tenantId));
+  for (const zone of zones) {
+    if (!zone.userId) continue;
+    const seller = adminUsers.find((u) => u.id === zone.userId);
+    if (!seller) continue;
+    zoneSellerEmails.set(zone.vendedorId, resolveStatementCopyEmails([seller], [seller.id]));
+  }
 
   // Try to create Microsip service for live CXC data (one connection per tenant run).
   // Track whether Microsip IS configured but unavailable: in that case linked customers
@@ -237,7 +261,10 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
         recipientEmails: emails,
         tenantName: tenant.name,
         liveData,
-        ccEmails: ccEmails.length > 0 ? ccEmails : undefined,
+        ccEmails: (() => {
+          const copy = statementCopyEmailsForCustomer(ccEmails, customer, zoneSellerEmails);
+          return copy.length > 0 ? copy : undefined;
+        })(),
         retryOnRateLimit: false,
         }),
       });

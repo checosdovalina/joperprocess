@@ -32,3 +32,9 @@ MailerSend genera un correo separado por cada destinatario TO y adjunta TODAS la
 **Why:** El 2026-11-25 la VPS envió 1 estado por cliente, pero la API de MailerSend mostró cada CC interna repetida 3–6 veces (igual al número de correos del cliente). Eso explicó los "125 correos".
 
 **How to apply:** Nunca mezclar correos del cliente con CC internas en el mismo mensaje; la copia interna va en un mensaje aparte con un solo TO. Para auditar, `GET /v1/messages` y `/v1/messages/{id}` funcionan con la llave actual (límite de ~60 solicitudes/min); `/domains` y analytics no tienen permiso.
+
+En Microsip de Joper, los "vendedores" (CLIENTES.VENDEDOR_ID → VENDEDORES) son zonas (ZONA 2, CENTRO, SURESTE, MOVIL MX, GRUPO…), no personas. El "vendedor que atiende" se obtiene asignando un usuario de Nexxo a cada zona.
+
+**Why:** El usuario eligió tomar el vendedor de Microsip el 2026-11-25; VENDEDORES no tiene correo ni relación con usuarios.
+
+**How to apply:** La sincronización solo actualiza el nombre de la zona; nunca debe sobrescribir el usuario asignado en Nexxo. Destinatarios pedidos por Joper: correos del cliente, rodrigopg@, cobranza@ y el vendedor de la zona; no joper@ ni ventas@.

@@ -266,6 +266,22 @@ export default function AccountStatementsPage() {
     setSchedCopyLegacy(false);
   }, [schedCopyLegacy, copyCandidates]);
 
+  const { data: sellerZones = [] } = useQuery<{
+    id: string; vendedorId: number; name: string; userId: string | null; customerCount: number;
+  }[]>({
+    queryKey: ["/api/microsip-seller-zones"],
+    enabled: !isSellerReadOnly && scheduleOpen,
+  });
+
+  const zoneSellerMutation = useMutation({
+    mutationFn: ({ zoneId, userId }: { zoneId: string; userId: string | null }) =>
+      apiRequest("PUT", `/api/microsip-seller-zones/${zoneId}`, { userId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/microsip-seller-zones"] }),
+    onError: (err: any) => {
+      toast({ title: t("label.error"), description: err.message, variant: "destructive" });
+    },
+  });
+
   function toggleCopyUser(id: string) {
     const next = new Set(schedCopyUserIds);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -1108,7 +1124,7 @@ export default function AccountStatementsPage() {
 
       {/* ── Schedule config dialog ── */}
       {!isSellerReadOnly && <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarClock className="w-5 h-5" />
@@ -1240,6 +1256,45 @@ export default function AccountStatementsPage() {
                 ))}
                 {copyCandidates.length === 0 && (
                   <p className="text-xs text-muted-foreground">No hay usuarios con correo.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Seller per Microsip zone */}
+            <div className="rounded-md border px-4 py-3 space-y-2">
+              <div>
+                <p className="text-sm font-medium">Vendedor por zona de Microsip</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  El vendedor asignado recibe la copia de los estados de cuenta de los clientes de su zona.
+                </p>
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-2" data-testid="list-seller-zones">
+                {sellerZones.filter((z) => z.customerCount > 0 || z.userId).map((zone) => (
+                  <div key={zone.id} className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm truncate">{zone.name}</p>
+                      <p className="text-xs text-muted-foreground">{zone.customerCount} clientes</p>
+                    </div>
+                    <Select
+                      value={zone.userId ?? "none"}
+                      onValueChange={(v) => zoneSellerMutation.mutate({ zoneId: zone.id, userId: v === "none" ? null : v })}
+                    >
+                      <SelectTrigger className="w-44 h-8 text-xs" data-testid={`select-zone-seller-${zone.vendedorId}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin asignar</SelectItem>
+                        {copyCandidates.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+                {sellerZones.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Las zonas aparecen después de la próxima sincronización de clientes con Microsip.
+                  </p>
                 )}
               </div>
             </div>

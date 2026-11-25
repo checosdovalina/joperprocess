@@ -316,6 +316,7 @@ export const customers = pgTable("customers", {
   // Microsip integration fields
   microsipId: integer("microsip_id"), // CLIENTE_ID from Microsip CLIENTES table
   microsipCode: text("microsip_code"), // CLAVE from Microsip CLIENTES table
+  microsipVendedorId: integer("microsip_vendedor_id"), // CLIENTES.VENDEDOR_ID (a sales zone in Microsip)
   microsipSyncedAt: timestamp("microsip_synced_at"), // Last sync timestamp
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -1551,6 +1552,21 @@ export const accountStatementDeliveries = pgTable("account_statement_deliveries"
 }, (table) => [
   uniqueIndex("account_statement_deliveries_daily_unique").on(table.tenantId, table.deliveryDay, table.customerKey),
 ]);
+
+// Microsip "vendedores" are sales zones (ZONA 2, CENTRO, ...), not people.
+// Each zone can be assigned to the Nexxo user who attends its customers; that
+// user receives the internal copy of those customers' account statements.
+export const microsipSellerZones = pgTable("microsip_seller_zones", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  vendedorId: integer("vendedor_id").notNull(),
+  name: text("name").notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("microsip_seller_zones_tenant_vendedor_unique").on(table.tenantId, table.vendedorId),
+]);
+export type MicrosipSellerZone = typeof microsipSellerZones.$inferSelect;
 
 // ==================== END ACCOUNT STATEMENT SCHEDULES ====================
 

@@ -9,6 +9,7 @@ import {
   payments, 
   microsipConfigs,
   microsipSyncLogs,
+  microsipSellerZones,
   InvoiceStatus
 } from '@shared/schema';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
@@ -152,6 +153,7 @@ interface MicrosipCustomer {
   TELEFONO1?: string;
   EMAIL?: string;
   CONTACTO?: string; // From DIRS_CLIENTES
+  VENDEDOR_ID?: number | null; // Sales zone
 }
 
 interface MicrosipProduct {
@@ -396,7 +398,7 @@ class MicrosipSyncService {
       const microsipCustomers = await this.query<MicrosipCustomer>(fbDb, `
         SELECT 
           C.CLIENTE_ID, C.NOMBRE, C.ESTATUS, C.CONTACTO1,
-          C.LIMITE_CREDITO, PCP.DIAS_PLAZO AS DIAS_CREDITO,
+          C.LIMITE_CREDITO, PCP.DIAS_PLAZO AS DIAS_CREDITO, C.VENDEDOR_ID,
           D.RFC_CURP AS RFC, D.CALLE, D.NUM_EXTERIOR, D.NUM_INTERIOR,
           D.CODIGO_POSTAL, D.COLONIA, UPPER(D.POBLACION) AS POBLACION, 
           D.TELEFONO1, D.EMAIL, D.CONTACTO
@@ -415,6 +417,25 @@ class MicrosipSyncService {
       }
       
       console.log(`[Microsip] Found ${uniqueCustomers.size} unique customers to sync`);
+
+      // Sales zones ("vendedores"): refresh names only; the assigned Nexxo user
+      // is configured in Nexxo and must never be overwritten by the sync.
+      try {
+        const zones = await this.query<{ VENDEDOR_ID: number; NOMBRE: string }>(fbDb,
+          `SELECT VENDEDOR_ID, NOMBRE FROM VENDEDORES`);
+        if (zones.length > 0) {
+          await db.insert(microsipSellerZones)
+            .values(zones.map((z) => ({
+              tenantId: this.tenantId, vendedorId: z.VENDEDOR_ID, name: z.NOMBRE?.trim() || `Zona ${z.VENDEDOR_ID}`,
+            })))
+            .onConflictDoUpdate({
+              target: [microsipSellerZones.tenantId, microsipSellerZones.vendedorId],
+              set: { name: sql`excluded.name`, updatedAt: new Date() },
+            });
+        }
+      } catch (zoneErr) {
+        console.error('[Microsip] Could not sync sales zones:', (zoneErr as Error).message);
+      }
       
       // Log credit days sample for debugging
       const sampleCustomers = Array.from(uniqueCustomers.values()).slice(0, 5);
@@ -462,6 +483,7 @@ class MicrosipSyncService {
             contactName: msCustomer.CONTACTO?.trim() || msCustomer.CONTACTO1?.trim() || null,
             microsipId: msCustomer.CLIENTE_ID,
             microsipCode: String(msCustomer.CLIENTE_ID),
+            microsipVendedorId: msCustomer.VENDEDOR_ID ?? null,
             microsipSyncedAt: new Date(),
           };
 

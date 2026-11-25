@@ -233,6 +233,21 @@ const MIGRATIONS: { id: string; sql: string }[] = [
   {
     id: "020_add_statement_copy_recipients",
     sql: `ALTER TABLE account_statement_schedules ADD COLUMN IF NOT EXISTS copy_user_ids text[]`,
+  },  {
+    id: "021_add_microsip_seller_zones",
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS microsip_vendedor_id integer;
+      CREATE TABLE IF NOT EXISTS microsip_seller_zones (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id varchar NOT NULL REFERENCES tenants(id),
+        vendedor_id integer NOT NULL,
+        name text NOT NULL,
+        user_id varchar REFERENCES users(id) ON DELETE SET NULL,
+        updated_at timestamp NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS microsip_seller_zones_tenant_vendedor_unique
+        ON microsip_seller_zones (tenant_id, vendedor_id);
+    `,
   },
 ];
 

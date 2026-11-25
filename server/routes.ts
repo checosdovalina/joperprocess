@@ -128,7 +128,7 @@ import {
   insertIncidentCommentSchema,
   insertIncidentAttachmentSchema,
 } from "@shared/schema";
-import { customers, quotations, quotationItems, checkins, checkinUpdates, FollowUpStatus, FollowUpOutcome, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
+import { customers, quotations, quotationItems, checkins, checkinUpdates, FollowUpStatus, FollowUpOutcome, scheduledVisits, users, orders, orderReleases, creditAuthorizations, creditAuthorizationComments, shipments, shipmentProductInstances, invoices, payments, pendingUploads, products, productCategories, incidents, incidentComments, incidentAttachments, incidentActivities, microsipConfigs, microsipSyncLogs, microsipSellerZones, insertMicrosipConfigSchema, updateMicrosipConfigSchema } from "@shared/schema";
 import { createMicrosipSyncService } from "./microsip-sync";
 import { allocateManualTaxToLines, calculateQuotationTotals, ManualTaxRateValidationError, validateManualTaxRate } from "@shared/quotation-calculations";
 import { logSystemActivity } from "./system-log";
@@ -7614,6 +7614,47 @@ Proporciona tu análisis en el siguiente formato JSON:
         .where(and(eq(users.tenantId, tenantId), eq(users.active, true)))
         .orderBy(users.fullName);
       res.json(rows.filter((u) => /@/.test(u.email ?? "")));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/microsip-seller-zones — Microsip sales zones and their assigned Nexxo user
+  app.get("/api/microsip-seller-zones", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant requerido" });
+      const zones = await db.select().from(microsipSellerZones)
+        .where(eq(microsipSellerZones.tenantId, tenantId)).orderBy(microsipSellerZones.name);
+      const counts = await db.select({ vendedorId: customers.microsipVendedorId, n: sql<number>`count(distinct ${customers.microsipId})::int` })
+        .from(customers).where(and(eq(customers.tenantId, tenantId), isNotNull(customers.microsipVendedorId)))
+        .groupBy(customers.microsipVendedorId);
+      const countBy = new Map(counts.map((c) => [c.vendedorId, c.n]));
+      res.json(zones.map((z) => ({ id: z.id, vendedorId: z.vendedorId, name: z.name, userId: z.userId, customerCount: countBy.get(z.vendedorId) ?? 0 }))
+        .sort((a, b) => b.customerCount - a.customerCount || a.name.localeCompare(b.name)));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/microsip-seller-zones/:id — assign (or clear) the seller of a zone
+  app.put("/api/microsip-seller-zones/:id", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant requerido" });
+      const { userId } = req.body as { userId?: string | null };
+      if (userId != null) {
+        if (typeof userId !== "string") return res.status(400).json({ error: "Usuario inválido" });
+        const [user] = await db.select({ id: users.id }).from(users)
+          .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+        if (!user) return res.status(400).json({ error: "El usuario no pertenece a esta empresa" });
+      }
+      const [updated] = await db.update(microsipSellerZones)
+        .set({ userId: userId ?? null, updatedAt: new Date() })
+        .where(and(eq(microsipSellerZones.id, req.params.id), eq(microsipSellerZones.tenantId, tenantId)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "Zona no encontrada" });
+      res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
