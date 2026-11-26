@@ -312,6 +312,7 @@ export const customers = pgTable("customers", {
   skipStatementEmail: boolean("skip_statement_email").notNull().default(false),
   statementEmails: text("statement_emails").array().notNull().default(sql`ARRAY[]::text[]`),
   statementEmailsConfigured: boolean("statement_emails_configured").notNull().default(false),
+  statementSellerUserId: varchar("statement_seller_user_id").references(() => users.id, { onDelete: "set null" }),
   contactName: text("contact_name"),
   // Microsip integration fields
   microsipId: integer("microsip_id"), // CLIENTE_ID from Microsip CLIENTES table
@@ -1211,6 +1212,7 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   tenantId: true,
   statementEmails: true,
   statementEmailsConfigured: true,
+  statementSellerUserId: true,
   createdAt: true,
 });
 
@@ -1219,6 +1221,7 @@ export const updateCustomerSchema = createInsertSchema(customers).omit({
   tenantId: true,
   statementEmails: true,
   statementEmailsConfigured: true,
+  statementSellerUserId: true,
   skipStatementEmail: true,
   createdAt: true,
 }).partial();

@@ -113,6 +113,31 @@ type Ctx = {
 
 const ctx = {} as Ctx;
 
+describe("Customer statement seller assignments", () => {
+  it("assigns and clears only an active user from the customer's tenant", async () => {
+    const path = `/api/customers/${ctx.customerA}/statement-seller`;
+    expect((await asAdminA("PATCH", path, { userId: ctx.adminB.id })).status).toBe(400);
+    expect((await asAdminB("PATCH", path, { userId: ctx.adminB.id })).status).toBe(404);
+    expect((await asVendedorA1("PATCH", path, { userId: ctx.vendedorA1.id })).status).toBe(403);
+    expect((await asAdminA("PATCH", path, {})).status).toBe(400);
+    const assigned = await asAdminA("PATCH", path, { userId: ctx.vendedorA1.id });
+    expect(assigned.status).toBe(200);
+    expect((await assigned.json()).statementSellerUserId).toBe(ctx.vendedorA1.id);
+    // General customer edits must not bypass the dedicated assignment checks.
+    await asAdminA("PUT", `/api/customers/${ctx.customerA}`, { statementSellerUserId: ctx.adminB.id });
+    expect((await (await asAdminA("GET", `/api/customers/${ctx.customerA}`)).json()).statementSellerUserId).toBe(ctx.vendedorA1.id);
+    await db.update(users).set({ active: false }).where(eq(users.id, ctx.vendedorA1.id));
+    try {
+      expect((await asAdminA("PATCH", path, { userId: ctx.vendedorA1.id })).status).toBe(400);
+    } finally {
+      await db.update(users).set({ active: true }).where(eq(users.id, ctx.vendedorA1.id));
+    }
+    const cleared = await asAdminA("PATCH", path, { userId: null });
+    expect(cleared.status).toBe(200);
+    expect((await cleared.json()).statementSellerUserId).toBeNull();
+  });
+});
+
 describe("Company bank settings", () => {
   const endpoint = "/api/company-settings/bank-details";
   const details = {
@@ -691,6 +716,7 @@ describe("Company-specific statement access and quotation prefixes", () => {
       ["PUT", "/api/account-statement-schedule", { enabled: true }],
       ["GET", `/api/customers/${ctx.customerB}/account-statement-link`],
       ["PATCH", `/api/customers/${ctx.customerB}/statement-email-settings`, { statementEmails: [] }],
+      ["PATCH", `/api/customers/${ctx.customerB}/statement-seller`, { userId: null }],
       ["GET", "/api/system-logs"],
     ];
     for (const [method, path, body] of denied) {

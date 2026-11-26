@@ -249,6 +249,10 @@ const MIGRATIONS: { id: string; sql: string }[] = [
         ON microsip_seller_zones (tenant_id, vendedor_id);
     `,
   },
+  {
+    id: "022_add_customer_statement_seller",
+    sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS statement_seller_user_id varchar REFERENCES users(id) ON DELETE SET NULL`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

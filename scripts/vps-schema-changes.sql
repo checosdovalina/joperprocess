@@ -262,6 +262,9 @@ CREATE TABLE IF NOT EXISTS microsip_seller_zones (
 CREATE UNIQUE INDEX IF NOT EXISTS microsip_seller_zones_tenant_vendedor_unique
   ON microsip_seller_zones (tenant_id, vendedor_id);
 
+-- 2026-11-26: vendedor específico para copias de estados de cuenta por cliente
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS statement_seller_user_id varchar REFERENCES users(id) ON DELETE SET NULL;
+
 -- INSTRUCCIONES PARA AGREGAR NUEVAS COLUMNAS EN EL FUTURO:
 --
 -- 1. Agrega la columna en shared/schema.ts

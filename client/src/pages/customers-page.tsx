@@ -45,6 +45,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
+import { CustomerStatementSeller } from "@/components/customer-statement-seller";
 
 export default function CustomersPage() {
   const { t } = useI18n();
@@ -499,6 +500,9 @@ export default function CustomersPage() {
               )}
             </div>
           </DialogHeader>
+          {viewingCustomer && ["admin", "credito_cobranza", "facturacion"].includes(user?.role ?? "") && (
+            <CustomerStatementSeller customerId={viewingCustomer.id} />
+          )}
 
           <div className="space-y-6 pt-4">
             {/* Contact Info */}

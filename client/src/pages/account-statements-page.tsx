@@ -63,6 +63,7 @@ import {
 import { Customer, UserRole } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { ZoneSellerPicker } from "@/components/zone-seller-picker";
+import { CustomerStatementSeller } from "@/components/customer-statement-seller";
 
 interface CustomerBalance {
   customer: {
@@ -994,11 +995,12 @@ export default function AccountStatementsPage() {
       </Dialog>}
 
       {!isSellerReadOnly && <Dialog open={!!emailSettingsCustomer} onOpenChange={(open) => !open && setEmailSettingsCustomer(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Destinatarios de estado de cuenta</DialogTitle>
             <DialogDescription>{emailSettingsCustomer?.customer.name}</DialogDescription>
           </DialogHeader>
+          {emailSettingsCustomer && <CustomerStatementSeller customerId={emailSettingsCustomer.customer.id} />}
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-md border p-3">
               <div>
@@ -1266,7 +1268,7 @@ export default function AccountStatementsPage() {
               <div>
                 <p className="text-sm font-medium">Vendedor por zona de Microsip</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  El vendedor asignado recibe la copia de los estados de cuenta de los clientes de su zona.
+                  Se usa para los clientes de la zona que no tengan un vendedor específico. Puedes asignarlo desde Clientes o desde los destinatarios de cada estado de cuenta.
                 </p>
               </div>
               <div className="max-h-56 overflow-y-auto space-y-2" data-testid="list-seller-zones">

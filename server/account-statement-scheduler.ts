@@ -89,10 +89,16 @@ export function resolveStatementCopyEmails(
 /** Adds the seller assigned to the customer's Microsip zone to the copy list. */
 export function statementCopyEmailsForCustomer(
   baseCopyEmails: string[],
-  customer: { microsipVendedorId?: number | null },
+  customer: { microsipVendedorId?: number | null; statementSellerUserId?: string | null },
   zoneSellerEmails: Map<number, string[]>,
+  eligibleSellerEmails: Map<string, string[]> = new Map(),
 ): string[] {
-  const seller = customer.microsipVendedorId != null ? zoneSellerEmails.get(customer.microsipVendedorId) ?? [] : [];
+  // An explicit assignment is authoritative, even if the user subsequently
+  // opts out or becomes inactive. Never route that customer's copy to a
+  // different seller by silently falling back to the zone.
+  const seller = customer.statementSellerUserId
+    ? eligibleSellerEmails.get(customer.statementSellerUserId) ?? []
+    : customer.microsipVendedorId != null ? zoneSellerEmails.get(customer.microsipVendedorId) ?? [] : [];
   const merged = [...baseCopyEmails];
   for (const e of seller) {
     if (!merged.some((m) => m.toLowerCase() === e.toLowerCase())) merged.push(e);
@@ -117,6 +123,9 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
     ),
   });
   const ccEmails = resolveStatementCopyEmails(adminUsers, copyUserIds);
+  const eligibleSellerEmails = new Map(adminUsers.map(user => [
+    user.id, resolveStatementCopyEmails([user], [user.id]),
+  ]));
 
   // Seller per Microsip sales zone. Only active, opted-in users of this tenant.
   const zoneSellerEmails = new Map<number, string[]>();
@@ -262,7 +271,7 @@ async function runForTenant(tenantId: string, onlyOverdue: boolean, deliveryDay:
         tenantName: tenant.name,
         liveData,
         ccEmails: (() => {
-          const copy = statementCopyEmailsForCustomer(ccEmails, customer, zoneSellerEmails);
+          const copy = statementCopyEmailsForCustomer(ccEmails, customer, zoneSellerEmails, eligibleSellerEmails);
           return copy.length > 0 ? copy : undefined;
         })(),
         retryOnRateLimit: false,

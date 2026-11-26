@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 
 // Keep choices inside the dialog: no native popup or second floating layer
 // competing with the modal's focus handling inside the preview iframe.
-export function ZoneSellerPicker({ zoneName, vendedorId, value, candidates, pending, onChange }: {
+export function ZoneSellerPicker({ zoneName, vendedorId, value, candidates, pending, onChange, unassignedLabel = "Sin asignar" }: {
   zoneName: string;
-  vendedorId: number;
+  vendedorId: number | string;
+  unassignedLabel?: string;
   value: string | null;
   candidates: { id: string; fullName: string; email: string | null }[];
   pending: boolean;
@@ -27,13 +28,13 @@ export function ZoneSellerPicker({ zoneName, vendedorId, value, candidates, pend
         aria-controls={choicesId}
         onClick={() => setOpen(previous => !previous)}
       >
-        <span className="truncate">{selected?.fullName ?? (value ? "Usuario asignado" : "Sin asignar")}</span>
+        <span className="truncate">{selected?.fullName ?? (value ? "Usuario asignado" : unassignedLabel)}</span>
         <ChevronDown className="ml-1 h-3 w-3 shrink-0" />
       </Button>
       {open && (
         <fieldset id={choicesId} className="mt-1 max-h-48 overflow-y-auto rounded-md border bg-background p-1" disabled={pending}>
           <legend className="sr-only">Vendedor de {zoneName}</legend>
-          {[{ id: "", fullName: "Sin asignar", email: null }, ...candidates].map(candidate => (
+          {[{ id: "", fullName: unassignedLabel, email: null }, ...candidates].map(candidate => (
             <label key={candidate.id} className="flex items-start gap-2 rounded px-1 py-2 text-xs cursor-pointer hover:bg-accent">
               <input
                 type="radio"

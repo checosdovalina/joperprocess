@@ -1628,6 +1628,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/customers/:id/statement-seller", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
+    try {
+      const customer = await createTenantScopedStorage(req).getCustomer(req.params.id);
+      if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
+      const { userId } = z.object({ userId: z.string().min(1).nullable() }).parse(req.body);
+      if (userId !== null) {
+        const [seller] = await db.select({ id: users.id, email: users.email }).from(users)
+          .where(and(eq(users.id, userId), eq(users.tenantId, customer.tenantId), eq(users.active, true)));
+        if (!seller || parseEmailList(seller.email).length === 0) {
+          return res.status(400).json({ error: "Selecciona un usuario activo con correo de esta empresa" });
+        }
+      }
+      const [updated] = await db.update(customers).set({ statementSellerUserId: userId })
+        .where(and(eq(customers.id, customer.id), eq(customers.tenantId, customer.tenantId))).returning();
+      accountStatementsCache.delete(customer.tenantId);
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Asignación inválida" });
+    }
+  });
+
   app.patch("/api/customers/:id/statement-email-settings", isAuthenticated, hasRole(UserRole.ADMIN, UserRole.CREDITO_COBRANZA, UserRole.FACTURACION), async (req, res) => {
     try {
       const scopedStorage = createTenantScopedStorage(req);

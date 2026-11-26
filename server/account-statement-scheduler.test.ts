@@ -184,6 +184,30 @@ describe("resolveStatementCopyEmails", () => {
 });
 
 describe("seller copy by Microsip zone", () => {
+  it("sends two customers in one zone only to their respective assigned sellers", async () => {
+    mocks.customers.mockResolvedValue([
+      { id: "a", name: "Cliente A", email: "a@example.test", microsipVendedorId: 1, statementSellerUserId: "juan" },
+      { id: "b", name: "Cliente B", email: "b@example.test", microsipVendedorId: 1, statementSellerUserId: "ana" },
+    ]);
+    mocks.users.mockResolvedValue([
+      { id: "juan", role: "vendedor", email: "juan@example.test" },
+      { id: "ana", role: "vendedor", email: "ana@example.test" },
+      { id: "zona", role: "vendedor", email: "zona@example.test" },
+    ]);
+    mocks.zones.mockImplementation(() => Promise.resolve([{ vendedorId: 1, userId: "zona" }]));
+    await run();
+    expect(mocks.send).toHaveBeenNthCalledWith(1, expect.objectContaining({ ccEmails: ["juan@example.test"] }));
+    expect(mocks.send).toHaveBeenNthCalledWith(2, expect.objectContaining({ ccEmails: ["ana@example.test"] }));
+  });
+
+  it("uses the zone only when no customer seller is assigned, and deduplicates copies", () => {
+    const zone = new Map([[1, ["zone@example.test"]]]);
+    const eligible = new Map([["juan", ["JUAN@example.test"]]]);
+    expect(statementCopyEmailsForCustomer([], { microsipVendedorId: 1 }, zone, eligible)).toEqual(["zone@example.test"]);
+    expect(statementCopyEmailsForCustomer(["juan@example.test"], { microsipVendedorId: 1, statementSellerUserId: "juan" }, zone, eligible)).toEqual(["juan@example.test"]);
+    expect(statementCopyEmailsForCustomer([], { microsipVendedorId: 1, statementSellerUserId: "inactive-or-opted-out" }, zone, eligible)).toEqual([]);
+  });
+
   it("adds the zone's assigned seller to that customer's internal copy", async () => {
     mocks.customers.mockResolvedValue([{
       id: "customer-a", name: "Cliente", email: "client@example.test", microsipVendedorId: 4780,
