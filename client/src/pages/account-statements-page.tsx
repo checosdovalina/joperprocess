@@ -1275,20 +1275,19 @@ export default function AccountStatementsPage() {
                       <p className="text-sm truncate">{zone.name}</p>
                       <p className="text-xs text-muted-foreground">{zone.customerCount} clientes</p>
                     </div>
-                    <Select
-                      value={zone.userId ?? "none"}
-                      onValueChange={(v) => zoneSellerMutation.mutate({ zoneId: zone.id, userId: v === "none" ? null : v })}
+                    <select
+                      aria-label={`Vendedor de ${zone.name}`}
+                      className="w-44 h-8 shrink-0 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                      data-testid={`select-zone-seller-${zone.vendedorId}`}
+                      value={zone.userId ?? ""}
+                      disabled={zoneSellerMutation.isPending}
+                      onChange={(event) => zoneSellerMutation.mutate({ zoneId: zone.id, userId: event.target.value || null })}
                     >
-                      <SelectTrigger className="w-44 h-8 text-xs" data-testid={`select-zone-seller-${zone.vendedorId}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sin asignar</SelectItem>
-                        {copyCandidates.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <option value="">Sin asignar</option>
+                      {copyCandidates.map((u) => (
+                        <option key={u.id} value={u.id}>{u.fullName}</option>
+                      ))}
+                    </select>
                   </div>
                 ))}
                 {sellerZones.length === 0 && (
