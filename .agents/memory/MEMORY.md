@@ -26,3 +26,4 @@
 - [Production DNS provider](production-dns-provider.md) — the user identified IONOS as the DNS provider for nexxo.com.mx.
 - [Check-in PDFs](checkin-pdf-semantics.md) — viewing a visit PDF must not require closing it or creating a contact; preserve saved historical minutes.
 - [Claude check-in actions](claude-checkin-actions.md) — voice commands record calls, agreements and commitments; email and future follow-up are explicit, separate actions.
+- [Zone seller choices](zone-picker-interaction.md) — floating and native dropdowns blinked in the scheduling modal; use inline choices and distinguish visual checks from component tests.

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   role: "vendedor",
   queries: [] as any[],
   mutate: vi.fn(),
+  zoneUserId: "seller-one" as string | null,
 }));
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { role: mocks.role } }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
@@ -26,7 +27,7 @@ vi.mock("@tanstack/react-query", () => ({
       oldestDueDate: null, currency: "MXN",
     }] : options.queryKey[0] === "/api/account-statement-schedule" ? null
       : options.queryKey[0] === "/api/microsip-seller-zones" ? [
-        { id: "zone-one", vendedorId: 12, name: "CENTRO", userId: "seller-one", customerCount: 3 },
+        { id: "zone-one", vendedorId: 12, name: "CENTRO", userId: mocks.zoneUserId, customerCount: 3 },
       ] : options.queryKey[0] === "/api/account-statement-schedule/copy-candidates" ? [
         { id: "seller-one", fullName: "Vendedor Centro", email: "seller@test.local", role: "vendedor", receiveEmailNotifications: true },
       ] : [];
@@ -39,6 +40,7 @@ beforeEach(() => {
   mocks.role = UserRole.VENDEDOR;
   mocks.queries.length = 0;
   mocks.mutate.mockClear();
+  mocks.zoneUserId = "seller-one";
 });
 afterEach(cleanup);
 
@@ -61,17 +63,32 @@ describe("Seller read-only account statements", () => {
     expect(mocks.queries.find(options => options.queryKey[0] === "/api/account-statement-schedule")?.enabled).toBe(true);
   });
 
-  it("shows zone sellers in a native selector and supports assigning and clearing", () => {
+  it("keeps zone choices inside the dialog and open after a selection", () => {
     mocks.role = UserRole.ADMIN;
+    const view = render(<AccountStatementsPage />);
+    fireEvent.click(screen.getByTestId("button-schedule"));
+    const selector = screen.getByRole("button", { name: "Vendedor de CENTRO" });
+    fireEvent.click(selector);
+    const unassigned = screen.getByRole("radio", { name: "Sin asignar" });
+    expect(screen.getByRole("dialog").contains(unassigned)).toBe(true);
+    expect(screen.getByRole("radio", { name: /Vendedor Centro/ })).toHaveProperty("checked", true);
+    fireEvent.click(unassigned);
+    expect(mocks.mutate).toHaveBeenLastCalledWith({ zoneId: "zone-one", userId: null });
+    expect(selector.getAttribute("aria-expanded")).toBe("true");
+    // Re-render with a refreshed server value, as happens after saving.
+    mocks.zoneUserId = null;
+    view.rerender(<AccountStatementsPage />);
+    expect(screen.getByRole("radio", { name: "Sin asignar" })).toHaveProperty("checked", true);
+    expect(selector.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("saves a seller using the inline choices", () => {
+    mocks.role = UserRole.ADMIN;
+    mocks.zoneUserId = null;
     render(<AccountStatementsPage />);
     fireEvent.click(screen.getByTestId("button-schedule"));
-    const selector = screen.getByRole("combobox", { name: "Vendedor de CENTRO" }) as HTMLSelectElement;
-    expect(selector.tagName).toBe("SELECT");
-    expect(Array.from(selector.options).map(option => option.text)).toEqual(["Sin asignar", "Vendedor Centro"]);
-    expect(selector.value).toBe("seller-one");
-    fireEvent.change(selector, { target: { value: "" } });
-    expect(mocks.mutate).toHaveBeenLastCalledWith({ zoneId: "zone-one", userId: null });
-    fireEvent.change(selector, { target: { value: "seller-one" } });
+    fireEvent.click(screen.getByRole("button", { name: "Vendedor de CENTRO" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Vendedor Centro/ }));
     expect(mocks.mutate).toHaveBeenLastCalledWith({ zoneId: "zone-one", userId: "seller-one" });
   });
 });

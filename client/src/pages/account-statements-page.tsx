@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import { Customer, UserRole } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { ZoneSellerPicker } from "@/components/zone-seller-picker";
 
 interface CustomerBalance {
   customer: {
@@ -1270,24 +1271,19 @@ export default function AccountStatementsPage() {
               </div>
               <div className="max-h-56 overflow-y-auto space-y-2" data-testid="list-seller-zones">
                 {sellerZones.filter((z) => z.customerCount > 0 || z.userId).map((zone) => (
-                  <div key={zone.id} className="flex items-center gap-2">
+                  <div key={zone.id} className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm truncate">{zone.name}</p>
                       <p className="text-xs text-muted-foreground">{zone.customerCount} clientes</p>
                     </div>
-                    <select
-                      aria-label={`Vendedor de ${zone.name}`}
-                      className="w-44 h-8 shrink-0 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-                      data-testid={`select-zone-seller-${zone.vendedorId}`}
-                      value={zone.userId ?? ""}
-                      disabled={zoneSellerMutation.isPending}
-                      onChange={(event) => zoneSellerMutation.mutate({ zoneId: zone.id, userId: event.target.value || null })}
-                    >
-                      <option value="">Sin asignar</option>
-                      {copyCandidates.map((u) => (
-                        <option key={u.id} value={u.id}>{u.fullName}</option>
-                      ))}
-                    </select>
+                    <ZoneSellerPicker
+                      zoneName={zone.name}
+                      vendedorId={zone.vendedorId}
+                      value={zone.userId}
+                      candidates={copyCandidates}
+                      pending={zoneSellerMutation.isPending}
+                      onChange={(userId) => zoneSellerMutation.mutate({ zoneId: zone.id, userId })}
+                    />
                   </div>
                 ))}
                 {sellerZones.length === 0 && (
